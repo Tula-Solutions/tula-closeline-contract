@@ -16,6 +16,7 @@ var common = [
   freezeEntry("request.not_found", 404, "The resource was not found."),
   freezeEntry("request.conflict", 409, "The request conflicts with the current state."),
   freezeEntry("request.idempotency_key_reused", 422, "The idempotency key was already used with a different request."),
+  freezeEntry("request.idempotency_in_progress", 409, "A request with this idempotency key is still in progress. Try again shortly."),
   freezeEntry("request.too_large", 413, "The request body is too large."),
   freezeEntry("request.method_not_allowed", 405, "This method is not allowed for this route."),
   freezeEntry("request.unsupported_media_type", 415, "The request content type is not supported."),
@@ -97,6 +98,50 @@ var SIGNUP_ERRORS = {
     unavailable: {
       status: 503,
       message: "Organization membership is unavailable right now. Try again shortly."
+    }
+  })
+};
+
+// src/auth/errors.ts
+var AUTH_ERRORS = {
+  ...defineErrors("auth", {
+    invalid_credentials: { status: 401, message: "The email address or password is not right." },
+    user_banned: { status: 403, message: "This account cannot sign in." }
+  }),
+  ...defineErrors("email", {
+    invalid: { status: 422, message: "Enter a valid email address." }
+  }),
+  ...defineErrors("password", {
+    too_short: { status: 422, message: "The password is too short." },
+    too_long: { status: 422, message: "The password is too long." },
+    contains_user_info: { status: 422, message: "The password contains your name or email." },
+    common: { status: 422, message: "The password is too common." },
+    breached: {
+      status: 422,
+      message: "The password appeared in a data breach. Choose a different one."
+    }
+  }),
+  ...defineErrors("verification", {
+    invalid_code: { status: 422, message: "The code is not right." },
+    expired: { status: 422, message: "The code has expired. Ask for a new one." },
+    too_many_attempts: { status: 429, message: "Too many wrong codes. Ask for a new one." }
+  }),
+  ...defineErrors("flow", {
+    not_found: { status: 404, message: "This sign-in or sign-up was not found or has ended." },
+    invalid_step: { status: 409, message: "This step is not available now. Start again." }
+  }),
+  ...SIGNUP_ERRORS,
+  "organization.deleted": CORE_ERRORS["organization.deleted"],
+  ...defineErrors("mail", {
+    unavailable: { status: 503, message: "The email could not be sent right now. Try again." }
+  }),
+  ...defineErrors("session", {
+    invalid_token: { status: 401, message: "The refresh token is not valid." },
+    revoked: { status: 401, message: "This session has ended." },
+    expired: { status: 401, message: "This session has expired. Sign in again." },
+    reuse_detected: {
+      status: 401,
+      message: "A refresh token was used twice, so the session was ended. Sign in again."
     }
   })
 };
@@ -404,6 +449,7 @@ function defineEvent(type, version, dataSchema) {
 // src/index.ts
 var PACKAGE = "tula-closeline-contract";
 export {
+  AUTH_ERRORS,
   CORE_ERRORS,
   DEFAULT_PAGE_SIZE,
   ERRORS,

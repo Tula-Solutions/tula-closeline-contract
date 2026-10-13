@@ -15,7 +15,7 @@ bun run verify
 
 Standards: `AGENTS.md` (this repo) and `.claude/COMMON.md` (shared).
 
-## Core's API surface (0.4.0)
+## Core's API surface (0.5.0)
 
 Schemas and inferred types only; routes and handlers live in `tula-closeline-core`.
 
@@ -34,7 +34,8 @@ Schemas and inferred types only; routes and handlers live in `tula-closeline-cor
   only the trimmed output of the request schemas.
 - **Every public POST accepts the `Idempotency-Key` header** (`idempotencyKeySchema`), including
   create Invitation and create Team. A replay returns the original result; the same key with a
-  different body returns the common code `request.idempotency_key_reused`.
+  different body returns the common code `request.idempotency_key_reused` (422); the same key while
+  the first request is still running returns `request.idempotency_in_progress` (409).
 
 | Group | Exports |
 | --- | --- |
@@ -46,6 +47,13 @@ Schemas and inferred types only; routes and handlers live in `tula-closeline-cor
 | Teams | `teamSchema`, `createTeamRequestSchema`, `renameTeamRequestSchema`, `listTeamsQuerySchema`, `listTeamsResponseSchema`, `teamParamsSchema`, `addTeamMemberRequestSchema`, `teamMemberSchema`, `teamMemberParamsSchema` |
 | Internal (auth to core) | `internalCreateOrganizationRequestSchema` / `…ResponseSchema`, `internalAcceptInvitationRequestSchema` / `…ResponseSchema`, `internalMembershipRequestSchema` / `…ResponseSchema` (`found: true` with Organization id, role and status, or `found: false`), `INTERNAL_CALL_ERRORS`, `InternalCallName` |
 | Errors | `CORE_ERRORS` (`organization.*`, `member.*`, `membership.already_member`, `invitation.*`, `team.*`) and `SIGNUP_ERRORS` (`auth.no_organization`, `signup.*`, `membership.unavailable`); a role that is not allowed is the common `auth.forbidden` |
+
+### Auth error codes
+
+`AUTH_ERRORS` is every code the auth service answers with beyond the common ones:
+`auth.invalid_credentials`, `auth.user_banned`, `email.*`, `password.*`, `verification.*`,
+`flow.*`, `mail.unavailable` and `session.*`, plus `SIGNUP_ERRORS` and `organization.deleted` by
+reference. The codes in a password failure's `details.errors[].code` are keys of this map.
 
 ### Internal calls
 
