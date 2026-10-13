@@ -29,3 +29,11 @@ test('the entry point exports the internal abandon call and its code', async () 
   expect(api.INTERNAL_CALL_ERRORS.abandonOrganization).toEqual(['organization.not_abandonable'])
   expect(typeof api.internalAbandonOrganizationRequestSchema.safeParse).toBe('function')
 })
+
+test('the entry point exports the playbook area', async () => {
+  const api = await import('./index')
+  expect(api.DOCUMENT_STATES).toContain('deleted')
+  expect(api.PLAYBOOK_ERRORS['document.not_restorable'].status).toBe(410)
+  expect(api.DOCUMENT_UPLOADED_MESSAGE.type).toBe('playbook.document_uploaded')
+  expect(api.documentIdSchema.safeParse('doc_0190a5e0b3c17d2a8f4e5b6c7d8e9f01').success).toBe(true)
+})

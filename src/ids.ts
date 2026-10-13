@@ -28,6 +28,8 @@ export const teamIdSchema = idSchema('team')
 export const invitationIdSchema = idSchema('inv')
 /** The id of a Prospect (`prs_…`). */
 export const prospectIdSchema = idSchema('prs')
+/** The id of a Playbook document (`doc_…`). */
+export const documentIdSchema = idSchema('doc')
 /** The id of an event (`evt_…`). */
 export const eventIdSchema = idSchema('evt')
 /** The id of a request, for tracing (`req_…`). */
@@ -45,6 +47,8 @@ export type TeamId = z.infer<typeof teamIdSchema>
 export type InvitationId = z.infer<typeof invitationIdSchema>
 /** The id of a Prospect. */
 export type ProspectId = z.infer<typeof prospectIdSchema>
+/** The id of a Playbook document. */
+export type DocumentId = z.infer<typeof documentIdSchema>
 /** The id of an event. */
 export type EventId = z.infer<typeof eventIdSchema>
 /** The id of a request. */
