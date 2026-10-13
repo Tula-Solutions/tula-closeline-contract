@@ -1,6 +1,7 @@
 import type { CommonErrorCode } from '../errors'
 import type { Role } from '../tenancy'
 import type { PlaybookErrorCode } from './errors'
+import type { SalesHistoryErrorCode } from './sales-history-errors'
 
 /** The roles that may change the Playbook (ADR 0016, choice 4). */
 export const PLAYBOOK_WRITE_ROLES = ['owner', 'admin'] as const satisfies readonly Role[]
@@ -24,7 +25,7 @@ export type PlaybookRouteName =
 
 /** What the service needs to describe one route: its method, path, who may call it, what it answers. */
 export type PlaybookRoute = {
-  readonly method: 'GET' | 'POST' | 'DELETE'
+  readonly method: 'GET' | 'POST' | 'PUT' | 'DELETE'
   readonly path: string
   /** True for a route on the internal network only; it takes no role and names the Organization in the path. */
   readonly internal: boolean
@@ -33,7 +34,7 @@ export type PlaybookRoute = {
   /** The success statuses, the first being the usual one. */
   readonly success: readonly number[]
   /** The domain codes the route may return, beyond the common ones. */
-  readonly errors: readonly PlaybookErrorCode[]
+  readonly errors: readonly (PlaybookErrorCode | SalesHistoryErrorCode)[]
   /** The common codes the route may return, beyond those every route may. */
   readonly commonErrors: readonly CommonErrorCode[]
   /** The description for the OpenAPI document, role rules included. */
@@ -123,6 +124,6 @@ export const PLAYBOOK_ROUTES: Readonly<Record<PlaybookRouteName, PlaybookRoute>>
       'request.idempotency_in_progress',
     ],
     description:
-      'Internal, for offboarding and erasure; no caller yet. Removes every document, file, chunk and vector an Organization has, soft-deleted ones included, without waiting for retention. Idempotent by end state: it answers 200 whenever nothing remains. Served on the internal network only; takes the Organization from the path.',
+      'Internal, for offboarding and erasure; no caller yet. Removes every document, file, chunk and vector an Organization has, and, since ADR 0018, its Calls, Recordings, Transcripts, Moments, Deals and Deal imports (and the copy the transcription vendor holds of a Recording), soft-deleted ones included, without waiting for retention. Idempotent by end state: it answers 200 whenever nothing remains. Served on the internal network only; takes the Organization from the path.',
   }),
 })

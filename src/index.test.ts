@@ -37,3 +37,14 @@ test('the entry point exports the playbook area', async () => {
   expect(api.DOCUMENT_UPLOADED_MESSAGE.type).toBe('playbook.document_uploaded')
   expect(api.documentIdSchema.safeParse('doc_0190a5e0b3c17d2a8f4e5b6c7d8e9f01').success).toBe(true)
 })
+
+test('the entry point exports the sales-history area', async () => {
+  const api = await import('./index')
+  expect(api.CALL_STATES).toContain('awaiting_rep')
+  expect(api.SALES_HISTORY_ERRORS['rights.confirmation_required'].status).toBe(428)
+  expect(api.checkCallFile({ fileName: 'a.mp3', declaredMediaType: null, sizeBytes: 1 }).ok).toBe(
+    true
+  )
+  expect(api.normaliseDealId(' A ')).toBe('A')
+  expect(api.callIdSchema.safeParse('call_0190a5e0b3c17d2a8f4e5b6c7d8e9f01').success).toBe(true)
+})

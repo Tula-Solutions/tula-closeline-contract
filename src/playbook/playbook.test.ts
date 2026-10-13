@@ -33,6 +33,7 @@ import {
   normaliseMediaType,
   PLAYBOOK_ERRORS,
   PLAYBOOK_ROUTES,
+  SALES_HISTORY_ERRORS,
   uploadDocumentFileSchema,
 } from './index'
 
@@ -451,7 +452,9 @@ describe('PLAYBOOK_ROUTES', () => {
   test('every listed code exists in a registry and every route answers with its error responses', () => {
     for (const [, route] of routes) {
       for (const code of route.errors) {
-        expect(PLAYBOOK_ERRORS[code].status).toBeGreaterThanOrEqual(400)
+        expect({ ...PLAYBOOK_ERRORS, ...SALES_HISTORY_ERRORS }[code].status).toBeGreaterThanOrEqual(
+          400
+        )
       }
       for (const code of route.commonErrors) {
         expect(ERRORS[code].status).toBeGreaterThanOrEqual(400)

@@ -80,7 +80,7 @@ Lists use the existing cursor pagination (`pageQuerySchema`, at most 100 per pag
 list also takes `state` (`pending`, `accepted` or `revoked`, default `pending`). Fold emails and
 Team names with `foldAscii`, never `toLowerCase()`.
 
-## Playbook API surface (0.7.0, ADR 0016)
+## Playbook API surface (0.7.0, ADR 0016; sales history 0.8.0, ADR 0018)
 
 Schemas only, as for core. `PLAYBOOK_ROUTES` holds each route's method, path, roles, success
 statuses, error codes and OpenAPI description (this library has no OpenAPI generator; the service
@@ -97,3 +97,29 @@ builds its document from these).
 - **Limits** are exported constants, each saying whether the owner chose it or it is a default.
 - **Messages** `DOCUMENT_UPLOADED_MESSAGE` and `DOCUMENT_DELETED_MESSAGE` are `{ type, version, scope,
   payload }`, the pieces of the kit's `defineMessage`.
+
+### Sales history (0.8.0, ADR 0018)
+
+Additive. `SALES_HISTORY_ROUTES` describes the 15 routes, `SALES_HISTORY_ERRORS` holds the codes
+(`call.*`, `deal.*`, `deal_import.*`, `rights.*`) and the messages are `CALL_UPLOADED_MESSAGE`,
+`CALL_TRANSCRIBED_MESSAGE`, `CALL_REP_CHANGED_MESSAGE`, `CALL_DELETED_MESSAGE`,
+`DEAL_OUTCOME_CHANGED_MESSAGE` and `DEAL_IMPORT_UPLOADED_MESSAGE`. They carry ids and sequences
+(`repSeq`, `deletionSeq`, `outcomeSeq`, each 1 to `MAX_SEQ`) only, never content.
+
+- **Call states** (`CALL_STATES`): `uploaded`, `transcribing`, `awaiting_rep`, `processing`, `ready`,
+  `failed`, `deleted`. Failure reasons: `CALL_FAILURE_REASONS`. Import states and row reasons:
+  `DEAL_IMPORT_STATES`, `DEAL_IMPORT_ROW_REASONS`. A row result is `applied` or `rejected` in the
+  report, never an HTTP error; a report row echoes only the deal id.
+- **Rep** is `repChoiceSchema`: `{by:'speaker', label}` or `{by:'channel', channel:'left'|'right'}`, or
+  absent for a Recording that will wait in `awaiting_rep`. `repChoiceSuits(kind, rep, when)` says
+  which suits. Upload text fields are `uploadCallFieldsSchema` (`rep` is JSON text, read with `parseRepField`).
+- **Helpers** (call these, not the pieces): `checkCallFile(file)` (size, type, shape; kind from the
+  extension), `checkDealImportHeader(firstLine)`, `normaliseDealId`, `normaliseSpeakerLabel`.
+- **Deal ids** (`dealIdSchema`): trimmed, otherwise exact and case-sensitive, 1 to 128 UTF-16 code
+  units, rejected (not stripped) if they hold a control, direction, line-separator or zero-width character.
+- **Rights**: `rightsStatusSchema`, `confirmRightsRequestSchema`; `rights.confirmation_required` (428)
+  carries `rightsRequiredDetailsSchema` in `details` with the wording version to show.
+- **Limits and defaults** are exported constants, each saying whether it is the owner's or a default:
+  `MAX_TRANSCRIPT_BYTES`, `MAX_RECORDING_BYTES`, `MAX_RECORDING_SECONDS`, `MAX_DEAL_IMPORT_BYTES`,
+  `MAX_DEAL_IMPORT_ROWS`, `MAX_DEAL_ID_LENGTH`, `MAX_REP_FOLLOWING_TURNS`, `MAX_REP_FOLLOWING_CHARACTERS`,
+  `INCOMPLETE_UPLOAD_PARTS_TTL_HOURS`, `DEFAULT_MAX_CALLS`, `DEFAULT_MAX_RECORDING_BYTES_TOTAL`, `DEFAULT_MAX_DEALS`.

@@ -199,3 +199,18 @@ export const documentSizeCheckSchema = z.number().max(MAX_DOCUMENT_BYTES)
 export function normaliseMediaType(mediaType: string): string {
   return (mediaType.split(';')[0] ?? '').trim().toLowerCase()
 }
+
+/** Whether text holds a control or bidirectional character (the ones a file name has stripped), so an identifier can refuse it. */
+export function hasStrippableCharacter(text: string): boolean {
+  for (let index = 0; index < text.length; index += 1) {
+    if (isStripped(text.charCodeAt(index))) {
+      return true
+    }
+  }
+  return false
+}
+
+/** Whether text is well-formed UTF-16: no lone surrogate. */
+export function isWellFormedText(text: string): boolean {
+  return isWellFormed(text)
+}

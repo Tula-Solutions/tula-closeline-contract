@@ -1,0 +1,219 @@
+import { PLAYBOOK_WRITE_ROLES, type PlaybookRoute } from './routes'
+
+/** The roles that may read Calls, Deals, imports and the rights confirmation: Owner and Admin, who manage the Playbook. Managers and Reps get `auth.forbidden`: a Call holds a Prospect's words and a Rep's conversations are private to the Rep (glossary). The lead's reading of ADR 0018. */
+export const SALES_HISTORY_READ_ROLES = PLAYBOOK_WRITE_ROLES
+
+/** The sales-history routes, by name. */
+export type SalesHistoryRouteName =
+  | 'uploadCall'
+  | 'listCalls'
+  | 'getCall'
+  | 'deleteCall'
+  | 'restoreCall'
+  | 'setCallRep'
+  | 'listDeals'
+  | 'getDeal'
+  | 'setDealOutcome'
+  | 'uploadDealImport'
+  | 'listDealImports'
+  | 'getDealImport'
+  | 'listDealImportRows'
+  | 'getRightsConfirmation'
+  | 'confirmRights'
+
+const route = (definition: PlaybookRoute): PlaybookRoute => Object.freeze(definition)
+
+const ENVELOPE_ERRORS = [
+  'request.invalid',
+  'request.too_large',
+  'request.unsupported_media_type',
+  'request.idempotency_key_reused',
+  'request.idempotency_in_progress',
+] as const
+
+/**
+ * The sales-history routes (ADR 0018), described as `PLAYBOOK_ROUTES` describes the document
+ * routes: method, path, roles, success statuses, domain error codes and the OpenAPI description.
+ * Every route may also return the common `auth.*`, `rate.limited` and `server.*` codes. A route on
+ * another Organization's Call, Deal or import answers the not-found code. No response carries a
+ * Transcript, audio or a turn. Reads are Owner and Admin only ({@link SALES_HISTORY_READ_ROLES}).
+ */
+export const SALES_HISTORY_ROUTES: Readonly<Record<SalesHistoryRouteName, PlaybookRoute>> =
+  Object.freeze({
+    uploadCall: route({
+      method: 'POST',
+      path: '/playbook/calls',
+      internal: false,
+      roles: PLAYBOOK_WRITE_ROLES,
+      success: [201, 200],
+      errors: [
+        'rights.confirmation_required',
+        'call.unsupported_type',
+        'call.too_large',
+        'call.quota_exceeded',
+        'call.rep_invalid',
+        'call.content_in_other_deal',
+      ],
+      commonErrors: [...ENVELOPE_ERRORS],
+      description:
+        'Uploads one Call as a Transcript (txt, vtt, srt or json, up to 5 MB) or a Recording (mp3, m4a, wav, ogg, webm or flac, up to 500 MB, streamed to storage and never held whole), as multipart/form-data with one file part named "file" and the text fields "dealId" and "rep". Owner and Admin only; Managers and Reps get auth.forbidden. A Transcript needs "rep", the JSON {"by":"speaker","label":...}; a per-side Recording takes {"by":"channel","channel":"left"|"right"}; a Recording with no "rep" waits in state "awaiting_rep" after transcription until an Owner or Admin picks one. A Deal that does not exist yet is created "open". Refused with rights.confirmation_required (428, its details name the wording version to show) until the Organization has a current rights confirmation. The type and size of the file part are checked before anything is stored: call.unsupported_type (415) and call.too_large (413); a malformed name, an empty file or a bad field is request.invalid, and a Rep choice that does not suit the kind is call.rep_invalid. The common request.too_large and request.unsupported_media_type apply to the whole request instead. Answers 201 with the new Call in state "uploaded". If the content matches a Call the Organization already has under the same Deal, answers 200 with that stored Call (restoring it if it was deleted); the same content under another deal id is call.content_in_other_deal. A recording over 3 hours, a Transcript with no turns or fewer than two speakers, or a Rep label not in the file is not checked here: the Call ends in state "failed" with a failureReason. Accepts an Idempotency-Key header.',
+    }),
+    listCalls: route({
+      method: 'GET',
+      path: '/playbook/calls',
+      internal: false,
+      roles: SALES_HISTORY_READ_ROLES,
+      success: [200],
+      errors: [],
+      commonErrors: ['request.invalid'],
+      description:
+        "Lists the Organization's Calls, newest first (sorted by createdAt, then id, both descending), one cursor-paginated page at a time (at most 100). Owner and Admin only. Deleted Calls are left out unless state=deleted is asked for; state=awaiting_rep lists the Calls waiting for a Rep and dealId limits the list to one Deal.",
+    }),
+    getCall: route({
+      method: 'GET',
+      path: '/playbook/calls/{callId}',
+      internal: false,
+      roles: SALES_HISTORY_READ_ROLES,
+      success: [200],
+      errors: ['call.not_found'],
+      commonErrors: ['request.invalid'],
+      description:
+        'Reads one Call and its state, with the failure reason when it failed, the speaker labels to pick a Rep from and the purge time when it was deleted. No Transcript text or audio is returned. Owner and Admin only.',
+    }),
+    deleteCall: route({
+      method: 'DELETE',
+      path: '/playbook/calls/{callId}',
+      internal: false,
+      roles: PLAYBOOK_WRITE_ROLES,
+      success: [200],
+      errors: ['call.not_found'],
+      commonErrors: ['request.invalid'],
+      description:
+        'Soft-deletes a Call: it and its Moments are hidden from search at once and purged after 30 days, and it can be restored until then. Owner and Admin only. Idempotent by end state: answers 200 with the Call in state "deleted" and its purge time, and deleting an already deleted Call answers the same. Takes no body.',
+    }),
+    restoreCall: route({
+      method: 'POST',
+      path: '/playbook/calls/{callId}/restore',
+      internal: false,
+      roles: PLAYBOOK_WRITE_ROLES,
+      success: [200],
+      errors: ['call.not_found', 'call.not_restorable'],
+      commonErrors: ['request.invalid'],
+      description:
+        'Restores a soft-deleted Call within the retention period; it is processed again from the kept Transcript (a Recording is never transcribed twice) and shows as "processing". Owner and Admin only. Idempotent by end state: a Call that is no longer deleted answers 200 with the Call as it is. A deleted Call whose purge time has passed but which the purge has not yet removed is call.not_restorable (410); once purged the record is gone and the answer is call.not_found (404). Takes no body.',
+    }),
+    setCallRep: route({
+      method: 'PUT',
+      path: '/playbook/calls/{callId}/rep',
+      internal: false,
+      roles: PLAYBOOK_WRITE_ROLES,
+      success: [200],
+      errors: ['call.not_found', 'call.rep_invalid', 'call.rep_not_changeable'],
+      commonErrors: ['request.invalid'],
+      description:
+        'Picks the Rep of a Call waiting in "awaiting_rep", or changes the Rep of a "ready" or "failed" Call, with {"rep":{"by":"speaker","label":...}} or {"rep":{"by":"channel","channel":...}}. Owner and Admin only, and any of them may pick, not only the uploader. A choice that does not suit the Call, or a label that is not among its speakers, is call.rep_invalid; a Call in any other state is call.rep_not_changeable. Answers 200 with the Call in state "processing": its Moments are rebuilt by a queued job and the Call is out of search until it finishes. Idempotent by end state: choosing the Rep the Call already has changes nothing.',
+    }),
+    listDeals: route({
+      method: 'GET',
+      path: '/playbook/deals',
+      internal: false,
+      roles: SALES_HISTORY_READ_ROLES,
+      success: [200],
+      errors: [],
+      commonErrors: ['request.invalid'],
+      description:
+        "Lists the Organization's Deals, newest first (sorted by createdAt, then dealId, both descending), one cursor-paginated page at a time (at most 100). Owner and Admin only. outcome limits the list to one Outcome and appearedInImport=false lists the Deals that have Calls but never appeared in a CSV, so a mistyped deal id is visible.",
+    }),
+    getDeal: route({
+      method: 'GET',
+      path: '/playbook/deals/{dealId}',
+      internal: false,
+      roles: SALES_HISTORY_READ_ROLES,
+      success: [200],
+      errors: ['deal.not_found'],
+      commonErrors: ['request.invalid'],
+      description:
+        'Reads one Deal by its deal id (trimmed, otherwise exact and case-sensitive). Owner and Admin only. A Deal cannot be deleted on its own.',
+    }),
+    setDealOutcome: route({
+      method: 'PUT',
+      path: '/playbook/deals/{dealId}/outcome',
+      internal: false,
+      roles: PLAYBOOK_WRITE_ROLES,
+      success: [200],
+      errors: ['deal.not_found'],
+      commonErrors: ['request.invalid'],
+      description:
+        "Sets or corrects a Deal's Outcome (won, lost or open), even a decided one. Owner and Admin only. Idempotent by end state. A change bumps the Deal's Outcome sequence and queues the re-tag of its Moments; search follows the database at once for a lost Deal and may lag for a Deal that has just become won.",
+    }),
+    uploadDealImport: route({
+      method: 'POST',
+      path: '/playbook/deal-imports',
+      internal: false,
+      roles: PLAYBOOK_WRITE_ROLES,
+      success: [202, 200],
+      errors: [
+        'deal_import.unsupported_type',
+        'deal_import.too_large',
+        'deal_import.header_invalid',
+      ],
+      commonErrors: [...ENVELOPE_ERRORS],
+      description:
+        'Uploads the fixed CSV template (columns deal_id, outcome, closed_at, amount, currency and optionally name; up to 10 MB and 50,000 rows) as multipart/form-data with one file part named "file". Owner and Admin only. The type, size and first row are checked before anything is stored: deal_import.unsupported_type (415), deal_import.too_large (413) and deal_import.header_invalid (422). Answers 202 with the import in state "uploaded"; it is processed in the background. A repeat of the same content answers 200 with the stored import. Valid rows are applied and bad rows are reported, never dropped: a deal id already won or lost, or repeated within the file, is a rejected row in the report, not an HTTP error. A file with more rows than the limit ends in state "failed" with failureReason "too_many_rows". Accepts an Idempotency-Key header.',
+    }),
+    listDealImports: route({
+      method: 'GET',
+      path: '/playbook/deal-imports',
+      internal: false,
+      roles: SALES_HISTORY_READ_ROLES,
+      success: [200],
+      errors: [],
+      commonErrors: ['request.invalid'],
+      description:
+        "Lists the Organization's Deal imports, newest first (sorted by createdAt, then id, both descending), one cursor-paginated page at a time (at most 100). Owner and Admin only.",
+    }),
+    getDealImport: route({
+      method: 'GET',
+      path: '/playbook/deal-imports/{importId}',
+      internal: false,
+      roles: SALES_HISTORY_READ_ROLES,
+      success: [200],
+      errors: ['deal_import.not_found'],
+      commonErrors: ['request.invalid'],
+      description:
+        'Reads one import: its state, failure reason and the counts of rows, applied rows and rejected rows. Owner and Admin only.',
+    }),
+    listDealImportRows: route({
+      method: 'GET',
+      path: '/playbook/deal-imports/{importId}/rows',
+      internal: false,
+      roles: SALES_HISTORY_READ_ROLES,
+      success: [200],
+      errors: ['deal_import.not_found'],
+      commonErrors: ['request.invalid'],
+      description:
+        'Reads the report of an import, in CSV order, one cursor-paginated page at a time (at most 100); result=rejected lists only the rows that need fixing. Each row has its row number (the header is row 1), the deal id when it was valid, the result and a reason code. No other cell is returned. Owner and Admin only.',
+    }),
+    getRightsConfirmation: route({
+      method: 'GET',
+      path: '/playbook/rights-confirmation',
+      internal: false,
+      roles: SALES_HISTORY_READ_ROLES,
+      success: [200],
+      errors: [],
+      commonErrors: [],
+      description:
+        "Reads the Organization's recorded confirmation that it may share Recordings and Transcripts, with who confirmed and when, the version of the wording they saw, the current wording version and whether the stored one is current. Owner and Admin only. Without a current confirmation, uploads of Calls are refused; existing Calls are kept and stay searchable.",
+    }),
+    confirmRights: route({
+      method: 'PUT',
+      path: '/playbook/rights-confirmation',
+      internal: false,
+      roles: PLAYBOOK_WRITE_ROLES,
+      success: [200],
+      errors: ['rights.version_outdated'],
+      commonErrors: ['request.invalid'],
+      description:
+        'Records the confirmation, with the wording version the member was shown, which must be the current one (else rights.version_outdated, 409). Owner and Admin only. Who confirmed and when come from the token and the clock, never from the body. Idempotent by end state: confirming the current version again changes nothing. A lawyer is to check the wording before real customers use it.',
+    }),
+  })

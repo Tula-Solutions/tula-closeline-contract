@@ -186,6 +186,8 @@ var teamIdSchema = idSchema("team");
 var invitationIdSchema = idSchema("inv");
 var prospectIdSchema = idSchema("prs");
 var documentIdSchema = idSchema("doc");
+var callIdSchema = idSchema("call");
+var dealImportIdSchema = idSchema("dimp");
 var eventIdSchema = idSchema("evt");
 var requestIdSchema = idSchema("req");
 var UUID_PATTERN = /^(?:[0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
@@ -484,7 +486,10 @@ function defineEvent(type, version, dataSchema) {
     safeParse: (input) => schema.safeParse(input)
   };
 }
-// src/playbook/document.ts
+// src/playbook/call.ts
+import { z as z16 } from "zod";
+
+// src/playbook/call-values.ts
 import { z as z14 } from "zod";
 
 // src/playbook/values.ts
@@ -568,14 +573,399 @@ var documentSizeCheckSchema = z13.number().max(MAX_DOCUMENT_BYTES);
 function normaliseMediaType(mediaType) {
   return (mediaType.split(";")[0] ?? "").trim().toLowerCase();
 }
+function hasStrippableCharacter(text) {
+  for (let index = 0;index < text.length; index += 1) {
+    if (isStripped(text.charCodeAt(index))) {
+      return true;
+    }
+  }
+  return false;
+}
+function isWellFormedText(text) {
+  return isWellFormed2(text);
+}
 
+// src/playbook/call-values.ts
+var CALL_STATES = [
+  "uploaded",
+  "transcribing",
+  "awaiting_rep",
+  "processing",
+  "ready",
+  "failed",
+  "deleted"
+];
+var callStateSchema = z14.enum(CALL_STATES);
+var CALL_FAILURE_REASONS = [
+  "no_turns",
+  "too_few_speakers",
+  "rep_label_not_found",
+  "not_per_side",
+  "too_long",
+  "transcription_failed",
+  "transcription_timed_out",
+  "unreadable",
+  "processing_failed"
+];
+var callFailureReasonSchema = z14.enum(CALL_FAILURE_REASONS);
+var CALL_KINDS = ["transcript", "recording"];
+var callKindSchema = z14.enum(CALL_KINDS);
+var ACCEPTED_TRANSCRIPT_EXTENSIONS = [".txt", ".vtt", ".srt", ".json"];
+var ACCEPTED_RECORDING_EXTENSIONS = [
+  ".mp3",
+  ".m4a",
+  ".wav",
+  ".ogg",
+  ".webm",
+  ".flac"
+];
+var CALL_MEDIA_TYPES = [
+  "text/plain",
+  "text/vtt",
+  "application/x-subrip",
+  "application/json",
+  "audio/mpeg",
+  "audio/mp4",
+  "audio/wav",
+  "audio/ogg",
+  "audio/webm",
+  "audio/flac"
+];
+var callMediaTypeSchema = z14.enum(CALL_MEDIA_TYPES);
+var MEDIA_TYPE_BY_CALL_EXTENSION = Object.freeze({
+  ".txt": "text/plain",
+  ".vtt": "text/vtt",
+  ".srt": "application/x-subrip",
+  ".json": "application/json",
+  ".mp3": "audio/mpeg",
+  ".m4a": "audio/mp4",
+  ".wav": "audio/wav",
+  ".ogg": "audio/ogg",
+  ".webm": "audio/webm",
+  ".flac": "audio/flac"
+});
+var MAX_TRANSCRIPT_BYTES = 5 * 1024 * 1024;
+var MAX_RECORDING_BYTES = 500 * 1024 * 1024;
+var MAX_RECORDING_SECONDS = 3 * 60 * 60;
+var INCOMPLETE_UPLOAD_PARTS_TTL_HOURS = 24;
+var MAX_REP_FOLLOWING_TURNS = 5;
+var MAX_REP_FOLLOWING_CHARACTERS = 4000;
+var DEFAULT_MAX_CALLS = 2000;
+var DEFAULT_MAX_RECORDING_BYTES_TOTAL = 50 * 1024 * 1024 * 1024;
+var DEFAULT_MAX_DEALS = 20000;
+var MAX_CALL_SPEAKERS = 10;
+var MAX_SPEAKER_LABEL_LENGTH = 64;
+function normaliseSpeakerLabel(label) {
+  return normaliseFileName(label);
+}
+var speakerLabelSchema = z14.string().max(1000).transform(normaliseSpeakerLabel).pipe(z14.string().min(1).max(MAX_SPEAKER_LABEL_LENGTH).refine(isWellFormedText, "Well-formed text only").refine((label) => !hasStrippableCharacter(label), "No control characters"));
+var CALL_CHANNELS = ["left", "right"];
+var callChannelSchema = z14.enum(CALL_CHANNELS);
+var repChoiceSchema = z14.discriminatedUnion("by", [
+  z14.strictObject({ by: z14.literal("speaker"), label: speakerLabelSchema }),
+  z14.strictObject({ by: z14.literal("channel"), channel: callChannelSchema })
+]);
+function repChoiceSuits(kind, rep, when) {
+  if (rep === null || rep === undefined) {
+    return when === "upload" && kind === "recording";
+  }
+  if (kind === "transcript") {
+    return rep.by === "speaker";
+  }
+  return when === "change" || rep.by === "channel";
+}
+
+// src/playbook/deal-values.ts
+import { z as z15 } from "zod";
+var OUTCOMES = ["won", "lost", "open"];
+var outcomeSchema = z15.enum(OUTCOMES);
+var MAX_DEAL_ID_LENGTH = 128;
+var MAX_RAW_DEAL_ID_LENGTH = 1000;
+function isInvisibleIdentifierCharacter(code) {
+  return code === 8232 || code === 8233 || code >= 8203 && code <= 8205 || code === 8288 || code === 65279;
+}
+function hasInvisibleCharacter(text) {
+  for (let index = 0;index < text.length; index += 1) {
+    if (isInvisibleIdentifierCharacter(text.charCodeAt(index))) {
+      return true;
+    }
+  }
+  return false;
+}
+function normaliseDealId(dealId) {
+  return dealId.trim();
+}
+var dealIdSchema = z15.string().max(MAX_RAW_DEAL_ID_LENGTH).transform(normaliseDealId).pipe(z15.string().min(1).max(MAX_DEAL_ID_LENGTH).refine(isWellFormedText, "Well-formed text only").refine((id) => !hasStrippableCharacter(id), "No control or direction characters").refine((id) => !hasInvisibleCharacter(id), "No invisible characters"));
+var MAX_DEAL_NAME_LENGTH = 200;
+var dealNameSchema = z15.string().max(1000).trim().pipe(z15.string().min(1).max(MAX_DEAL_NAME_LENGTH).refine(isWellFormedText, "Well-formed text only").refine((name) => !hasStrippableCharacter(name), "No control or direction characters"));
+var dealAmountSchema = z15.string().regex(/^\d{1,15}(\.\d{1,2})?$/);
+var dealCurrencySchema = z15.string().regex(/^[A-Z]{3}$/);
+var MAX_DEAL_IMPORT_BYTES = 10 * 1024 * 1024;
+var MAX_DEAL_IMPORT_ROWS = 50000;
+var DEAL_IMPORT_REQUIRED_COLUMNS = [
+  "deal_id",
+  "outcome",
+  "closed_at",
+  "amount",
+  "currency"
+];
+var DEAL_IMPORT_OPTIONAL_COLUMN = "name";
+var MAX_DEAL_IMPORT_HEADER_LENGTH = 1024;
+var DEAL_IMPORT_HEADER_PROBLEMS = [
+  "empty",
+  "too_long",
+  "missing_column",
+  "unexpected_column",
+  "wrong_order"
+];
+function checkDealImportHeader(line) {
+  const refuse = (problem) => ({ ok: false, code: "deal_import.header_invalid", problem });
+  if (line.length > MAX_DEAL_IMPORT_HEADER_LENGTH) {
+    return refuse("too_long");
+  }
+  const unbommed = line.startsWith("\uFEFF") ? line.slice(1) : line;
+  const text = unbommed.endsWith("\r") ? unbommed.slice(0, -1) : unbommed;
+  if (text.trim() === "") {
+    return refuse("empty");
+  }
+  if (/[\r\n]/.test(text)) {
+    return refuse("unexpected_column");
+  }
+  const cells = text.split(",").map((cell) => cell.trim().replace(/^"(.*)"$/, "$1").trim());
+  const known = [...DEAL_IMPORT_REQUIRED_COLUMNS, DEAL_IMPORT_OPTIONAL_COLUMN];
+  if (cells.some((cell) => !known.includes(cell))) {
+    return refuse("unexpected_column");
+  }
+  if (new Set(cells).size !== cells.length) {
+    return refuse("unexpected_column");
+  }
+  if (DEAL_IMPORT_REQUIRED_COLUMNS.some((column) => !cells.includes(column))) {
+    return refuse("missing_column");
+  }
+  const expected = [...DEAL_IMPORT_REQUIRED_COLUMNS, DEAL_IMPORT_OPTIONAL_COLUMN].slice(0, cells.length);
+  if (cells.some((cell, index) => cell !== expected[index])) {
+    return refuse("wrong_order");
+  }
+  return { ok: true, hasName: cells.length === DEAL_IMPORT_REQUIRED_COLUMNS.length + 1 };
+}
+var DEAL_IMPORT_STATES = ["uploaded", "processing", "completed", "failed"];
+var dealImportStateSchema = z15.enum(DEAL_IMPORT_STATES);
+var DEAL_IMPORT_FAILURE_REASONS = [
+  "too_many_rows",
+  "unreadable",
+  "processing_failed"
+];
+var dealImportFailureReasonSchema = z15.enum(DEAL_IMPORT_FAILURE_REASONS);
+var DEAL_IMPORT_ROW_RESULTS = ["applied", "rejected"];
+var dealImportRowResultSchema = z15.enum(DEAL_IMPORT_ROW_RESULTS);
+var DEAL_IMPORT_ROW_REASONS = [
+  "wrong_column_count",
+  "invalid_deal_id",
+  "duplicate_in_file",
+  "invalid_outcome",
+  "invalid_closed_at",
+  "invalid_amount",
+  "invalid_currency",
+  "invalid_name",
+  "outcome_already_decided",
+  "deal_limit_reached"
+];
+var dealImportRowReasonSchema = z15.enum(DEAL_IMPORT_ROW_REASONS);
+
+// src/playbook/call.ts
+var callSchema = z16.object({
+  id: callIdSchema,
+  dealId: dealIdSchema,
+  kind: callKindSchema,
+  fileName: documentFileNameSchema,
+  mediaType: callMediaTypeSchema,
+  sizeBytes: z16.number().int().min(1).max(MAX_RECORDING_BYTES),
+  durationSeconds: z16.number().int().min(1).max(MAX_RECORDING_SECONDS).nullable(),
+  state: callStateSchema,
+  failureReason: callFailureReasonSchema.nullable(),
+  rep: repChoiceSchema.nullable(),
+  speakerLabels: z16.array(speakerLabelSchema).max(MAX_CALL_SPEAKERS),
+  deletedAt: timestampSchema.nullable(),
+  purgeAt: timestampSchema.nullable(),
+  uploadedByUserId: userIdSchema,
+  createdAt: timestampSchema,
+  updatedAt: timestampSchema
+}).superRefine((call, context) => {
+  const issue = (path, message) => context.addIssue({ code: "custom", path: [path], message });
+  if (call.state === "failed" !== (call.failureReason !== null)) {
+    issue("failureReason", "A failure reason is set exactly when the state is failed");
+  }
+  const deleted = call.state === "deleted";
+  if (deleted !== (call.deletedAt !== null) || deleted !== (call.purgeAt !== null)) {
+    issue("purgeAt", "A deletion time and a purge time are set exactly when the state is deleted");
+  }
+  if (call.state === "awaiting_rep" && call.rep !== null) {
+    issue("rep", "A Call awaiting its Rep has none");
+  }
+  if (call.state === "ready" && call.rep === null) {
+    issue("rep", "A ready Call has a Rep");
+  }
+  if (call.kind === "transcript" && (call.state === "transcribing" || call.state === "awaiting_rep")) {
+    issue("state", "A Transcript is not transcribed and has its Rep at upload");
+  }
+});
+var uploadCallFieldsSchema = z16.strictObject({
+  dealId: dealIdSchema,
+  rep: z16.string().max(512).optional()
+});
+function parseRepField(text) {
+  try {
+    const result = repChoiceSchema.safeParse(JSON.parse(text));
+    return result.success ? result.data : undefined;
+  } catch {
+    return;
+  }
+}
+var callParamsSchema = z16.strictObject({ callId: callIdSchema });
+var listCallsQuerySchema = pageQuerySchema.extend({ state: callStateSchema.optional(), dealId: dealIdSchema.optional() }).strict();
+var listCallsResponseSchema = pageSchema(callSchema);
+var setCallRepRequestSchema = z16.strictObject({ rep: repChoiceSchema });
+var CALL_FILE_KEYS = ["fileName", "declaredMediaType", "sizeBytes"];
+var uploadCallFileSchema = z16.strictObject({
+  fileName: documentFileNameSchema,
+  declaredMediaType: z16.string().max(255).nullable(),
+  sizeBytes: z16.number().int().min(1)
+});
+function callKindOf(fileName) {
+  const lower = fileName.toLowerCase();
+  if (ACCEPTED_TRANSCRIPT_EXTENSIONS.some((extension) => lower.endsWith(extension))) {
+    return "transcript";
+  }
+  if (ACCEPTED_RECORDING_EXTENSIONS.some((extension) => lower.endsWith(extension))) {
+    return "recording";
+  }
+  return;
+}
+function checkCallFile(input) {
+  const invalid = { ok: false, code: "request.invalid" };
+  if (typeof input !== "object" || input === null) {
+    return invalid;
+  }
+  if (Object.keys(input).some((key) => !CALL_FILE_KEYS.includes(key))) {
+    return invalid;
+  }
+  const copy = Object.create(null);
+  for (const key of CALL_FILE_KEYS) {
+    if (Object.hasOwn(input, key)) {
+      copy[key] = input[key];
+    }
+  }
+  const { fileName, sizeBytes } = copy;
+  if (typeof fileName !== "string" || typeof sizeBytes !== "number" || !Number.isFinite(sizeBytes)) {
+    return invalid;
+  }
+  if (sizeBytes > MAX_RECORDING_BYTES) {
+    return { ok: false, code: "call.too_large" };
+  }
+  const kind = callKindOf(normaliseFileName(fileName));
+  if (kind === undefined) {
+    return { ok: false, code: "call.unsupported_type" };
+  }
+  if (kind === "transcript" && sizeBytes > MAX_TRANSCRIPT_BYTES) {
+    return { ok: false, code: "call.too_large" };
+  }
+  const parsed = uploadCallFileSchema.safeParse(copy);
+  return parsed.success ? { ok: true, kind, file: parsed.data } : invalid;
+}
+// src/playbook/deal.ts
+import { z as z17 } from "zod";
+var dealSchema = z17.object({
+  dealId: dealIdSchema,
+  name: dealNameSchema.nullable(),
+  outcome: outcomeSchema,
+  closedAt: timestampSchema.nullable(),
+  amount: dealAmountSchema.nullable(),
+  currency: dealCurrencySchema.nullable(),
+  callCount: z17.number().int().min(0),
+  appearedInImport: z17.boolean(),
+  createdAt: timestampSchema,
+  updatedAt: timestampSchema
+});
+var dealParamsSchema = z17.strictObject({ dealId: dealIdSchema });
+var listDealsQuerySchema = pageQuerySchema.extend({
+  outcome: outcomeSchema.optional(),
+  appearedInImport: z17.enum(["true", "false"]).transform((value) => value === "true").optional()
+}).strict();
+var listDealsResponseSchema = pageSchema(dealSchema);
+var setDealOutcomeRequestSchema = z17.strictObject({ outcome: outcomeSchema, closedAt: timestampSchema.nullable().optional() }).refine((body) => body.outcome !== "open" || !body.closedAt, {
+  message: "An open Deal has no closing time",
+  path: ["closedAt"]
+});
+var DEAL_IMPORT_FILE_FIELD = "file";
+var dealImportSchema = z17.object({
+  id: dealImportIdSchema,
+  state: dealImportStateSchema,
+  failureReason: dealImportFailureReasonSchema.nullable(),
+  rowCount: z17.number().int().min(0).max(MAX_DEAL_IMPORT_ROWS).nullable(),
+  appliedCount: z17.number().int().min(0).max(MAX_DEAL_IMPORT_ROWS).nullable(),
+  rejectedCount: z17.number().int().min(0).max(MAX_DEAL_IMPORT_ROWS).nullable(),
+  uploadedByUserId: userIdSchema,
+  createdAt: timestampSchema,
+  updatedAt: timestampSchema
+}).superRefine((item, context) => {
+  if (item.state === "failed" !== (item.failureReason !== null)) {
+    context.addIssue({
+      code: "custom",
+      path: ["failureReason"],
+      message: "A failure reason is set exactly when the state is failed"
+    });
+  }
+  const counted = item.rowCount !== null && item.appliedCount !== null && item.rejectedCount !== null;
+  const none = item.rowCount === null && item.appliedCount === null && item.rejectedCount === null;
+  if (item.state === "completed" ? !counted : !none) {
+    context.addIssue({
+      code: "custom",
+      path: ["rowCount"],
+      message: "The counts are set exactly when the import is completed"
+    });
+  }
+  if (counted && item.appliedCount !== null && item.rejectedCount !== null && item.rowCount !== item.appliedCount + item.rejectedCount) {
+    context.addIssue({
+      code: "custom",
+      path: ["rowCount"],
+      message: "The row count is the applied and rejected rows together"
+    });
+  }
+});
+var dealImportParamsSchema = z17.strictObject({ importId: dealImportIdSchema });
+var listDealImportsQuerySchema = pageQuerySchema.strict();
+var listDealImportsResponseSchema = pageSchema(dealImportSchema);
+var dealImportRowSchema = z17.object({
+  rowNumber: z17.number().int().min(2).max(MAX_DEAL_IMPORT_ROWS + 1),
+  dealId: dealIdSchema.nullable(),
+  result: dealImportRowResultSchema,
+  reason: dealImportRowReasonSchema.nullable()
+}).superRefine((row, context) => {
+  if (row.result === "rejected" !== (row.reason !== null)) {
+    context.addIssue({
+      code: "custom",
+      path: ["reason"],
+      message: "A reason is set exactly when the row is rejected"
+    });
+  }
+  if (row.dealId === null && row.reason !== "invalid_deal_id" && row.reason !== "wrong_column_count") {
+    context.addIssue({
+      code: "custom",
+      path: ["dealId"],
+      message: "Only a row with no usable deal id has none"
+    });
+  }
+});
+var listDealImportRowsQuerySchema = pageQuerySchema.extend({ result: dealImportRowResultSchema.optional() }).strict();
+var listDealImportRowsResponseSchema = pageSchema(dealImportRowSchema);
 // src/playbook/document.ts
-var documentSchema = z14.object({
+import { z as z18 } from "zod";
+var documentSchema = z18.object({
   id: documentIdSchema,
   fileName: documentFileNameSchema,
   mediaType: documentMediaTypeSchema,
-  sizeBytes: z14.number().int().min(1).max(MAX_DOCUMENT_BYTES),
-  pageCount: z14.number().int().min(1).max(MAX_DOCUMENT_PAGES).nullable(),
+  sizeBytes: z18.number().int().min(1).max(MAX_DOCUMENT_BYTES),
+  pageCount: z18.number().int().min(1).max(MAX_DOCUMENT_PAGES).nullable(),
   state: documentStateSchema,
   failureReason: documentFailureReasonSchema.nullable(),
   deletedAt: timestampSchema.nullable(),
@@ -602,23 +992,23 @@ var documentSchema = z14.object({
 });
 var UPLOAD_FILE_FIELD = "file";
 var UPLOAD_CONTENT_TYPE = "multipart/form-data";
-var uploadDocumentFileSchema = z14.strictObject({
+var uploadDocumentFileSchema = z18.strictObject({
   fileName: documentFileNameSchema,
-  declaredMediaType: z14.string().max(255).nullable(),
-  sizeBytes: z14.number().int().min(1)
+  declaredMediaType: z18.string().max(255).nullable(),
+  sizeBytes: z18.number().int().min(1)
 });
-var documentParamsSchema = z14.strictObject({
+var documentParamsSchema = z18.strictObject({
   documentId: documentIdSchema
 });
 var listDocumentsQuerySchema = pageQuerySchema.extend({ state: documentStateSchema.optional() }).strict();
 var listDocumentsResponseSchema = pageSchema(documentSchema);
-var internalRemoveOrganizationDocumentsParamsSchema = z14.strictObject({
+var internalRemoveOrganizationDocumentsParamsSchema = z18.strictObject({
   organizationId: organizationIdSchema
 });
-var internalRemoveOrganizationDocumentsRequestSchema = z14.strictObject({});
-var internalRemoveOrganizationDocumentsResponseSchema = z14.object({
+var internalRemoveOrganizationDocumentsRequestSchema = z18.strictObject({});
+var internalRemoveOrganizationDocumentsResponseSchema = z18.object({
   organizationId: organizationIdSchema,
-  status: z14.literal("removed")
+  status: z18.literal("removed")
 });
 var UPLOAD_FILE_KEYS = ["fileName", "declaredMediaType", "sizeBytes"];
 function checkUploadFile(input) {
@@ -666,8 +1056,8 @@ var PLAYBOOK_ERRORS = {
   })
 };
 // src/playbook/messages.ts
-import { z as z15 } from "zod";
-var documentUploadedPayloadSchema = z15.strictObject({
+import { z as z19 } from "zod";
+var documentUploadedPayloadSchema = z19.strictObject({
   documentId: documentIdSchema
 });
 var DOCUMENT_UPLOADED_MESSAGE = {
@@ -677,9 +1067,9 @@ var DOCUMENT_UPLOADED_MESSAGE = {
   payload: documentUploadedPayloadSchema
 };
 var MAX_DELETION_SEQ = 2147483647;
-var documentDeletedPayloadSchema = z15.strictObject({
+var documentDeletedPayloadSchema = z19.strictObject({
   documentId: documentIdSchema,
-  deletionSeq: z15.number().int().min(1).max(MAX_DELETION_SEQ)
+  deletionSeq: z19.number().int().min(1).max(MAX_DELETION_SEQ)
 });
 var DOCUMENT_DELETED_MESSAGE = {
   type: "playbook.document_deleted",
@@ -687,6 +1077,23 @@ var DOCUMENT_DELETED_MESSAGE = {
   scope: "organization",
   payload: documentDeletedPayloadSchema
 };
+// src/playbook/rights.ts
+import { z as z20 } from "zod";
+var MAX_RIGHTS_WORDING_VERSION = 1e6;
+var rightsWordingVersionSchema = z20.number().int().min(1).max(MAX_RIGHTS_WORDING_VERSION);
+var rightsConfirmationSchema = z20.object({
+  wordingVersion: rightsWordingVersionSchema,
+  confirmedByUserId: userIdSchema,
+  confirmedAt: timestampSchema
+});
+var rightsStatusSchema = z20.object({
+  currentWordingVersion: rightsWordingVersionSchema,
+  confirmation: rightsConfirmationSchema.nullable(),
+  confirmed: z20.boolean()
+});
+var confirmRightsRequestSchema = z20.strictObject({
+  wordingVersion: rightsWordingVersionSchema
+});
 // src/playbook/routes.ts
 var PLAYBOOK_WRITE_ROLES = ["owner", "admin"];
 var PLAYBOOK_READ_ROLES = [
@@ -765,7 +1172,286 @@ var PLAYBOOK_ROUTES = Object.freeze({
       "request.idempotency_key_reused",
       "request.idempotency_in_progress"
     ],
-    description: "Internal, for offboarding and erasure; no caller yet. Removes every document, file, chunk and vector an Organization has, soft-deleted ones included, without waiting for retention. Idempotent by end state: it answers 200 whenever nothing remains. Served on the internal network only; takes the Organization from the path."
+    description: "Internal, for offboarding and erasure; no caller yet. Removes every document, file, chunk and vector an Organization has, and, since ADR 0018, its Calls, Recordings, Transcripts, Moments, Deals and Deal imports (and the copy the transcription vendor holds of a Recording), soft-deleted ones included, without waiting for retention. Idempotent by end state: it answers 200 whenever nothing remains. Served on the internal network only; takes the Organization from the path."
+  })
+});
+// src/playbook/sales-history-errors.ts
+import { z as z21 } from "zod";
+var SALES_HISTORY_ERRORS = {
+  ...defineErrors("call", {
+    not_found: { status: 404, message: "The Call was not found." },
+    unsupported_type: { status: 415, message: "This file type is not supported." },
+    too_large: { status: 413, message: "The file is larger than the upload limit." },
+    quota_exceeded: {
+      status: 409,
+      message: "The Organization has reached its limit on Calls, Recordings or Deals. Deleted Calls count until they are purged."
+    },
+    content_in_other_deal: {
+      status: 409,
+      message: "This Call was already uploaded for a different Deal."
+    },
+    rep_invalid: { status: 422, message: "The Rep choice is not valid for this Call." },
+    rep_not_changeable: {
+      status: 409,
+      message: "The Rep of this Call cannot be changed in its current state."
+    },
+    not_restorable: {
+      status: 410,
+      message: "The Call was purged after its retention period and cannot be restored."
+    }
+  }),
+  ...defineErrors("deal", {
+    not_found: { status: 404, message: "The Deal was not found." }
+  }),
+  ...defineErrors("deal_import", {
+    not_found: { status: 404, message: "The import was not found." },
+    unsupported_type: { status: 415, message: "This file type is not supported." },
+    too_large: { status: 413, message: "The file is larger than the upload limit." },
+    header_invalid: {
+      status: 422,
+      message: "The first row does not match the template."
+    }
+  }),
+  ...defineErrors("rights", {
+    confirmation_required: {
+      status: 428,
+      message: "Confirm that your Organization may share these Calls before uploading them."
+    },
+    version_outdated: {
+      status: 409,
+      message: "The confirmation wording has changed. Reload and confirm the current version."
+    }
+  })
+};
+var rightsRequiredDetailsSchema = z21.strictObject({
+  wordingVersion: z21.number().int().min(1).max(1e6)
+});
+// src/playbook/sales-history-messages.ts
+import { z as z22 } from "zod";
+var MAX_SEQ = MAX_DELETION_SEQ;
+var seqSchema = z22.number().int().min(1).max(MAX_SEQ);
+var callUploadedPayloadSchema = z22.strictObject({ callId: callIdSchema });
+var CALL_UPLOADED_MESSAGE = {
+  type: "playbook.call_uploaded",
+  version: 1,
+  scope: "organization",
+  payload: callUploadedPayloadSchema
+};
+var callTranscribedPayloadSchema = z22.strictObject({ callId: callIdSchema });
+var CALL_TRANSCRIBED_MESSAGE = {
+  type: "playbook.call_transcribed",
+  version: 1,
+  scope: "organization",
+  payload: callTranscribedPayloadSchema
+};
+var callRepChangedPayloadSchema = z22.strictObject({
+  callId: callIdSchema,
+  repSeq: seqSchema
+});
+var CALL_REP_CHANGED_MESSAGE = {
+  type: "playbook.call_rep_changed",
+  version: 1,
+  scope: "organization",
+  payload: callRepChangedPayloadSchema
+};
+var callDeletedPayloadSchema = z22.strictObject({
+  callId: callIdSchema,
+  deletionSeq: seqSchema
+});
+var CALL_DELETED_MESSAGE = {
+  type: "playbook.call_deleted",
+  version: 1,
+  scope: "organization",
+  payload: callDeletedPayloadSchema
+};
+var dealOutcomeChangedPayloadSchema = z22.strictObject({
+  dealId: dealIdSchema,
+  outcomeSeq: seqSchema
+});
+var DEAL_OUTCOME_CHANGED_MESSAGE = {
+  type: "playbook.deal_outcome_changed",
+  version: 1,
+  scope: "organization",
+  payload: dealOutcomeChangedPayloadSchema
+};
+var dealImportUploadedPayloadSchema = z22.strictObject({ importId: dealImportIdSchema });
+var DEAL_IMPORT_UPLOADED_MESSAGE = {
+  type: "playbook.deal_import_uploaded",
+  version: 1,
+  scope: "organization",
+  payload: dealImportUploadedPayloadSchema
+};
+// src/playbook/sales-history-routes.ts
+var SALES_HISTORY_READ_ROLES = PLAYBOOK_WRITE_ROLES;
+var route2 = (definition) => Object.freeze(definition);
+var ENVELOPE_ERRORS = [
+  "request.invalid",
+  "request.too_large",
+  "request.unsupported_media_type",
+  "request.idempotency_key_reused",
+  "request.idempotency_in_progress"
+];
+var SALES_HISTORY_ROUTES = Object.freeze({
+  uploadCall: route2({
+    method: "POST",
+    path: "/playbook/calls",
+    internal: false,
+    roles: PLAYBOOK_WRITE_ROLES,
+    success: [201, 200],
+    errors: [
+      "rights.confirmation_required",
+      "call.unsupported_type",
+      "call.too_large",
+      "call.quota_exceeded",
+      "call.rep_invalid",
+      "call.content_in_other_deal"
+    ],
+    commonErrors: [...ENVELOPE_ERRORS],
+    description: 'Uploads one Call as a Transcript (txt, vtt, srt or json, up to 5 MB) or a Recording (mp3, m4a, wav, ogg, webm or flac, up to 500 MB, streamed to storage and never held whole), as multipart/form-data with one file part named "file" and the text fields "dealId" and "rep". Owner and Admin only; Managers and Reps get auth.forbidden. A Transcript needs "rep", the JSON {"by":"speaker","label":...}; a per-side Recording takes {"by":"channel","channel":"left"|"right"}; a Recording with no "rep" waits in state "awaiting_rep" after transcription until an Owner or Admin picks one. A Deal that does not exist yet is created "open". Refused with rights.confirmation_required (428, its details name the wording version to show) until the Organization has a current rights confirmation. The type and size of the file part are checked before anything is stored: call.unsupported_type (415) and call.too_large (413); a malformed name, an empty file or a bad field is request.invalid, and a Rep choice that does not suit the kind is call.rep_invalid. The common request.too_large and request.unsupported_media_type apply to the whole request instead. Answers 201 with the new Call in state "uploaded". If the content matches a Call the Organization already has under the same Deal, answers 200 with that stored Call (restoring it if it was deleted); the same content under another deal id is call.content_in_other_deal. A recording over 3 hours, a Transcript with no turns or fewer than two speakers, or a Rep label not in the file is not checked here: the Call ends in state "failed" with a failureReason. Accepts an Idempotency-Key header.'
+  }),
+  listCalls: route2({
+    method: "GET",
+    path: "/playbook/calls",
+    internal: false,
+    roles: SALES_HISTORY_READ_ROLES,
+    success: [200],
+    errors: [],
+    commonErrors: ["request.invalid"],
+    description: "Lists the Organization's Calls, newest first (sorted by createdAt, then id, both descending), one cursor-paginated page at a time (at most 100). Owner and Admin only. Deleted Calls are left out unless state=deleted is asked for; state=awaiting_rep lists the Calls waiting for a Rep and dealId limits the list to one Deal."
+  }),
+  getCall: route2({
+    method: "GET",
+    path: "/playbook/calls/{callId}",
+    internal: false,
+    roles: SALES_HISTORY_READ_ROLES,
+    success: [200],
+    errors: ["call.not_found"],
+    commonErrors: ["request.invalid"],
+    description: "Reads one Call and its state, with the failure reason when it failed, the speaker labels to pick a Rep from and the purge time when it was deleted. No Transcript text or audio is returned. Owner and Admin only."
+  }),
+  deleteCall: route2({
+    method: "DELETE",
+    path: "/playbook/calls/{callId}",
+    internal: false,
+    roles: PLAYBOOK_WRITE_ROLES,
+    success: [200],
+    errors: ["call.not_found"],
+    commonErrors: ["request.invalid"],
+    description: 'Soft-deletes a Call: it and its Moments are hidden from search at once and purged after 30 days, and it can be restored until then. Owner and Admin only. Idempotent by end state: answers 200 with the Call in state "deleted" and its purge time, and deleting an already deleted Call answers the same. Takes no body.'
+  }),
+  restoreCall: route2({
+    method: "POST",
+    path: "/playbook/calls/{callId}/restore",
+    internal: false,
+    roles: PLAYBOOK_WRITE_ROLES,
+    success: [200],
+    errors: ["call.not_found", "call.not_restorable"],
+    commonErrors: ["request.invalid"],
+    description: 'Restores a soft-deleted Call within the retention period; it is processed again from the kept Transcript (a Recording is never transcribed twice) and shows as "processing". Owner and Admin only. Idempotent by end state: a Call that is no longer deleted answers 200 with the Call as it is. A deleted Call whose purge time has passed but which the purge has not yet removed is call.not_restorable (410); once purged the record is gone and the answer is call.not_found (404). Takes no body.'
+  }),
+  setCallRep: route2({
+    method: "PUT",
+    path: "/playbook/calls/{callId}/rep",
+    internal: false,
+    roles: PLAYBOOK_WRITE_ROLES,
+    success: [200],
+    errors: ["call.not_found", "call.rep_invalid", "call.rep_not_changeable"],
+    commonErrors: ["request.invalid"],
+    description: 'Picks the Rep of a Call waiting in "awaiting_rep", or changes the Rep of a "ready" or "failed" Call, with {"rep":{"by":"speaker","label":...}} or {"rep":{"by":"channel","channel":...}}. Owner and Admin only, and any of them may pick, not only the uploader. A choice that does not suit the Call, or a label that is not among its speakers, is call.rep_invalid; a Call in any other state is call.rep_not_changeable. Answers 200 with the Call in state "processing": its Moments are rebuilt by a queued job and the Call is out of search until it finishes. Idempotent by end state: choosing the Rep the Call already has changes nothing.'
+  }),
+  listDeals: route2({
+    method: "GET",
+    path: "/playbook/deals",
+    internal: false,
+    roles: SALES_HISTORY_READ_ROLES,
+    success: [200],
+    errors: [],
+    commonErrors: ["request.invalid"],
+    description: "Lists the Organization's Deals, newest first (sorted by createdAt, then dealId, both descending), one cursor-paginated page at a time (at most 100). Owner and Admin only. outcome limits the list to one Outcome and appearedInImport=false lists the Deals that have Calls but never appeared in a CSV, so a mistyped deal id is visible."
+  }),
+  getDeal: route2({
+    method: "GET",
+    path: "/playbook/deals/{dealId}",
+    internal: false,
+    roles: SALES_HISTORY_READ_ROLES,
+    success: [200],
+    errors: ["deal.not_found"],
+    commonErrors: ["request.invalid"],
+    description: "Reads one Deal by its deal id (trimmed, otherwise exact and case-sensitive). Owner and Admin only. A Deal cannot be deleted on its own."
+  }),
+  setDealOutcome: route2({
+    method: "PUT",
+    path: "/playbook/deals/{dealId}/outcome",
+    internal: false,
+    roles: PLAYBOOK_WRITE_ROLES,
+    success: [200],
+    errors: ["deal.not_found"],
+    commonErrors: ["request.invalid"],
+    description: "Sets or corrects a Deal's Outcome (won, lost or open), even a decided one. Owner and Admin only. Idempotent by end state. A change bumps the Deal's Outcome sequence and queues the re-tag of its Moments; search follows the database at once for a lost Deal and may lag for a Deal that has just become won."
+  }),
+  uploadDealImport: route2({
+    method: "POST",
+    path: "/playbook/deal-imports",
+    internal: false,
+    roles: PLAYBOOK_WRITE_ROLES,
+    success: [202, 200],
+    errors: [
+      "deal_import.unsupported_type",
+      "deal_import.too_large",
+      "deal_import.header_invalid"
+    ],
+    commonErrors: [...ENVELOPE_ERRORS],
+    description: 'Uploads the fixed CSV template (columns deal_id, outcome, closed_at, amount, currency and optionally name; up to 10 MB and 50,000 rows) as multipart/form-data with one file part named "file". Owner and Admin only. The type, size and first row are checked before anything is stored: deal_import.unsupported_type (415), deal_import.too_large (413) and deal_import.header_invalid (422). Answers 202 with the import in state "uploaded"; it is processed in the background. A repeat of the same content answers 200 with the stored import. Valid rows are applied and bad rows are reported, never dropped: a deal id already won or lost, or repeated within the file, is a rejected row in the report, not an HTTP error. A file with more rows than the limit ends in state "failed" with failureReason "too_many_rows". Accepts an Idempotency-Key header.'
+  }),
+  listDealImports: route2({
+    method: "GET",
+    path: "/playbook/deal-imports",
+    internal: false,
+    roles: SALES_HISTORY_READ_ROLES,
+    success: [200],
+    errors: [],
+    commonErrors: ["request.invalid"],
+    description: "Lists the Organization's Deal imports, newest first (sorted by createdAt, then id, both descending), one cursor-paginated page at a time (at most 100). Owner and Admin only."
+  }),
+  getDealImport: route2({
+    method: "GET",
+    path: "/playbook/deal-imports/{importId}",
+    internal: false,
+    roles: SALES_HISTORY_READ_ROLES,
+    success: [200],
+    errors: ["deal_import.not_found"],
+    commonErrors: ["request.invalid"],
+    description: "Reads one import: its state, failure reason and the counts of rows, applied rows and rejected rows. Owner and Admin only."
+  }),
+  listDealImportRows: route2({
+    method: "GET",
+    path: "/playbook/deal-imports/{importId}/rows",
+    internal: false,
+    roles: SALES_HISTORY_READ_ROLES,
+    success: [200],
+    errors: ["deal_import.not_found"],
+    commonErrors: ["request.invalid"],
+    description: "Reads the report of an import, in CSV order, one cursor-paginated page at a time (at most 100); result=rejected lists only the rows that need fixing. Each row has its row number (the header is row 1), the deal id when it was valid, the result and a reason code. No other cell is returned. Owner and Admin only."
+  }),
+  getRightsConfirmation: route2({
+    method: "GET",
+    path: "/playbook/rights-confirmation",
+    internal: false,
+    roles: SALES_HISTORY_READ_ROLES,
+    success: [200],
+    errors: [],
+    commonErrors: [],
+    description: "Reads the Organization's recorded confirmation that it may share Recordings and Transcripts, with who confirmed and when, the version of the wording they saw, the current wording version and whether the stored one is current. Owner and Admin only. Without a current confirmation, uploads of Calls are refused; existing Calls are kept and stay searchable."
+  }),
+  confirmRights: route2({
+    method: "PUT",
+    path: "/playbook/rights-confirmation",
+    internal: false,
+    roles: PLAYBOOK_WRITE_ROLES,
+    success: [200],
+    errors: ["rights.version_outdated"],
+    commonErrors: ["request.invalid"],
+    description: "Records the confirmation, with the wording version the member was shown, which must be the current one (else rights.version_outdated, 409). Owner and Admin only. Who confirmed and when come from the token and the clock, never from the body. Idempotent by end state: confirming the current version again changes nothing. A lawyer is to check the wording before real customers use it."
   })
 });
 // src/index.ts
@@ -774,10 +1460,34 @@ export {
   ABANDON_MAX_AGE_HOURS,
   ACCEPTED_DOCUMENT_EXTENSIONS,
   ACCEPTED_DOCUMENT_MEDIA_TYPES,
+  ACCEPTED_RECORDING_EXTENSIONS,
+  ACCEPTED_TRANSCRIPT_EXTENSIONS,
   AUTH_ERRORS,
+  CALL_CHANNELS,
+  CALL_DELETED_MESSAGE,
+  CALL_FAILURE_REASONS,
+  CALL_KINDS,
+  CALL_MEDIA_TYPES,
+  CALL_REP_CHANGED_MESSAGE,
+  CALL_STATES,
+  CALL_TRANSCRIBED_MESSAGE,
+  CALL_UPLOADED_MESSAGE,
   CORE_ERRORS,
+  DEAL_IMPORT_FAILURE_REASONS,
+  DEAL_IMPORT_FILE_FIELD,
+  DEAL_IMPORT_HEADER_PROBLEMS,
+  DEAL_IMPORT_OPTIONAL_COLUMN,
+  DEAL_IMPORT_REQUIRED_COLUMNS,
+  DEAL_IMPORT_ROW_REASONS,
+  DEAL_IMPORT_ROW_RESULTS,
+  DEAL_IMPORT_STATES,
+  DEAL_IMPORT_UPLOADED_MESSAGE,
+  DEAL_OUTCOME_CHANGED_MESSAGE,
+  DEFAULT_MAX_CALLS,
+  DEFAULT_MAX_DEALS,
   DEFAULT_MAX_DOCUMENTS,
   DEFAULT_MAX_DOCUMENT_BYTES_TOTAL,
+  DEFAULT_MAX_RECORDING_BYTES_TOTAL,
   DEFAULT_PAGE_SIZE,
   DOCUMENT_DELETED_MESSAGE,
   DOCUMENT_FAILURE_REASONS,
@@ -786,10 +1496,17 @@ export {
   DOCUMENT_UPLOADED_MESSAGE,
   ERRORS,
   IDEMPOTENCY_KEY_HEADER,
+  INCOMPLETE_UPLOAD_PARTS_TTL_HOURS,
   INTERNAL_CALL_ERRORS,
   INVITABLE_ROLES,
   INVITATION_STATES,
+  MAX_CALL_SPEAKERS,
   MAX_CURSOR_LENGTH,
+  MAX_DEAL_ID_LENGTH,
+  MAX_DEAL_IMPORT_BYTES,
+  MAX_DEAL_IMPORT_HEADER_LENGTH,
+  MAX_DEAL_IMPORT_ROWS,
+  MAX_DEAL_NAME_LENGTH,
   MAX_DELETION_SEQ,
   MAX_DOCUMENT_BYTES,
   MAX_DOCUMENT_FILE_NAME_LENGTH,
@@ -798,8 +1515,18 @@ export {
   MAX_NAME_LENGTH,
   MAX_PAGE_SIZE,
   MAX_PERSON_NAME_LENGTH,
+  MAX_RECORDING_BYTES,
+  MAX_RECORDING_SECONDS,
+  MAX_REP_FOLLOWING_CHARACTERS,
+  MAX_REP_FOLLOWING_TURNS,
+  MAX_RIGHTS_WORDING_VERSION,
+  MAX_SEQ,
+  MAX_SPEAKER_LABEL_LENGTH,
+  MAX_TRANSCRIPT_BYTES,
+  MEDIA_TYPE_BY_CALL_EXTENSION,
   MEDIA_TYPE_BY_EXTENSION,
   ORGANIZATION_STATUSES,
+  OUTCOMES,
   PACKAGE,
   PLAYBOOK_ERRORS,
   PLAYBOOK_READ_ROLES,
@@ -807,14 +1534,48 @@ export {
   PLAYBOOK_WRITE_ROLES,
   REGIONS,
   ROLES,
+  SALES_HISTORY_ERRORS,
+  SALES_HISTORY_READ_ROLES,
+  SALES_HISTORY_ROUTES,
   SIGNUP_ERRORS,
   UPLOAD_CONTENT_TYPE,
   UPLOAD_FILE_FIELD,
   addTeamMemberRequestSchema,
+  callChannelSchema,
+  callDeletedPayloadSchema,
+  callFailureReasonSchema,
+  callIdSchema,
+  callKindSchema,
+  callMediaTypeSchema,
+  callParamsSchema,
+  callRepChangedPayloadSchema,
+  callSchema,
+  callStateSchema,
+  callTranscribedPayloadSchema,
+  callUploadedPayloadSchema,
   changeMemberRoleRequestSchema,
+  checkCallFile,
+  checkDealImportHeader,
   checkUploadFile,
+  confirmRightsRequestSchema,
   createInvitationRequestSchema,
   createTeamRequestSchema,
+  dealAmountSchema,
+  dealCurrencySchema,
+  dealIdSchema,
+  dealImportFailureReasonSchema,
+  dealImportIdSchema,
+  dealImportParamsSchema,
+  dealImportRowReasonSchema,
+  dealImportRowResultSchema,
+  dealImportRowSchema,
+  dealImportSchema,
+  dealImportStateSchema,
+  dealImportUploadedPayloadSchema,
+  dealNameSchema,
+  dealOutcomeChangedPayloadSchema,
+  dealParamsSchema,
+  dealSchema,
   decodeCursor,
   defineErrors,
   defineEvent,
@@ -839,6 +1600,7 @@ export {
   eventTypeSchema,
   foldAscii,
   formatId,
+  hasStrippableCharacter,
   idSchema,
   idempotencyKeySchema,
   internalAbandonOrganizationParamsSchema,
@@ -862,6 +1624,15 @@ export {
   invitationSchema,
   invitationStateSchema,
   invitationTokenSchema,
+  isWellFormedText,
+  listCallsQuerySchema,
+  listCallsResponseSchema,
+  listDealImportRowsQuerySchema,
+  listDealImportRowsResponseSchema,
+  listDealImportsQuerySchema,
+  listDealImportsResponseSchema,
+  listDealsQuerySchema,
+  listDealsResponseSchema,
   listDocumentsQuerySchema,
   listDocumentsResponseSchema,
   listInvitationsQuerySchema,
@@ -873,22 +1644,35 @@ export {
   memberParamsSchema,
   memberSchema,
   membershipIdSchema,
+  normaliseDealId,
   normaliseFileName,
   normaliseMediaType,
+  normaliseSpeakerLabel,
   organizationIdSchema,
   organizationNameSchema,
   organizationSchema,
   organizationStatusSchema,
+  outcomeSchema,
   pageQuerySchema,
   pageSchema,
+  parseRepField,
   personNameSchema,
   prospectIdSchema,
   regionSchema,
   renameOrganizationRequestSchema,
   renameTeamRequestSchema,
+  repChoiceSchema,
+  repChoiceSuits,
   requestIdSchema,
+  rightsConfirmationSchema,
+  rightsRequiredDetailsSchema,
+  rightsStatusSchema,
+  rightsWordingVersionSchema,
   roleAtLeast,
   roleSchema,
+  setCallRepRequestSchema,
+  setDealOutcomeRequestSchema,
+  speakerLabelSchema,
   storedNameSchema,
   teamIdSchema,
   teamMemberParamsSchema,
@@ -897,6 +1681,8 @@ export {
   teamParamsSchema,
   teamSchema,
   timestampSchema,
+  uploadCallFieldsSchema,
+  uploadCallFileSchema,
   uploadDocumentFileSchema,
   userIdSchema
 };

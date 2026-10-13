@@ -30,6 +30,10 @@ export const invitationIdSchema = idSchema('inv')
 export const prospectIdSchema = idSchema('prs')
 /** The id of a Playbook document (`doc_…`). */
 export const documentIdSchema = idSchema('doc')
+/** The id of a Call (`call_…`). */
+export const callIdSchema = idSchema('call')
+/** The id of a Deal import (`dimp_…`). */
+export const dealImportIdSchema = idSchema('dimp')
 /** The id of an event (`evt_…`). */
 export const eventIdSchema = idSchema('evt')
 /** The id of a request, for tracing (`req_…`). */
@@ -49,6 +53,10 @@ export type InvitationId = z.infer<typeof invitationIdSchema>
 export type ProspectId = z.infer<typeof prospectIdSchema>
 /** The id of a Playbook document. */
 export type DocumentId = z.infer<typeof documentIdSchema>
+/** The id of a Call. */
+export type CallId = z.infer<typeof callIdSchema>
+/** The id of a Deal import. */
+export type DealImportId = z.infer<typeof dealImportIdSchema>
 /** The id of an event. */
 export type EventId = z.infer<typeof eventIdSchema>
 /** The id of a request. */
