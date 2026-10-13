@@ -32,8 +32,8 @@ import { documentFileNameSchema, normaliseFileName } from './values'
  * Transcript is never `transcribing` or `awaiting_rep`, has no duration and is within
  * `MAX_TRANSCRIPT_BYTES`; `kind` agrees with `mediaType` (text for a Transcript, audio for a
  * Recording); the labels are unique; and a `ready` Call's speaker Rep is one of them. A Call with
- * more speakers than `MAX_CALL_SPEAKERS` fails with `too_many_speakers` and never reaches a
- * response, so a read route cannot throw on it. `durationSeconds` is `null` for a
+ * more speakers than `MAX_CALL_SPEAKERS` fails with `too_many_speakers`, lists no speaker labels and
+ * never reaches a response with more than the cap, so a read route cannot throw on it. `durationSeconds` is `null` for a
  * Transcript and until a Recording has been read. `dealRecordId` is the Deal's opaque id (the one
  * a Deal's path uses) and `dealOutcome` its Outcome; `inSearch` is true only for a `ready` Call of a
  * `won` Deal, and may be false for a Call whose Deal has just become won until the re-tag job
@@ -97,6 +97,9 @@ export const callSchema = z
         : call.mediaType.startsWith('audio/')
     ) {
       issue('mediaType', 'The kind agrees with the media type')
+    }
+    if (call.failureReason === 'too_many_speakers' && call.speakerLabels.length > 0) {
+      issue('speakerLabels', 'A Call with too many speakers lists none')
     }
     if (new Set(call.speakerLabels).size !== call.speakerLabels.length) {
       issue('speakerLabels', 'Speaker labels are unique')
@@ -170,12 +173,12 @@ export type CallParams = z.infer<typeof callParamsSchema>
 
 /**
  * The query parameters of a request to list Calls: a page, and optionally one `state` and one
- * `dealId`. With no `state`, every Call that is not `deleted` is listed; `state=deleted` lists
+ * `dealRecordId` (the Deal's opaque id; the customer's deal id never goes in a query string). With no `state`, every Call that is not `deleted` is listed; `state=deleted` lists
  * those that can still be restored, and `state=awaiting_rep` the ones waiting for a Rep. An
  * unknown parameter is rejected.
  */
 export const listCallsQuerySchema = pageQuerySchema
-  .extend({ state: callStateSchema.optional(), dealId: dealIdSchema.optional() })
+  .extend({ state: callStateSchema.optional(), dealRecordId: dealRecordIdSchema.optional() })
   .strict()
 
 /** The query parameters of a request to list Calls. */
@@ -277,3 +280,9 @@ export function checkCallFile(input: unknown): CheckCallFileResult {
   const parsed = uploadCallFileSchema.safeParse(copy)
   return parsed.success ? { ok: true, kind, file: parsed.data } : invalid
 }
+
+/** The position a Call list continues from: `createdAt`, then the Call's own `id`. It never holds a deal id. */
+export const callCursorSchema = z.strictObject({ createdAt: timestampSchema, id: callIdSchema })
+
+/** The position a Call list continues from. */
+export type CallCursor = z.infer<typeof callCursorSchema>

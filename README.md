@@ -100,7 +100,7 @@ builds its document from these).
 
 ### Sales history (0.8.0, ADR 0018)
 
-Additive; the 0.7.0 types are unchanged (`PlaybookRoute`, `PLAYBOOK_ROUTES` and `PLAYBOOK_ERRORS` do not gain methods or codes). `SALES_HISTORY_ROUTES` (type `SalesHistoryRoute`) describes the 15 routes; for one OpenAPI document use `ALL_PLAYBOOK_ROUTES` and `ALL_PLAYBOOK_ERRORS`, which merge both areas, `SALES_HISTORY_ERRORS` holds the codes
+Additive; the 0.7.0 types are unchanged (`PlaybookRoute`, `PLAYBOOK_ROUTES` and `PLAYBOOK_ERRORS` do not gain methods or codes). `SALES_HISTORY_ROUTES` (type `SalesHistoryRoute`) describes the 16 routes; for one OpenAPI document use `ALL_PLAYBOOK_ROUTES` and `ALL_PLAYBOOK_ERRORS`, which merge both areas, `SALES_HISTORY_ERRORS` holds the codes
 (`call.*`, `deal.*`, `deal_import.*`, `rights.*`) and the messages are `CALL_UPLOADED_MESSAGE`,
 `CALL_TRANSCRIBED_MESSAGE`, `CALL_REP_CHANGED_MESSAGE`, `CALL_DELETED_MESSAGE`,
 `DEAL_OUTCOME_CHANGED_MESSAGE` and `DEAL_IMPORT_UPLOADED_MESSAGE`. They carry ids and sequences
@@ -121,19 +121,36 @@ Additive; the 0.7.0 types are unchanged (`PlaybookRoute`, `PLAYBOOK_ROUTES` and 
   or paragraph separator or a Hangul filler; homoglyphs stay accepted. They may hold a name and are
   never logged, and never travel in a URL path: a Deal's path id is the opaque `deal_…` id
   (`dealRecordIdSchema`, field `id`; Calls carry it as `dealRecordId`, and the queue message names it).
-  Look a Deal up by the customer's id with the `dealId` filter of the Deal list.
+  Look a Deal up by the customer's id with `POST /playbook/deals/lookup` (the id in the body, `lookupDealRequestSchema`); no list has a deal id filter, `listCalls` filters by `dealRecordId`, and list cursors (`callCursorSchema`, `dealCursorSchema`, `dealImportCursorSchema`, `dealImportRowCursorSchema`) hold the opaque id or a row number, never a deal id.
 - **Lengths** count Unicode code points (Zod's count, the same as a Postgres `varchar(n)`); a column
   must allow `MAX_UTF8_BYTES_PER_CODE_POINT` (4) bytes for each: `MAX_DEAL_ID_BYTES`,
   `MAX_DEAL_NAME_BYTES`, `MAX_SPEAKER_LABEL_BYTES`, `MAX_DOCUMENT_FILE_NAME_BYTES`.
-- **CSV cells**: split text with `parseCsv` (quoted cells may hold commas and line breaks; the header
-  is record 1, and `rowNumber` is the record number, so a quoted cell spanning lines is one record),
-  check the header with `checkDealImportHeader`, then each record with `checkDealImportRow(cells,
-  hasName)`, which uses `parseOutcomeCell` (`won`/`lost`/`open`, any case, trimmed), `parseClosedAtCell`
-  (`YYYY-MM-DD` as that day 00:00 UTC, or an ISO timestamp with offset; blank is none; `won` and `lost`
-  do not need it), `parseAmountCell` (non-negative decimal, at most 15 integer and 2 fraction digits, up
-  to 999999999999999.99, no leading zeros beyond one `0`; blank is none) and `parseCurrencyCell` (three
+- **CSV**: split the text in a background job with `parseCsv(text, { maxRecords, maxCellLength })`
+  (defaults `MAX_DEAL_IMPORT_ROWS + 1` records and `MAX_DEAL_IMPORT_CELL_LENGTH` code points; it stops
+  at the first limit with `too_many_records` or `cell_too_long`, and needs the whole text, so never
+  on a request path). Quoting is strict RFC 4180: a quote inside an unquoted cell or text after a
+  closing quote is `bad_quote`, a quote that never closes is `unterminated_quote`. The header is record
+  1 and `rowNumber` is the record number, so a quoted cell spanning lines is one record; a blank line
+  (`isBlankCsvRecord`) is skipped and not reported but still counts in the numbers, as in a
+  spreadsheet. The upload route checks the header early with `checkDealImportHeaderText(start of file)`,
+  which reads the first record with `firstCsvRecord` (same rules and limits); the job re-checks the first
+  record of its parse with `checkDealImportHeader(record)`; the two give one verdict. Each record then
+  goes through `checkDealImportRow(cells, hasName)`, which uses `parseOutcomeCell` (`won`/`lost`/`open`,
+  any case, trimmed), `parseClosedAtCell` (`YYYY-MM-DD` as that day 00:00 UTC, or an ISO timestamp with
+  offset; blank is none; every Outcome accepts it; the UTC year must be 1970 to 2100),
+  `parseAmountCell` (non-negative decimal, at most 15 integer and 2 fraction digits, up to
+  999999999999999.99, no leading zeros beyond one `0`; blank is none) and `parseCurrencyCell` (three
   letters, folded to upper case; required when an amount is present). Example: a record
   `D-1,won,2026-10-12,10,EUR,"Acme` then `renewal"` is one record, row 2.
+- **What fixes a failed Call** (`CALL_FAILURE_FIXES`):
+
+  | Failure reason | Fix | A same-Deal re-upload of identical content |
+  | --- | --- | --- |
+  | `rep_label_not_found`, `not_per_side` | change the Rep | answers 200 with the failed Call unchanged |
+  | `transcription_failed`, `transcription_timed_out`, `processing_failed` | re-upload (may be transient) | re-queues the Call (`callReuploadRequeues`) |
+  | `too_many_speakers`, `no_turns`, `too_few_speakers`, `too_long`, `unreadable` | delete the Call and upload a corrected file | answers 200 with the failed Call unchanged |
+
+  A `failed` Call with `too_many_speakers` lists no `speakerLabels`.
 - **Search flags**: a Call carries `dealOutcome` and `inSearch` (true only when `ready` and the Deal
   is won; it may lag for a Deal that has just become won).
 - **Rights**: `rightsStatusSchema`, `confirmRightsRequestSchema`; `rights.confirmation_required` (403)

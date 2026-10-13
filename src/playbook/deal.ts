@@ -54,15 +54,13 @@ export const dealParamsSchema = z.strictObject({ dealRecordId: dealRecordIdSchem
 export type DealParams = z.infer<typeof dealParamsSchema>
 
 /**
- * The query parameters of a request to list Deals: a page, and optionally one `outcome`, one
- * `dealId` (the customer's id, matched exactly after the trim, which is how a Deal is found by it)
- * and `appearedInImport` (`true` or `false`). `appearedInImport=false` lists the Deals that have Calls
+ * The query parameters of a request to list Deals: a page, and optionally one `outcome` and
+ * `appearedInImport` (`true` or `false`). `appearedInImport=false` lists the Deals that have Calls
  * but never appeared in a CSV. An unknown parameter is rejected.
  */
 export const listDealsQuerySchema = pageQuerySchema
   .extend({
     outcome: outcomeSchema.optional(),
-    dealId: dealIdSchema.optional(),
     appearedInImport: z
       .enum(['true', 'false'])
       .transform((value) => value === 'true')
@@ -81,18 +79,51 @@ export type ListDealsResponse = z.infer<typeof listDealsResponseSchema>
 
 /**
  * The body of the request that sets or corrects a Deal's Outcome (Owner and Admin, any Deal, even
- * a decided one): the `outcome` and, for `won` or `lost`, an optional `closedAt`; `open` takes no
- * `closedAt`. It is idempotent by end state, and a change queues the re-tag of the Deal's Moments.
+ * a decided one): the `outcome` and an optional `closedAt`, which an `open` Deal may carry too (an
+ * expected close date), as in the CSV. It is idempotent by end state, and a change queues the
+ * re-tag of the Deal's Moments.
  */
-export const setDealOutcomeRequestSchema = z
-  .strictObject({ outcome: outcomeSchema, closedAt: timestampSchema.nullable().optional() })
-  .refine((body) => body.outcome !== 'open' || !body.closedAt, {
-    message: 'An open Deal has no closing time',
-    path: ['closedAt'],
-  })
+export const setDealOutcomeRequestSchema = z.strictObject({
+  outcome: outcomeSchema,
+  closedAt: timestampSchema.nullable().optional(),
+})
 
 /** The body of the request that sets or corrects a Deal's Outcome. */
 export type SetDealOutcomeRequest = z.infer<typeof setDealOutcomeRequestSchema>
+
+/**
+ * The body of the request that finds a Deal by the customer's deal id, so the id goes in a POST
+ * body and never in a URL. The answer is the Deal, or `deal.not_found`. Matching is exact after the
+ * trim.
+ */
+export const lookupDealRequestSchema = z.strictObject({ dealId: dealIdSchema })
+
+/** The body of the request that finds a Deal by the customer's deal id. */
+export type LookupDealRequest = z.infer<typeof lookupDealRequestSchema>
+
+/** The position a Deal list continues from: `createdAt`, then the Deal's opaque `id`, never the customer's deal id. */
+export const dealCursorSchema = z.strictObject({
+  createdAt: timestampSchema,
+  id: dealRecordIdSchema,
+})
+
+/** The position a Deal list continues from. */
+export type DealCursor = z.infer<typeof dealCursorSchema>
+
+/** The position a Deal import list continues from: `createdAt`, then the import's `id`. */
+export const dealImportCursorSchema = z.strictObject({
+  createdAt: timestampSchema,
+  id: dealImportIdSchema,
+})
+
+/** The position a Deal import list continues from. */
+export type DealImportCursor = z.infer<typeof dealImportCursorSchema>
+
+/** The position an import report continues from: the `rowNumber` of the last row returned. */
+export const dealImportRowCursorSchema = z.strictObject({ rowNumber: z.number().int().min(2) })
+
+/** The position an import report continues from. */
+export type DealImportRowCursor = z.infer<typeof dealImportRowCursorSchema>
 
 /** The fields of the multipart upload of a Deal import: the CSV is the one file part (`file`), with no other part. The request carries an `Idempotency-Key` header. */
 export const DEAL_IMPORT_FILE_FIELD = 'file'

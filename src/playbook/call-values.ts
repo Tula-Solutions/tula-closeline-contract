@@ -221,6 +221,39 @@ export function repChoiceSuits(
   return when === 'change' || rep.by === 'channel'
 }
 
+/** What fixes a failed Call: a different Rep, a re-upload of the same file (the reason may be transient), or deleting the Call and uploading a corrected file. */
+export type CallFailureFix = 'change_rep' | 'reupload' | 'delete_and_upload'
+
+/**
+ * What fixes each failure reason. `change_rep`: `rep_label_not_found` and `not_per_side` are fixed
+ * by choosing a different Rep. `reupload`: `transcription_failed`, `transcription_timed_out` and
+ * `processing_failed` may be transient, so a same-Deal re-upload of the same content re-queues the
+ * Call. `delete_and_upload`: `too_many_speakers`, `no_turns`, `too_few_speakers`, `too_long` and
+ * `unreadable` come from the file itself, so the Call must be deleted and a corrected file uploaded.
+ */
+export const CALL_FAILURE_FIXES: Readonly<Record<CallFailureReason, CallFailureFix>> =
+  Object.freeze({
+    rep_label_not_found: 'change_rep',
+    not_per_side: 'change_rep',
+    transcription_failed: 'reupload',
+    transcription_timed_out: 'reupload',
+    processing_failed: 'reupload',
+    too_many_speakers: 'delete_and_upload',
+    no_turns: 'delete_and_upload',
+    too_few_speakers: 'delete_and_upload',
+    too_long: 'delete_and_upload',
+    unreadable: 'delete_and_upload',
+  })
+
+/**
+ * Whether a same-Deal re-upload of identical content re-queues a `failed` Call: only for a reason
+ * that can be transient (`reupload` in {@link CALL_FAILURE_FIXES}). For any other reason the upload
+ * answers 200 with the failed Call unchanged, as the same file would fail the same way.
+ */
+export function callReuploadRequeues(failureReason: CallFailureReason | null): boolean {
+  return failureReason !== null && CALL_FAILURE_FIXES[failureReason] === 'reupload'
+}
+
 /**
  * Whether a Call's Rep may be picked or changed: when it is `ready` or `awaiting_rep`, or `failed`
  * with a reason a different Rep can fix (`rep_label_not_found`, `not_per_side`). Any other state
