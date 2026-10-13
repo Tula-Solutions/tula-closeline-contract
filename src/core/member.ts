@@ -5,7 +5,7 @@ import { roleSchema } from '../tenancy'
 import { timestampSchema } from './values'
 
 /** A member of the caller's Organization: a user's Membership and the role it holds. */
-export const memberSchema = z.strictObject({
+export const memberSchema = z.object({
   id: membershipIdSchema,
   userId: userIdSchema,
   role: roleSchema,

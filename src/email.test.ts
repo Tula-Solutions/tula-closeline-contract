@@ -47,10 +47,12 @@ describe('emailSchema', () => {
   })
 
   test('accepts 320 characters and rejects 321', () => {
-    const at320 = `${'a'.repeat(MAX_EMAIL_LENGTH - 2)}@b`
-    expect(at320).toHaveLength(MAX_EMAIL_LENGTH)
+    const at320 = `${'a'.repeat(318)}@b`
+    expect(at320).toHaveLength(320)
+    expect(MAX_EMAIL_LENGTH).toBe(320)
     expect(emailSchema.safeParse(at320).success).toBe(true)
     expect(emailSchema.safeParse(`a${at320}`).success).toBe(false)
+    expect(`a${at320}`).toHaveLength(321)
   })
 
   test('does not fold non-ASCII letters; it refuses them', () => {

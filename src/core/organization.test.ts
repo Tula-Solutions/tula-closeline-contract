@@ -17,7 +17,6 @@ describe('organizationSchema', () => {
   })
 
   test.each([
-    ['an unknown key', { ...organization, plan: 'pro' }],
     ['a Team id as its id', { ...organization, id: id('team') }],
     ['an unknown status', { ...organization, status: 'closed' }],
     ['an unknown Region', { ...organization, region: 'ap' }],
@@ -43,5 +42,12 @@ describe('renameOrganizationRequestSchema', () => {
     ['no body', {}],
   ])('rejects %s', (_name, body) => {
     expect(renameOrganizationRequestSchema.safeParse(body).success).toBe(false)
+  })
+})
+
+describe('a stored name never fails a response parse', () => {
+  test('an Organization named with a tab still parses', () => {
+    const stored = { ...organization, name: 'Acme\tSales' }
+    expect(organizationSchema.parse(stored).name).toBe('Acme\tSales')
   })
 })

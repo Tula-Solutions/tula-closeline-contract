@@ -3,7 +3,9 @@ import { defineErrors } from '../errors'
 /**
  * The errors core returns, as `area.reason` codes. None says whether an email address or a user
  * exists in another Organization: `invitation.invalid` covers an unknown, used, revoked and expired
- * token alike, and `membership.already_member` is only ever about the user making the call.
+ * token alike, and `membership.already_member` is only ever about the user making the call. A role
+ * that is not allowed is the common `auth.forbidden`. Which internal call returns which code is
+ * `INTERNAL_CALL_ERRORS`.
  */
 export const CORE_ERRORS = {
   ...defineErrors('organization', {
@@ -15,26 +17,24 @@ export const CORE_ERRORS = {
     not_found: { status: 404, message: 'The member was not found.' },
     last_owner: {
       status: 409,
-      message: 'The last Owner cannot be removed or demoted. Make another member an Owner first.',
+      message:
+        'The last Owner cannot be removed or demoted. Promote a different member to Owner first.',
     },
   }),
   ...defineErrors('membership', {
-    already_member: { status: 409, message: 'This user already belongs to an Organization.' },
+    already_member: { status: 409, message: 'You already belong to an Organization.' },
   }),
   ...defineErrors('invitation', {
     invalid: { status: 422, message: 'The invitation is not valid.' },
     not_found: { status: 404, message: 'The invitation was not found.' },
     already_pending: {
       status: 409,
-      message: 'An invitation to that address is already pending. Revoke it to send a new one.',
+      message: 'A matching invitation is already pending. Revoke it to send a new one.',
     },
   }),
   ...defineErrors('team', {
     not_found: { status: 404, message: 'The Team was not found.' },
     name_taken: { status: 409, message: 'A Team with that name already exists.' },
-  }),
-  ...defineErrors('role', {
-    not_permitted: { status: 403, message: 'Your role does not allow this.' },
   }),
 } as const
 
@@ -50,7 +50,7 @@ export const SIGNUP_ERRORS = {
   ...defineErrors('auth', {
     no_organization: {
       status: 403,
-      message: 'This account does not belong to an Organization, so it cannot sign in.',
+      message: 'You do not belong to an Organization, so you cannot sign in.',
     },
   }),
   ...defineErrors('signup', {

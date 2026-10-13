@@ -13,18 +13,53 @@ function hasControlCharacter(text: string): boolean {
   return false
 }
 
+function isWellFormed(text: string): boolean {
+  for (let index = 0; index < text.length; index += 1) {
+    const code = text.charCodeAt(index)
+    if (code >= 0xd800 && code <= 0xdbff) {
+      const next = text.charCodeAt(index + 1)
+      if (!(next >= 0xdc00 && next <= 0xdfff)) {
+        return false
+      }
+      index += 1
+    } else if (code >= 0xdc00 && code <= 0xdfff) {
+      return false
+    }
+  }
+  return true
+}
+
 const nameSchema = z
   .string()
-  .max(MAX_NAME_LENGTH)
   .trim()
-  .min(1)
-  .refine((text) => !hasControlCharacter(text), 'No control characters')
+  .pipe(
+    z
+      .string()
+      .min(1)
+      .max(MAX_NAME_LENGTH)
+      .refine(isWellFormed, 'Well-formed text only')
+      .refine((text) => !hasControlCharacter(text), 'No control characters')
+  )
 
-/** An Organization's name: 1 to 200 characters once trimmed, with no control characters. */
+/**
+ * An Organization's name in a request: trimmed, then 1 to 200 characters, well-formed UTF-16 (no
+ * lone surrogate) and no control characters. Zero-width and direction-override characters are
+ * allowed, so display code must treat a name as untrusted text.
+ */
 export const organizationNameSchema = nameSchema
 
-/** A Team's name: 1 to 200 characters once trimmed, with no control characters. */
+/**
+ * A Team's name in a request: trimmed, then 1 to 200 characters, well-formed UTF-16 (no lone
+ * surrogate) and no control characters. Zero-width and direction-override characters are allowed,
+ * so display code must treat a name as untrusted text.
+ */
 export const teamNameSchema = nameSchema
+
+/**
+ * A name as a response carries it: any 1 to 200 character string, so a name that is already
+ * stored can never fail a response parse. Display code must treat it as untrusted text.
+ */
+export const storedNameSchema = z.string().min(1).max(MAX_NAME_LENGTH)
 
 /** The states an Invitation is in; "expired" is not a state, it is read from `expiresAt`. */
 export const INVITATION_STATES = ['pending', 'accepted', 'revoked'] as const
@@ -48,7 +83,11 @@ export const invitationTokenSchema = z
   .max(256)
   .regex(/^[A-Za-z0-9_-]+$/)
 
-/** The header that carries an idempotency key on a call that has effects. */
+/**
+ * The header that carries an idempotency key on a call that has effects. Every public POST accepts
+ * it too: a replay returns the original result, and the same key with a different body is
+ * `request.idempotency_key_reused`.
+ */
 export const IDEMPOTENCY_KEY_HEADER = 'Idempotency-Key'
 
 /** The value of the {@link IDEMPOTENCY_KEY_HEADER} header: 16 to 128 characters from `A-Za-z0-9_.:-`, such as a UUID. */

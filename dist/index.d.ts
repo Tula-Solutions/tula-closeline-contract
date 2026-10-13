@@ -2,7 +2,9 @@ import { ErrorDefinition as ErrorDefinition_8gwh45 } from "..";
 /**
 * The errors core returns, as `area.reason` codes. None says whether an email address or a user
 * exists in another Organization: `invitation.invalid` covers an unknown, used, revoked and expired
-* token alike, and `membership.already_member` is only ever about the user making the call.
+* token alike, and `membership.already_member` is only ever about the user making the call. A role
+* that is not allowed is the common `auth.forbidden`. Which internal call returns which code is
+* `INTERNAL_CALL_ERRORS`.
 */
 declare const CORE_ERRORS: {
 	readonly "invitation.already_pending": ErrorDefinition_8gwh45<"invitation.already_pending">;
@@ -14,7 +16,6 @@ declare const CORE_ERRORS: {
 	readonly "organization.deleted": ErrorDefinition_8gwh45<"organization.deleted">;
 	readonly "organization.not_found": ErrorDefinition_8gwh45<"organization.not_found">;
 	readonly "organization.suspended": ErrorDefinition_8gwh45<"organization.suspended">;
-	readonly "role.not_permitted": ErrorDefinition_8gwh45<"role.not_permitted">;
 	readonly "team.name_taken": ErrorDefinition_8gwh45<"team.name_taken">;
 	readonly "team.not_found": ErrorDefinition_8gwh45<"team.not_found">;
 };
@@ -34,11 +35,23 @@ declare const SIGNUP_ERRORS: {
 /** A code from the {@link SIGNUP_ERRORS} registry. */
 type SignupErrorCode = keyof typeof SIGNUP_ERRORS;
 import { z } from "zod";
-/** Internal: the body of a sign-up that creates an Organization; the user becomes its Owner. */
+/** The internal calls, by name. */
+type InternalCallName = "createOrganization" | "acceptInvitation" | "membership";
+/**
+* The complete list of domain error codes each internal call may return, for core's tests to
+* assert against. Common codes (`auth.*`, `request.*`, `server.*`) can come from any call and are
+* not listed. Accepting an Invitation never returns an Organization status code, so a suspended or
+* deleted Organization is indistinguishable from an unknown token. The membership lookup returns
+* no domain error: it answers `found: false`.
+*/
+declare const INTERNAL_CALL_ERRORS: Readonly<Record<InternalCallName, readonly CoreErrorCode[]>>;
+/**
+* Internal: the body of a sign-up that creates an Organization; the user becomes its Owner. It
+* carries no email: core does not store one. Core returns only `membership.already_member`.
+*/
 declare const internalCreateOrganizationRequestSchema: z.ZodObject<{
 	userId: z.core.$ZodBranded<z.ZodString, "usr", "out">;
-	email: z.ZodPipe<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>, z.ZodString>;
-	organizationName: z.ZodString;
+	organizationName: z.ZodPipe<z.ZodString, z.ZodString>;
 }, z.core.$strict>;
 /** Internal: the body of a sign-up that creates an Organization. */
 type InternalCreateOrganizationRequest = z.infer<typeof internalCreateOrganizationRequestSchema>;
@@ -46,10 +59,15 @@ type InternalCreateOrganizationRequest = z.infer<typeof internalCreateOrganizati
 declare const internalCreateOrganizationResponseSchema: z.ZodObject<{
 	organizationId: z.core.$ZodBranded<z.ZodString, "org", "out">;
 	role: z.ZodLiteral<"owner">;
-}, z.core.$strict>;
+}, z.core.$strip>;
 /** Internal: the answer to creating an Organization at sign-up. */
 type InternalCreateOrganizationResponse = z.infer<typeof internalCreateOrganizationResponseSchema>;
-/** Internal: the body of a sign-up that accepts an Invitation with its raw token and the verified address. */
+/**
+* Internal: the body of a sign-up that accepts an Invitation with its raw token and the verified
+* address. Core compares the address, folded, with the Invitation's and answers
+* `invitation.invalid` on a mismatch, like an unknown, used, revoked or expired token. Core
+* returns only `invitation.invalid` or `membership.already_member`, never an Organization status.
+*/
 declare const internalAcceptInvitationRequestSchema: z.ZodObject<{
 	userId: z.core.$ZodBranded<z.ZodString, "usr", "out">;
 	email: z.ZodPipe<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>, z.ZodString>;
@@ -65,7 +83,7 @@ declare const internalAcceptInvitationResponseSchema: z.ZodObject<{
 		manager: "manager";
 		rep: "rep";
 	}>;
-}, z.core.$strict>;
+}, z.core.$strip>;
 /** Internal: the answer to accepting an Invitation. */
 type InternalAcceptInvitationResponse = z.infer<typeof internalAcceptInvitationResponseSchema>;
 /** Internal: the request for the membership of one user, which the token hook makes before issuing a token. */
@@ -77,7 +95,7 @@ type InternalMembershipRequest = z.infer<typeof internalMembershipRequestSchema>
 /**
 * Internal: the membership of a user, or `{ found: false }` for a user with none. A user with an
 * Organization that is suspended or deleted is found: the token hook decides what to do with the
-* status.
+* status. The lookup returns no domain error.
 */
 declare const internalMembershipResponseSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
 	found: z.ZodLiteral<true>;
@@ -93,9 +111,9 @@ declare const internalMembershipResponseSchema: z.ZodDiscriminatedUnion<[z.ZodOb
 		deleted: "deleted";
 		suspended: "suspended";
 	}>;
-}, z.core.$strict>, z.ZodObject<{
+}, z.core.$strip>, z.ZodObject<{
 	found: z.ZodLiteral<false>;
-}, z.core.$strict>], "found">;
+}, z.core.$strip>], "found">;
 /** Internal: the membership of a user, or none. */
 type InternalMembershipResponse = z.infer<typeof internalMembershipResponseSchema>;
 import { z as z2 } from "zod";
@@ -120,10 +138,15 @@ declare const invitationSchema: z2.ZodObject<{
 	invitedByUserId: z2.core.$ZodBranded<z2.ZodString, "usr", "out">;
 	expiresAt: z2.ZodISODateTime;
 	createdAt: z2.ZodISODateTime;
-}, z2.core.$strict>;
+}, z2.core.$strip>;
 /** An Invitation as core returns it. */
 type Invitation = z2.infer<typeof invitationSchema>;
-/** The body of a request to invite someone: an address and a role that is never `owner`. */
+/**
+* The body of a request to invite someone: an address and a role that is never `owner`. The call
+* accepts an `Idempotency-Key` header (`idempotencyKeySchema`): a replay returns the original
+* Invitation instead of `invitation.already_pending`, and the same key with a different body is
+* `request.idempotency_key_reused`.
+*/
 declare const createInvitationRequestSchema: z2.ZodObject<{
 	email: z2.ZodPipe<z2.ZodPipe<z2.ZodString, z2.ZodTransform<string, string>>, z2.ZodString>;
 	role: z2.ZodEnum<{
@@ -135,12 +158,20 @@ declare const createInvitationRequestSchema: z2.ZodObject<{
 }, z2.core.$strict>;
 /** The body of a request to invite someone. */
 type CreateInvitationRequest = z2.infer<typeof createInvitationRequestSchema>;
-/** The query parameters of a request to list pending Invitations. */
+/**
+* The query parameters of a request to list Invitations: a page, and the `state` to list, which
+* is `pending` unless asked otherwise. An unknown parameter is rejected.
+*/
 declare const listInvitationsQuerySchema: z2.ZodObject<{
 	cursor: z2.ZodOptional<z2.ZodString>;
 	limit: z2.ZodDefault<z2.ZodPipe<z2.ZodPipe<z2.ZodUnion<readonly [z2.ZodNumber, z2.ZodString]>, z2.ZodTransform<number, string | number>>, z2.ZodNumber>>;
-}, z2.core.$strip>;
-/** The query parameters of a request to list pending Invitations. */
+	state: z2.ZodDefault<z2.ZodEnum<{
+		accepted: "accepted";
+		pending: "pending";
+		revoked: "revoked";
+	}>>;
+}, z2.core.$strict>;
+/** The query parameters of a request to list Invitations. */
 type ListInvitationsQuery = z2.infer<typeof listInvitationsQuerySchema>;
 /** One page of Invitations. */
 declare const listInvitationsResponseSchema: z2.ZodObject<{
@@ -161,7 +192,7 @@ declare const listInvitationsResponseSchema: z2.ZodObject<{
 		invitedByUserId: z2.core.$ZodBranded<z2.ZodString, "usr", "out">;
 		expiresAt: z2.ZodISODateTime;
 		createdAt: z2.ZodISODateTime;
-	}, z2.core.$strict>>;
+	}, z2.core.$strip>>;
 	nextCursor: z2.ZodNullable<z2.ZodString>;
 }, z2.core.$strip>;
 /** One page of Invitations. */
@@ -185,7 +216,7 @@ declare const memberSchema: z3.ZodObject<{
 	}>;
 	createdAt: z3.ZodISODateTime;
 	updatedAt: z3.ZodISODateTime;
-}, z3.core.$strict>;
+}, z3.core.$strip>;
 /** A member of an Organization. */
 type Member = z3.infer<typeof memberSchema>;
 /** The query parameters of a request to list members: a cursor and a limit of at most the maximum page size. */
@@ -208,7 +239,7 @@ declare const listMembersResponseSchema: z3.ZodObject<{
 		}>;
 		createdAt: z3.ZodISODateTime;
 		updatedAt: z3.ZodISODateTime;
-	}, z3.core.$strict>>;
+	}, z3.core.$strip>>;
 	nextCursor: z3.ZodNullable<z3.ZodString>;
 }, z3.core.$strip>;
 /** One page of members. */
@@ -246,12 +277,12 @@ declare const organizationSchema: z4.ZodObject<{
 	}>;
 	createdAt: z4.ZodISODateTime;
 	updatedAt: z4.ZodISODateTime;
-}, z4.core.$strict>;
+}, z4.core.$strip>;
 /** An Organization as core returns it. */
 type Organization = z4.infer<typeof organizationSchema>;
 /** The body of a request to rename the caller's Organization. */
 declare const renameOrganizationRequestSchema: z4.ZodObject<{
-	name: z4.ZodString;
+	name: z4.ZodPipe<z4.ZodString, z4.ZodString>;
 }, z4.core.$strict>;
 /** The body of a request to rename the caller's Organization. */
 type RenameOrganizationRequest = z4.infer<typeof renameOrganizationRequestSchema>;
@@ -262,18 +293,22 @@ declare const teamSchema: z5.ZodObject<{
 	name: z5.ZodString;
 	createdAt: z5.ZodISODateTime;
 	updatedAt: z5.ZodISODateTime;
-}, z5.core.$strict>;
+}, z5.core.$strip>;
 /** A Team as core returns it. */
 type Team = z5.infer<typeof teamSchema>;
-/** The body of a request to create a Team. */
+/**
+* The body of a request to create a Team. The call accepts an `Idempotency-Key` header
+* (`idempotencyKeySchema`): a replay returns the original Team, and the same key with a different
+* body is `request.idempotency_key_reused`.
+*/
 declare const createTeamRequestSchema: z5.ZodObject<{
-	name: z5.ZodString;
+	name: z5.ZodPipe<z5.ZodString, z5.ZodString>;
 }, z5.core.$strict>;
 /** The body of a request to create a Team. */
 type CreateTeamRequest = z5.infer<typeof createTeamRequestSchema>;
 /** The body of a request to rename a Team. */
 declare const renameTeamRequestSchema: z5.ZodObject<{
-	name: z5.ZodString;
+	name: z5.ZodPipe<z5.ZodString, z5.ZodString>;
 }, z5.core.$strict>;
 /** The body of a request to rename a Team. */
 type RenameTeamRequest = z5.infer<typeof renameTeamRequestSchema>;
@@ -291,7 +326,7 @@ declare const listTeamsResponseSchema: z5.ZodObject<{
 		name: z5.ZodString;
 		createdAt: z5.ZodISODateTime;
 		updatedAt: z5.ZodISODateTime;
-	}, z5.core.$strict>>;
+	}, z5.core.$strip>>;
 	nextCursor: z5.ZodNullable<z5.ZodString>;
 }, z5.core.$strip>;
 /** One page of Teams. */
@@ -313,7 +348,7 @@ declare const teamMemberSchema: z5.ZodObject<{
 	teamId: z5.core.$ZodBranded<z5.ZodString, "team", "out">;
 	membershipId: z5.core.$ZodBranded<z5.ZodString, "mem", "out">;
 	createdAt: z5.ZodISODateTime;
-}, z5.core.$strict>;
+}, z5.core.$strip>;
 /** A member's place in a Team. */
 type TeamMember = z5.infer<typeof teamMemberSchema>;
 /** The path parameters of a request to remove a member from a Team. */
@@ -326,10 +361,23 @@ type TeamMemberParams = z5.infer<typeof teamMemberParamsSchema>;
 import { z as z6 } from "zod";
 /** The longest Organization or Team name, in characters; the same bound as the database check. */
 declare const MAX_NAME_LENGTH = 200;
-/** An Organization's name: 1 to 200 characters once trimmed, with no control characters. */
-declare const organizationNameSchema: z6.ZodString;
-/** A Team's name: 1 to 200 characters once trimmed, with no control characters. */
-declare const teamNameSchema: z6.ZodString;
+/**
+* An Organization's name in a request: trimmed, then 1 to 200 characters, well-formed UTF-16 (no
+* lone surrogate) and no control characters. Zero-width and direction-override characters are
+* allowed, so display code must treat a name as untrusted text.
+*/
+declare const organizationNameSchema: z6.ZodPipe<z6.ZodString, z6.ZodString>;
+/**
+* A Team's name in a request: trimmed, then 1 to 200 characters, well-formed UTF-16 (no lone
+* surrogate) and no control characters. Zero-width and direction-override characters are allowed,
+* so display code must treat a name as untrusted text.
+*/
+declare const teamNameSchema: z6.ZodPipe<z6.ZodString, z6.ZodString>;
+/**
+* A name as a response carries it: any 1 to 200 character string, so a name that is already
+* stored can never fail a response parse. Display code must treat it as untrusted text.
+*/
+declare const storedNameSchema: z6.ZodString;
 /** The states an Invitation is in; "expired" is not a state, it is read from `expiresAt`. */
 declare const INVITATION_STATES: readonly ["pending", "accepted", "revoked"];
 /** The state of an Invitation. */
@@ -347,7 +395,11 @@ declare const timestampSchema: z6.ZodISODateTime;
 * the email sent to the invitee and in the sign-up call to core, never in a response.
 */
 declare const invitationTokenSchema: z6.ZodString;
-/** The header that carries an idempotency key on a call that has effects. */
+/**
+* The header that carries an idempotency key on a call that has effects. Every public POST accepts
+* it too: a replay returns the original result, and the same key with a different body is
+* `request.idempotency_key_reused`.
+*/
 declare const IDEMPOTENCY_KEY_HEADER = "Idempotency-Key";
 /** The value of the {@link IDEMPOTENCY_KEY_HEADER} header: 16 to 128 characters from `A-Za-z0-9_.:-`, such as a UUID. */
 declare const idempotencyKeySchema: z6.ZodString;
@@ -676,4 +728,4 @@ declare const organizationStatusSchema: z12.ZodEnum<{
 type OrganizationStatus = z12.infer<typeof organizationStatusSchema>;
 /** This library's package name, so a consumer can report which shared libraries it resolved. */
 declare const PACKAGE = "tula-closeline-contract";
-export { AddTeamMemberRequest, CORE_ERRORS, ChangeMemberRoleRequest, CommonErrorCode, CoreErrorCode, CreateInvitationRequest, CreateTeamRequest, DEFAULT_PAGE_SIZE, ERRORS, Email, ErrorBody, ErrorDefinition, ErrorInput, EventId, EventType, IDEMPOTENCY_KEY_HEADER, INVITABLE_ROLES, INVITATION_STATES, Id, IdempotencyKey, InternalAcceptInvitationRequest, InternalAcceptInvitationResponse, InternalCreateOrganizationRequest, InternalCreateOrganizationResponse, InternalMembershipRequest, InternalMembershipResponse, InvitableRole, Invitation, InvitationId, InvitationParams, InvitationState, ListInvitationsQuery, ListInvitationsResponse, ListMembersQuery, ListMembersResponse, ListTeamsQuery, ListTeamsResponse, MAX_CURSOR_LENGTH, MAX_EMAIL_LENGTH, MAX_NAME_LENGTH, MAX_PAGE_SIZE, Member, MemberParams, MembershipId, ORGANIZATION_STATUSES, Organization, OrganizationId, OrganizationStatus, PACKAGE, Page, PageQuery, ProspectId, REGIONS, ROLES, Region, RenameOrganizationRequest, RenameTeamRequest, RequestId, Role, SIGNUP_ERRORS, SignupErrorCode, Team, TeamId, TeamMember, TeamMemberParams, TeamParams, UserId, addTeamMemberRequestSchema, changeMemberRoleRequestSchema, createInvitationRequestSchema, createTeamRequestSchema, decodeCursor, defineErrors, defineEvent, emailSchema, encodeCursor, errorBodySchema, errorCodeSchema, eventEnvelopeSchema, eventIdSchema, eventTypeSchema, foldAscii, formatId, idSchema, idempotencyKeySchema, internalAcceptInvitationRequestSchema, internalAcceptInvitationResponseSchema, internalCreateOrganizationRequestSchema, internalCreateOrganizationResponseSchema, internalMembershipRequestSchema, internalMembershipResponseSchema, invitableRoleSchema, invitationIdSchema, invitationParamsSchema, invitationSchema, invitationStateSchema, invitationTokenSchema, listInvitationsQuerySchema, listInvitationsResponseSchema, listMembersQuerySchema, listMembersResponseSchema, listTeamsQuerySchema, listTeamsResponseSchema, memberParamsSchema, memberSchema, membershipIdSchema, organizationIdSchema, organizationNameSchema, organizationSchema, organizationStatusSchema, pageQuerySchema, pageSchema, prospectIdSchema, regionSchema, renameOrganizationRequestSchema, renameTeamRequestSchema, requestIdSchema, roleAtLeast, roleSchema, teamIdSchema, teamMemberParamsSchema, teamMemberSchema, teamNameSchema, teamParamsSchema, teamSchema, timestampSchema, userIdSchema };
+export { AddTeamMemberRequest, CORE_ERRORS, ChangeMemberRoleRequest, CommonErrorCode, CoreErrorCode, CreateInvitationRequest, CreateTeamRequest, DEFAULT_PAGE_SIZE, ERRORS, Email, ErrorBody, ErrorDefinition, ErrorInput, EventId, EventType, IDEMPOTENCY_KEY_HEADER, INTERNAL_CALL_ERRORS, INVITABLE_ROLES, INVITATION_STATES, Id, IdempotencyKey, InternalAcceptInvitationRequest, InternalAcceptInvitationResponse, InternalCallName, InternalCreateOrganizationRequest, InternalCreateOrganizationResponse, InternalMembershipRequest, InternalMembershipResponse, InvitableRole, Invitation, InvitationId, InvitationParams, InvitationState, ListInvitationsQuery, ListInvitationsResponse, ListMembersQuery, ListMembersResponse, ListTeamsQuery, ListTeamsResponse, MAX_CURSOR_LENGTH, MAX_EMAIL_LENGTH, MAX_NAME_LENGTH, MAX_PAGE_SIZE, Member, MemberParams, MembershipId, ORGANIZATION_STATUSES, Organization, OrganizationId, OrganizationStatus, PACKAGE, Page, PageQuery, ProspectId, REGIONS, ROLES, Region, RenameOrganizationRequest, RenameTeamRequest, RequestId, Role, SIGNUP_ERRORS, SignupErrorCode, Team, TeamId, TeamMember, TeamMemberParams, TeamParams, UserId, addTeamMemberRequestSchema, changeMemberRoleRequestSchema, createInvitationRequestSchema, createTeamRequestSchema, decodeCursor, defineErrors, defineEvent, emailSchema, encodeCursor, errorBodySchema, errorCodeSchema, eventEnvelopeSchema, eventIdSchema, eventTypeSchema, foldAscii, formatId, idSchema, idempotencyKeySchema, internalAcceptInvitationRequestSchema, internalAcceptInvitationResponseSchema, internalCreateOrganizationRequestSchema, internalCreateOrganizationResponseSchema, internalMembershipRequestSchema, internalMembershipResponseSchema, invitableRoleSchema, invitationIdSchema, invitationParamsSchema, invitationSchema, invitationStateSchema, invitationTokenSchema, listInvitationsQuerySchema, listInvitationsResponseSchema, listMembersQuerySchema, listMembersResponseSchema, listTeamsQuerySchema, listTeamsResponseSchema, memberParamsSchema, memberSchema, membershipIdSchema, organizationIdSchema, organizationNameSchema, organizationSchema, organizationStatusSchema, pageQuerySchema, pageSchema, prospectIdSchema, regionSchema, renameOrganizationRequestSchema, renameTeamRequestSchema, requestIdSchema, roleAtLeast, roleSchema, storedNameSchema, teamIdSchema, teamMemberParamsSchema, teamMemberSchema, teamNameSchema, teamParamsSchema, teamSchema, timestampSchema, userIdSchema };

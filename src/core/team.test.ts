@@ -18,12 +18,12 @@ describe('teamSchema', () => {
     expect(teamSchema.parse(team)).toEqual(team as never)
   })
 
-  test.each([
-    ['an unknown key', { ...team, organizationId: id('org') }],
-    ['an over-long name', { ...team, name: 'a'.repeat(201) }],
-  ])('rejects %s', (_name, body) => {
-    expect(teamSchema.safeParse(body).success).toBe(false)
-  })
+  test.each([['an over-long name', { ...team, name: 'a'.repeat(201) }]])(
+    'rejects %s',
+    (_name, body) => {
+      expect(teamSchema.safeParse(body).success).toBe(false)
+    }
+  )
 })
 
 describe.each([
@@ -51,6 +51,17 @@ describe('listTeamsResponseSchema', () => {
   })
 })
 
+describe('listTeamsResponseSchema page size', () => {
+  test('accepts 100 Teams and rejects 101', () => {
+    const page = (count: number) => ({
+      items: Array.from({ length: count }, () => team),
+      nextCursor: null,
+    })
+    expect(listTeamsResponseSchema.safeParse(page(100)).success).toBe(true)
+    expect(listTeamsResponseSchema.safeParse(page(101)).success).toBe(false)
+  })
+})
+
 describe('Team membership', () => {
   test('add takes a membership id and nothing else', () => {
     expect(addTeamMemberRequestSchema.safeParse({ membershipId: id('mem') }).success).toBe(true)
@@ -63,7 +74,7 @@ describe('Team membership', () => {
   test('the added member names its Team and membership', () => {
     const added = { teamId: id('team'), membershipId: id('mem'), createdAt: NOW }
     expect(teamMemberSchema.parse(added)).toEqual(added as never)
-    expect(teamMemberSchema.safeParse({ ...added, extra: 1 }).success).toBe(false)
+    expect(teamMemberSchema.safeParse({ ...added, createdAt: 'x' }).success).toBe(false)
   })
 
   test('path parameters want the right kinds of id', () => {
@@ -75,5 +86,12 @@ describe('Team membership', () => {
     expect(
       teamMemberParamsSchema.safeParse({ teamId: id('mem'), membershipId: id('team') }).success
     ).toBe(false)
+    expect(teamMemberParamsSchema.safeParse({ teamId: id('team') }).success).toBe(false)
+  })
+})
+
+describe('a stored name never fails a response parse', () => {
+  test('a Team named with a tab still parses', () => {
+    expect(teamSchema.parse({ ...team, name: 'West\tCoast' }).name).toBe('West\tCoast')
   })
 })

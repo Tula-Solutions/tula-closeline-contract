@@ -1,12 +1,12 @@
 import { z } from 'zod'
 import { membershipIdSchema, teamIdSchema } from '../ids'
 import { pageQuerySchema, pageSchema } from '../pagination'
-import { teamNameSchema, timestampSchema } from './values'
+import { storedNameSchema, teamNameSchema, timestampSchema } from './values'
 
 /** A Team as core returns it. */
-export const teamSchema = z.strictObject({
+export const teamSchema = z.object({
   id: teamIdSchema,
-  name: teamNameSchema,
+  name: storedNameSchema,
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
 })
@@ -14,7 +14,11 @@ export const teamSchema = z.strictObject({
 /** A Team as core returns it. */
 export type Team = z.infer<typeof teamSchema>
 
-/** The body of a request to create a Team. */
+/**
+ * The body of a request to create a Team. The call accepts an `Idempotency-Key` header
+ * (`idempotencyKeySchema`): a replay returns the original Team, and the same key with a different
+ * body is `request.idempotency_key_reused`.
+ */
 export const createTeamRequestSchema = z.strictObject({
   name: teamNameSchema,
 })
@@ -59,7 +63,7 @@ export const addTeamMemberRequestSchema = z.strictObject({
 export type AddTeamMemberRequest = z.infer<typeof addTeamMemberRequestSchema>
 
 /** A member's place in a Team, as core returns it after adding one. */
-export const teamMemberSchema = z.strictObject({
+export const teamMemberSchema = z.object({
   teamId: teamIdSchema,
   membershipId: membershipIdSchema,
   createdAt: timestampSchema,

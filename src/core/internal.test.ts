@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test'
+import { CORE_ERRORS } from './errors'
 import { id } from './fixtures'
 import {
+  INTERNAL_CALL_ERRORS,
   internalAcceptInvitationRequestSchema,
   internalAcceptInvitationResponseSchema,
   internalCreateOrganizationRequestSchema,
@@ -11,13 +13,38 @@ import {
 
 const TOKEN = 'dGhpcyBpcyBhIHRva2Vu0123456789abcdef'
 
-describe('internalCreateOrganizationRequestSchema', () => {
-  const body = { userId: id('usr'), email: 'Ada@Example.com', organizationName: ' Acme ' }
+describe('INTERNAL_CALL_ERRORS', () => {
+  test('names the domain codes each internal call may return, and no others', () => {
+    expect(INTERNAL_CALL_ERRORS).toEqual({
+      createOrganization: ['membership.already_member'],
+      acceptInvitation: ['invitation.invalid', 'membership.already_member'],
+      membership: [],
+    })
+  })
 
-  test('accepts a sign-up and folds the address', () => {
+  test('is frozen, at every level', () => {
+    expect(Object.isFrozen(INTERNAL_CALL_ERRORS)).toBe(true)
+    for (const codes of Object.values(INTERNAL_CALL_ERRORS)) {
+      expect(Object.isFrozen(codes)).toBe(true)
+    }
+  })
+
+  test('lists only codes core defines, and never an Organization status', () => {
+    for (const codes of Object.values(INTERNAL_CALL_ERRORS)) {
+      for (const code of codes) {
+        expect(code in CORE_ERRORS).toBe(true)
+        expect(code.startsWith('organization.')).toBe(false)
+      }
+    }
+  })
+})
+
+describe('internalCreateOrganizationRequestSchema', () => {
+  const body = { userId: id('usr'), organizationName: ' Acme ' }
+
+  test('accepts a sign-up and trims the name', () => {
     expect(internalCreateOrganizationRequestSchema.parse(body)).toEqual({
       userId: body.userId,
-      email: 'ada@example.com',
       organizationName: 'Acme',
     } as never)
   })
@@ -25,10 +52,10 @@ describe('internalCreateOrganizationRequestSchema', () => {
   test.each([
     ['a Region', { ...body, region: 'eu' }],
     ['an Organization id', { ...body, organizationId: id('org') }],
-    ['an email with two @', { ...body, email: 'a@b@c.co' }],
+    ['an email, which core does not use', { ...body, email: 'ada@example.com' }],
     ['an over-long name', { ...body, organizationName: 'a'.repeat(201) }],
     ['an empty name', { ...body, organizationName: '' }],
-    ['no user', { email: body.email, organizationName: 'x' }],
+    ['no user', { organizationName: 'x' }],
   ])('rejects %s', (_name, input) => {
     expect(internalCreateOrganizationRequestSchema.safeParse(input).success).toBe(false)
   })
@@ -80,18 +107,18 @@ describe('internalAcceptInvitationResponseSchema', () => {
     ).toBe(true)
   })
 
-  test('never carries owner or the token', () => {
+  test('never carries owner, and strips the token', () => {
     expect(
       internalAcceptInvitationResponseSchema.safeParse({ organizationId: id('org'), role: 'owner' })
         .success
     ).toBe(false)
     expect(
-      internalAcceptInvitationResponseSchema.safeParse({
+      internalAcceptInvitationResponseSchema.parse({
         organizationId: id('org'),
         role: 'rep',
         invitationToken: TOKEN,
-      }).success
-    ).toBe(false)
+      })
+    ).toEqual({ organizationId: id('org'), role: 'rep' } as never)
   })
 })
 
@@ -117,12 +144,14 @@ describe('internal membership lookup', () => {
     }
   })
 
-  test('answers with a defined none', () => {
+  test('answers with a defined none, without any Organization a newer version names', () => {
     expect(internalMembershipResponseSchema.parse({ found: false })).toEqual({ found: false })
+    expect(
+      internalMembershipResponseSchema.parse({ found: false, organizationId: id('org') })
+    ).toEqual({ found: false })
   })
 
   test.each([
-    ['none that still names an Organization', { found: false, organizationId: id('org') }],
     ['a membership without a status', { found: true, organizationId: id('org'), role: 'rep' }],
     ['null', null],
     [

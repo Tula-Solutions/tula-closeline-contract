@@ -1,12 +1,12 @@
 import { z } from 'zod'
 import { organizationIdSchema } from '../ids'
 import { organizationStatusSchema, regionSchema } from '../tenancy'
-import { organizationNameSchema, timestampSchema } from './values'
+import { organizationNameSchema, storedNameSchema, timestampSchema } from './values'
 
 /** An Organization as core returns it, for both reading it and renaming it. */
-export const organizationSchema = z.strictObject({
+export const organizationSchema = z.object({
   id: organizationIdSchema,
-  name: organizationNameSchema,
+  name: storedNameSchema,
   region: regionSchema,
   status: organizationStatusSchema,
   createdAt: timestampSchema,

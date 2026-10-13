@@ -5,6 +5,7 @@ import {
   createInvitationRequestSchema,
   invitationParamsSchema,
   invitationSchema,
+  listInvitationsQuerySchema,
   listInvitationsResponseSchema,
 } from './invitation'
 
@@ -53,35 +54,55 @@ describe('invitationSchema', () => {
   })
 
   test.each(['token', 'rawToken', 'tokenHash', 'invitationToken'])(
-    'rejects a response with a %s field',
+    'never carries a %s field out',
     (field) => {
-      expect(invitationSchema.safeParse({ ...invitation, [field]: 'A'.repeat(32) }).success).toBe(
-        false
-      )
+      const parsed = invitationSchema.parse({ ...invitation, [field]: 'A'.repeat(32) })
+      expect(field in parsed).toBe(false)
     }
   )
 
   test.each([
     ['owner as the role', { ...invitation, role: 'owner' }],
     ['an unknown state', { ...invitation, state: 'expired' }],
-    ['an unknown key', { ...invitation, extra: 1 }],
   ])('rejects %s', (_name, body) => {
     expect(invitationSchema.safeParse(body).success).toBe(false)
   })
 })
 
 describe('listInvitationsResponseSchema', () => {
-  test('accepts a page and rejects a token in an item', () => {
+  test('accepts a page and strips a token from an item', () => {
     expect(
       listInvitationsResponseSchema.safeParse({ items: [invitation], nextCursor: null }).success
     ).toBe(true)
     const items = [{ ...invitation, token: 'A'.repeat(32) }]
-    expect(listInvitationsResponseSchema.safeParse({ items, nextCursor: null }).success).toBe(false)
+    const parsed = listInvitationsResponseSchema.parse({ items, nextCursor: null })
+    expect(parsed.items[0] && 'token' in parsed.items[0]).toBe(false)
   })
 
   test('bounds the page size', () => {
     const items = Array.from({ length: MAX_PAGE_SIZE + 1 }, () => invitation)
     expect(listInvitationsResponseSchema.safeParse({ items, nextCursor: null }).success).toBe(false)
+  })
+})
+
+describe('listInvitationsQuerySchema', () => {
+  test('lists pending Invitations unless asked for another state', () => {
+    expect(listInvitationsQuerySchema.parse({}).state).toBe('pending')
+    expect(listInvitationsQuerySchema.parse({ state: 'revoked' }).state).toBe('revoked')
+    expect(listInvitationsQuerySchema.parse({ state: 'accepted', limit: '50' })).toEqual({
+      state: 'accepted',
+      limit: 50,
+    })
+  })
+
+  test.each([
+    ['expired, which is read from expiresAt', { state: 'expired' }],
+    ['a state in the wrong case', { state: 'Pending' }],
+    ['an empty state', { state: '' }],
+    ['an unknown filter', { role: 'rep' }],
+    ['a limit above the maximum', { limit: MAX_PAGE_SIZE + 1 }],
+  ])('rejects %s', (_name, query) => {
+    expect(listInvitationsQuerySchema.safeParse(query).success).toBe(false)
   })
 })
 

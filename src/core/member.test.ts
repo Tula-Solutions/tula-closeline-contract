@@ -17,7 +17,6 @@ describe('memberSchema', () => {
   })
 
   test.each([
-    ['an unknown key', { ...member, email: 'a@b.co' }],
     ['an unknown role', { ...member, role: 'superuser' }],
     ['a user id as the membership id', { ...member, id: id('usr') }],
   ])('rejects %s', (_name, body) => {
@@ -44,9 +43,8 @@ describe('listMembersResponseSchema', () => {
     )
   })
 
-  test('rejects an item with an unknown key', () => {
-    const items = [{ ...member, token: 'x' }]
-    expect(listMembersResponseSchema.safeParse({ items, nextCursor: null }).success).toBe(false)
+  test('rejects a missing membership id', () => {
+    expect(memberParamsSchema.safeParse({}).success).toBe(false)
   })
 })
 

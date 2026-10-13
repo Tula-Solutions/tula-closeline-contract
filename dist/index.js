@@ -63,33 +63,30 @@ var CORE_ERRORS = {
     not_found: { status: 404, message: "The member was not found." },
     last_owner: {
       status: 409,
-      message: "The last Owner cannot be removed or demoted. Make another member an Owner first."
+      message: "The last Owner cannot be removed or demoted. Promote a different member to Owner first."
     }
   }),
   ...defineErrors("membership", {
-    already_member: { status: 409, message: "This user already belongs to an Organization." }
+    already_member: { status: 409, message: "You already belong to an Organization." }
   }),
   ...defineErrors("invitation", {
     invalid: { status: 422, message: "The invitation is not valid." },
     not_found: { status: 404, message: "The invitation was not found." },
     already_pending: {
       status: 409,
-      message: "An invitation to that address is already pending. Revoke it to send a new one."
+      message: "A matching invitation is already pending. Revoke it to send a new one."
     }
   }),
   ...defineErrors("team", {
     not_found: { status: 404, message: "The Team was not found." },
     name_taken: { status: 409, message: "A Team with that name already exists." }
-  }),
-  ...defineErrors("role", {
-    not_permitted: { status: 403, message: "Your role does not allow this." }
   })
 };
 var SIGNUP_ERRORS = {
   ...defineErrors("auth", {
     no_organization: {
       status: 403,
-      message: "This account does not belong to an Organization, so it cannot sign in."
+      message: "You do not belong to an Organization, so you cannot sign in."
     }
   }),
   ...defineErrors("signup", {
@@ -181,9 +178,25 @@ function hasControlCharacter(text) {
   }
   return false;
 }
-var nameSchema = z5.string().max(MAX_NAME_LENGTH).trim().min(1).refine((text) => !hasControlCharacter(text), "No control characters");
+function isWellFormed(text) {
+  for (let index = 0;index < text.length; index += 1) {
+    const code = text.charCodeAt(index);
+    if (code >= 55296 && code <= 56319) {
+      const next = text.charCodeAt(index + 1);
+      if (!(next >= 56320 && next <= 57343)) {
+        return false;
+      }
+      index += 1;
+    } else if (code >= 56320 && code <= 57343) {
+      return false;
+    }
+  }
+  return true;
+}
+var nameSchema = z5.string().trim().pipe(z5.string().min(1).max(MAX_NAME_LENGTH).refine(isWellFormed, "Well-formed text only").refine((text) => !hasControlCharacter(text), "No control characters"));
 var organizationNameSchema = nameSchema;
 var teamNameSchema = nameSchema;
+var storedNameSchema = z5.string().min(1).max(MAX_NAME_LENGTH);
 var INVITATION_STATES = ["pending", "accepted", "revoked"];
 var invitationStateSchema = z5.enum(INVITATION_STATES);
 var timestampSchema = z5.iso.datetime({ offset: true }).max(64);
@@ -192,12 +205,16 @@ var IDEMPOTENCY_KEY_HEADER = "Idempotency-Key";
 var idempotencyKeySchema = z5.string().min(16).max(128).regex(/^[A-Za-z0-9_.:-]+$/);
 
 // src/core/internal.ts
+var INTERNAL_CALL_ERRORS = Object.freeze({
+  createOrganization: Object.freeze(["membership.already_member"]),
+  acceptInvitation: Object.freeze(["invitation.invalid", "membership.already_member"]),
+  membership: Object.freeze([])
+});
 var internalCreateOrganizationRequestSchema = z6.strictObject({
   userId: userIdSchema,
-  email: emailSchema,
   organizationName: organizationNameSchema
 });
-var internalCreateOrganizationResponseSchema = z6.strictObject({
+var internalCreateOrganizationResponseSchema = z6.object({
   organizationId: organizationIdSchema,
   role: z6.literal("owner")
 });
@@ -206,7 +223,7 @@ var internalAcceptInvitationRequestSchema = z6.strictObject({
   email: emailSchema,
   invitationToken: invitationTokenSchema
 });
-var internalAcceptInvitationResponseSchema = z6.strictObject({
+var internalAcceptInvitationResponseSchema = z6.object({
   organizationId: organizationIdSchema,
   role: invitableRoleSchema
 });
@@ -214,13 +231,13 @@ var internalMembershipRequestSchema = z6.strictObject({
   userId: userIdSchema
 });
 var internalMembershipResponseSchema = z6.discriminatedUnion("found", [
-  z6.strictObject({
+  z6.object({
     found: z6.literal(true),
     organizationId: organizationIdSchema,
     role: roleSchema,
     organizationStatus: organizationStatusSchema
   }),
-  z6.strictObject({ found: z6.literal(false) })
+  z6.object({ found: z6.literal(false) })
 ]);
 // src/core/invitation.ts
 import { z as z8 } from "zod";
@@ -270,7 +287,7 @@ function decodeCursor(text, schema) {
 }
 
 // src/core/invitation.ts
-var invitationSchema = z8.strictObject({
+var invitationSchema = z8.object({
   id: invitationIdSchema,
   email: emailSchema,
   role: invitableRoleSchema,
@@ -285,14 +302,14 @@ var createInvitationRequestSchema = z8.strictObject({
   role: invitableRoleSchema,
   teamId: teamIdSchema.optional()
 });
-var listInvitationsQuerySchema = pageQuerySchema;
+var listInvitationsQuerySchema = pageQuerySchema.extend({ state: invitationStateSchema.default("pending") }).strict();
 var listInvitationsResponseSchema = pageSchema(invitationSchema);
 var invitationParamsSchema = z8.strictObject({
   invitationId: invitationIdSchema
 });
 // src/core/member.ts
 import { z as z9 } from "zod";
-var memberSchema = z9.strictObject({
+var memberSchema = z9.object({
   id: membershipIdSchema,
   userId: userIdSchema,
   role: roleSchema,
@@ -309,9 +326,9 @@ var changeMemberRoleRequestSchema = z9.strictObject({
 });
 // src/core/organization.ts
 import { z as z10 } from "zod";
-var organizationSchema = z10.strictObject({
+var organizationSchema = z10.object({
   id: organizationIdSchema,
-  name: organizationNameSchema,
+  name: storedNameSchema,
   region: regionSchema,
   status: organizationStatusSchema,
   createdAt: timestampSchema,
@@ -322,9 +339,9 @@ var renameOrganizationRequestSchema = z10.strictObject({
 });
 // src/core/team.ts
 import { z as z11 } from "zod";
-var teamSchema = z11.strictObject({
+var teamSchema = z11.object({
   id: teamIdSchema,
-  name: teamNameSchema,
+  name: storedNameSchema,
   createdAt: timestampSchema,
   updatedAt: timestampSchema
 });
@@ -342,7 +359,7 @@ var teamParamsSchema = z11.strictObject({
 var addTeamMemberRequestSchema = z11.strictObject({
   membershipId: membershipIdSchema
 });
-var teamMemberSchema = z11.strictObject({
+var teamMemberSchema = z11.object({
   teamId: teamIdSchema,
   membershipId: membershipIdSchema,
   createdAt: timestampSchema
@@ -390,6 +407,7 @@ export {
   DEFAULT_PAGE_SIZE,
   ERRORS,
   IDEMPOTENCY_KEY_HEADER,
+  INTERNAL_CALL_ERRORS,
   INVITABLE_ROLES,
   INVITATION_STATES,
   MAX_CURSOR_LENGTH,
@@ -453,6 +471,7 @@ export {
   requestIdSchema,
   roleAtLeast,
   roleSchema,
+  storedNameSchema,
   teamIdSchema,
   teamMemberParamsSchema,
   teamMemberSchema,
