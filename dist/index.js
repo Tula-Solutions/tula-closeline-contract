@@ -185,6 +185,7 @@ var membershipIdSchema = idSchema("mem");
 var teamIdSchema = idSchema("team");
 var invitationIdSchema = idSchema("inv");
 var prospectIdSchema = idSchema("prs");
+var documentIdSchema = idSchema("doc");
 var eventIdSchema = idSchema("evt");
 var requestIdSchema = idSchema("req");
 var UUID_PATTERN = /^(?:[0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
@@ -483,36 +484,352 @@ function defineEvent(type, version, dataSchema) {
     safeParse: (input) => schema.safeParse(input)
   };
 }
+// src/playbook/document.ts
+import { z as z14 } from "zod";
 
+// src/playbook/values.ts
+import { z as z13 } from "zod";
+var DOCUMENT_STATES = ["uploaded", "processing", "ready", "failed", "deleted"];
+var documentStateSchema = z13.enum(DOCUMENT_STATES);
+var DOCUMENT_FAILURE_REASONS = [
+  "too_many_pages",
+  "unreadable",
+  "password_protected",
+  "no_text",
+  "processing_failed"
+];
+var documentFailureReasonSchema = z13.enum(DOCUMENT_FAILURE_REASONS);
+var ACCEPTED_DOCUMENT_EXTENSIONS = [".pdf", ".docx", ".pptx", ".txt", ".md"];
+var ACCEPTED_DOCUMENT_MEDIA_TYPES = [
+  "application/pdf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "text/plain",
+  "text/markdown"
+];
+var documentMediaTypeSchema = z13.enum(ACCEPTED_DOCUMENT_MEDIA_TYPES);
+var MEDIA_TYPE_BY_EXTENSION = Object.freeze({
+  ".pdf": "application/pdf",
+  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  ".txt": "text/plain",
+  ".md": "text/markdown"
+});
+var MAX_DOCUMENT_BYTES = 25 * 1024 * 1024;
+var MAX_DOCUMENT_PAGES = 300;
+var DOCUMENT_RETENTION_DAYS = 30;
+var DEFAULT_MAX_DOCUMENTS = 500;
+var DEFAULT_MAX_DOCUMENT_BYTES_TOTAL = 2 * 1024 * 1024 * 1024;
+var MAX_DOCUMENT_FILE_NAME_LENGTH = 255;
+var MAX_RAW_FILE_NAME_LENGTH = 1000;
+function isStripped(code) {
+  return code <= 31 || code >= 127 && code <= 159 || code === 1564 || code === 8206 || code === 8207 || code >= 8234 && code <= 8238 || code >= 8294 && code <= 8297;
+}
+function normaliseFileName(name) {
+  return stripUnsafe(name).trim();
+}
+function stripUnsafe(text) {
+  let out = "";
+  for (let index = 0;index < text.length; index += 1) {
+    if (!isStripped(text.charCodeAt(index))) {
+      out += text[index];
+    }
+  }
+  return out;
+}
+function isWellFormed2(text) {
+  for (let index = 0;index < text.length; index += 1) {
+    const code = text.charCodeAt(index);
+    if (code >= 55296 && code <= 56319) {
+      const next = text.charCodeAt(index + 1);
+      if (!(next >= 56320 && next <= 57343)) {
+        return false;
+      }
+      index += 1;
+    } else if (code >= 56320 && code <= 57343) {
+      return false;
+    }
+  }
+  return true;
+}
+function documentExtension(fileName) {
+  const lower = fileName.toLowerCase();
+  return ACCEPTED_DOCUMENT_EXTENSIONS.find((extension) => lower.endsWith(extension));
+}
+var INVISIBLE_STEM = /^[\s\u200b-\u200d\u2060\ufeff]*$/;
+function hasStem(name) {
+  const dot = name.lastIndexOf(".");
+  const stem = dot === -1 ? name : name.slice(0, dot);
+  return !INVISIBLE_STEM.test(stem);
+}
+var documentFileNameSchema = z13.string().max(MAX_RAW_FILE_NAME_LENGTH).transform(normaliseFileName).pipe(z13.string().min(1).max(MAX_DOCUMENT_FILE_NAME_LENGTH).refine(isWellFormed2, "Well-formed text only").refine((name) => !/[/\\]/.test(name), "No path separators").refine(hasStem, "A name before the extension"));
+var documentTypeCheckSchema = z13.string().transform(normaliseFileName).pipe(z13.string().refine((name) => documentExtension(name) !== undefined, "An accepted file type only"));
+var documentSizeCheckSchema = z13.number().max(MAX_DOCUMENT_BYTES);
+function normaliseMediaType(mediaType) {
+  return (mediaType.split(";")[0] ?? "").trim().toLowerCase();
+}
+
+// src/playbook/document.ts
+var documentSchema = z14.object({
+  id: documentIdSchema,
+  fileName: documentFileNameSchema,
+  mediaType: documentMediaTypeSchema,
+  sizeBytes: z14.number().int().min(1).max(MAX_DOCUMENT_BYTES),
+  pageCount: z14.number().int().min(1).max(MAX_DOCUMENT_PAGES).nullable(),
+  state: documentStateSchema,
+  failureReason: documentFailureReasonSchema.nullable(),
+  deletedAt: timestampSchema.nullable(),
+  purgeAt: timestampSchema.nullable(),
+  uploadedByUserId: userIdSchema,
+  createdAt: timestampSchema,
+  updatedAt: timestampSchema
+}).superRefine((document, context) => {
+  if (document.state === "failed" !== (document.failureReason !== null)) {
+    context.addIssue({
+      code: "custom",
+      path: ["failureReason"],
+      message: "A failure reason is set exactly when the state is failed"
+    });
+  }
+  const deleted = document.state === "deleted";
+  if (deleted !== (document.deletedAt !== null) || deleted !== (document.purgeAt !== null)) {
+    context.addIssue({
+      code: "custom",
+      path: ["purgeAt"],
+      message: "A deletion time and a purge time are set exactly when the state is deleted"
+    });
+  }
+});
+var UPLOAD_FILE_FIELD = "file";
+var UPLOAD_CONTENT_TYPE = "multipart/form-data";
+var uploadDocumentFileSchema = z14.strictObject({
+  fileName: documentFileNameSchema,
+  declaredMediaType: z14.string().max(255).nullable(),
+  sizeBytes: z14.number().int().min(1)
+});
+var documentParamsSchema = z14.strictObject({
+  documentId: documentIdSchema
+});
+var listDocumentsQuerySchema = pageQuerySchema.extend({ state: documentStateSchema.optional() }).strict();
+var listDocumentsResponseSchema = pageSchema(documentSchema);
+var internalRemoveOrganizationDocumentsParamsSchema = z14.strictObject({
+  organizationId: organizationIdSchema
+});
+var internalRemoveOrganizationDocumentsRequestSchema = z14.strictObject({});
+var internalRemoveOrganizationDocumentsResponseSchema = z14.object({
+  organizationId: organizationIdSchema,
+  status: z14.literal("removed")
+});
+var UPLOAD_FILE_KEYS = ["fileName", "declaredMediaType", "sizeBytes"];
+function checkUploadFile(input) {
+  const invalid = { ok: false, code: "request.invalid" };
+  if (typeof input !== "object" || input === null) {
+    return invalid;
+  }
+  const keys = Object.keys(input);
+  if (keys.some((key) => !UPLOAD_FILE_KEYS.includes(key))) {
+    return invalid;
+  }
+  const copy = Object.create(null);
+  for (const key of UPLOAD_FILE_KEYS) {
+    if (Object.hasOwn(input, key)) {
+      copy[key] = input[key];
+    }
+  }
+  const { fileName, sizeBytes } = copy;
+  if (typeof fileName !== "string" || typeof sizeBytes !== "number" || !Number.isFinite(sizeBytes)) {
+    return invalid;
+  }
+  if (!documentSizeCheckSchema.safeParse(sizeBytes).success) {
+    return { ok: false, code: "document.too_large" };
+  }
+  if (!documentTypeCheckSchema.safeParse(fileName).success) {
+    return { ok: false, code: "document.unsupported_type" };
+  }
+  const parsed = uploadDocumentFileSchema.safeParse(copy);
+  return parsed.success ? { ok: true, file: parsed.data } : invalid;
+}
+// src/playbook/errors.ts
+var PLAYBOOK_ERRORS = {
+  ...defineErrors("document", {
+    not_found: { status: 404, message: "The document was not found." },
+    unsupported_type: { status: 415, message: "This file type is not supported." },
+    too_large: { status: 413, message: "The file is larger than the upload limit." },
+    quota_exceeded: {
+      status: 409,
+      message: "The Organization has reached its limit on the number or total size of documents. Deleted documents count until they are purged."
+    },
+    not_restorable: {
+      status: 410,
+      message: "The document was purged after its retention period and cannot be restored."
+    }
+  })
+};
+// src/playbook/messages.ts
+import { z as z15 } from "zod";
+var documentUploadedPayloadSchema = z15.strictObject({
+  documentId: documentIdSchema
+});
+var DOCUMENT_UPLOADED_MESSAGE = {
+  type: "playbook.document_uploaded",
+  version: 1,
+  scope: "organization",
+  payload: documentUploadedPayloadSchema
+};
+var MAX_DELETION_SEQ = 2147483647;
+var documentDeletedPayloadSchema = z15.strictObject({
+  documentId: documentIdSchema,
+  deletionSeq: z15.number().int().min(1).max(MAX_DELETION_SEQ)
+});
+var DOCUMENT_DELETED_MESSAGE = {
+  type: "playbook.document_deleted",
+  version: 1,
+  scope: "organization",
+  payload: documentDeletedPayloadSchema
+};
+// src/playbook/routes.ts
+var PLAYBOOK_WRITE_ROLES = ["owner", "admin"];
+var PLAYBOOK_READ_ROLES = [
+  "owner",
+  "admin",
+  "manager",
+  "rep"
+];
+var route = (definition) => Object.freeze(definition);
+var PLAYBOOK_ROUTES = Object.freeze({
+  uploadDocument: route({
+    method: "POST",
+    path: "/playbook/documents",
+    internal: false,
+    roles: PLAYBOOK_WRITE_ROLES,
+    success: [201, 200],
+    errors: ["document.unsupported_type", "document.too_large", "document.quota_exceeded"],
+    commonErrors: [
+      "request.invalid",
+      "request.too_large",
+      "request.unsupported_media_type",
+      "request.idempotency_key_reused",
+      "request.idempotency_in_progress"
+    ],
+    description: `Uploads one file (multipart/form-data, one part named "file") to the Organization's Playbook. Owner and Admin only; Managers and Reps get auth.forbidden. The type and size of the file part are checked before anything is stored: document.unsupported_type (415) and document.too_large (413); a malformed name or an empty file is request.invalid. The common request.too_large and request.unsupported_media_type apply to the whole request instead: a body over the envelope limit, or a body that is not multipart. Answers 201 with the new document in state "uploaded". If the content matches a document the Organization already has, answers 200 with that stored document, with its stored fileName (not the new upload's name), so a duplicate is an answer, not an error: a match on a "deleted" document restores it (state "processing"), and a match on a "failed" document re-queues it for processing and answers with state "uploaded". The page limit is not checked here: a document over it ends in state "failed" with failureReason "too_many_pages". Accepts an Idempotency-Key header.`
+  }),
+  listDocuments: route({
+    method: "GET",
+    path: "/playbook/documents",
+    internal: false,
+    roles: PLAYBOOK_READ_ROLES,
+    success: [200],
+    errors: [],
+    commonErrors: ["request.invalid"],
+    description: "Lists the Organization's documents, newest first (sorted by createdAt, then id, both descending), one cursor-paginated page at a time (at most 100). Owner, Admin, Manager and Rep may read. Soft-deleted documents are left out unless state=deleted is asked for."
+  }),
+  getDocument: route({
+    method: "GET",
+    path: "/playbook/documents/{documentId}",
+    internal: false,
+    roles: PLAYBOOK_READ_ROLES,
+    success: [200],
+    errors: ["document.not_found"],
+    commonErrors: ["request.invalid"],
+    description: "Reads one document and its state, with the failure reason when it failed and the purge time when it was deleted. Owner, Admin, Manager and Rep may read."
+  }),
+  deleteDocument: route({
+    method: "DELETE",
+    path: "/playbook/documents/{documentId}",
+    internal: false,
+    roles: PLAYBOOK_WRITE_ROLES,
+    success: [200],
+    errors: ["document.not_found"],
+    commonErrors: ["request.invalid"],
+    description: 'Soft-deletes a document: it is hidden at once and purged after the retention period, and can be restored until then. Owner and Admin only. Idempotent by end state: answers 200 with the document in state "deleted" and its purge time, and deleting an already deleted document answers the same. Takes no body.'
+  }),
+  restoreDocument: route({
+    method: "POST",
+    path: "/playbook/documents/{documentId}/restore",
+    internal: false,
+    roles: PLAYBOOK_WRITE_ROLES,
+    success: [200],
+    errors: ["document.not_found", "document.not_restorable"],
+    commonErrors: ["request.invalid"],
+    description: 'Restores a soft-deleted document within the retention period; it is re-ingested from the kept file and shows as "processing". Owner and Admin only. Idempotent by end state: a document that is no longer deleted (restored by an earlier call, or never deleted) answers 200 with the document as it is. A deleted document whose purge time has passed but which the purge has not yet removed is document.not_restorable (410); once purged the record is gone and the answer is document.not_found (404). Takes no body.'
+  }),
+  removeOrganizationDocuments: route({
+    method: "POST",
+    path: "/internal/playbook/organizations/{organizationId}/remove-all",
+    internal: true,
+    roles: [],
+    success: [200],
+    errors: [],
+    commonErrors: [
+      "request.invalid",
+      "request.idempotency_key_reused",
+      "request.idempotency_in_progress"
+    ],
+    description: "Internal, for offboarding and erasure; no caller yet. Removes every document, file, chunk and vector an Organization has, soft-deleted ones included, without waiting for retention. Idempotent by end state: it answers 200 whenever nothing remains. Served on the internal network only; takes the Organization from the path."
+  })
+});
 // src/index.ts
 var PACKAGE = "tula-closeline-contract";
 export {
   ABANDON_MAX_AGE_HOURS,
+  ACCEPTED_DOCUMENT_EXTENSIONS,
+  ACCEPTED_DOCUMENT_MEDIA_TYPES,
   AUTH_ERRORS,
   CORE_ERRORS,
+  DEFAULT_MAX_DOCUMENTS,
+  DEFAULT_MAX_DOCUMENT_BYTES_TOTAL,
   DEFAULT_PAGE_SIZE,
+  DOCUMENT_DELETED_MESSAGE,
+  DOCUMENT_FAILURE_REASONS,
+  DOCUMENT_RETENTION_DAYS,
+  DOCUMENT_STATES,
+  DOCUMENT_UPLOADED_MESSAGE,
   ERRORS,
   IDEMPOTENCY_KEY_HEADER,
   INTERNAL_CALL_ERRORS,
   INVITABLE_ROLES,
   INVITATION_STATES,
   MAX_CURSOR_LENGTH,
+  MAX_DELETION_SEQ,
+  MAX_DOCUMENT_BYTES,
+  MAX_DOCUMENT_FILE_NAME_LENGTH,
+  MAX_DOCUMENT_PAGES,
   MAX_EMAIL_LENGTH,
   MAX_NAME_LENGTH,
   MAX_PAGE_SIZE,
   MAX_PERSON_NAME_LENGTH,
+  MEDIA_TYPE_BY_EXTENSION,
   ORGANIZATION_STATUSES,
   PACKAGE,
+  PLAYBOOK_ERRORS,
+  PLAYBOOK_READ_ROLES,
+  PLAYBOOK_ROUTES,
+  PLAYBOOK_WRITE_ROLES,
   REGIONS,
   ROLES,
   SIGNUP_ERRORS,
+  UPLOAD_CONTENT_TYPE,
+  UPLOAD_FILE_FIELD,
   addTeamMemberRequestSchema,
   changeMemberRoleRequestSchema,
+  checkUploadFile,
   createInvitationRequestSchema,
   createTeamRequestSchema,
   decodeCursor,
   defineErrors,
   defineEvent,
+  documentDeletedPayloadSchema,
+  documentExtension,
+  documentFailureReasonSchema,
+  documentFileNameSchema,
+  documentIdSchema,
+  documentMediaTypeSchema,
+  documentParamsSchema,
+  documentSchema,
+  documentSizeCheckSchema,
+  documentStateSchema,
+  documentTypeCheckSchema,
+  documentUploadedPayloadSchema,
   emailSchema,
   encodeCursor,
   errorBodySchema,
@@ -533,6 +850,9 @@ export {
   internalCreateOrganizationResponseSchema,
   internalMembershipRequestSchema,
   internalMembershipResponseSchema,
+  internalRemoveOrganizationDocumentsParamsSchema,
+  internalRemoveOrganizationDocumentsRequestSchema,
+  internalRemoveOrganizationDocumentsResponseSchema,
   internalUpdateMemberProfileParamsSchema,
   internalUpdateMemberProfileRequestSchema,
   internalUpdateMemberProfileResponseSchema,
@@ -542,6 +862,8 @@ export {
   invitationSchema,
   invitationStateSchema,
   invitationTokenSchema,
+  listDocumentsQuerySchema,
+  listDocumentsResponseSchema,
   listInvitationsQuerySchema,
   listInvitationsResponseSchema,
   listMembersQuerySchema,
@@ -551,6 +873,8 @@ export {
   memberParamsSchema,
   memberSchema,
   membershipIdSchema,
+  normaliseFileName,
+  normaliseMediaType,
   organizationIdSchema,
   organizationNameSchema,
   organizationSchema,
@@ -573,5 +897,6 @@ export {
   teamParamsSchema,
   teamSchema,
   timestampSchema,
+  uploadDocumentFileSchema,
   userIdSchema
 };

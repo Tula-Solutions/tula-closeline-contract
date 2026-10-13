@@ -15,7 +15,7 @@ bun run verify
 
 Standards: `AGENTS.md` (this repo) and `.claude/COMMON.md` (shared).
 
-## Core's API surface (0.6.0)
+## Core's API surface (0.7.0)
 
 Schemas and inferred types only; routes and handlers live in `tula-closeline-core`.
 
@@ -79,3 +79,21 @@ by one space, and `null` when the person gave neither; a request `name` is at mo
 Lists use the existing cursor pagination (`pageQuerySchema`, at most 100 per page); the Invitation
 list also takes `state` (`pending`, `accepted` or `revoked`, default `pending`). Fold emails and
 Team names with `foldAscii`, never `toLowerCase()`.
+
+## Playbook API surface (0.7.0, ADR 0016)
+
+Schemas only, as for core. `PLAYBOOK_ROUTES` holds each route's method, path, roles, success
+statuses, error codes and OpenAPI description (this library has no OpenAPI generator; the service
+builds its document from these).
+
+- **States** (`DOCUMENT_STATES`): `uploaded`, `processing`, `ready`, `failed`, `deleted` (soft-deleted,
+  awaiting purge). A `failed` document carries `failureReason` from `DOCUMENT_FAILURE_REASONS`; a
+  `deleted` one carries `deletedAt` and `purgeAt`.
+- **Upload** is `multipart/form-data` with one part, `file` (`UPLOAD_FILE_FIELD`), and an
+  `Idempotency-Key` header. Services call `checkUploadFile(file)` on what they read off the part: it runs the size check (`document.too_large`), then the type check on the stored name (`document.unsupported_type`), then the shape (`request.invalid`) and returns the parsed file or the code. `documentSizeCheckSchema`, `documentTypeCheckSchema` and `uploadDocumentFileSchema` are the steps it uses. The extension and `mediaType` of a document are not checked against each other: that is the service's job. The page limit is not an error: a document over it ends `failed` with `failureReason: too_many_pages`. `normaliseMediaType` lower-cases a media type and drops its parameters.
+  A new document answers 201; a duplicate of existing content answers 200 with the stored document (a `deleted` match is restored, a `failed` match is re-queued). Delete and restore are idempotent by end state. `DOCUMENT_DELETED_MESSAGE` carries `deletionSeq` (1 to `MAX_DELETION_SEQ`, a Postgres `integer`), which the service bumps on each state-changing delete (a repeated delete does not bump it or publish again); it is not on the public document.
+- **File names** (`documentFileNameSchema`) have control and bidirectional characters stripped, are
+  1 to 255 UTF-16 code units, hold no `/` or `\` and need a visible stem; they are display text, never a storage key.
+- **Limits** are exported constants, each saying whether the owner chose it or it is a default.
+- **Messages** `DOCUMENT_UPLOADED_MESSAGE` and `DOCUMENT_DELETED_MESSAGE` are `{ type, version, scope,
+  payload }`, the pieces of the kit's `defineMessage`.

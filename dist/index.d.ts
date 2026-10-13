@@ -783,6 +783,8 @@ declare const teamIdSchema: z10.core.$ZodBranded<z10.ZodString, "team", "out">;
 declare const invitationIdSchema: z10.core.$ZodBranded<z10.ZodString, "inv", "out">;
 /** The id of a Prospect (`prs_…`). */
 declare const prospectIdSchema: z10.core.$ZodBranded<z10.ZodString, "prs", "out">;
+/** The id of a Playbook document (`doc_…`). */
+declare const documentIdSchema: z10.core.$ZodBranded<z10.ZodString, "doc", "out">;
 /** The id of an event (`evt_…`). */
 declare const eventIdSchema: z10.core.$ZodBranded<z10.ZodString, "evt", "out">;
 /** The id of a request, for tracing (`req_…`). */
@@ -799,6 +801,8 @@ type TeamId = z10.infer<typeof teamIdSchema>;
 type InvitationId = z10.infer<typeof invitationIdSchema>;
 /** The id of a Prospect. */
 type ProspectId = z10.infer<typeof prospectIdSchema>;
+/** The id of a Playbook document. */
+type DocumentId = z10.infer<typeof documentIdSchema>;
 /** The id of an event. */
 type EventId = z10.infer<typeof eventIdSchema>;
 /** The id of a request. */
@@ -842,48 +846,426 @@ declare function encodeCursor(value: unknown): string;
 */
 declare function decodeCursor<T extends z11.ZodType>(text: string, schema: T): z11.output<T> | undefined;
 import { z as z12 } from "zod";
+/**
+* A Playbook document as the service returns it. It names the file but never carries its content,
+* and no text taken from it. The extension of `fileName` and `mediaType` are not checked against each other: that agreement is
+* the service's job, as only it knows the declared and the detected type, and the contract does
+* not enforce it. `failureReason` is set exactly when `state` is `failed`. `purgeAt` is
+* set exactly when `state` is `deleted`: the time the file and record will be purged
+* (`DOCUMENT_RETENTION_DAYS` after `deletedAt`); a restore is refused after it. `pageCount` is
+* `null` until ingestion has counted the pages. The service must send the output of
+* `documentSchema.parse(row)`, never the row.
+*/
+declare const documentSchema: z12.ZodObject<{
+	id: z12.core.$ZodBranded<z12.ZodString, "doc", "out">;
+	fileName: z12.ZodPipe<z12.ZodPipe<z12.ZodString, z12.ZodTransform<string, string>>, z12.ZodString>;
+	mediaType: z12.ZodEnum<{
+		"application/pdf": "application/pdf";
+		"application/vnd.openxmlformats-officedocument.presentationml.presentation": "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+		"application/vnd.openxmlformats-officedocument.wordprocessingml.document": "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+		"text/markdown": "text/markdown";
+		"text/plain": "text/plain";
+	}>;
+	sizeBytes: z12.ZodNumber;
+	pageCount: z12.ZodNullable<z12.ZodNumber>;
+	state: z12.ZodEnum<{
+		deleted: "deleted";
+		failed: "failed";
+		processing: "processing";
+		ready: "ready";
+		uploaded: "uploaded";
+	}>;
+	failureReason: z12.ZodNullable<z12.ZodEnum<{
+		no_text: "no_text";
+		password_protected: "password_protected";
+		processing_failed: "processing_failed";
+		too_many_pages: "too_many_pages";
+		unreadable: "unreadable";
+	}>>;
+	deletedAt: z12.ZodNullable<z12.ZodISODateTime>;
+	purgeAt: z12.ZodNullable<z12.ZodISODateTime>;
+	uploadedByUserId: z12.core.$ZodBranded<z12.ZodString, "usr", "out">;
+	createdAt: z12.ZodISODateTime;
+	updatedAt: z12.ZodISODateTime;
+}, z12.core.$strip>;
+/** A Playbook document as the service returns it. */
+type PlaybookDocument = z12.infer<typeof documentSchema>;
+/** The name of the multipart form field that carries the file. */
+declare const UPLOAD_FILE_FIELD = "file";
+/** The content type of an upload request: `multipart/form-data` with one file part named {@link UPLOAD_FILE_FIELD}. */
+declare const UPLOAD_CONTENT_TYPE = "multipart/form-data";
+/**
+* What the service reads off the file part of an upload before it stores anything: the
+* `fileName` of the part, the media type the client declared (`declaredMediaType`, advisory only;
+* the service inspects the content too, because an upload is untrusted data) and the `sizeBytes`
+* counted while reading. The file itself is a multipart part, not a JSON field, and appears in no
+* schema. The request has no other part; it carries an `Idempotency-Key` header.
+*
+* This schema checks only shape (a well-formed name, a non-empty file) and a failure is
+* `request.invalid` (400). A service calls {@link checkUploadFile}, which runs it after the size
+* and type checks so each gets its own code.
+*/
+declare const uploadDocumentFileSchema: z12.ZodObject<{
+	fileName: z12.ZodPipe<z12.ZodPipe<z12.ZodString, z12.ZodTransform<string, string>>, z12.ZodString>;
+	declaredMediaType: z12.ZodNullable<z12.ZodString>;
+	sizeBytes: z12.ZodNumber;
+}, z12.core.$strict>;
+/** What the service reads off the file part of an upload. */
+type UploadDocumentFile = z12.infer<typeof uploadDocumentFileSchema>;
+/** The path parameters of a request about one document. */
+declare const documentParamsSchema: z12.ZodObject<{
+	documentId: z12.core.$ZodBranded<z12.ZodString, "doc", "out">;
+}, z12.core.$strict>;
+/** The path parameters of a request about one document. */
+type DocumentParams = z12.infer<typeof documentParamsSchema>;
+/**
+* The query parameters of a request to list documents: a page, and optionally one `state`. With
+* no `state`, every document that is not `deleted` is listed; `state=deleted` lists the documents
+* that can still be restored. An unknown parameter is rejected.
+*/
+declare const listDocumentsQuerySchema: z12.ZodObject<{
+	cursor: z12.ZodOptional<z12.ZodString>;
+	limit: z12.ZodDefault<z12.ZodPipe<z12.ZodPipe<z12.ZodUnion<readonly [z12.ZodNumber, z12.ZodString]>, z12.ZodTransform<number, string | number>>, z12.ZodNumber>>;
+	state: z12.ZodOptional<z12.ZodEnum<{
+		deleted: "deleted";
+		failed: "failed";
+		processing: "processing";
+		ready: "ready";
+		uploaded: "uploaded";
+	}>>;
+}, z12.core.$strict>;
+/** The query parameters of a request to list documents. */
+type ListDocumentsQuery = z12.infer<typeof listDocumentsQuerySchema>;
+/** One page of documents. */
+declare const listDocumentsResponseSchema: z12.ZodObject<{
+	items: z12.ZodArray<z12.ZodObject<{
+		id: z12.core.$ZodBranded<z12.ZodString, "doc", "out">;
+		fileName: z12.ZodPipe<z12.ZodPipe<z12.ZodString, z12.ZodTransform<string, string>>, z12.ZodString>;
+		mediaType: z12.ZodEnum<{
+			"application/pdf": "application/pdf";
+			"application/vnd.openxmlformats-officedocument.presentationml.presentation": "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+			"application/vnd.openxmlformats-officedocument.wordprocessingml.document": "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+			"text/markdown": "text/markdown";
+			"text/plain": "text/plain";
+		}>;
+		sizeBytes: z12.ZodNumber;
+		pageCount: z12.ZodNullable<z12.ZodNumber>;
+		state: z12.ZodEnum<{
+			deleted: "deleted";
+			failed: "failed";
+			processing: "processing";
+			ready: "ready";
+			uploaded: "uploaded";
+		}>;
+		failureReason: z12.ZodNullable<z12.ZodEnum<{
+			no_text: "no_text";
+			password_protected: "password_protected";
+			processing_failed: "processing_failed";
+			too_many_pages: "too_many_pages";
+			unreadable: "unreadable";
+		}>>;
+		deletedAt: z12.ZodNullable<z12.ZodISODateTime>;
+		purgeAt: z12.ZodNullable<z12.ZodISODateTime>;
+		uploadedByUserId: z12.core.$ZodBranded<z12.ZodString, "usr", "out">;
+		createdAt: z12.ZodISODateTime;
+		updatedAt: z12.ZodISODateTime;
+	}, z12.core.$strip>>;
+	nextCursor: z12.ZodNullable<z12.ZodString>;
+}, z12.core.$strip>;
+/** One page of documents. */
+type ListDocumentsResponse = z12.infer<typeof listDocumentsResponseSchema>;
+/**
+* Internal: the path parameters of the call that removes everything an Organization has in the
+* Playbook. The Organization is named in the path, never taken from the caller's token.
+*/
+declare const internalRemoveOrganizationDocumentsParamsSchema: z12.ZodObject<{
+	organizationId: z12.core.$ZodBranded<z12.ZodString, "org", "out">;
+}, z12.core.$strict>;
+/** Internal: the path parameters of the remove-everything call. */
+type InternalRemoveOrganizationDocumentsParams = z12.infer<typeof internalRemoveOrganizationDocumentsParamsSchema>;
+/**
+* Internal: `POST /internal/playbook/organizations/{organizationId}/remove-all`, for offboarding
+* and erasure; no caller yet. The body is empty. It cancels ingestion in flight and removes every
+* file, chunk, vector and record the Organization has, soft-deleted documents included, without
+* waiting for retention. It carries an `Idempotency-Key` header and is defined by its end state:
+* it answers success whenever nothing remains when it returns, whether this call, an earlier one
+* or nobody ever stored anything, so a repeat under any key answers the same and success does not
+* mean this call removed anything. It returns no domain error code.
+*/
+declare const internalRemoveOrganizationDocumentsRequestSchema: z12.ZodObject<{}, z12.core.$strict>;
+/** Internal: the body of the remove-everything call. */
+type InternalRemoveOrganizationDocumentsRequest = z12.infer<typeof internalRemoveOrganizationDocumentsRequestSchema>;
+/** Internal: the answer to the remove-everything call: always `removed`. */
+declare const internalRemoveOrganizationDocumentsResponseSchema: z12.ZodObject<{
+	organizationId: z12.core.$ZodBranded<z12.ZodString, "org", "out">;
+	status: z12.ZodLiteral<"removed">;
+}, z12.core.$strip>;
+/** Internal: the answer to the remove-everything call. */
+type InternalRemoveOrganizationDocumentsResponse = z12.infer<typeof internalRemoveOrganizationDocumentsResponseSchema>;
+/** The answer of {@link checkUploadFile}: the parsed file, or the one error code to return. */
+type CheckUploadFileResult = {
+	readonly ok: true;
+	readonly file: UploadDocumentFile;
+} | {
+	readonly ok: false;
+	readonly code: "document.too_large" | "document.unsupported_type" | "request.invalid";
+};
+/**
+* The one call that checks the file part of an upload, so a service cannot skip a step. It runs
+* the size check first (`document.too_large`, 413, so an over-size `.exe` is only too large), then
+* the type check on the stored form of the name (`document.unsupported_type`, 415: the extension
+* is judged after control and bidirectional characters are stripped and the name is trimmed, so
+* `report.pdf ` is accepted and stored as `report.pdf`), then the shape
+* ({@link uploadDocumentFileSchema}, `request.invalid`, 400). Input that is not an object with a
+* string name and a finite numeric size (so `NaN` and the infinities too), or that has an own key
+* other than the three, is `request.invalid`. Each field is read once, as an own property, into a
+* copy that all three checks use, so a changing getter or an inherited property cannot pass a check
+* the parsed value would fail. On success `file` is the parsed form, with
+* the stored name. The result carries no name or content, so it is safe to log and to return.
+*/
+declare function checkUploadFile(input: unknown): CheckUploadFileResult;
+import { ErrorDefinition as ErrorDefinition_8gwh453 } from "..";
+/**
+* The errors the playbook service returns, as `area.reason` codes. No body carries a file name,
+* file content or text taken from a document: every message is fixed. A role that is not allowed
+* is the common `auth.forbidden`; a malformed multipart body is the common `request.invalid`.
+* There is no page-limit code: the page count is checked in the ingestion job, so a document over
+* the limit ends in state `failed` with `failureReason: 'too_many_pages'`. `quota_exceeded` covers
+* both the document count and the total size and does not say which, as no domain error in this
+* library carries typed details. `document.not_restorable` (410) is a deleted
+* document whose purge time has passed but which the purge has not yet removed. There is no
+* tombstone: once purged the record is gone and the answer is `document.not_found` (404).
+*/
+declare const PLAYBOOK_ERRORS: {
+	readonly "document.not_found": ErrorDefinition_8gwh453<"document.not_found">;
+	readonly "document.not_restorable": ErrorDefinition_8gwh453<"document.not_restorable">;
+	readonly "document.quota_exceeded": ErrorDefinition_8gwh453<"document.quota_exceeded">;
+	readonly "document.too_large": ErrorDefinition_8gwh453<"document.too_large">;
+	readonly "document.unsupported_type": ErrorDefinition_8gwh453<"document.unsupported_type">;
+};
+/** A code from the {@link PLAYBOOK_ERRORS} registry. */
+type PlaybookErrorCode = keyof typeof PLAYBOOK_ERRORS;
+import { z as z13 } from "zod";
+/** The payload of {@link DOCUMENT_UPLOADED_MESSAGE}: the document to ingest. */
+declare const documentUploadedPayloadSchema: z13.ZodObject<{
+	documentId: z13.core.$ZodBranded<z13.ZodString, "doc", "out">;
+}, z13.core.$strict>;
+/** The payload of {@link DOCUMENT_UPLOADED_MESSAGE}. */
+type DocumentUploadedPayload = z13.infer<typeof documentUploadedPayloadSchema>;
+/**
+* The message that starts ingestion of a document: published after an upload is stored, and again
+* when a soft-deleted document is restored (it is re-ingested from the kept file). The job is
+* idempotent and resumable, keyed on the document.
+*/
+declare const DOCUMENT_UPLOADED_MESSAGE: {
+	readonly type: "playbook.document_uploaded";
+	readonly version: 1;
+	readonly scope: "organization";
+	readonly payload: z13.ZodObject<{
+		documentId: z13.core.$ZodBranded<z13.ZodString, "doc", "out">;
+	}, z13.core.$strict>;
+};
+/** The largest `deletionSeq`: the db column is a Postgres `integer`, so the message cannot carry more. */
+declare const MAX_DELETION_SEQ = 2147483647;
+/**
+* The payload of {@link DOCUMENT_DELETED_MESSAGE}: the document and its `deletionSeq`, an integer
+* from 1 to {@link MAX_DELETION_SEQ} that the service increases in the same write as each delete. The cleanup applies only
+* when the document is still `deleted` and its stored sequence equals this one, so a restore, or
+* a later delete, makes an older message do nothing. A timestamp is not the guard: Postgres keeps
+* microseconds, a JSON timestamp does not, and two deletions can share a clock tick. The sequence
+* is not on the public document schema. Only a delete that changes the state bumps it: a repeated
+* delete of an already deleted document does not bump the sequence and does not publish again.
+*/
+declare const documentDeletedPayloadSchema: z13.ZodObject<{
+	documentId: z13.core.$ZodBranded<z13.ZodString, "doc", "out">;
+	deletionSeq: z13.ZodNumber;
+}, z13.core.$strict>;
+/** The payload of {@link DOCUMENT_DELETED_MESSAGE}. */
+type DocumentDeletedPayload = z13.infer<typeof documentDeletedPayloadSchema>;
+/**
+* The message that queues the removal of a deleted document's vectors, published by the delete
+* request. It is cleanup only: search hides a deleted document by its state, never by this job.
+*/
+declare const DOCUMENT_DELETED_MESSAGE: {
+	readonly type: "playbook.document_deleted";
+	readonly version: 1;
+	readonly scope: "organization";
+	readonly payload: z13.ZodObject<{
+		documentId: z13.core.$ZodBranded<z13.ZodString, "doc", "out">;
+		deletionSeq: z13.ZodNumber;
+	}, z13.core.$strict>;
+};
+import { z as z14 } from "zod";
 /** Every Region an Organization can be created in. */
 declare const REGIONS: readonly ["us", "eu"];
 /** A Region: the geography whose boundary an Organization's data never crosses. */
-declare const regionSchema: z12.ZodEnum<{
+declare const regionSchema: z14.ZodEnum<{
 	eu: "eu";
 	us: "us";
 }>;
 /** A Region. */
-type Region = z12.infer<typeof regionSchema>;
+type Region = z14.infer<typeof regionSchema>;
 /** Every role, ordered from most to least privileged. */
 declare const ROLES: readonly ["owner", "admin", "manager", "rep"];
 /** A member's role in an Organization. */
-declare const roleSchema: z12.ZodEnum<{
+declare const roleSchema: z14.ZodEnum<{
 	admin: "admin";
 	manager: "manager";
 	owner: "owner";
 	rep: "rep";
 }>;
 /** A role. */
-type Role = z12.infer<typeof roleSchema>;
+type Role = z14.infer<typeof roleSchema>;
 /** Whether `role` is at least as privileged as `minimum`; an unrecognised role is never enough. */
 declare function roleAtLeast(role: Role, minimum: Role): boolean;
 /** The roles an Invitation can offer; ownership passes by promoting a member, never by Invitation. */
 declare const INVITABLE_ROLES: readonly ["admin", "manager", "rep"];
 /** A role an Invitation can offer: any role except `owner`. */
-declare const invitableRoleSchema: z12.ZodEnum<{
+declare const invitableRoleSchema: z14.ZodEnum<{
 	admin: "admin";
 	manager: "manager";
 	rep: "rep";
 }>;
 /** A role an Invitation can offer. */
-type InvitableRole = z12.infer<typeof invitableRoleSchema>;
+type InvitableRole = z14.infer<typeof invitableRoleSchema>;
 /** Every state an Organization is in; `deleted` keeps the record for the retention window. */
 declare const ORGANIZATION_STATUSES: readonly ["active", "suspended", "deleted"];
 /** The state of an Organization. */
-declare const organizationStatusSchema: z12.ZodEnum<{
+declare const organizationStatusSchema: z14.ZodEnum<{
 	active: "active";
 	deleted: "deleted";
 	suspended: "suspended";
 }>;
 /** The state of an Organization. */
-type OrganizationStatus = z12.infer<typeof organizationStatusSchema>;
+type OrganizationStatus = z14.infer<typeof organizationStatusSchema>;
+/** The roles that may change the Playbook (ADR 0016, choice 4). */
+declare const PLAYBOOK_WRITE_ROLES: readonly ["owner", "admin"];
+/** The roles that may list and read documents: every role (ADR 0016, choice 4). */
+declare const PLAYBOOK_READ_ROLES: readonly ["owner", "admin", "manager", "rep"];
+/** The playbook routes, by name. */
+type PlaybookRouteName = "uploadDocument" | "listDocuments" | "getDocument" | "deleteDocument" | "restoreDocument" | "removeOrganizationDocuments";
+/** What the service needs to describe one route: its method, path, who may call it, what it answers. */
+type PlaybookRoute = {
+	readonly method: "GET" | "POST" | "DELETE";
+	readonly path: string;
+	/** True for a route on the internal network only; it takes no role and names the Organization in the path. */
+	readonly internal: boolean;
+	/** The roles allowed; empty for an internal route. Any other role is the common `auth.forbidden`. */
+	readonly roles: readonly Role[];
+	/** The success statuses, the first being the usual one. */
+	readonly success: readonly number[];
+	/** The domain codes the route may return, beyond the common ones. */
+	readonly errors: readonly PlaybookErrorCode[];
+	/** The common codes the route may return, beyond those every route may. */
+	readonly commonErrors: readonly CommonErrorCode[];
+	/** The description for the OpenAPI document, role rules included. */
+	readonly description: string;
+};
+/**
+* The playbook routes: the description a service puts in its OpenAPI document, the roles, the
+* success statuses and every error code each route may answer with. Every route may also return
+* the common `auth.*`, `rate.limited` and `server.*` codes. A route on another Organization's
+* document answers `document.not_found`.
+*/
+declare const PLAYBOOK_ROUTES: Readonly<Record<PlaybookRouteName, PlaybookRoute>>;
+import { z as z15 } from "zod";
+/**
+* The states a Playbook document is in, in the order a document passes through them (ADR 0016).
+* `deleted` means soft-deleted and awaiting purge. The db library builds its column from this
+* same list, so the names are the contract between the two.
+*/
+declare const DOCUMENT_STATES: readonly ["uploaded", "processing", "ready", "failed", "deleted"];
+/** The state of a Playbook document. */
+declare const documentStateSchema: z15.ZodEnum<{
+	deleted: "deleted";
+	failed: "failed";
+	processing: "processing";
+	ready: "ready";
+	uploaded: "uploaded";
+}>;
+/** The state of a Playbook document. */
+type DocumentState = z15.infer<typeof documentStateSchema>;
+/**
+* Why a document ended in `failed`: a closed list the portal maps to its own wording. Never free
+* text, so a reason cannot carry the content or name of a file. This list is the lead's reading
+* of ADR 0016, which names only the page limit; the owner did not choose the rest.
+*/
+declare const DOCUMENT_FAILURE_REASONS: readonly ["too_many_pages", "unreadable", "password_protected", "no_text", "processing_failed"];
+/** Why a document ended in `failed`. */
+declare const documentFailureReasonSchema: z15.ZodEnum<{
+	no_text: "no_text";
+	password_protected: "password_protected";
+	processing_failed: "processing_failed";
+	too_many_pages: "too_many_pages";
+	unreadable: "unreadable";
+}>;
+/** Why a document ended in `failed`. */
+type DocumentFailureReason = z15.infer<typeof documentFailureReasonSchema>;
+/** Owner's choice (ADR 0016, choice 2): the file extensions phase 1 accepts, lower case with the dot. */
+declare const ACCEPTED_DOCUMENT_EXTENSIONS: readonly [".pdf", ".docx", ".pptx", ".txt", ".md"];
+/** An accepted file extension. */
+type AcceptedDocumentExtension = (typeof ACCEPTED_DOCUMENT_EXTENSIONS)[number];
+/** Owner's choice (ADR 0016, choice 2): the media types phase 1 accepts, one for each accepted extension. */
+declare const ACCEPTED_DOCUMENT_MEDIA_TYPES: readonly ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/vnd.openxmlformats-officedocument.presentationml.presentation", "text/plain", "text/markdown"];
+/** The media type of a stored document, as the service detected it from the content. */
+declare const documentMediaTypeSchema: z15.ZodEnum<{
+	"application/pdf": "application/pdf";
+	"application/vnd.openxmlformats-officedocument.presentationml.presentation": "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+	"application/vnd.openxmlformats-officedocument.wordprocessingml.document": "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+	"text/markdown": "text/markdown";
+	"text/plain": "text/plain";
+}>;
+/** The media type of a stored document. */
+type DocumentMediaType = z15.infer<typeof documentMediaTypeSchema>;
+/** The media type each accepted extension stands for. */
+declare const MEDIA_TYPE_BY_EXTENSION: Readonly<Record<AcceptedDocumentExtension, DocumentMediaType>>;
+/** Owner's choice (ADR 0016, choice 2): the largest file accepted, 25 MB counted as 25 * 1024 * 1024 bytes. */
+declare const MAX_DOCUMENT_BYTES: number;
+/** Owner's choice (ADR 0016, choice 2): the most pages a document may have; checked by the ingestion job, not at upload. */
+declare const MAX_DOCUMENT_PAGES = 300;
+/** The lead's default (ADR 0016), not the owner's: days a soft-deleted document is kept before it is purged. */
+declare const DOCUMENT_RETENTION_DAYS = 30;
+/** The lead's default (ADR 0016), not the owner's: documents an Organization may hold, soft-deleted ones included until purged. */
+declare const DEFAULT_MAX_DOCUMENTS = 500;
+/** The lead's default (ADR 0016), not the owner's: bytes an Organization may hold, 2 GB counted as 2 * 1024^3. */
+declare const DEFAULT_MAX_DOCUMENT_BYTES_TOTAL: number;
+/** The longest file name, in characters, once control and direction characters are stripped. */
+declare const MAX_DOCUMENT_FILE_NAME_LENGTH = 255;
+/** The stored form of a file name: control and bidirectional characters removed, then trimmed. */
+declare function normaliseFileName(name: string): string;
+/** The accepted extension a file name ends with, compared without case, or undefined. */
+declare function documentExtension(fileName: string): AcceptedDocumentExtension | undefined;
+/**
+* A document's file name, in a request and in a response: at most 1000 raw UTF-16 code units,
+* then control and bidirectional characters are removed (not rejected) and the rest is trimmed to
+* 1 to 255 well-formed UTF-16 code units with no `/` or `\` and a visible stem before the last
+* dot (`.pdf`, or an invisible character plus `.pdf`, is rejected). It does not check the
+* extension: that is {@link documentTypeCheckSchema}, which has its own error code. Parsing a
+* stored name yields a safe one. The name is for display only and is never a storage key or a
+* path: the service keys storage on the document id. It is stricter than a person's name (which
+* keeps direction characters) because a file name is shown beside the person's own text in lists
+* and downloads, where a right-to-left override can disguise an extension, and a person's name has
+* no extension to disguise. Zero-width characters other than in the stem are allowed, so display
+* code must still treat a name as untrusted text. A name is never part of an error body.
+*/
+declare const documentFileNameSchema: z15.ZodPipe<z15.ZodPipe<z15.ZodString, z15.ZodTransform<string, string>>, z15.ZodString>;
+/** The name of an uploaded file. */
+type DocumentFileName = z15.infer<typeof documentFileNameSchema>;
+/**
+* The type check of an upload, on the file name in its stored form (control and bidirectional
+* characters stripped, then trimmed): it must end in an accepted extension. A failure is
+* `document.unsupported_type` (415). Services call `checkUploadFile`, not this. The service also inspects the content, because the name
+* and the declared type are untrusted.
+*/
+declare const documentTypeCheckSchema: z15.ZodPipe<z15.ZodPipe<z15.ZodString, z15.ZodTransform<string, string>>, z15.ZodString>;
+/**
+* The size check of an upload, on the byte count: at most {@link MAX_DOCUMENT_BYTES}. A failure
+* is `document.too_large` (413). Services call `checkUploadFile`, not this. Emptiness is not checked here: an empty file fails the upload
+* schema as `request.invalid`.
+*/
+declare const documentSizeCheckSchema: z15.ZodNumber;
+/** Lower-cases a media type and drops its parameters, so `Text/Plain; charset=utf-8` becomes `text/plain`. */
+declare function normaliseMediaType(mediaType: string): string;
 /** This library's package name, so a consumer can report which shared libraries it resolved. */
 declare const PACKAGE = "tula-closeline-contract";
-export { ABANDON_MAX_AGE_HOURS, AUTH_ERRORS, AddTeamMemberRequest, AuthErrorCode, CORE_ERRORS, ChangeMemberRoleRequest, CommonErrorCode, CoreErrorCode, CreateInvitationRequest, CreateTeamRequest, DEFAULT_PAGE_SIZE, ERRORS, Email, ErrorBody, ErrorDefinition, ErrorInput, EventId, EventType, IDEMPOTENCY_KEY_HEADER, INTERNAL_CALL_ERRORS, INVITABLE_ROLES, INVITATION_STATES, Id, IdempotencyKey, InternalAbandonOrganizationParams, InternalAbandonOrganizationRequest, InternalAbandonOrganizationResponse, InternalAcceptInvitationRequest, InternalAcceptInvitationResponse, InternalCallName, InternalCreateOrganizationRequest, InternalCreateOrganizationResponse, InternalMembershipRequest, InternalMembershipResponse, InternalUpdateMemberProfileParams, InternalUpdateMemberProfileRequest, InternalUpdateMemberProfileResponse, InvitableRole, Invitation, InvitationId, InvitationParams, InvitationState, ListInvitationsQuery, ListInvitationsResponse, ListMembersQuery, ListMembersResponse, ListTeamsQuery, ListTeamsResponse, MAX_CURSOR_LENGTH, MAX_EMAIL_LENGTH, MAX_NAME_LENGTH, MAX_PAGE_SIZE, MAX_PERSON_NAME_LENGTH, Member, MemberParams, MembershipId, ORGANIZATION_STATUSES, Organization, OrganizationId, OrganizationStatus, PACKAGE, Page, PageQuery, ProspectId, REGIONS, ROLES, Region, RenameOrganizationRequest, RenameTeamRequest, RequestId, Role, SIGNUP_ERRORS, SignupErrorCode, Team, TeamId, TeamMember, TeamMemberParams, TeamParams, UserId, addTeamMemberRequestSchema, changeMemberRoleRequestSchema, createInvitationRequestSchema, createTeamRequestSchema, decodeCursor, defineErrors, defineEvent, emailSchema, encodeCursor, errorBodySchema, errorCodeSchema, eventEnvelopeSchema, eventIdSchema, eventTypeSchema, foldAscii, formatId, idSchema, idempotencyKeySchema, internalAbandonOrganizationParamsSchema, internalAbandonOrganizationRequestSchema, internalAbandonOrganizationResponseSchema, internalAcceptInvitationRequestSchema, internalAcceptInvitationResponseSchema, internalCreateOrganizationRequestSchema, internalCreateOrganizationResponseSchema, internalMembershipRequestSchema, internalMembershipResponseSchema, internalUpdateMemberProfileParamsSchema, internalUpdateMemberProfileRequestSchema, internalUpdateMemberProfileResponseSchema, invitableRoleSchema, invitationIdSchema, invitationParamsSchema, invitationSchema, invitationStateSchema, invitationTokenSchema, listInvitationsQuerySchema, listInvitationsResponseSchema, listMembersQuerySchema, listMembersResponseSchema, listTeamsQuerySchema, listTeamsResponseSchema, memberParamsSchema, memberSchema, membershipIdSchema, organizationIdSchema, organizationNameSchema, organizationSchema, organizationStatusSchema, pageQuerySchema, pageSchema, personNameSchema, prospectIdSchema, regionSchema, renameOrganizationRequestSchema, renameTeamRequestSchema, requestIdSchema, roleAtLeast, roleSchema, storedNameSchema, teamIdSchema, teamMemberParamsSchema, teamMemberSchema, teamNameSchema, teamParamsSchema, teamSchema, timestampSchema, userIdSchema };
+export { ABANDON_MAX_AGE_HOURS, ACCEPTED_DOCUMENT_EXTENSIONS, ACCEPTED_DOCUMENT_MEDIA_TYPES, AUTH_ERRORS, AcceptedDocumentExtension, AddTeamMemberRequest, AuthErrorCode, CORE_ERRORS, ChangeMemberRoleRequest, CheckUploadFileResult, CommonErrorCode, CoreErrorCode, CreateInvitationRequest, CreateTeamRequest, DEFAULT_MAX_DOCUMENTS, DEFAULT_MAX_DOCUMENT_BYTES_TOTAL, DEFAULT_PAGE_SIZE, DOCUMENT_DELETED_MESSAGE, DOCUMENT_FAILURE_REASONS, DOCUMENT_RETENTION_DAYS, DOCUMENT_STATES, DOCUMENT_UPLOADED_MESSAGE, DocumentDeletedPayload, DocumentFailureReason, DocumentFileName, DocumentId, DocumentMediaType, DocumentParams, DocumentState, DocumentUploadedPayload, ERRORS, Email, ErrorBody, ErrorDefinition, ErrorInput, EventId, EventType, IDEMPOTENCY_KEY_HEADER, INTERNAL_CALL_ERRORS, INVITABLE_ROLES, INVITATION_STATES, Id, IdempotencyKey, InternalAbandonOrganizationParams, InternalAbandonOrganizationRequest, InternalAbandonOrganizationResponse, InternalAcceptInvitationRequest, InternalAcceptInvitationResponse, InternalCallName, InternalCreateOrganizationRequest, InternalCreateOrganizationResponse, InternalMembershipRequest, InternalMembershipResponse, InternalRemoveOrganizationDocumentsParams, InternalRemoveOrganizationDocumentsRequest, InternalRemoveOrganizationDocumentsResponse, InternalUpdateMemberProfileParams, InternalUpdateMemberProfileRequest, InternalUpdateMemberProfileResponse, InvitableRole, Invitation, InvitationId, InvitationParams, InvitationState, ListDocumentsQuery, ListDocumentsResponse, ListInvitationsQuery, ListInvitationsResponse, ListMembersQuery, ListMembersResponse, ListTeamsQuery, ListTeamsResponse, MAX_CURSOR_LENGTH, MAX_DELETION_SEQ, MAX_DOCUMENT_BYTES, MAX_DOCUMENT_FILE_NAME_LENGTH, MAX_DOCUMENT_PAGES, MAX_EMAIL_LENGTH, MAX_NAME_LENGTH, MAX_PAGE_SIZE, MAX_PERSON_NAME_LENGTH, MEDIA_TYPE_BY_EXTENSION, Member, MemberParams, MembershipId, ORGANIZATION_STATUSES, Organization, OrganizationId, OrganizationStatus, PACKAGE, PLAYBOOK_ERRORS, PLAYBOOK_READ_ROLES, PLAYBOOK_ROUTES, PLAYBOOK_WRITE_ROLES, Page, PageQuery, PlaybookDocument, PlaybookErrorCode, PlaybookRoute, PlaybookRouteName, ProspectId, REGIONS, ROLES, Region, RenameOrganizationRequest, RenameTeamRequest, RequestId, Role, SIGNUP_ERRORS, SignupErrorCode, Team, TeamId, TeamMember, TeamMemberParams, TeamParams, UPLOAD_CONTENT_TYPE, UPLOAD_FILE_FIELD, UploadDocumentFile, UserId, addTeamMemberRequestSchema, changeMemberRoleRequestSchema, checkUploadFile, createInvitationRequestSchema, createTeamRequestSchema, decodeCursor, defineErrors, defineEvent, documentDeletedPayloadSchema, documentExtension, documentFailureReasonSchema, documentFileNameSchema, documentIdSchema, documentMediaTypeSchema, documentParamsSchema, documentSchema, documentSizeCheckSchema, documentStateSchema, documentTypeCheckSchema, documentUploadedPayloadSchema, emailSchema, encodeCursor, errorBodySchema, errorCodeSchema, eventEnvelopeSchema, eventIdSchema, eventTypeSchema, foldAscii, formatId, idSchema, idempotencyKeySchema, internalAbandonOrganizationParamsSchema, internalAbandonOrganizationRequestSchema, internalAbandonOrganizationResponseSchema, internalAcceptInvitationRequestSchema, internalAcceptInvitationResponseSchema, internalCreateOrganizationRequestSchema, internalCreateOrganizationResponseSchema, internalMembershipRequestSchema, internalMembershipResponseSchema, internalRemoveOrganizationDocumentsParamsSchema, internalRemoveOrganizationDocumentsRequestSchema, internalRemoveOrganizationDocumentsResponseSchema, internalUpdateMemberProfileParamsSchema, internalUpdateMemberProfileRequestSchema, internalUpdateMemberProfileResponseSchema, invitableRoleSchema, invitationIdSchema, invitationParamsSchema, invitationSchema, invitationStateSchema, invitationTokenSchema, listDocumentsQuerySchema, listDocumentsResponseSchema, listInvitationsQuerySchema, listInvitationsResponseSchema, listMembersQuerySchema, listMembersResponseSchema, listTeamsQuerySchema, listTeamsResponseSchema, memberParamsSchema, memberSchema, membershipIdSchema, normaliseFileName, normaliseMediaType, organizationIdSchema, organizationNameSchema, organizationSchema, organizationStatusSchema, pageQuerySchema, pageSchema, personNameSchema, prospectIdSchema, regionSchema, renameOrganizationRequestSchema, renameTeamRequestSchema, requestIdSchema, roleAtLeast, roleSchema, storedNameSchema, teamIdSchema, teamMemberParamsSchema, teamMemberSchema, teamNameSchema, teamParamsSchema, teamSchema, timestampSchema, uploadDocumentFileSchema, userIdSchema };
