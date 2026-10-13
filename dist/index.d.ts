@@ -39,7 +39,8 @@ import { ErrorDefinition as ErrorDefinition_8gwh452 } from "..";
 * The errors core returns, as `area.reason` codes. None says whether an email address or a user
 * exists in another Organization: `invitation.invalid` covers an unknown, used, revoked and expired
 * token alike, and `membership.already_member` is only ever about the user making the call. A role
-* that is not allowed is the common `auth.forbidden`. Which internal call returns which code is
+* that is not allowed is the common `auth.forbidden`. `organization.not_abandonable` is the one
+* answer when the abandon guard refuses, whichever of its conditions failed. Which internal call returns which code is
 * `INTERNAL_CALL_ERRORS`.
 */
 declare const CORE_ERRORS: {
@@ -50,6 +51,7 @@ declare const CORE_ERRORS: {
 	readonly "member.not_found": ErrorDefinition_8gwh452<"member.not_found">;
 	readonly "membership.already_member": ErrorDefinition_8gwh452<"membership.already_member">;
 	readonly "organization.deleted": ErrorDefinition_8gwh452<"organization.deleted">;
+	readonly "organization.not_abandonable": ErrorDefinition_8gwh452<"organization.not_abandonable">;
 	readonly "organization.not_found": ErrorDefinition_8gwh452<"organization.not_found">;
 	readonly "organization.suspended": ErrorDefinition_8gwh452<"organization.suspended">;
 	readonly "team.name_taken": ErrorDefinition_8gwh452<"team.name_taken">;
@@ -72,14 +74,17 @@ declare const SIGNUP_ERRORS: {
 type SignupErrorCode = keyof typeof SIGNUP_ERRORS;
 import { z } from "zod";
 /** The internal calls, by name. */
-type InternalCallName = "createOrganization" | "acceptInvitation" | "membership" | "updateMemberProfile";
+type InternalCallName = "createOrganization" | "acceptInvitation" | "membership" | "updateMemberProfile" | "abandonOrganization";
 /**
 * The complete list of domain error codes each internal call may return, for core's tests to
 * assert against. Common codes (`auth.*`, `request.*`, `server.*`) can come from any call and are
 * not listed. Accepting an Invitation never returns an Organization status code, so a suspended or
 * deleted Organization is indistinguishable from an unknown token. The membership lookup returns
 * no domain error: it answers `found: false`. A profile change for a user with no membership is
-* `member.not_found`, which the caller treats as nothing to do.
+* `member.not_found`, which the caller treats as nothing to do. Abandoning an Organization answers
+* `organization.not_found` for an unknown id and the single `organization.not_abandonable` when
+* the guard refuses, so a caller cannot tell which condition failed; a suspended or deleted status
+* is never revealed.
 */
 declare const INTERNAL_CALL_ERRORS: Readonly<Record<InternalCallName, readonly CoreErrorCode[]>>;
 /**
@@ -194,6 +199,39 @@ declare const internalUpdateMemberProfileResponseSchema: z.ZodObject<{
 }, z.core.$strip>;
 /** Internal: the answer to a profile change. */
 type InternalUpdateMemberProfileResponse = z.infer<typeof internalUpdateMemberProfileResponseSchema>;
+/** The hours an Organization stays abandonable after it is created; older than this, the guard refuses. */
+declare const ABANDON_MAX_AGE_HOURS = 24;
+/** Internal: the path parameters of an abandon; the Organization is named in the path. */
+declare const internalAbandonOrganizationParamsSchema: z.ZodObject<{
+	organizationId: z.core.$ZodBranded<z.ZodString, "org", "out">;
+}, z.core.$strict>;
+/** Internal: the path parameters of an abandon. */
+type InternalAbandonOrganizationParams = z.infer<typeof internalAbandonOrganizationParamsSchema>;
+/**
+* Internal: `POST /internal/organizations/{organizationId}/abandon`, the body of the call auth
+* makes when the account write fails after core created the Organization, and from its sweep of
+* abandoned sign-ups. Core marks the Organization `deleted` and frees the user id only if the
+* Organization has exactly one member, that member is `userId`, and it was created less than
+* `ABANDON_MAX_AGE_HOURS` hours ago. The Organization id and the user id are needed together, so
+* an id cannot be abandoned by guessing. It carries an `Idempotency-Key` header, and a repeat
+* answers as the first success did. Any failed condition is the one `organization.not_abandonable`;
+* an unknown id is `organization.not_found`.
+*/
+declare const internalAbandonOrganizationRequestSchema: z.ZodObject<{
+	userId: z.core.$ZodBranded<z.ZodString, "usr", "out">;
+}, z.core.$strict>;
+/** Internal: the body of an abandon. */
+type InternalAbandonOrganizationRequest = z.infer<typeof internalAbandonOrganizationRequestSchema>;
+/**
+* Internal: the answer to an abandon. The first success and every repeat of it are this same
+* value, so a retry cannot be told from the original; there is nothing else to learn from it.
+*/
+declare const internalAbandonOrganizationResponseSchema: z.ZodObject<{
+	organizationId: z.core.$ZodBranded<z.ZodString, "org", "out">;
+	status: z.ZodLiteral<"deleted">;
+}, z.core.$strip>;
+/** Internal: the answer to an abandon. */
+type InternalAbandonOrganizationResponse = z.infer<typeof internalAbandonOrganizationResponseSchema>;
 import { z as z2 } from "zod";
 /**
 * An Invitation as core returns it. The raw token is not here and never will be: it is delivered
@@ -832,4 +870,4 @@ declare const organizationStatusSchema: z12.ZodEnum<{
 type OrganizationStatus = z12.infer<typeof organizationStatusSchema>;
 /** This library's package name, so a consumer can report which shared libraries it resolved. */
 declare const PACKAGE = "tula-closeline-contract";
-export { AUTH_ERRORS, AddTeamMemberRequest, AuthErrorCode, CORE_ERRORS, ChangeMemberRoleRequest, CommonErrorCode, CoreErrorCode, CreateInvitationRequest, CreateTeamRequest, DEFAULT_PAGE_SIZE, ERRORS, Email, ErrorBody, ErrorDefinition, ErrorInput, EventId, EventType, IDEMPOTENCY_KEY_HEADER, INTERNAL_CALL_ERRORS, INVITABLE_ROLES, INVITATION_STATES, Id, IdempotencyKey, InternalAcceptInvitationRequest, InternalAcceptInvitationResponse, InternalCallName, InternalCreateOrganizationRequest, InternalCreateOrganizationResponse, InternalMembershipRequest, InternalMembershipResponse, InternalUpdateMemberProfileParams, InternalUpdateMemberProfileRequest, InternalUpdateMemberProfileResponse, InvitableRole, Invitation, InvitationId, InvitationParams, InvitationState, ListInvitationsQuery, ListInvitationsResponse, ListMembersQuery, ListMembersResponse, ListTeamsQuery, ListTeamsResponse, MAX_CURSOR_LENGTH, MAX_EMAIL_LENGTH, MAX_NAME_LENGTH, MAX_PAGE_SIZE, MAX_PERSON_NAME_LENGTH, Member, MemberParams, MembershipId, ORGANIZATION_STATUSES, Organization, OrganizationId, OrganizationStatus, PACKAGE, Page, PageQuery, ProspectId, REGIONS, ROLES, Region, RenameOrganizationRequest, RenameTeamRequest, RequestId, Role, SIGNUP_ERRORS, SignupErrorCode, Team, TeamId, TeamMember, TeamMemberParams, TeamParams, UserId, addTeamMemberRequestSchema, changeMemberRoleRequestSchema, createInvitationRequestSchema, createTeamRequestSchema, decodeCursor, defineErrors, defineEvent, emailSchema, encodeCursor, errorBodySchema, errorCodeSchema, eventEnvelopeSchema, eventIdSchema, eventTypeSchema, foldAscii, formatId, idSchema, idempotencyKeySchema, internalAcceptInvitationRequestSchema, internalAcceptInvitationResponseSchema, internalCreateOrganizationRequestSchema, internalCreateOrganizationResponseSchema, internalMembershipRequestSchema, internalMembershipResponseSchema, internalUpdateMemberProfileParamsSchema, internalUpdateMemberProfileRequestSchema, internalUpdateMemberProfileResponseSchema, invitableRoleSchema, invitationIdSchema, invitationParamsSchema, invitationSchema, invitationStateSchema, invitationTokenSchema, listInvitationsQuerySchema, listInvitationsResponseSchema, listMembersQuerySchema, listMembersResponseSchema, listTeamsQuerySchema, listTeamsResponseSchema, memberParamsSchema, memberSchema, membershipIdSchema, organizationIdSchema, organizationNameSchema, organizationSchema, organizationStatusSchema, pageQuerySchema, pageSchema, personNameSchema, prospectIdSchema, regionSchema, renameOrganizationRequestSchema, renameTeamRequestSchema, requestIdSchema, roleAtLeast, roleSchema, storedNameSchema, teamIdSchema, teamMemberParamsSchema, teamMemberSchema, teamNameSchema, teamParamsSchema, teamSchema, timestampSchema, userIdSchema };
+export { ABANDON_MAX_AGE_HOURS, AUTH_ERRORS, AddTeamMemberRequest, AuthErrorCode, CORE_ERRORS, ChangeMemberRoleRequest, CommonErrorCode, CoreErrorCode, CreateInvitationRequest, CreateTeamRequest, DEFAULT_PAGE_SIZE, ERRORS, Email, ErrorBody, ErrorDefinition, ErrorInput, EventId, EventType, IDEMPOTENCY_KEY_HEADER, INTERNAL_CALL_ERRORS, INVITABLE_ROLES, INVITATION_STATES, Id, IdempotencyKey, InternalAbandonOrganizationParams, InternalAbandonOrganizationRequest, InternalAbandonOrganizationResponse, InternalAcceptInvitationRequest, InternalAcceptInvitationResponse, InternalCallName, InternalCreateOrganizationRequest, InternalCreateOrganizationResponse, InternalMembershipRequest, InternalMembershipResponse, InternalUpdateMemberProfileParams, InternalUpdateMemberProfileRequest, InternalUpdateMemberProfileResponse, InvitableRole, Invitation, InvitationId, InvitationParams, InvitationState, ListInvitationsQuery, ListInvitationsResponse, ListMembersQuery, ListMembersResponse, ListTeamsQuery, ListTeamsResponse, MAX_CURSOR_LENGTH, MAX_EMAIL_LENGTH, MAX_NAME_LENGTH, MAX_PAGE_SIZE, MAX_PERSON_NAME_LENGTH, Member, MemberParams, MembershipId, ORGANIZATION_STATUSES, Organization, OrganizationId, OrganizationStatus, PACKAGE, Page, PageQuery, ProspectId, REGIONS, ROLES, Region, RenameOrganizationRequest, RenameTeamRequest, RequestId, Role, SIGNUP_ERRORS, SignupErrorCode, Team, TeamId, TeamMember, TeamMemberParams, TeamParams, UserId, addTeamMemberRequestSchema, changeMemberRoleRequestSchema, createInvitationRequestSchema, createTeamRequestSchema, decodeCursor, defineErrors, defineEvent, emailSchema, encodeCursor, errorBodySchema, errorCodeSchema, eventEnvelopeSchema, eventIdSchema, eventTypeSchema, foldAscii, formatId, idSchema, idempotencyKeySchema, internalAbandonOrganizationParamsSchema, internalAbandonOrganizationRequestSchema, internalAbandonOrganizationResponseSchema, internalAcceptInvitationRequestSchema, internalAcceptInvitationResponseSchema, internalCreateOrganizationRequestSchema, internalCreateOrganizationResponseSchema, internalMembershipRequestSchema, internalMembershipResponseSchema, internalUpdateMemberProfileParamsSchema, internalUpdateMemberProfileRequestSchema, internalUpdateMemberProfileResponseSchema, invitableRoleSchema, invitationIdSchema, invitationParamsSchema, invitationSchema, invitationStateSchema, invitationTokenSchema, listInvitationsQuerySchema, listInvitationsResponseSchema, listMembersQuerySchema, listMembersResponseSchema, listTeamsQuerySchema, listTeamsResponseSchema, memberParamsSchema, memberSchema, membershipIdSchema, organizationIdSchema, organizationNameSchema, organizationSchema, organizationStatusSchema, pageQuerySchema, pageSchema, personNameSchema, prospectIdSchema, regionSchema, renameOrganizationRequestSchema, renameTeamRequestSchema, requestIdSchema, roleAtLeast, roleSchema, storedNameSchema, teamIdSchema, teamMemberParamsSchema, teamMemberSchema, teamNameSchema, teamParamsSchema, teamSchema, timestampSchema, userIdSchema };

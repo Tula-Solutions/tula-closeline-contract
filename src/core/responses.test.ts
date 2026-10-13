@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { id, NOW } from './fixtures'
 import {
+  internalAbandonOrganizationResponseSchema,
   internalAcceptInvitationResponseSchema,
   internalCreateOrganizationResponseSchema,
   internalMembershipResponseSchema,
@@ -78,6 +79,11 @@ const RESPONSES = [
     'internalUpdateMemberProfileResponseSchema (no name)',
     internalUpdateMemberProfileResponseSchema,
     { userId: id('usr'), email: 'ada@example.com', name: null },
+  ],
+  [
+    'internalAbandonOrganizationResponseSchema',
+    internalAbandonOrganizationResponseSchema,
+    { organizationId: id('org'), status: 'deleted' },
   ],
 ] as const
 

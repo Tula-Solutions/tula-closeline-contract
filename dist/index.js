@@ -58,7 +58,8 @@ var CORE_ERRORS = {
   ...defineErrors("organization", {
     not_found: { status: 404, message: "The Organization was not found." },
     suspended: { status: 403, message: "This Organization is suspended." },
-    deleted: { status: 410, message: "This Organization has been deleted." }
+    deleted: { status: 410, message: "This Organization has been deleted." },
+    not_abandonable: { status: 409, message: "This Organization cannot be abandoned." }
   }),
   ...defineErrors("member", {
     not_found: { status: 404, message: "The member was not found." },
@@ -260,7 +261,11 @@ var INTERNAL_CALL_ERRORS = Object.freeze({
   createOrganization: Object.freeze(["membership.already_member"]),
   acceptInvitation: Object.freeze(["invitation.invalid", "membership.already_member"]),
   membership: Object.freeze([]),
-  updateMemberProfile: Object.freeze(["member.not_found"])
+  updateMemberProfile: Object.freeze(["member.not_found"]),
+  abandonOrganization: Object.freeze([
+    "organization.not_found",
+    "organization.not_abandonable"
+  ])
 });
 var internalCreateOrganizationRequestSchema = z6.strictObject({
   userId: userIdSchema,
@@ -307,6 +312,17 @@ var internalUpdateMemberProfileResponseSchema = z6.object({
   userId: userIdSchema,
   email: emailSchema,
   name: storedNameSchema.nullable()
+});
+var ABANDON_MAX_AGE_HOURS = 24;
+var internalAbandonOrganizationParamsSchema = z6.strictObject({
+  organizationId: organizationIdSchema
+});
+var internalAbandonOrganizationRequestSchema = z6.strictObject({
+  userId: userIdSchema
+});
+var internalAbandonOrganizationResponseSchema = z6.object({
+  organizationId: organizationIdSchema,
+  status: z6.literal("deleted")
 });
 // src/core/invitation.ts
 import { z as z8 } from "zod";
@@ -474,6 +490,7 @@ function defineEvent(type, version, dataSchema) {
 // src/index.ts
 var PACKAGE = "tula-closeline-contract";
 export {
+  ABANDON_MAX_AGE_HOURS,
   AUTH_ERRORS,
   CORE_ERRORS,
   DEFAULT_PAGE_SIZE,
@@ -510,6 +527,9 @@ export {
   formatId,
   idSchema,
   idempotencyKeySchema,
+  internalAbandonOrganizationParamsSchema,
+  internalAbandonOrganizationRequestSchema,
+  internalAbandonOrganizationResponseSchema,
   internalAcceptInvitationRequestSchema,
   internalAcceptInvitationResponseSchema,
   internalCreateOrganizationRequestSchema,

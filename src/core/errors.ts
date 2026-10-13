@@ -4,7 +4,8 @@ import { defineErrors } from '../errors'
  * The errors core returns, as `area.reason` codes. None says whether an email address or a user
  * exists in another Organization: `invitation.invalid` covers an unknown, used, revoked and expired
  * token alike, and `membership.already_member` is only ever about the user making the call. A role
- * that is not allowed is the common `auth.forbidden`. Which internal call returns which code is
+ * that is not allowed is the common `auth.forbidden`. `organization.not_abandonable` is the one
+ * answer when the abandon guard refuses, whichever of its conditions failed. Which internal call returns which code is
  * `INTERNAL_CALL_ERRORS`.
  */
 export const CORE_ERRORS = {
@@ -12,6 +13,7 @@ export const CORE_ERRORS = {
     not_found: { status: 404, message: 'The Organization was not found.' },
     suspended: { status: 403, message: 'This Organization is suspended.' },
     deleted: { status: 410, message: 'This Organization has been deleted.' },
+    not_abandonable: { status: 409, message: 'This Organization cannot be abandoned.' },
   }),
   ...defineErrors('member', {
     not_found: { status: 404, message: 'The member was not found.' },

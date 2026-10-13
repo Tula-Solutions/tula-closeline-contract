@@ -24,6 +24,7 @@ export type InternalCallName =
   | 'acceptInvitation'
   | 'membership'
   | 'updateMemberProfile'
+  | 'abandonOrganization'
 
 /**
  * The complete list of domain error codes each internal call may return, for core's tests to
@@ -31,7 +32,10 @@ export type InternalCallName =
  * not listed. Accepting an Invitation never returns an Organization status code, so a suspended or
  * deleted Organization is indistinguishable from an unknown token. The membership lookup returns
  * no domain error: it answers `found: false`. A profile change for a user with no membership is
- * `member.not_found`, which the caller treats as nothing to do.
+ * `member.not_found`, which the caller treats as nothing to do. Abandoning an Organization answers
+ * `organization.not_found` for an unknown id and the single `organization.not_abandonable` when
+ * the guard refuses, so a caller cannot tell which condition failed; a suspended or deleted status
+ * is never revealed.
  */
 export const INTERNAL_CALL_ERRORS: Readonly<Record<InternalCallName, readonly CoreErrorCode[]>> =
   Object.freeze({
@@ -39,6 +43,10 @@ export const INTERNAL_CALL_ERRORS: Readonly<Record<InternalCallName, readonly Co
     acceptInvitation: Object.freeze(['invitation.invalid', 'membership.already_member'] as const),
     membership: Object.freeze([] as const),
     updateMemberProfile: Object.freeze(['member.not_found'] as const),
+    abandonOrganization: Object.freeze([
+      'organization.not_found',
+      'organization.not_abandonable',
+    ] as const),
   })
 
 /**
@@ -173,4 +181,50 @@ export const internalUpdateMemberProfileResponseSchema = z.object({
 /** Internal: the answer to a profile change. */
 export type InternalUpdateMemberProfileResponse = z.infer<
   typeof internalUpdateMemberProfileResponseSchema
+>
+
+/** The hours an Organization stays abandonable after it is created; older than this, the guard refuses. */
+export const ABANDON_MAX_AGE_HOURS = 24
+
+/** Internal: the path parameters of an abandon; the Organization is named in the path. */
+export const internalAbandonOrganizationParamsSchema = z.strictObject({
+  organizationId: organizationIdSchema,
+})
+
+/** Internal: the path parameters of an abandon. */
+export type InternalAbandonOrganizationParams = z.infer<
+  typeof internalAbandonOrganizationParamsSchema
+>
+
+/**
+ * Internal: `POST /internal/organizations/{organizationId}/abandon`, the body of the call auth
+ * makes when the account write fails after core created the Organization, and from its sweep of
+ * abandoned sign-ups. Core marks the Organization `deleted` and frees the user id only if the
+ * Organization has exactly one member, that member is `userId`, and it was created less than
+ * `ABANDON_MAX_AGE_HOURS` hours ago. The Organization id and the user id are needed together, so
+ * an id cannot be abandoned by guessing. It carries an `Idempotency-Key` header, and a repeat
+ * answers as the first success did. Any failed condition is the one `organization.not_abandonable`;
+ * an unknown id is `organization.not_found`.
+ */
+export const internalAbandonOrganizationRequestSchema = z.strictObject({
+  userId: userIdSchema,
+})
+
+/** Internal: the body of an abandon. */
+export type InternalAbandonOrganizationRequest = z.infer<
+  typeof internalAbandonOrganizationRequestSchema
+>
+
+/**
+ * Internal: the answer to an abandon. The first success and every repeat of it are this same
+ * value, so a retry cannot be told from the original; there is nothing else to learn from it.
+ */
+export const internalAbandonOrganizationResponseSchema = z.object({
+  organizationId: organizationIdSchema,
+  status: z.literal('deleted'),
+})
+
+/** Internal: the answer to an abandon. */
+export type InternalAbandonOrganizationResponse = z.infer<
+  typeof internalAbandonOrganizationResponseSchema
 >

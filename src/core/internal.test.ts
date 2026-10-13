@@ -2,7 +2,11 @@ import { describe, expect, test } from 'bun:test'
 import { CORE_ERRORS } from './errors'
 import { id } from './fixtures'
 import {
+  ABANDON_MAX_AGE_HOURS,
   INTERNAL_CALL_ERRORS,
+  internalAbandonOrganizationParamsSchema,
+  internalAbandonOrganizationRequestSchema,
+  internalAbandonOrganizationResponseSchema,
   internalAcceptInvitationRequestSchema,
   internalAcceptInvitationResponseSchema,
   internalCreateOrganizationRequestSchema,
@@ -23,6 +27,7 @@ describe('INTERNAL_CALL_ERRORS', () => {
       acceptInvitation: ['invitation.invalid', 'membership.already_member'],
       membership: [],
       updateMemberProfile: ['member.not_found'],
+      abandonOrganization: ['organization.not_found', 'organization.not_abandonable'],
     })
   })
 
@@ -33,11 +38,12 @@ describe('INTERNAL_CALL_ERRORS', () => {
     }
   })
 
-  test('lists only codes core defines, and never an Organization status', () => {
+  test('lists only codes core defines, and never a suspended or deleted Organization', () => {
     for (const codes of Object.values(INTERNAL_CALL_ERRORS)) {
       for (const code of codes) {
         expect(code in CORE_ERRORS).toBe(true)
-        expect(code.startsWith('organization.')).toBe(false)
+        expect(code).not.toBe('organization.suspended')
+        expect(code).not.toBe('organization.deleted')
       }
     }
   })
@@ -277,5 +283,64 @@ describe('internal profile change', () => {
         role: 'owner',
       })
     ).toEqual({ userId, email: 'ada@example.com', name: null } as never)
+  })
+})
+
+describe('internal abandon', () => {
+  const organizationId = id('org')
+  const userId = id('usr')
+
+  test('the age limit is a named constant in hours', () => {
+    expect(ABANDON_MAX_AGE_HOURS).toBe(24)
+  })
+
+  test('names the Organization in the path and the user in the body', () => {
+    expect(internalAbandonOrganizationParamsSchema.safeParse({ organizationId }).success).toBe(true)
+    expect(internalAbandonOrganizationRequestSchema.parse({ userId })).toEqual({ userId } as never)
+  })
+
+  test.each([
+    [
+      'a user id as the Organization id',
+      internalAbandonOrganizationParamsSchema,
+      { organizationId: userId },
+    ],
+    ['no Organization id', internalAbandonOrganizationParamsSchema, {}],
+    ['an unknown path key', internalAbandonOrganizationParamsSchema, { organizationId, userId }],
+    ['no user', internalAbandonOrganizationRequestSchema, {}],
+    [
+      'an Organization id as the user',
+      internalAbandonOrganizationRequestSchema,
+      { userId: organizationId },
+    ],
+    [
+      'the Organization in the body',
+      internalAbandonOrganizationRequestSchema,
+      { userId, organizationId },
+    ],
+    [
+      'a way to skip the age guard',
+      internalAbandonOrganizationRequestSchema,
+      { userId, force: true },
+    ],
+  ])('rejects %s', (_label, schema, input) => {
+    expect(schema.safeParse(input).success).toBe(false)
+  })
+
+  test('answers the same on a repeat as on the first success, and strips the rest', () => {
+    const first = internalAbandonOrganizationResponseSchema.parse({
+      organizationId,
+      status: 'deleted',
+      removedMembers: 1,
+    })
+    expect(first).toEqual({ organizationId, status: 'deleted' } as never)
+    expect(internalAbandonOrganizationResponseSchema.parse(first)).toEqual(first)
+  })
+
+  test('only ever says deleted', () => {
+    expect(
+      internalAbandonOrganizationResponseSchema.safeParse({ organizationId, status: 'active' })
+        .success
+    ).toBe(false)
   })
 })

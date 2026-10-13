@@ -45,8 +45,8 @@ Schemas and inferred types only; routes and handlers live in `tula-closeline-cor
 | Members | `memberSchema` (with `email` and `name`, core's copy of what auth holds; `name` is `null` when the person gave none), `listMembersQuerySchema`, `listMembersResponseSchema`, `memberParamsSchema`, `changeMemberRoleRequestSchema` |
 | Invitations | `invitationSchema`, `createInvitationRequestSchema`, `listInvitationsQuerySchema` (a page plus `state`, default `pending`), `listInvitationsResponseSchema`, `invitationParamsSchema` |
 | Teams | `teamSchema`, `createTeamRequestSchema`, `renameTeamRequestSchema`, `listTeamsQuerySchema`, `listTeamsResponseSchema`, `teamParamsSchema`, `addTeamMemberRequestSchema`, `teamMemberSchema`, `teamMemberParamsSchema` |
-| Internal (auth to core) | `internalCreateOrganizationRequestSchema` / `…ResponseSchema`, `internalAcceptInvitationRequestSchema` / `…ResponseSchema`, `internalMembershipRequestSchema` / `…ResponseSchema` (`found: true` with Organization id, role and status, or `found: false`), `internalUpdateMemberProfileParamsSchema` / `…RequestSchema` / `…ResponseSchema`, `INTERNAL_CALL_ERRORS`, `InternalCallName` |
-| Errors | `CORE_ERRORS` (`organization.*`, `member.*`, `membership.already_member`, `invitation.*`, `team.*`) and `SIGNUP_ERRORS` (`auth.no_organization`, `signup.*`, `membership.unavailable`); a role that is not allowed is the common `auth.forbidden` |
+| Internal (auth to core) | `internalCreateOrganizationRequestSchema` / `…ResponseSchema`, `internalAcceptInvitationRequestSchema` / `…ResponseSchema`, `internalMembershipRequestSchema` / `…ResponseSchema` (`found: true` with Organization id, role and status, or `found: false`), `internalUpdateMemberProfileParamsSchema` / `…RequestSchema` / `…ResponseSchema`, `internalAbandonOrganizationParamsSchema` / `…RequestSchema` / `…ResponseSchema`, `ABANDON_MAX_AGE_HOURS`, `INTERNAL_CALL_ERRORS`, `InternalCallName` |
+| Errors | `CORE_ERRORS` (`organization.*`, including `organization.not_abandonable`, `member.*`, `membership.already_member`, `invitation.*`, `team.*`) and `SIGNUP_ERRORS` (`auth.no_organization`, `signup.*`, `membership.unavailable`); a role that is not allowed is the common `auth.forbidden` |
 
 ### Auth error codes
 
@@ -67,6 +67,7 @@ exported as `INTERNAL_CALL_ERRORS` (a frozen map from call name to codes) for co
 | accept Invitation (`POST /internal/invitations/accept`) | `invitation.invalid` or `membership.already_member` only, never an Organization status code. Core compares the request's `email`, folded, with the Invitation's and answers `invitation.invalid` on a mismatch. The request's `name` is optional until auth sends it. |
 | membership lookup (`POST /internal/membership`) | none: a user with no membership is answered `found: false`. |
 | profile change (`PATCH /internal/members/{userId}`) | `member.not_found` only, for a user with no membership. The body is a new `email`, a new `name` (`null` clears it) or both; a repeat gives the same answer. Auth has no route that changes either yet. |
+| abandon Organization (`POST /internal/organizations/{organizationId}/abandon`) | `organization.not_found` for an unknown id, and `organization.not_abandonable` when the guard refuses: the Organization has more than one member, its one member is not the `userId` in the body, or it is `ABANDON_MAX_AGE_HOURS` (24) hours old or more. One code for all three, so a caller cannot tell which. A repeat answers `{ organizationId, status: 'deleted' }` like the first success. |
 
 Common codes (`auth.*`, `request.*`, `server.*`) can come from any call.
 
