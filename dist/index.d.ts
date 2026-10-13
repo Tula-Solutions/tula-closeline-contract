@@ -785,6 +785,8 @@ declare const invitationIdSchema: z10.core.$ZodBranded<z10.ZodString, "inv", "ou
 declare const prospectIdSchema: z10.core.$ZodBranded<z10.ZodString, "prs", "out">;
 /** The id of a Playbook document (`doc_…`). */
 declare const documentIdSchema: z10.core.$ZodBranded<z10.ZodString, "doc", "out">;
+/** The opaque id of a Deal record (`deal_…`), used in every URL path; the customer's own deal id never travels in a path. */
+declare const dealRecordIdSchema: z10.core.$ZodBranded<z10.ZodString, "deal", "out">;
 /** The id of a Call (`call_…`). */
 declare const callIdSchema: z10.core.$ZodBranded<z10.ZodString, "call", "out">;
 /** The id of a Deal import (`dimp_…`). */
@@ -807,6 +809,8 @@ type InvitationId = z10.infer<typeof invitationIdSchema>;
 type ProspectId = z10.infer<typeof prospectIdSchema>;
 /** The id of a Playbook document. */
 type DocumentId = z10.infer<typeof documentIdSchema>;
+/** The opaque id of a Deal record. */
+type DealRecordId = z10.infer<typeof dealRecordIdSchema>;
 /** The id of a Call. */
 type CallId = z10.infer<typeof callIdSchema>;
 /** The id of a Deal import. */
@@ -1148,7 +1152,7 @@ declare const MAX_RECORDING_SECONDS: number;
 declare const INCOMPLETE_UPLOAD_PARTS_TTL_HOURS = 24;
 /** The ticket's default (ADR 0018 leaves it open): the most Rep turns stored after a Moment (choice 11). */
 declare const MAX_REP_FOLLOWING_TURNS = 5;
-/** The ticket's default (ADR 0018 leaves it open): the most characters (UTF-16 code units) of Rep turns stored after a Moment, so a long turn cannot make it unbounded. */
+/** The ticket's default (ADR 0018 leaves it open): the most characters (Unicode code points) of Rep turns stored after a Moment, so a long turn cannot make it unbounded. */
 declare const MAX_REP_FOLLOWING_CHARACTERS = 4e3;
 /** The ticket's default (ADR 0018 leaves it open): Calls an Organization may hold, soft-deleted and `awaiting_rep` ones included until purged. */
 declare const DEFAULT_MAX_CALLS = 2e3;
@@ -1158,14 +1162,16 @@ declare const DEFAULT_MAX_RECORDING_BYTES_TOTAL: number;
 declare const DEFAULT_MAX_DEALS = 2e4;
 /** The ticket's default (ADR 0018 leaves it open): the most speakers a Call may have and list for a Rep pick; a Call with more fails with `too_many_speakers`. */
 declare const MAX_CALL_SPEAKERS = 20;
-/** The longest speaker label, in UTF-16 code units, once control and direction characters are stripped. */
+/** The longest speaker label, in Unicode code points, once control and direction characters are stripped. */
 declare const MAX_SPEAKER_LABEL_LENGTH = 64;
+/** The most UTF-8 bytes a stored speaker label can take: 64 code points at 4 bytes each. A column must allow this many bytes. */
+declare const MAX_SPEAKER_LABEL_BYTES: number;
 /** The stored form of a speaker label: control and bidirectional characters removed, then trimmed. Labels read from a file and labels in a request must both pass through this. */
 declare function normaliseSpeakerLabel(label: string): string;
 /**
-* A speaker label, in a request and in a response: at most 1000 raw characters, then control and
-* bidirectional characters are removed and the rest trimmed to 1 to 64 well-formed UTF-16 code
-* units. It is text taken from a file (`Alice`, or `A` from the transcriber), so display code must
+* A speaker label, in a request and in a response: at most 1000 raw Unicode code points, then control and
+* bidirectional characters are removed and the rest trimmed to 1 to 64 well-formed Unicode code
+* points (at most `MAX_SPEAKER_LABEL_BYTES` bytes in UTF-8). It is text taken from a file (`Alice`, or `A` from the transcriber), so display code must
 * treat it as untrusted text, and it never appears in an error body. It is compared exactly and
 * case-sensitively with the labels in the file.
 */
@@ -1223,13 +1229,23 @@ declare function repChangeAllowed(state: CallState, failureReason: CallFailureRe
 * Recording); the labels are unique; and a `ready` Call's speaker Rep is one of them. A Call with
 * more speakers than `MAX_CALL_SPEAKERS` fails with `too_many_speakers` and never reaches a
 * response, so a read route cannot throw on it. `durationSeconds` is `null` for a
-* Transcript and until a Recording has been read. Whether the Call is held back from search
-* because its Deal is not won is read from the Deal, not here. The service must send the output of
+* Transcript and until a Recording has been read. `dealRecordId` is the Deal's opaque id (the one
+* a Deal's path uses) and `dealOutcome` its Outcome; `inSearch` is true only for a `ready` Call of a
+* `won` Deal, and may be false for a Call whose Deal has just become won until the re-tag job
+* finishes (the database decides, the index may lag). `dealId` is the customer's text and is never
+* logged. The service must send the output of
 * `callSchema.parse(row)`, never the row.
 */
 declare const callSchema: z15.ZodObject<{
 	id: z15.core.$ZodBranded<z15.ZodString, "call", "out">;
 	dealId: z15.ZodPipe<z15.ZodPipe<z15.ZodString, z15.ZodTransform<string, string>>, z15.ZodString>;
+	dealRecordId: z15.core.$ZodBranded<z15.ZodString, "deal", "out">;
+	dealOutcome: z15.ZodEnum<{
+		lost: "lost";
+		open: "open";
+		won: "won";
+	}>;
+	inSearch: z15.ZodBoolean;
 	kind: z15.ZodEnum<{
 		recording: "recording";
 		transcript: "transcript";
@@ -1353,6 +1369,13 @@ declare const listCallsResponseSchema: z15.ZodObject<{
 	items: z15.ZodArray<z15.ZodObject<{
 		id: z15.core.$ZodBranded<z15.ZodString, "call", "out">;
 		dealId: z15.ZodPipe<z15.ZodPipe<z15.ZodString, z15.ZodTransform<string, string>>, z15.ZodString>;
+		dealRecordId: z15.core.$ZodBranded<z15.ZodString, "deal", "out">;
+		dealOutcome: z15.ZodEnum<{
+			lost: "lost";
+			open: "open";
+			won: "won";
+		}>;
+		inSearch: z15.ZodBoolean;
 		kind: z15.ZodEnum<{
 			recording: "recording";
 			transcript: "transcript";
@@ -1464,14 +1487,17 @@ type CheckCallFileResult = {
 declare function checkCallFile(input: unknown): CheckCallFileResult;
 import { z as z16 } from "zod";
 /**
-* A Deal as the service returns it. A Deal is named by the Organization's own `dealId` and is
-* never deleted on its own in phase 1. `closedAt`, `amount`, `currency` and `name` are `null`
+* A Deal as the service returns it. A Deal is named by the Organization's own `dealId` (customer
+* text, never logged, never in a URL path) and addressed by its opaque `id` (`deal_…`). It is never
+* deleted on its own in phase 1. An `open` Deal may carry a `closedAt`, an expected close date from
+* a CRM; an `amount` always comes with a `currency`. `closedAt`, `amount`, `currency` and `name` are `null`
 * until given. `callCount` counts Calls that are not deleted. `appearedInImport` is false for a
 * Deal created by a Call upload that no CSV has named, so the portal can list likely typos. The
 * Outcome sequence the re-tag job uses is not here. The service must send the output of
 * `dealSchema.parse(row)`.
 */
 declare const dealSchema: z16.ZodObject<{
+	id: z16.core.$ZodBranded<z16.ZodString, "deal", "out">;
 	dealId: z16.ZodPipe<z16.ZodPipe<z16.ZodString, z16.ZodTransform<string, string>>, z16.ZodString>;
 	name: z16.ZodNullable<z16.ZodPipe<z16.ZodString, z16.ZodString>>;
 	outcome: z16.ZodEnum<{
@@ -1489,15 +1515,16 @@ declare const dealSchema: z16.ZodObject<{
 }, z16.core.$strip>;
 /** A Deal as the service returns it. */
 type Deal = z16.infer<typeof dealSchema>;
-/** The path parameters of a request about one Deal; the deal id is trimmed and otherwise exact. */
+/** The path parameters of a request about one Deal: its opaque id, never the customer's deal id. */
 declare const dealParamsSchema: z16.ZodObject<{
-	dealId: z16.ZodPipe<z16.ZodPipe<z16.ZodString, z16.ZodTransform<string, string>>, z16.ZodString>;
+	dealRecordId: z16.core.$ZodBranded<z16.ZodString, "deal", "out">;
 }, z16.core.$strict>;
 /** The path parameters of a request about one Deal. */
 type DealParams = z16.infer<typeof dealParamsSchema>;
 /**
-* The query parameters of a request to list Deals: a page, and optionally one `outcome` and
-* `appearedInImport` (`true` or `false`). `appearedInImport=false` lists the Deals that have Calls
+* The query parameters of a request to list Deals: a page, and optionally one `outcome`, one
+* `dealId` (the customer's id, matched exactly after the trim, which is how a Deal is found by it)
+* and `appearedInImport` (`true` or `false`). `appearedInImport=false` lists the Deals that have Calls
 * but never appeared in a CSV. An unknown parameter is rejected.
 */
 declare const listDealsQuerySchema: z16.ZodObject<{
@@ -1508,6 +1535,7 @@ declare const listDealsQuerySchema: z16.ZodObject<{
 		open: "open";
 		won: "won";
 	}>>;
+	dealId: z16.ZodOptional<z16.ZodPipe<z16.ZodPipe<z16.ZodString, z16.ZodTransform<string, string>>, z16.ZodString>>;
 	appearedInImport: z16.ZodOptional<z16.ZodPipe<z16.ZodEnum<{
 		false: "false";
 		true: "true";
@@ -1518,6 +1546,7 @@ type ListDealsQuery = z16.infer<typeof listDealsQuerySchema>;
 /** One page of Deals. */
 declare const listDealsResponseSchema: z16.ZodObject<{
 	items: z16.ZodArray<z16.ZodObject<{
+		id: z16.core.$ZodBranded<z16.ZodString, "deal", "out">;
 		dealId: z16.ZodPipe<z16.ZodPipe<z16.ZodString, z16.ZodTransform<string, string>>, z16.ZodString>;
 		name: z16.ZodNullable<z16.ZodPipe<z16.ZodString, z16.ZodString>>;
 		outcome: z16.ZodEnum<{
@@ -1621,7 +1650,9 @@ declare const listDealImportsResponseSchema: z16.ZodObject<{
 /** One page of Deal imports. */
 type ListDealImportsResponse = z16.infer<typeof listDealImportsResponseSchema>;
 /**
-* One row of an import report: the CSV `rowNumber` (the header is row 1, the first data row 2),
+* One row of an import report: the CSV `rowNumber`, the record number with the header as record 1
+* (so the first data row is 2). A quoted cell that spans lines is one record, so `rowNumber` can
+* differ from the physical line (see `parseCsv`),
 * the `dealId` (the one free-text cell echoed; `null` when the cell was missing or not a valid deal
 * id, so a bad cell is never echoed), the `result` and, for a rejected row, the `reason`. `reason`
 * is `null` exactly when the result is `applied`. No other cell is ever part of a report.
@@ -1696,30 +1727,38 @@ declare const outcomeSchema: z17.ZodEnum<{
 }>;
 /** The Outcome of a Deal. */
 type Outcome = z17.infer<typeof outcomeSchema>;
-/** The ticket's choice (ADR 0018 leaves it open): the longest deal id, in UTF-16 code units, after trimming. */
+/** The ticket's choice (ADR 0018 leaves it open): the longest deal id, in Unicode code points, after trimming. */
 declare const MAX_DEAL_ID_LENGTH = 128;
+/** The most UTF-8 bytes a stored deal id can take: 128 code points at 4 bytes each. A column must allow this many bytes. */
+declare const MAX_DEAL_ID_BYTES: number;
 /**
 * Normalises a deal id: trims surrounding whitespace and changes nothing else. The comparison is
 * exact and case-sensitive (`A-1` and `a-1` are two Deals) with no Unicode normalisation, as ADR
-* 0018 says, so two ids are the same only if they are the same code units after the trim.
+* 0018 says, so two ids are the same only if they are the same code points after the trim.
 */
 declare function normaliseDealId(dealId: string): string;
 /**
-* A deal id (the Organization's own identifier for a Deal), in a request, a path, a CSV cell and a
-* response: at most 1000 raw characters, trimmed, then 1 to 128 UTF-16 code units, well-formed,
-* with no control character, bidirectional character, line or paragraph separator or zero-width
-* character. Unlike a file name it is rejected, not stripped, because stripping could make two
+* A deal id (the Organization's own identifier for a Deal), in a body, a CSV cell, the upload field,
+* a list filter and a response, never in a URL path (a Deal's path id is the opaque `deal_…` id): at
+* most 1000 raw Unicode code points, trimmed, then 1 to 128 Unicode code points (at most
+* `MAX_DEAL_ID_BYTES` bytes in UTF-8), well-formed, with no control character, bidirectional
+* character, Unicode format character (category Cf, so no soft hyphen, zero-width, word joiner or
+* tag character), line or paragraph separator or Hangul filler; homoglyphs are accepted and stay
+* distinct ids. It is customer-chosen text that may hold a person's or a company's name, so it is
+* never logged. Unlike a file name it is rejected, not stripped, because stripping could make two
 * ids equal. It is compared exactly and case-sensitively after the trim ({@link normaliseDealId}).
-* It is the only free-text cell an import report may echo. It is untrusted text for display.
+* It is the only free-text cell an import report may echo, and untrusted text for display.
 */
 declare const dealIdSchema: z17.ZodPipe<z17.ZodPipe<z17.ZodString, z17.ZodTransform<string, string>>, z17.ZodString>;
 /** A deal id. */
 type DealId = z17.infer<typeof dealIdSchema>;
-/** The longest Deal name, in UTF-16 code units, once trimmed. */
+/** The longest Deal name, in Unicode code points, once trimmed. */
 declare const MAX_DEAL_NAME_LENGTH = 200;
-/** A Deal's optional name: trimmed, 1 to 200 well-formed UTF-16 code units, no control character. Untrusted text for display. */
+/** The most UTF-8 bytes a stored Deal name can take: 200 code points at 4 bytes each. A column must allow this many bytes. */
+declare const MAX_DEAL_NAME_BYTES: number;
+/** A Deal's optional name: trimmed, 1 to 200 well-formed Unicode code points (at most `MAX_DEAL_NAME_BYTES` bytes), no control character. Untrusted text for display, never logged. */
 declare const dealNameSchema: z17.ZodPipe<z17.ZodString, z17.ZodString>;
-/** A money amount as a decimal string, never a float: up to 15 digits and at most 2 decimals, not negative. */
+/** A money amount as a decimal string, never a float: not negative, at most 15 integer digits (the maximum is 999999999999999.99) and 2 fraction digits, no leading zero beyond a single `0`. */
 declare const dealAmountSchema: z17.ZodString;
 /** A currency as an upper-case ISO 4217 code of three letters. */
 declare const dealCurrencySchema: z17.ZodString;
@@ -1805,6 +1844,64 @@ declare const dealImportRowReasonSchema: z17.ZodEnum<{
 }>;
 /** Why a row was rejected. */
 type DealImportRowReason = z17.infer<typeof dealImportRowReasonSchema>;
+/** The answer of a CSV cell parser: the parsed value, or not valid. */
+type CellResult<T> = {
+	readonly ok: true;
+	readonly value: T;
+} | {
+	readonly ok: false;
+};
+/** Reads the `outcome` cell: `won`, `lost` or `open`, compared case-insensitively after trimming. A blank cell is not valid: the column is required. */
+declare function parseOutcomeCell(cell: string): CellResult<Outcome>;
+/**
+* Reads the `closed_at` cell. Blank is none (`null`); `won` and `lost` do not require it, and an
+* `open` Deal may carry an expected close date. Otherwise it is a calendar date `YYYY-MM-DD`, read
+* as that day at 00:00 UTC, or an ISO 8601 timestamp with an offset (`Z` or `+02:00`). The value is
+* always the UTC ISO timestamp with milliseconds.
+*/
+declare function parseClosedAtCell(cell: string): CellResult<string | null>;
+/** Reads the `amount` cell: blank is none; otherwise a non-negative decimal as {@link dealAmountSchema} describes (at most 999999999999999.99). */
+declare function parseAmountCell(cell: string): CellResult<string | null>;
+/** Reads the `currency` cell: blank is none; otherwise three letters, folded to upper case. A currency is required when an amount is present, which {@link checkDealImportRow} checks. */
+declare function parseCurrencyCell(cell: string): CellResult<string | null>;
+/** One CSV data row once its cells are read. */
+type ParsedDealImportRow = {
+	readonly dealId: string;
+	readonly outcome: Outcome;
+	readonly closedAt: string | null;
+	readonly amount: string | null;
+	readonly currency: string | null;
+	readonly name: string | null;
+};
+/** The answer of {@link checkDealImportRow}: the parsed row, or the one reason code of the report. */
+type CheckDealImportRowResult = {
+	readonly ok: true;
+	readonly row: ParsedDealImportRow;
+} | {
+	readonly ok: false;
+	readonly reason: DealImportRowReason;
+};
+/**
+* Reads one CSV record's cells (already split, so a quoted cell with a comma or a line break is one
+* cell; see {@link parseCsv}) against the template, so the portal and the service agree. Every cell
+* is trimmed; blank optional cells are none. Cell count must be 5, or 6 when the header has `name`
+* (`wrong_column_count`). The problems are reported in column order and only the first is returned:
+* `invalid_deal_id`, `invalid_outcome`, `invalid_closed_at`, `invalid_amount`, `invalid_currency`
+* (including an amount with no currency) and `invalid_name`. Whether the Deal is already decided,
+* repeated in the file or over the quota is the service's, as those need its data.
+*/
+declare function checkDealImportRow(cells: readonly string[], hasName: boolean): CheckDealImportRowResult;
+/**
+* Splits CSV text into records of cells (RFC 4180): cells may be double-quoted, `""` is a quote
+* inside one, and a quoted cell may hold commas and line breaks; a line break is `\n`, `\r\n` or
+* `\r`, a leading byte order mark is dropped, and one final line break does not add a record. It
+* returns `undefined` for an unterminated quote. The first record is the header, so **record
+* number** is the index plus one, with the header as record 1: a report's `rowNumber` is a record
+* number, and a quoted cell spanning lines is one record, so it can differ from the physical line.
+* A blank line is a record of one empty cell. It needs the whole text; a service that streams the
+* file may split records itself and must number them the same way.
+*/
+declare function parseCsv(text: string): string[][] | undefined;
 import { z as z18 } from "zod";
 /**
 * A Playbook document as the service returns it. It names the file but never carries its content,
@@ -2145,9 +2242,9 @@ declare const CALL_DELETED_MESSAGE: {
 		deletionSeq: z21.ZodNumber;
 	}, z21.core.$strict>;
 };
-/** The payload of {@link DEAL_OUTCOME_CHANGED_MESSAGE}: the Deal's own id and its `outcomeSeq`. */
+/** The payload of {@link DEAL_OUTCOME_CHANGED_MESSAGE}: the Deal's opaque id (never the customer's text) and its `outcomeSeq`. */
 declare const dealOutcomeChangedPayloadSchema: z21.ZodObject<{
-	dealId: z21.ZodPipe<z21.ZodPipe<z21.ZodString, z21.ZodTransform<string, string>>, z21.ZodString>;
+	dealRecordId: z21.core.$ZodBranded<z21.ZodString, "deal", "out">;
 	outcomeSeq: z21.ZodNumber;
 }, z21.core.$strict>;
 /** The payload of {@link DEAL_OUTCOME_CHANGED_MESSAGE}. */
@@ -2158,7 +2255,7 @@ declare const DEAL_OUTCOME_CHANGED_MESSAGE: {
 	readonly version: 1;
 	readonly scope: "organization";
 	readonly payload: z21.ZodObject<{
-		dealId: z21.ZodPipe<z21.ZodPipe<z21.ZodString, z21.ZodTransform<string, string>>, z21.ZodString>;
+		dealRecordId: z21.core.$ZodBranded<z21.ZodString, "deal", "out">;
 		outcomeSeq: z21.ZodNumber;
 	}, z21.core.$strict>;
 };
@@ -2238,16 +2335,26 @@ declare const DOCUMENT_RETENTION_DAYS = 30;
 declare const DEFAULT_MAX_DOCUMENTS = 500;
 /** The lead's default (ADR 0016), not the owner's: bytes an Organization may hold, 2 GB counted as 2 * 1024^3. */
 declare const DEFAULT_MAX_DOCUMENT_BYTES_TOTAL: number;
-/** The longest file name, in characters, once control and direction characters are stripped. */
+/**
+* How lengths are counted in this area: in Unicode code points, as Zod's string `min` and `max`
+* count them, so an astral-plane character counts as 1 (not 2 as JavaScript's `.length` has it). A
+* database `varchar(n)` or `char_length` check counts code points too, so the column limit is the
+* same number; a column must also allow {@link MAX_UTF8_BYTES_PER_CODE_POINT} bytes per code point
+* (the most UTF-8 takes), such as `MAX_DOCUMENT_FILE_NAME_BYTES`.
+*/
+declare const MAX_UTF8_BYTES_PER_CODE_POINT = 4;
+/** The longest file name, in Unicode code points, once control and direction characters are stripped. */
 declare const MAX_DOCUMENT_FILE_NAME_LENGTH = 255;
+/** The most UTF-8 bytes a stored file name can take: 255 code points at 4 bytes each. A column must allow this many bytes. */
+declare const MAX_DOCUMENT_FILE_NAME_BYTES: number;
 /** The stored form of a file name: control and bidirectional characters removed, then trimmed. */
 declare function normaliseFileName(name: string): string;
 /** The accepted extension a file name ends with, compared without case, or undefined. */
 declare function documentExtension(fileName: string): AcceptedDocumentExtension | undefined;
 /**
-* A document's file name, in a request and in a response: at most 1000 raw UTF-16 code units,
+* A document's file name, in a request and in a response: at most 1000 raw Unicode code points,
 * then control and bidirectional characters are removed (not rejected) and the rest is trimmed to
-* 1 to 255 well-formed UTF-16 code units with no `/` or `\` and a visible stem before the last
+* 1 to 255 well-formed Unicode code points with no `/` or `\` and a visible stem before the last
 * dot (`.pdf`, or an invisible character plus `.pdf`, is rejected). It does not check the
 * extension: that is {@link documentTypeCheckSchema}, which has its own error code. Parsing a
 * stored name yields a safe one. The name is for display only and is never a storage key or a
@@ -2281,4 +2388,4 @@ declare function hasStrippableCharacter(text: string): boolean;
 declare function isWellFormedText(text: string): boolean;
 /** This library's package name, so a consumer can report which shared libraries it resolved. */
 declare const PACKAGE = "tula-closeline-contract";
-export { ABANDON_MAX_AGE_HOURS, ACCEPTED_DOCUMENT_EXTENSIONS, ACCEPTED_DOCUMENT_MEDIA_TYPES, ACCEPTED_RECORDING_EXTENSIONS, ACCEPTED_TRANSCRIPT_EXTENSIONS, ALL_PLAYBOOK_ERRORS, ALL_PLAYBOOK_ROUTES, AUTH_ERRORS, AcceptedCallExtension, AcceptedDocumentExtension, AddTeamMemberRequest, AllPlaybookRouteName, AuthErrorCode, CALL_CHANNELS, CALL_DELETED_MESSAGE, CALL_FAILURE_REASONS, CALL_KINDS, CALL_MEDIA_TYPES, CALL_REP_CHANGED_MESSAGE, CALL_STATES, CALL_TRANSCRIBED_MESSAGE, CALL_UPLOADED_MESSAGE, CORE_ERRORS, Call, CallDeletedPayload, CallFailureReason, CallId, CallKind, CallMediaType, CallParams, CallRepChangedPayload, CallState, CallTranscribedPayload, CallUploadedPayload, ChangeMemberRoleRequest, CheckCallFileResult, CheckDealImportHeaderResult, CheckUploadFileResult, CommonErrorCode, ConfirmRightsRequest, CoreErrorCode, CreateInvitationRequest, CreateTeamRequest, DEAL_IMPORT_FAILURE_REASONS, DEAL_IMPORT_FILE_FIELD, DEAL_IMPORT_HEADER_PROBLEMS, DEAL_IMPORT_OPTIONAL_COLUMN, DEAL_IMPORT_REQUIRED_COLUMNS, DEAL_IMPORT_ROW_REASONS, DEAL_IMPORT_ROW_RESULTS, DEAL_IMPORT_STATES, DEAL_IMPORT_UPLOADED_MESSAGE, DEAL_OUTCOME_CHANGED_MESSAGE, DEFAULT_MAX_CALLS, DEFAULT_MAX_DEALS, DEFAULT_MAX_DOCUMENTS, DEFAULT_MAX_DOCUMENT_BYTES_TOTAL, DEFAULT_MAX_RECORDING_BYTES_TOTAL, DEFAULT_PAGE_SIZE, DOCUMENT_DELETED_MESSAGE, DOCUMENT_FAILURE_REASONS, DOCUMENT_RETENTION_DAYS, DOCUMENT_STATES, DOCUMENT_UPLOADED_MESSAGE, Deal, DealId, DealImport, DealImportFailureReason, DealImportHeaderProblem, DealImportId, DealImportParams, DealImportRow, DealImportRowReason, DealImportRowResult, DealImportState, DealImportUploadedPayload, DealOutcomeChangedPayload, DealParams, DocumentDeletedPayload, DocumentFailureReason, DocumentFileName, DocumentId, DocumentMediaType, DocumentParams, DocumentState, DocumentUploadedPayload, ERRORS, Email, ErrorBody, ErrorDefinition, ErrorInput, EventId, EventType, IDEMPOTENCY_KEY_HEADER, INCOMPLETE_UPLOAD_PARTS_TTL_HOURS, INTERNAL_CALL_ERRORS, INVITABLE_ROLES, INVITATION_STATES, Id, IdempotencyKey, InternalAbandonOrganizationParams, InternalAbandonOrganizationRequest, InternalAbandonOrganizationResponse, InternalAcceptInvitationRequest, InternalAcceptInvitationResponse, InternalCallName, InternalCreateOrganizationRequest, InternalCreateOrganizationResponse, InternalMembershipRequest, InternalMembershipResponse, InternalRemoveOrganizationDocumentsParams, InternalRemoveOrganizationDocumentsRequest, InternalRemoveOrganizationDocumentsResponse, InternalUpdateMemberProfileParams, InternalUpdateMemberProfileRequest, InternalUpdateMemberProfileResponse, InvitableRole, Invitation, InvitationId, InvitationParams, InvitationState, ListCallsQuery, ListCallsResponse, ListDealImportRowsQuery, ListDealImportRowsResponse, ListDealImportsQuery, ListDealImportsResponse, ListDealsQuery, ListDealsResponse, ListDocumentsQuery, ListDocumentsResponse, ListInvitationsQuery, ListInvitationsResponse, ListMembersQuery, ListMembersResponse, ListTeamsQuery, ListTeamsResponse, MAX_CALL_SPEAKERS, MAX_CURSOR_LENGTH, MAX_DEAL_ID_LENGTH, MAX_DEAL_IMPORT_BYTES, MAX_DEAL_IMPORT_HEADER_LENGTH, MAX_DEAL_IMPORT_ROWS, MAX_DEAL_NAME_LENGTH, MAX_DELETION_SEQ, MAX_DOCUMENT_BYTES, MAX_DOCUMENT_FILE_NAME_LENGTH, MAX_DOCUMENT_PAGES, MAX_EMAIL_LENGTH, MAX_NAME_LENGTH, MAX_PAGE_SIZE, MAX_PERSON_NAME_LENGTH, MAX_RECORDING_BYTES, MAX_RECORDING_SECONDS, MAX_REP_FIELD_LENGTH, MAX_REP_FOLLOWING_CHARACTERS, MAX_REP_FOLLOWING_TURNS, MAX_RIGHTS_WORDING_VERSION, MAX_SEQ, MAX_SPEAKER_LABEL_LENGTH, MAX_TRANSCRIPT_BYTES, MEDIA_TYPE_BY_CALL_EXTENSION, MEDIA_TYPE_BY_EXTENSION, Member, MemberParams, MembershipId, ORGANIZATION_STATUSES, OUTCOMES, Organization, OrganizationId, OrganizationStatus, Outcome, PACKAGE, PLAYBOOK_ERRORS, PLAYBOOK_READ_ROLES, PLAYBOOK_ROUTES, PLAYBOOK_WRITE_ROLES, Page, PageQuery, ParseRepFieldResult, PlaybookDocument, PlaybookErrorCode, PlaybookRoute, PlaybookRouteName, ProspectId, REGIONS, ROLES, Region, RenameOrganizationRequest, RenameTeamRequest, RepChoice, RequestId, RightsConfirmation, RightsRequiredDetails, RightsStatus, Role, SALES_HISTORY_ERRORS, SALES_HISTORY_READ_ROLES, SALES_HISTORY_ROUTES, SIGNUP_ERRORS, SalesHistoryErrorCode, SalesHistoryRoute, SalesHistoryRouteName, SetCallRepRequest, SetDealOutcomeRequest, SignupErrorCode, Team, TeamId, TeamMember, TeamMemberParams, TeamParams, UPLOAD_CONTENT_TYPE, UPLOAD_FILE_FIELD, UploadCallFields, UploadDocumentFile, UserId, addTeamMemberRequestSchema, callChannelSchema, callDeletedPayloadSchema, callFailureReasonSchema, callIdSchema, callKindSchema, callMediaTypeSchema, callParamsSchema, callRepChangedPayloadSchema, callSchema, callStateSchema, callTranscribedPayloadSchema, callUploadedPayloadSchema, changeMemberRoleRequestSchema, checkCallFile, checkDealImportHeader, checkUploadFile, confirmRightsRequestSchema, createInvitationRequestSchema, createTeamRequestSchema, dealAmountSchema, dealCurrencySchema, dealIdSchema, dealImportFailureReasonSchema, dealImportIdSchema, dealImportParamsSchema, dealImportRowReasonSchema, dealImportRowResultSchema, dealImportRowSchema, dealImportSchema, dealImportStateSchema, dealImportUploadedPayloadSchema, dealNameSchema, dealOutcomeChangedPayloadSchema, dealParamsSchema, dealSchema, decodeCursor, defineErrors, defineEvent, documentDeletedPayloadSchema, documentExtension, documentFailureReasonSchema, documentFileNameSchema, documentIdSchema, documentMediaTypeSchema, documentParamsSchema, documentSchema, documentSizeCheckSchema, documentStateSchema, documentTypeCheckSchema, documentUploadedPayloadSchema, emailSchema, encodeCursor, errorBodySchema, errorCodeSchema, eventEnvelopeSchema, eventIdSchema, eventTypeSchema, foldAscii, formatId, hasStrippableCharacter, idSchema, idempotencyKeySchema, internalAbandonOrganizationParamsSchema, internalAbandonOrganizationRequestSchema, internalAbandonOrganizationResponseSchema, internalAcceptInvitationRequestSchema, internalAcceptInvitationResponseSchema, internalCreateOrganizationRequestSchema, internalCreateOrganizationResponseSchema, internalMembershipRequestSchema, internalMembershipResponseSchema, internalRemoveOrganizationDocumentsParamsSchema, internalRemoveOrganizationDocumentsRequestSchema, internalRemoveOrganizationDocumentsResponseSchema, internalUpdateMemberProfileParamsSchema, internalUpdateMemberProfileRequestSchema, internalUpdateMemberProfileResponseSchema, invitableRoleSchema, invitationIdSchema, invitationParamsSchema, invitationSchema, invitationStateSchema, invitationTokenSchema, isWellFormedText, listCallsQuerySchema, listCallsResponseSchema, listDealImportRowsQuerySchema, listDealImportRowsResponseSchema, listDealImportsQuerySchema, listDealImportsResponseSchema, listDealsQuerySchema, listDealsResponseSchema, listDocumentsQuerySchema, listDocumentsResponseSchema, listInvitationsQuerySchema, listInvitationsResponseSchema, listMembersQuerySchema, listMembersResponseSchema, listTeamsQuerySchema, listTeamsResponseSchema, memberParamsSchema, memberSchema, membershipIdSchema, normaliseDealId, normaliseFileName, normaliseMediaType, normaliseSpeakerLabel, organizationIdSchema, organizationNameSchema, organizationSchema, organizationStatusSchema, outcomeSchema, pageQuerySchema, pageSchema, parseRepField, personNameSchema, prospectIdSchema, regionSchema, renameOrganizationRequestSchema, renameTeamRequestSchema, repChangeAllowed, repChoiceSchema, repChoiceSuits, requestIdSchema, rightsConfirmationSchema, rightsRequiredDetailsSchema, rightsStatusSchema, rightsWordingVersionSchema, roleAtLeast, roleSchema, setCallRepRequestSchema, setDealOutcomeRequestSchema, speakerLabelSchema, storedNameSchema, teamIdSchema, teamMemberParamsSchema, teamMemberSchema, teamNameSchema, teamParamsSchema, teamSchema, timestampSchema, uploadCallFieldsSchema, uploadCallFileSchema, uploadDocumentFileSchema, userIdSchema };
+export { ABANDON_MAX_AGE_HOURS, ACCEPTED_DOCUMENT_EXTENSIONS, ACCEPTED_DOCUMENT_MEDIA_TYPES, ACCEPTED_RECORDING_EXTENSIONS, ACCEPTED_TRANSCRIPT_EXTENSIONS, ALL_PLAYBOOK_ERRORS, ALL_PLAYBOOK_ROUTES, AUTH_ERRORS, AcceptedCallExtension, AcceptedDocumentExtension, AddTeamMemberRequest, AllPlaybookRouteName, AuthErrorCode, CALL_CHANNELS, CALL_DELETED_MESSAGE, CALL_FAILURE_REASONS, CALL_KINDS, CALL_MEDIA_TYPES, CALL_REP_CHANGED_MESSAGE, CALL_STATES, CALL_TRANSCRIBED_MESSAGE, CALL_UPLOADED_MESSAGE, CORE_ERRORS, Call, CallDeletedPayload, CallFailureReason, CallId, CallKind, CallMediaType, CallParams, CallRepChangedPayload, CallState, CallTranscribedPayload, CallUploadedPayload, CellResult, ChangeMemberRoleRequest, CheckCallFileResult, CheckDealImportHeaderResult, CheckDealImportRowResult, CheckUploadFileResult, CommonErrorCode, ConfirmRightsRequest, CoreErrorCode, CreateInvitationRequest, CreateTeamRequest, DEAL_IMPORT_FAILURE_REASONS, DEAL_IMPORT_FILE_FIELD, DEAL_IMPORT_HEADER_PROBLEMS, DEAL_IMPORT_OPTIONAL_COLUMN, DEAL_IMPORT_REQUIRED_COLUMNS, DEAL_IMPORT_ROW_REASONS, DEAL_IMPORT_ROW_RESULTS, DEAL_IMPORT_STATES, DEAL_IMPORT_UPLOADED_MESSAGE, DEAL_OUTCOME_CHANGED_MESSAGE, DEFAULT_MAX_CALLS, DEFAULT_MAX_DEALS, DEFAULT_MAX_DOCUMENTS, DEFAULT_MAX_DOCUMENT_BYTES_TOTAL, DEFAULT_MAX_RECORDING_BYTES_TOTAL, DEFAULT_PAGE_SIZE, DOCUMENT_DELETED_MESSAGE, DOCUMENT_FAILURE_REASONS, DOCUMENT_RETENTION_DAYS, DOCUMENT_STATES, DOCUMENT_UPLOADED_MESSAGE, Deal, DealId, DealImport, DealImportFailureReason, DealImportHeaderProblem, DealImportId, DealImportParams, DealImportRow, DealImportRowReason, DealImportRowResult, DealImportState, DealImportUploadedPayload, DealOutcomeChangedPayload, DealParams, DealRecordId, DocumentDeletedPayload, DocumentFailureReason, DocumentFileName, DocumentId, DocumentMediaType, DocumentParams, DocumentState, DocumentUploadedPayload, ERRORS, Email, ErrorBody, ErrorDefinition, ErrorInput, EventId, EventType, IDEMPOTENCY_KEY_HEADER, INCOMPLETE_UPLOAD_PARTS_TTL_HOURS, INTERNAL_CALL_ERRORS, INVITABLE_ROLES, INVITATION_STATES, Id, IdempotencyKey, InternalAbandonOrganizationParams, InternalAbandonOrganizationRequest, InternalAbandonOrganizationResponse, InternalAcceptInvitationRequest, InternalAcceptInvitationResponse, InternalCallName, InternalCreateOrganizationRequest, InternalCreateOrganizationResponse, InternalMembershipRequest, InternalMembershipResponse, InternalRemoveOrganizationDocumentsParams, InternalRemoveOrganizationDocumentsRequest, InternalRemoveOrganizationDocumentsResponse, InternalUpdateMemberProfileParams, InternalUpdateMemberProfileRequest, InternalUpdateMemberProfileResponse, InvitableRole, Invitation, InvitationId, InvitationParams, InvitationState, ListCallsQuery, ListCallsResponse, ListDealImportRowsQuery, ListDealImportRowsResponse, ListDealImportsQuery, ListDealImportsResponse, ListDealsQuery, ListDealsResponse, ListDocumentsQuery, ListDocumentsResponse, ListInvitationsQuery, ListInvitationsResponse, ListMembersQuery, ListMembersResponse, ListTeamsQuery, ListTeamsResponse, MAX_CALL_SPEAKERS, MAX_CURSOR_LENGTH, MAX_DEAL_ID_BYTES, MAX_DEAL_ID_LENGTH, MAX_DEAL_IMPORT_BYTES, MAX_DEAL_IMPORT_HEADER_LENGTH, MAX_DEAL_IMPORT_ROWS, MAX_DEAL_NAME_BYTES, MAX_DEAL_NAME_LENGTH, MAX_DELETION_SEQ, MAX_DOCUMENT_BYTES, MAX_DOCUMENT_FILE_NAME_BYTES, MAX_DOCUMENT_FILE_NAME_LENGTH, MAX_DOCUMENT_PAGES, MAX_EMAIL_LENGTH, MAX_NAME_LENGTH, MAX_PAGE_SIZE, MAX_PERSON_NAME_LENGTH, MAX_RECORDING_BYTES, MAX_RECORDING_SECONDS, MAX_REP_FIELD_LENGTH, MAX_REP_FOLLOWING_CHARACTERS, MAX_REP_FOLLOWING_TURNS, MAX_RIGHTS_WORDING_VERSION, MAX_SEQ, MAX_SPEAKER_LABEL_BYTES, MAX_SPEAKER_LABEL_LENGTH, MAX_TRANSCRIPT_BYTES, MAX_UTF8_BYTES_PER_CODE_POINT, MEDIA_TYPE_BY_CALL_EXTENSION, MEDIA_TYPE_BY_EXTENSION, Member, MemberParams, MembershipId, ORGANIZATION_STATUSES, OUTCOMES, Organization, OrganizationId, OrganizationStatus, Outcome, PACKAGE, PLAYBOOK_ERRORS, PLAYBOOK_READ_ROLES, PLAYBOOK_ROUTES, PLAYBOOK_WRITE_ROLES, Page, PageQuery, ParseRepFieldResult, ParsedDealImportRow, PlaybookDocument, PlaybookErrorCode, PlaybookRoute, PlaybookRouteName, ProspectId, REGIONS, ROLES, Region, RenameOrganizationRequest, RenameTeamRequest, RepChoice, RequestId, RightsConfirmation, RightsRequiredDetails, RightsStatus, Role, SALES_HISTORY_ERRORS, SALES_HISTORY_READ_ROLES, SALES_HISTORY_ROUTES, SIGNUP_ERRORS, SalesHistoryErrorCode, SalesHistoryRoute, SalesHistoryRouteName, SetCallRepRequest, SetDealOutcomeRequest, SignupErrorCode, Team, TeamId, TeamMember, TeamMemberParams, TeamParams, UPLOAD_CONTENT_TYPE, UPLOAD_FILE_FIELD, UploadCallFields, UploadDocumentFile, UserId, addTeamMemberRequestSchema, callChannelSchema, callDeletedPayloadSchema, callFailureReasonSchema, callIdSchema, callKindSchema, callMediaTypeSchema, callParamsSchema, callRepChangedPayloadSchema, callSchema, callStateSchema, callTranscribedPayloadSchema, callUploadedPayloadSchema, changeMemberRoleRequestSchema, checkCallFile, checkDealImportHeader, checkDealImportRow, checkUploadFile, confirmRightsRequestSchema, createInvitationRequestSchema, createTeamRequestSchema, dealAmountSchema, dealCurrencySchema, dealIdSchema, dealImportFailureReasonSchema, dealImportIdSchema, dealImportParamsSchema, dealImportRowReasonSchema, dealImportRowResultSchema, dealImportRowSchema, dealImportSchema, dealImportStateSchema, dealImportUploadedPayloadSchema, dealNameSchema, dealOutcomeChangedPayloadSchema, dealParamsSchema, dealRecordIdSchema, dealSchema, decodeCursor, defineErrors, defineEvent, documentDeletedPayloadSchema, documentExtension, documentFailureReasonSchema, documentFileNameSchema, documentIdSchema, documentMediaTypeSchema, documentParamsSchema, documentSchema, documentSizeCheckSchema, documentStateSchema, documentTypeCheckSchema, documentUploadedPayloadSchema, emailSchema, encodeCursor, errorBodySchema, errorCodeSchema, eventEnvelopeSchema, eventIdSchema, eventTypeSchema, foldAscii, formatId, hasStrippableCharacter, idSchema, idempotencyKeySchema, internalAbandonOrganizationParamsSchema, internalAbandonOrganizationRequestSchema, internalAbandonOrganizationResponseSchema, internalAcceptInvitationRequestSchema, internalAcceptInvitationResponseSchema, internalCreateOrganizationRequestSchema, internalCreateOrganizationResponseSchema, internalMembershipRequestSchema, internalMembershipResponseSchema, internalRemoveOrganizationDocumentsParamsSchema, internalRemoveOrganizationDocumentsRequestSchema, internalRemoveOrganizationDocumentsResponseSchema, internalUpdateMemberProfileParamsSchema, internalUpdateMemberProfileRequestSchema, internalUpdateMemberProfileResponseSchema, invitableRoleSchema, invitationIdSchema, invitationParamsSchema, invitationSchema, invitationStateSchema, invitationTokenSchema, isWellFormedText, listCallsQuerySchema, listCallsResponseSchema, listDealImportRowsQuerySchema, listDealImportRowsResponseSchema, listDealImportsQuerySchema, listDealImportsResponseSchema, listDealsQuerySchema, listDealsResponseSchema, listDocumentsQuerySchema, listDocumentsResponseSchema, listInvitationsQuerySchema, listInvitationsResponseSchema, listMembersQuerySchema, listMembersResponseSchema, listTeamsQuerySchema, listTeamsResponseSchema, memberParamsSchema, memberSchema, membershipIdSchema, normaliseDealId, normaliseFileName, normaliseMediaType, normaliseSpeakerLabel, organizationIdSchema, organizationNameSchema, organizationSchema, organizationStatusSchema, outcomeSchema, pageQuerySchema, pageSchema, parseAmountCell, parseClosedAtCell, parseCsv, parseCurrencyCell, parseOutcomeCell, parseRepField, personNameSchema, prospectIdSchema, regionSchema, renameOrganizationRequestSchema, renameTeamRequestSchema, repChangeAllowed, repChoiceSchema, repChoiceSuits, requestIdSchema, rightsConfirmationSchema, rightsRequiredDetailsSchema, rightsStatusSchema, rightsWordingVersionSchema, roleAtLeast, roleSchema, setCallRepRequestSchema, setDealOutcomeRequestSchema, speakerLabelSchema, storedNameSchema, teamIdSchema, teamMemberParamsSchema, teamMemberSchema, teamNameSchema, teamParamsSchema, teamSchema, timestampSchema, uploadCallFieldsSchema, uploadCallFileSchema, uploadDocumentFileSchema, userIdSchema };

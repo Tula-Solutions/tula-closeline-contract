@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { id, NOW } from '../core/fixtures'
 import { ERRORS } from '../errors'
+import { dealRecordIdSchema } from '../ids'
 import { MAX_PAGE_SIZE } from '../pagination'
 import {
   ACCEPTED_RECORDING_EXTENSIONS,
@@ -19,6 +20,7 @@ import {
   callUploadedPayloadSchema,
   checkCallFile,
   checkDealImportHeader,
+  checkDealImportRow,
   confirmRightsRequestSchema,
   DEAL_IMPORT_ROW_REASONS,
   DEAL_IMPORT_STATES,
@@ -39,20 +41,32 @@ import {
   listDealImportRowsResponseSchema,
   listDealsQuerySchema,
   MAX_CALL_SPEAKERS,
+  MAX_DEAL_ID_BYTES,
   MAX_DEAL_ID_LENGTH,
   MAX_DEAL_IMPORT_BYTES,
   MAX_DEAL_IMPORT_ROWS,
+  MAX_DEAL_NAME_BYTES,
+  MAX_DEAL_NAME_LENGTH,
+  MAX_DOCUMENT_FILE_NAME_BYTES,
   MAX_RECORDING_BYTES,
   MAX_RECORDING_SECONDS,
   MAX_REP_FOLLOWING_CHARACTERS,
   MAX_REP_FOLLOWING_TURNS,
   MAX_RIGHTS_WORDING_VERSION,
   MAX_SEQ,
+  MAX_SPEAKER_LABEL_BYTES,
+  MAX_SPEAKER_LABEL_LENGTH,
   MAX_TRANSCRIPT_BYTES,
+  MAX_UTF8_BYTES_PER_CODE_POINT,
   MEDIA_TYPE_BY_CALL_EXTENSION,
   normaliseDealId,
   normaliseSpeakerLabel,
   PLAYBOOK_ERRORS,
+  parseAmountCell,
+  parseClosedAtCell,
+  parseCsv,
+  parseCurrencyCell,
+  parseOutcomeCell,
   parseRepField,
   repChangeAllowed,
   repChoiceSchema,
@@ -76,6 +90,9 @@ const ZWSP = ch(0x200b)
 const call = {
   id: id('call'),
   dealId: 'D-100',
+  dealRecordId: id('deal'),
+  dealOutcome: 'won',
+  inSearch: true,
   kind: 'transcript',
   fileName: 'call.vtt',
   mediaType: 'text/vtt',
@@ -233,23 +250,34 @@ describe('callSchema', () => {
       mediaType: 'audio/mpeg',
       durationSeconds: 60,
     }
-    expect(callSchema.safeParse({ ...recording, state: 'transcribing', rep: null }).success).toBe(
-      true
-    )
+    expect(
+      callSchema.safeParse({ ...recording, state: 'transcribing', rep: null, inSearch: false })
+        .success
+    ).toBe(true)
     expect(
       callSchema.safeParse({
         ...recording,
         state: 'awaiting_rep',
         rep: null,
+        inSearch: false,
         speakerLabels: ['A', 'B'],
       }).success
     ).toBe(true)
-    expect(callSchema.safeParse({ ...call, state: 'processing' }).success).toBe(true)
+    expect(callSchema.safeParse({ ...call, state: 'processing', inSearch: false }).success).toBe(
+      true
+    )
     expect(
-      callSchema.safeParse({ ...call, state: 'failed', failureReason: 'no_turns' }).success
+      callSchema.safeParse({ ...call, state: 'failed', failureReason: 'no_turns', inSearch: false })
+        .success
     ).toBe(true)
     expect(
-      callSchema.safeParse({ ...call, state: 'deleted', deletedAt: NOW, purgeAt: NOW }).success
+      callSchema.safeParse({
+        ...call,
+        state: 'deleted',
+        deletedAt: NOW,
+        purgeAt: NOW,
+        inSearch: false,
+      }).success
     ).toBe(true)
   })
 
@@ -300,12 +328,22 @@ describe('speaker cap', () => {
     expect(MAX_CALL_SPEAKERS).toBe(20)
     const labels = (n: number) => Array.from({ length: n }, (_, i) => `S${i}`)
     expect(
-      callSchema.safeParse({ ...call, rep: null, state: 'processing', speakerLabels: labels(20) })
-        .success
+      callSchema.safeParse({
+        ...call,
+        rep: null,
+        state: 'processing',
+        inSearch: false,
+        speakerLabels: labels(20),
+      }).success
     ).toBe(true)
     expect(
-      callSchema.safeParse({ ...call, rep: null, state: 'processing', speakerLabels: labels(21) })
-        .success
+      callSchema.safeParse({
+        ...call,
+        rep: null,
+        state: 'processing',
+        inSearch: false,
+        speakerLabels: labels(21),
+      }).success
     ).toBe(false)
   })
 
@@ -552,14 +590,16 @@ describe('deal ids', () => {
   })
 
   test('the path params use the same rule', () => {
-    expect(dealParamsSchema.parse({ dealId: ' X ' })).toEqual({ dealId: 'X' })
-    expect(dealParamsSchema.safeParse({ dealId: '' }).success).toBe(false)
-    expect(dealParamsSchema.safeParse({ dealId: 'X', y: 1 }).success).toBe(false)
+    expect(dealParamsSchema.safeParse({ dealRecordId: id('deal') }).success).toBe(true)
+    expect(dealParamsSchema.safeParse({ dealId: 'X' }).success).toBe(false)
+    expect(dealParamsSchema.safeParse({ dealRecordId: id('call') }).success).toBe(false)
+    expect(dealParamsSchema.safeParse({ dealRecordId: id('deal'), y: 1 }).success).toBe(false)
   })
 })
 
 describe('Deals', () => {
   const deal = {
+    id: id('deal'),
     dealId: 'D-100',
     name: null,
     outcome: 'won',
@@ -953,18 +993,21 @@ describe('messages', () => {
     ).toBe(false)
     expect(callUploadedPayloadSchema.safeParse({ callId: id('doc') }).success).toBe(false)
     expect(
-      dealOutcomeChangedPayloadSchema.safeParse({ dealId: 'D-1', outcomeSeq: 1 }).success
+      dealOutcomeChangedPayloadSchema.safeParse({ dealRecordId: id('deal'), outcomeSeq: 1 }).success
     ).toBe(true)
     expect(
-      dealOutcomeChangedPayloadSchema.safeParse({ dealId: 'D-1', outcomeSeq: 1, outcome: 'won' })
-        .success
+      dealOutcomeChangedPayloadSchema.safeParse({
+        dealRecordId: id('deal'),
+        outcomeSeq: 1,
+        outcome: 'won',
+      }).success
     ).toBe(false)
   })
 
   test.each([
     ['repSeq', callRepChangedPayloadSchema, { callId: id('call') }],
     ['deletionSeq', callDeletedPayloadSchema, { callId: id('call') }],
-    ['outcomeSeq', dealOutcomeChangedPayloadSchema, { dealId: 'D-1' }],
+    ['outcomeSeq', dealOutcomeChangedPayloadSchema, { dealRecordId: id('deal') }],
   ] as const)('%s is a positive integer up to the Postgres integer', (key, schema, base) => {
     const ok = { ...base, [key]: 1 }
     expect(schema.safeParse(ok).success).toBe(true)
@@ -1080,5 +1123,343 @@ describe('SALES_HISTORY_ROUTES', () => {
         /\b(meeting|session|opportunity|disposition|snippet|segment|call notes|voice file|audio clip)\b/i
       )
     }
+  })
+})
+
+const astral = String.fromCodePoint(0x1f600)
+
+describe('lengths count Unicode code points, and the byte bound is four per code point', () => {
+  test('the byte bounds the db must allow', () => {
+    expect(MAX_UTF8_BYTES_PER_CODE_POINT).toBe(4)
+    expect(MAX_DEAL_ID_BYTES).toBe(MAX_DEAL_ID_LENGTH * 4)
+    expect(MAX_SPEAKER_LABEL_BYTES).toBe(MAX_SPEAKER_LABEL_LENGTH * 4)
+    expect(MAX_DEAL_NAME_BYTES).toBe(MAX_DEAL_NAME_LENGTH * 4)
+    expect(MAX_DOCUMENT_FILE_NAME_BYTES).toBe(255 * 4)
+    expect(new TextEncoder().encode(astral).length).toBe(MAX_UTF8_BYTES_PER_CODE_POINT)
+  })
+
+  test('a deal id of 128 astral characters is accepted, 129 is not', () => {
+    expect(dealIdSchema.safeParse(astral.repeat(128)).success).toBe(true)
+    expect(dealIdSchema.safeParse(astral.repeat(129)).success).toBe(false)
+    expect(dealIdSchema.safeParse(`${astral.repeat(127)}a`).success).toBe(true)
+    expect(dealIdSchema.safeParse(`${astral.repeat(128)}a`).success).toBe(false)
+  })
+
+  test('a speaker label of 64 astral characters is accepted, 65 is not', () => {
+    expect(speakerLabelSchema.safeParse(astral.repeat(64)).success).toBe(true)
+    expect(speakerLabelSchema.safeParse(astral.repeat(65)).success).toBe(false)
+  })
+
+  test('a Deal name of 200 astral characters is accepted, 201 is not', () => {
+    expect(dealNameSchema.safeParse(astral.repeat(200)).success).toBe(true)
+    expect(dealNameSchema.safeParse(astral.repeat(201)).success).toBe(false)
+  })
+
+  test('a call file name of 251 astral characters plus .mp3 (255 code points) passes; 252 does not', () => {
+    const file = (name: string) => ({ fileName: name, declaredMediaType: null, sizeBytes: 1 })
+    expect(checkCallFile(file(`${astral.repeat(251)}.mp3`)).ok).toBe(true)
+    expect(checkCallFile(file(`${astral.repeat(252)}.mp3`)).ok).toBe(false)
+  })
+
+  test('a worst-case deal id is at most the byte bound in UTF-8', () => {
+    const worst = dealIdSchema.parse(astral.repeat(128))
+    expect(new TextEncoder().encode(worst).length).toBeLessThanOrEqual(MAX_DEAL_ID_BYTES)
+  })
+})
+
+describe('deal ids: format-control characters and Hangul fillers', () => {
+  test.each([
+    ['a soft hyphen', 0x00ad],
+    ['a word joiner', 0x2060],
+    ['an invisible separator', 0x2063],
+    ['a Hangul choseong filler', 0x115f],
+    ['a Hangul jungseong filler', 0x1160],
+    ['a Hangul filler', 0x3164],
+    ['a halfwidth Hangul filler', 0xffa0],
+    ['a tag character', 0xe0041],
+    ['a language tag', 0xe0001],
+  ])('rejects %s', (_name, code) => {
+    expect(dealIdSchema.safeParse(`D${String.fromCodePoint(code)}1`).success).toBe(false)
+  })
+
+  test('accepts homoglyphs, which stay distinct ids', () => {
+    const cyrillicA = String.fromCodePoint(0x0430)
+    expect(dealIdSchema.parse(`${cyrillicA}-1`)).toBe(`${cyrillicA}-1`)
+    expect(dealIdSchema.parse(`${cyrillicA}-1`)).not.toBe(dealIdSchema.parse('a-1'))
+  })
+})
+
+describe('opaque Deal id', () => {
+  test('is deal_ plus 32 hex digits and the Deal and Call carry it', () => {
+    expect(dealRecordIdSchema.safeParse(id('deal')).success).toBe(true)
+    expect(dealRecordIdSchema.safeParse(id('call')).success).toBe(false)
+    expect(dealSchema.safeParse({ ...dealFixture, id: 'D-100' }).success).toBe(false)
+    expect(callSchema.safeParse({ ...call, dealRecordId: 'D-100' }).success).toBe(false)
+  })
+
+  test('no route path carries a customer deal id', () => {
+    for (const [, route] of Object.entries(SALES_HISTORY_ROUTES)) {
+      expect(route.path).not.toContain('{dealId}')
+    }
+    expect(SALES_HISTORY_ROUTES.getDeal.path).toBe('/playbook/deals/{dealRecordId}')
+    expect(SALES_HISTORY_ROUTES.setDealOutcome.path).toBe('/playbook/deals/{dealRecordId}/outcome')
+  })
+
+  test('the Deal list can look a Deal up by its customer deal id, exactly', () => {
+    expect(listDealsQuerySchema.parse({ dealId: ' D-1 ' })).toEqual({ dealId: 'D-1', limit: 25 })
+    expect(listDealsQuerySchema.safeParse({ dealId: '' }).success).toBe(false)
+  })
+
+  test('the queue message names the opaque Deal id, never the customer text', () => {
+    expect(
+      dealOutcomeChangedPayloadSchema.safeParse({ dealId: 'D-1', outcomeSeq: 1 }).success
+    ).toBe(false)
+  })
+})
+
+const dealFixture = {
+  id: id('deal'),
+  dealId: 'D-100',
+  name: null,
+  outcome: 'open',
+  closedAt: null,
+  amount: null,
+  currency: null,
+  callCount: 0,
+  appearedInImport: false,
+  createdAt: NOW,
+  updatedAt: NOW,
+}
+
+describe('dealSchema amount and currency', () => {
+  test('an amount needs a currency, and nothing else is refined', () => {
+    expect(dealSchema.safeParse({ ...dealFixture, amount: '10', currency: null }).success).toBe(
+      false
+    )
+    expect(dealSchema.safeParse({ ...dealFixture, amount: '10', currency: 'EUR' }).success).toBe(
+      true
+    )
+    expect(dealSchema.safeParse({ ...dealFixture, amount: null, currency: 'EUR' }).success).toBe(
+      true
+    )
+    // an open Deal may carry an expected close date from the CRM
+    expect(dealSchema.safeParse({ ...dealFixture, outcome: 'open', closedAt: NOW }).success).toBe(
+      true
+    )
+    expect(dealSchema.safeParse({ ...dealFixture, outcome: 'won', closedAt: null }).success).toBe(
+      true
+    )
+  })
+})
+
+describe('Call search flags', () => {
+  test('inSearch is true only for a ready Call of a won Deal', () => {
+    expect(callSchema.safeParse(call).success).toBe(true)
+    expect(callSchema.safeParse({ ...call, dealOutcome: 'open' }).success).toBe(false)
+    expect(callSchema.safeParse({ ...call, dealOutcome: 'lost' }).success).toBe(false)
+    expect(callSchema.safeParse({ ...call, state: 'processing' }).success).toBe(false)
+    expect(
+      callSchema.safeParse({ ...call, state: 'failed', failureReason: 'no_turns' }).success
+    ).toBe(false)
+  })
+
+  test('inSearch may be false for a ready Call of a won Deal (the re-tag may lag)', () => {
+    expect(callSchema.safeParse({ ...call, inSearch: false }).success).toBe(true)
+    expect(callSchema.safeParse({ ...call, inSearch: false, dealOutcome: 'open' }).success).toBe(
+      true
+    )
+  })
+
+  test('the Call carries the Deal outcome and both flags', () => {
+    expect(callSchema.safeParse({ ...call, dealOutcome: undefined }).success).toBe(false)
+    expect(callSchema.safeParse({ ...call, inSearch: undefined }).success).toBe(false)
+    expect(callSchema.safeParse({ ...call, dealRecordId: undefined }).success).toBe(false)
+  })
+})
+
+describe('CSV cells', () => {
+  const ok = <T>(value: T) => ({ ok: true, value })
+  const bad = { ok: false }
+
+  test('outcome is won, lost or open, case-insensitively after trimming; blank is invalid', () => {
+    expect(parseOutcomeCell(' WON ')).toEqual(ok('won'))
+    expect(parseOutcomeCell('Lost')).toEqual(ok('lost'))
+    expect(parseOutcomeCell('open')).toEqual(ok('open'))
+    for (const cell of ['', '  ', 'closed', 'wonn', 'won lost']) {
+      expect(parseOutcomeCell(cell)).toEqual(bad as never)
+    }
+  })
+
+  test('closed_at is YYYY-MM-DD at 00:00 UTC, or an ISO timestamp with offset; blank is none', () => {
+    expect(parseClosedAtCell('')).toEqual(ok(null))
+    expect(parseClosedAtCell('  ')).toEqual(ok(null))
+    expect(parseClosedAtCell('2026-10-12')).toEqual(ok('2026-10-12T00:00:00.000Z'))
+    expect(parseClosedAtCell(' 2026-02-28 ')).toEqual(ok('2026-02-28T00:00:00.000Z'))
+    expect(parseClosedAtCell('2026-10-12T09:30:00Z')).toEqual(ok('2026-10-12T09:30:00.000Z'))
+    expect(parseClosedAtCell('2026-10-12T11:30:00+02:00')).toEqual(ok('2026-10-12T09:30:00.000Z'))
+    for (const cell of [
+      '2026-02-30',
+      '2026-13-01',
+      '12/10/2026',
+      '2026-10-12T09:30:00',
+      '2026-10-12 09:30',
+      'soon',
+      '2026-1-2',
+    ]) {
+      expect(parseClosedAtCell(cell)).toEqual(bad as never)
+    }
+  })
+
+  test('amount is a non-negative decimal, at most 15 integer digits and 2 fraction digits, no leading zeros', () => {
+    for (const cell of ['0', '0.5', '10', '1250.50', '999999999999999.99', '7.1']) {
+      expect(parseAmountCell(cell)).toEqual(ok(cell))
+    }
+    expect(parseAmountCell('')).toEqual(ok(null))
+    expect(parseAmountCell(' 12.30 ')).toEqual(ok('12.30'))
+    for (const cell of [
+      '-1',
+      '01',
+      '00',
+      '1.234',
+      '1.',
+      '.5',
+      '1,000',
+      '1e3',
+      '$5',
+      '1000000000000000',
+      'NaN',
+      '+5',
+    ]) {
+      expect(parseAmountCell(cell)).toEqual(bad as never)
+    }
+  })
+
+  test('currency is three letters folded to upper case; blank is none', () => {
+    expect(parseCurrencyCell('eur')).toEqual(ok('EUR'))
+    expect(parseCurrencyCell(' Usd ')).toEqual(ok('USD'))
+    expect(parseCurrencyCell('')).toEqual(ok(null))
+    for (const cell of ['EU', 'EURO', '€€€', 'E1R', 'EU R']) {
+      expect(parseCurrencyCell(cell)).toEqual(bad as never)
+    }
+  })
+
+  describe('checkDealImportRow', () => {
+    const row = ['D-1', 'won', '2026-10-12', '100.00', 'eur']
+
+    test('reads a row of five or six cells', () => {
+      expect(checkDealImportRow(row, false)).toEqual({
+        ok: true,
+        row: {
+          dealId: 'D-1',
+          outcome: 'won',
+          closedAt: '2026-10-12T00:00:00.000Z',
+          amount: '100.00',
+          currency: 'EUR',
+          name: null,
+        },
+      })
+      expect(checkDealImportRow([...row, ' Acme '], true)).toMatchObject({
+        ok: true,
+        row: { name: 'Acme' },
+      })
+      expect(checkDealImportRow([...row, '  '], true)).toMatchObject({
+        ok: true,
+        row: { name: null },
+      })
+    })
+
+    test('a won or lost Deal does not need a closing date, and optional cells may be blank', () => {
+      expect(checkDealImportRow(['D-1', 'won', '', '', ''], false)).toEqual({
+        ok: true,
+        row: {
+          dealId: 'D-1',
+          outcome: 'won',
+          closedAt: null,
+          amount: null,
+          currency: null,
+          name: null,
+        },
+      })
+      expect(checkDealImportRow(['D-1', 'open', '', '', 'usd'], false)).toMatchObject({
+        ok: true,
+        row: { currency: 'USD', amount: null },
+      })
+    })
+
+    test.each([
+      ['too few cells', ['D-1', 'won'], false, 'wrong_column_count'],
+      ['a sixth cell without a name column', [...row, 'x'], false, 'wrong_column_count'],
+      ['five cells with a name column', row, true, 'wrong_column_count'],
+      ['a blank deal id', ['  ', 'won', '', '', ''], false, 'invalid_deal_id'],
+      [
+        'a deal id with a control character',
+        [`D${String.fromCharCode(0)}`, 'won', '', '', ''],
+        false,
+        'invalid_deal_id',
+      ],
+      ['a bad outcome', ['D-1', 'maybe', '', '', ''], false, 'invalid_outcome'],
+      ['a bad date', ['D-1', 'won', '2026-02-30', '', ''], false, 'invalid_closed_at'],
+      ['a bad amount', ['D-1', 'won', '', '1.234', 'EUR'], false, 'invalid_amount'],
+      ['an amount without a currency', ['D-1', 'won', '', '5', ''], false, 'invalid_currency'],
+      ['a bad currency', ['D-1', 'won', '', '', 'EURO'], false, 'invalid_currency'],
+      [
+        'a name with a control character',
+        [...row, `a${String.fromCharCode(0)}b`],
+        true,
+        'invalid_name',
+      ],
+      ['a name over 200 units', [...row, 'n'.repeat(201)], true, 'invalid_name'],
+    ])('rejects %s as %s', (_name, cells, hasName, reason) => {
+      expect(checkDealImportRow(cells, hasName)).toEqual({ ok: false, reason } as never)
+    })
+
+    test('reports the first problem in column order', () => {
+      expect(checkDealImportRow(['', 'maybe', 'x', 'x', 'x'], false)).toEqual({
+        ok: false,
+        reason: 'invalid_deal_id',
+      })
+    })
+  })
+
+  describe('parseCsv and record numbers', () => {
+    test('splits quoted cells, escaped quotes and any line ending', () => {
+      expect(parseCsv('a,b\r\n"x,y","he said ""hi"""\n')).toEqual([
+        ['a', 'b'],
+        ['x,y', 'he said "hi"'],
+      ])
+      expect(parseCsv(`${String.fromCharCode(0xfeff)}a\rb`)).toEqual([['a'], ['b']])
+      expect(parseCsv('a,b')).toEqual([['a', 'b']])
+      expect(parseCsv('')).toEqual([])
+    })
+
+    test('an unterminated quote is undefined', () => {
+      expect(parseCsv('a,"b')).toBeUndefined()
+    })
+
+    test('a quoted cell spanning lines is one record, so rowNumber counts records, header first', () => {
+      const text = [
+        'deal_id,outcome,closed_at,amount,currency,name',
+        'D-1,won,2026-10-12,10,EUR,"Acme',
+        'renewal"',
+        'D-2,lost,,,,',
+      ].join('\n')
+      const records = parseCsv(text)
+      expect(records).toHaveLength(4 - 1)
+      expect(records?.[1]?.[5]).toBe('Acme\nrenewal')
+      // header is record 1, so D-1 is rowNumber 2 and D-2 is rowNumber 3 (physical line 4)
+      const rowNumberOf = (index: number) => index + 1
+      expect(records?.[1]?.[0]).toBe('D-1')
+      expect(rowNumberOf(1)).toBe(2)
+      expect(records?.[2]?.[0]).toBe('D-2')
+      expect(rowNumberOf(2)).toBe(3)
+      expect(
+        dealImportRowSchema.safeParse({
+          rowNumber: 3,
+          dealId: 'D-2',
+          result: 'applied',
+          reason: null,
+        }).success
+      ).toBe(true)
+    })
   })
 })

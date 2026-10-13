@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { timestampSchema } from '../core/values'
-import { callIdSchema, userIdSchema } from '../ids'
+import { callIdSchema, dealRecordIdSchema, userIdSchema } from '../ids'
 import { pageQuerySchema, pageSchema } from '../pagination'
 import {
   ACCEPTED_RECORDING_EXTENSIONS,
@@ -18,7 +18,7 @@ import {
   repChoiceSchema,
   speakerLabelSchema,
 } from './call-values'
-import { dealIdSchema } from './deal-values'
+import { dealIdSchema, outcomeSchema } from './deal-values'
 import { documentFileNameSchema, normaliseFileName } from './values'
 
 /**
@@ -34,14 +34,20 @@ import { documentFileNameSchema, normaliseFileName } from './values'
  * Recording); the labels are unique; and a `ready` Call's speaker Rep is one of them. A Call with
  * more speakers than `MAX_CALL_SPEAKERS` fails with `too_many_speakers` and never reaches a
  * response, so a read route cannot throw on it. `durationSeconds` is `null` for a
- * Transcript and until a Recording has been read. Whether the Call is held back from search
- * because its Deal is not won is read from the Deal, not here. The service must send the output of
+ * Transcript and until a Recording has been read. `dealRecordId` is the Deal's opaque id (the one
+ * a Deal's path uses) and `dealOutcome` its Outcome; `inSearch` is true only for a `ready` Call of a
+ * `won` Deal, and may be false for a Call whose Deal has just become won until the re-tag job
+ * finishes (the database decides, the index may lag). `dealId` is the customer's text and is never
+ * logged. The service must send the output of
  * `callSchema.parse(row)`, never the row.
  */
 export const callSchema = z
   .object({
     id: callIdSchema,
     dealId: dealIdSchema,
+    dealRecordId: dealRecordIdSchema,
+    dealOutcome: outcomeSchema,
+    inSearch: z.boolean(),
     kind: callKindSchema,
     fileName: documentFileNameSchema,
     mediaType: callMediaTypeSchema,
@@ -94,6 +100,9 @@ export const callSchema = z
     }
     if (new Set(call.speakerLabels).size !== call.speakerLabels.length) {
       issue('speakerLabels', 'Speaker labels are unique')
+    }
+    if (call.inSearch && (call.state !== 'ready' || call.dealOutcome !== 'won')) {
+      issue('inSearch', 'A Call is in search only when it is ready and its Deal is won')
     }
     if (
       call.state === 'ready' &&

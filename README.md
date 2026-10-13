@@ -93,7 +93,7 @@ builds its document from these).
   `Idempotency-Key` header. Services call `checkUploadFile(file)` on what they read off the part: it runs the size check (`document.too_large`), then the type check on the stored name (`document.unsupported_type`), then the shape (`request.invalid`) and returns the parsed file or the code. `documentSizeCheckSchema`, `documentTypeCheckSchema` and `uploadDocumentFileSchema` are the steps it uses. The extension and `mediaType` of a document are not checked against each other: that is the service's job. The page limit is not an error: a document over it ends `failed` with `failureReason: too_many_pages`. `normaliseMediaType` lower-cases a media type and drops its parameters.
   A new document answers 201; a duplicate of existing content answers 200 with the stored document (a `deleted` match is restored, a `failed` match is re-queued). Delete and restore are idempotent by end state. `DOCUMENT_DELETED_MESSAGE` carries `deletionSeq` (1 to `MAX_DELETION_SEQ`, a Postgres `integer`), which the service bumps on each state-changing delete (a repeated delete does not bump it or publish again); it is not on the public document.
 - **File names** (`documentFileNameSchema`) have control and bidirectional characters stripped, are
-  1 to 255 UTF-16 code units, hold no `/` or `\` and need a visible stem; they are display text, never a storage key.
+  1 to 255 Unicode code points, hold no `/` or `\` and need a visible stem; they are display text, never a storage key.
 - **Limits** are exported constants, each saying whether the owner chose it or it is a default.
 - **Messages** `DOCUMENT_UPLOADED_MESSAGE` and `DOCUMENT_DELETED_MESSAGE` are `{ type, version, scope,
   payload }`, the pieces of the kit's `defineMessage`.
@@ -115,8 +115,27 @@ Additive; the 0.7.0 types are unchanged (`PlaybookRoute`, `PLAYBOOK_ROUTES` and 
   which suits. Upload text fields are `uploadCallFieldsSchema`; `rep` is JSON text, read with `parseRepField(text)`, which answers `{ ok: true, rep }` (`rep` is `null` when the field was not sent) or `{ ok: false, code: 'call.rep_invalid' }` for a present field that is empty, too long or invalid. `repChangeAllowed(state, failureReason)` says when a Rep may be changed.
 - **Helpers** (call these, not the pieces): `checkCallFile(file)` (size, type, shape; kind from the
   extension), `checkDealImportHeader(firstLine)`, `normaliseDealId`, `normaliseSpeakerLabel`.
-- **Deal ids** (`dealIdSchema`): trimmed, otherwise exact and case-sensitive, 1 to 128 UTF-16 code
-  units, rejected (not stripped) if they hold a control, direction, line-separator or zero-width character.
+- **Deal ids** (`dealIdSchema`) are the customer's text: trimmed, otherwise exact and case-sensitive, 1 to
+  128 Unicode code points, rejected (not stripped) if they hold a control, direction or Unicode
+  format character (category Cf, so no soft hyphen, zero-width, word joiner or tag character), a line
+  or paragraph separator or a Hangul filler; homoglyphs stay accepted. They may hold a name and are
+  never logged, and never travel in a URL path: a Deal's path id is the opaque `deal_…` id
+  (`dealRecordIdSchema`, field `id`; Calls carry it as `dealRecordId`, and the queue message names it).
+  Look a Deal up by the customer's id with the `dealId` filter of the Deal list.
+- **Lengths** count Unicode code points (Zod's count, the same as a Postgres `varchar(n)`); a column
+  must allow `MAX_UTF8_BYTES_PER_CODE_POINT` (4) bytes for each: `MAX_DEAL_ID_BYTES`,
+  `MAX_DEAL_NAME_BYTES`, `MAX_SPEAKER_LABEL_BYTES`, `MAX_DOCUMENT_FILE_NAME_BYTES`.
+- **CSV cells**: split text with `parseCsv` (quoted cells may hold commas and line breaks; the header
+  is record 1, and `rowNumber` is the record number, so a quoted cell spanning lines is one record),
+  check the header with `checkDealImportHeader`, then each record with `checkDealImportRow(cells,
+  hasName)`, which uses `parseOutcomeCell` (`won`/`lost`/`open`, any case, trimmed), `parseClosedAtCell`
+  (`YYYY-MM-DD` as that day 00:00 UTC, or an ISO timestamp with offset; blank is none; `won` and `lost`
+  do not need it), `parseAmountCell` (non-negative decimal, at most 15 integer and 2 fraction digits, up
+  to 999999999999999.99, no leading zeros beyond one `0`; blank is none) and `parseCurrencyCell` (three
+  letters, folded to upper case; required when an amount is present). Example: a record
+  `D-1,won,2026-10-12,10,EUR,"Acme` then `renewal"` is one record, row 2.
+- **Search flags**: a Call carries `dealOutcome` and `inSearch` (true only when `ready` and the Deal
+  is won; it may lag for a Deal that has just become won).
 - **Rights**: `rightsStatusSchema`, `confirmRightsRequestSchema`; `rights.confirmation_required` (403)
   carries `rightsRequiredDetailsSchema` in `details` with the wording version to show.
 - **Limits and defaults** are exported constants, each saying whether it is the owner's or a default:

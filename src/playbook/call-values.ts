@@ -1,5 +1,10 @@
 import { z } from 'zod'
-import { hasStrippableCharacter, isWellFormedText, normaliseFileName } from './values'
+import {
+  hasStrippableCharacter,
+  isWellFormedText,
+  MAX_UTF8_BYTES_PER_CODE_POINT,
+  normaliseFileName,
+} from './values'
 
 /**
  * The states a Call is in (ADR 0018, with ADR 0016). A Transcript goes `uploaded`, `processing`,
@@ -128,7 +133,7 @@ export const INCOMPLETE_UPLOAD_PARTS_TTL_HOURS = 24
 /** The ticket's default (ADR 0018 leaves it open): the most Rep turns stored after a Moment (choice 11). */
 export const MAX_REP_FOLLOWING_TURNS = 5
 
-/** The ticket's default (ADR 0018 leaves it open): the most characters (UTF-16 code units) of Rep turns stored after a Moment, so a long turn cannot make it unbounded. */
+/** The ticket's default (ADR 0018 leaves it open): the most characters (Unicode code points) of Rep turns stored after a Moment, so a long turn cannot make it unbounded. */
 export const MAX_REP_FOLLOWING_CHARACTERS = 4000
 
 /** The ticket's default (ADR 0018 leaves it open): Calls an Organization may hold, soft-deleted and `awaiting_rep` ones included until purged. */
@@ -143,8 +148,11 @@ export const DEFAULT_MAX_DEALS = 20_000
 /** The ticket's default (ADR 0018 leaves it open): the most speakers a Call may have and list for a Rep pick; a Call with more fails with `too_many_speakers`. */
 export const MAX_CALL_SPEAKERS = 20
 
-/** The longest speaker label, in UTF-16 code units, once control and direction characters are stripped. */
+/** The longest speaker label, in Unicode code points, once control and direction characters are stripped. */
 export const MAX_SPEAKER_LABEL_LENGTH = 64
+
+/** The most UTF-8 bytes a stored speaker label can take: 64 code points at 4 bytes each. A column must allow this many bytes. */
+export const MAX_SPEAKER_LABEL_BYTES = MAX_SPEAKER_LABEL_LENGTH * MAX_UTF8_BYTES_PER_CODE_POINT
 
 /** The stored form of a speaker label: control and bidirectional characters removed, then trimmed. Labels read from a file and labels in a request must both pass through this. */
 export function normaliseSpeakerLabel(label: string): string {
@@ -152,9 +160,9 @@ export function normaliseSpeakerLabel(label: string): string {
 }
 
 /**
- * A speaker label, in a request and in a response: at most 1000 raw characters, then control and
- * bidirectional characters are removed and the rest trimmed to 1 to 64 well-formed UTF-16 code
- * units. It is text taken from a file (`Alice`, or `A` from the transcriber), so display code must
+ * A speaker label, in a request and in a response: at most 1000 raw Unicode code points, then control and
+ * bidirectional characters are removed and the rest trimmed to 1 to 64 well-formed Unicode code
+ * points (at most `MAX_SPEAKER_LABEL_BYTES` bytes in UTF-8). It is text taken from a file (`Alice`, or `A` from the transcriber), so display code must
  * treat it as untrusted text, and it never appears in an error body. It is compared exactly and
  * case-sensitively with the labels in the file.
  */

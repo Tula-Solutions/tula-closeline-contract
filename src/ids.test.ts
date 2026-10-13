@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import {
   callIdSchema,
   dealImportIdSchema,
+  dealRecordIdSchema,
   documentIdSchema,
   eventIdSchema,
   formatId,
@@ -26,6 +27,7 @@ const schemas = [
   ['prs', prospectIdSchema],
   ['doc', documentIdSchema],
   ['call', callIdSchema],
+  ['deal', dealRecordIdSchema],
   ['dimp', dealImportIdSchema],
   ['evt', eventIdSchema],
   ['req', requestIdSchema],

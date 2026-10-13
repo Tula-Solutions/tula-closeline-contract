@@ -147,22 +147,22 @@ export const SALES_HISTORY_ROUTES: Readonly<Record<SalesHistoryRouteName, SalesH
       errors: [],
       commonErrors: ['request.invalid'],
       description:
-        "Lists the Organization's Deals, newest first (sorted by createdAt, then dealId, both descending), one cursor-paginated page at a time (at most 100). Owner and Admin only. outcome limits the list to one Outcome and appearedInImport=false lists the Deals that have Calls but never appeared in a CSV, so a mistyped deal id is visible.",
+        "Lists the Organization's Deals, newest first (sorted by createdAt, then dealId, both descending), one cursor-paginated page at a time (at most 100). Owner and Admin only. outcome limits the list to one Outcome, dealId finds the Deal with that customer deal id (exact after trimming) and appearedInImport=false lists the Deals that have Calls but never appeared in a CSV, so a mistyped deal id is visible.",
     }),
     getDeal: route({
       method: 'GET',
-      path: '/playbook/deals/{dealId}',
+      path: '/playbook/deals/{dealRecordId}',
       internal: false,
       roles: SALES_HISTORY_READ_ROLES,
       success: [200],
       errors: ['deal.not_found'],
       commonErrors: ['request.invalid'],
       description:
-        'Reads one Deal by its deal id (trimmed, otherwise exact and case-sensitive). Owner and Admin only. A Deal cannot be deleted on its own.',
+        "Reads one Deal by its opaque id (the deal_ id from a list, never the customer's deal id, which is looked up with the dealId filter of the list). Owner and Admin only. A Deal cannot be deleted on its own.",
     }),
     setDealOutcome: route({
       method: 'PUT',
-      path: '/playbook/deals/{dealId}/outcome',
+      path: '/playbook/deals/{dealRecordId}/outcome',
       internal: false,
       roles: PLAYBOOK_WRITE_ROLES,
       success: [200],

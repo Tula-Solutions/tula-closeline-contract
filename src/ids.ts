@@ -30,6 +30,8 @@ export const invitationIdSchema = idSchema('inv')
 export const prospectIdSchema = idSchema('prs')
 /** The id of a Playbook document (`doc_…`). */
 export const documentIdSchema = idSchema('doc')
+/** The opaque id of a Deal record (`deal_…`), used in every URL path; the customer's own deal id never travels in a path. */
+export const dealRecordIdSchema = idSchema('deal')
 /** The id of a Call (`call_…`). */
 export const callIdSchema = idSchema('call')
 /** The id of a Deal import (`dimp_…`). */
@@ -53,6 +55,8 @@ export type InvitationId = z.infer<typeof invitationIdSchema>
 export type ProspectId = z.infer<typeof prospectIdSchema>
 /** The id of a Playbook document. */
 export type DocumentId = z.infer<typeof documentIdSchema>
+/** The opaque id of a Deal record. */
+export type DealRecordId = z.infer<typeof dealRecordIdSchema>
 /** The id of a Call. */
 export type CallId = z.infer<typeof callIdSchema>
 /** The id of a Deal import. */

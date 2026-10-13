@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { timestampSchema } from '../core/values'
-import { dealImportIdSchema, userIdSchema } from '../ids'
+import { dealImportIdSchema, dealRecordIdSchema, userIdSchema } from '../ids'
 import { pageQuerySchema, pageSchema } from '../pagination'
 import {
   dealAmountSchema,
@@ -16,43 +16,53 @@ import {
 } from './deal-values'
 
 /**
- * A Deal as the service returns it. A Deal is named by the Organization's own `dealId` and is
- * never deleted on its own in phase 1. `closedAt`, `amount`, `currency` and `name` are `null`
+ * A Deal as the service returns it. A Deal is named by the Organization's own `dealId` (customer
+ * text, never logged, never in a URL path) and addressed by its opaque `id` (`deal_…`). It is never
+ * deleted on its own in phase 1. An `open` Deal may carry a `closedAt`, an expected close date from
+ * a CRM; an `amount` always comes with a `currency`. `closedAt`, `amount`, `currency` and `name` are `null`
  * until given. `callCount` counts Calls that are not deleted. `appearedInImport` is false for a
  * Deal created by a Call upload that no CSV has named, so the portal can list likely typos. The
  * Outcome sequence the re-tag job uses is not here. The service must send the output of
  * `dealSchema.parse(row)`.
  */
-export const dealSchema = z.object({
-  dealId: dealIdSchema,
-  name: dealNameSchema.nullable(),
-  outcome: outcomeSchema,
-  closedAt: timestampSchema.nullable(),
-  amount: dealAmountSchema.nullable(),
-  currency: dealCurrencySchema.nullable(),
-  callCount: z.number().int().min(0),
-  appearedInImport: z.boolean(),
-  createdAt: timestampSchema,
-  updatedAt: timestampSchema,
-})
+export const dealSchema = z
+  .object({
+    id: dealRecordIdSchema,
+    dealId: dealIdSchema,
+    name: dealNameSchema.nullable(),
+    outcome: outcomeSchema,
+    closedAt: timestampSchema.nullable(),
+    amount: dealAmountSchema.nullable(),
+    currency: dealCurrencySchema.nullable(),
+    callCount: z.number().int().min(0),
+    appearedInImport: z.boolean(),
+    createdAt: timestampSchema,
+    updatedAt: timestampSchema,
+  })
+  .refine((deal) => deal.amount === null || deal.currency !== null, {
+    message: 'An amount comes with a currency',
+    path: ['currency'],
+  })
 
 /** A Deal as the service returns it. */
 export type Deal = z.infer<typeof dealSchema>
 
-/** The path parameters of a request about one Deal; the deal id is trimmed and otherwise exact. */
-export const dealParamsSchema = z.strictObject({ dealId: dealIdSchema })
+/** The path parameters of a request about one Deal: its opaque id, never the customer's deal id. */
+export const dealParamsSchema = z.strictObject({ dealRecordId: dealRecordIdSchema })
 
 /** The path parameters of a request about one Deal. */
 export type DealParams = z.infer<typeof dealParamsSchema>
 
 /**
- * The query parameters of a request to list Deals: a page, and optionally one `outcome` and
- * `appearedInImport` (`true` or `false`). `appearedInImport=false` lists the Deals that have Calls
+ * The query parameters of a request to list Deals: a page, and optionally one `outcome`, one
+ * `dealId` (the customer's id, matched exactly after the trim, which is how a Deal is found by it)
+ * and `appearedInImport` (`true` or `false`). `appearedInImport=false` lists the Deals that have Calls
  * but never appeared in a CSV. An unknown parameter is rejected.
  */
 export const listDealsQuerySchema = pageQuerySchema
   .extend({
     outcome: outcomeSchema.optional(),
+    dealId: dealIdSchema.optional(),
     appearedInImport: z
       .enum(['true', 'false'])
       .transform((value) => value === 'true')
@@ -158,7 +168,9 @@ export const listDealImportsResponseSchema = pageSchema(dealImportSchema)
 export type ListDealImportsResponse = z.infer<typeof listDealImportsResponseSchema>
 
 /**
- * One row of an import report: the CSV `rowNumber` (the header is row 1, the first data row 2),
+ * One row of an import report: the CSV `rowNumber`, the record number with the header as record 1
+ * (so the first data row is 2). A quoted cell that spans lines is one record, so `rowNumber` can
+ * differ from the physical line (see `parseCsv`),
  * the `dealId` (the one free-text cell echoed; `null` when the cell was missing or not a valid deal
  * id, so a bad cell is never echoed), the `result` and, for a rejected row, the `reason`. `reason`
  * is `null` exactly when the result is `applied`. No other cell is ever part of a report.

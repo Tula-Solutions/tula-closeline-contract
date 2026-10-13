@@ -1,6 +1,5 @@
 import { z } from 'zod'
-import { callIdSchema, dealImportIdSchema } from '../ids'
-import { dealIdSchema } from './deal-values'
+import { callIdSchema, dealImportIdSchema, dealRecordIdSchema } from '../ids'
 import { MAX_DELETION_SEQ } from './messages'
 
 /*
@@ -78,9 +77,9 @@ export const CALL_DELETED_MESSAGE = {
   payload: callDeletedPayloadSchema,
 } as const
 
-/** The payload of {@link DEAL_OUTCOME_CHANGED_MESSAGE}: the Deal's own id and its `outcomeSeq`. */
+/** The payload of {@link DEAL_OUTCOME_CHANGED_MESSAGE}: the Deal's opaque id (never the customer's text) and its `outcomeSeq`. */
 export const dealOutcomeChangedPayloadSchema = z.strictObject({
-  dealId: dealIdSchema,
+  dealRecordId: dealRecordIdSchema,
   outcomeSeq: seqSchema,
 })
 

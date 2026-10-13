@@ -186,6 +186,7 @@ var teamIdSchema = idSchema("team");
 var invitationIdSchema = idSchema("inv");
 var prospectIdSchema = idSchema("prs");
 var documentIdSchema = idSchema("doc");
+var dealRecordIdSchema = idSchema("deal");
 var callIdSchema = idSchema("call");
 var dealImportIdSchema = idSchema("dimp");
 var eventIdSchema = idSchema("evt");
@@ -743,21 +744,21 @@ var SALES_HISTORY_ROUTES = Object.freeze({
     success: [200],
     errors: [],
     commonErrors: ["request.invalid"],
-    description: "Lists the Organization's Deals, newest first (sorted by createdAt, then dealId, both descending), one cursor-paginated page at a time (at most 100). Owner and Admin only. outcome limits the list to one Outcome and appearedInImport=false lists the Deals that have Calls but never appeared in a CSV, so a mistyped deal id is visible."
+    description: "Lists the Organization's Deals, newest first (sorted by createdAt, then dealId, both descending), one cursor-paginated page at a time (at most 100). Owner and Admin only. outcome limits the list to one Outcome, dealId finds the Deal with that customer deal id (exact after trimming) and appearedInImport=false lists the Deals that have Calls but never appeared in a CSV, so a mistyped deal id is visible."
   }),
   getDeal: route2({
     method: "GET",
-    path: "/playbook/deals/{dealId}",
+    path: "/playbook/deals/{dealRecordId}",
     internal: false,
     roles: SALES_HISTORY_READ_ROLES,
     success: [200],
     errors: ["deal.not_found"],
     commonErrors: ["request.invalid"],
-    description: "Reads one Deal by its deal id (trimmed, otherwise exact and case-sensitive). Owner and Admin only. A Deal cannot be deleted on its own."
+    description: "Reads one Deal by its opaque id (the deal_ id from a list, never the customer's deal id, which is looked up with the dealId filter of the list). Owner and Admin only. A Deal cannot be deleted on its own."
   }),
   setDealOutcome: route2({
     method: "PUT",
-    path: "/playbook/deals/{dealId}/outcome",
+    path: "/playbook/deals/{dealRecordId}/outcome",
     internal: false,
     roles: PLAYBOOK_WRITE_ROLES,
     success: [200],
@@ -873,8 +874,10 @@ var MAX_DOCUMENT_PAGES = 300;
 var DOCUMENT_RETENTION_DAYS = 30;
 var DEFAULT_MAX_DOCUMENTS = 500;
 var DEFAULT_MAX_DOCUMENT_BYTES_TOTAL = 2 * 1024 * 1024 * 1024;
+var MAX_UTF8_BYTES_PER_CODE_POINT = 4;
 var MAX_DOCUMENT_FILE_NAME_LENGTH = 255;
 var MAX_RAW_FILE_NAME_LENGTH = 1000;
+var MAX_DOCUMENT_FILE_NAME_BYTES = MAX_DOCUMENT_FILE_NAME_LENGTH * MAX_UTF8_BYTES_PER_CODE_POINT;
 function isStripped(code) {
   return code <= 31 || code >= 127 && code <= 159 || code === 1564 || code === 8206 || code === 8207 || code >= 8234 && code <= 8238 || code >= 8294 && code <= 8297;
 }
@@ -1004,6 +1007,7 @@ var DEFAULT_MAX_RECORDING_BYTES_TOTAL = 50 * 1024 * 1024 * 1024;
 var DEFAULT_MAX_DEALS = 20000;
 var MAX_CALL_SPEAKERS = 20;
 var MAX_SPEAKER_LABEL_LENGTH = 64;
+var MAX_SPEAKER_LABEL_BYTES = MAX_SPEAKER_LABEL_LENGTH * MAX_UTF8_BYTES_PER_CODE_POINT;
 function normaliseSpeakerLabel(label) {
   return normaliseFileName(label);
 }
@@ -1036,12 +1040,17 @@ var OUTCOMES = ["won", "lost", "open"];
 var outcomeSchema = z17.enum(OUTCOMES);
 var MAX_DEAL_ID_LENGTH = 128;
 var MAX_RAW_DEAL_ID_LENGTH = 1000;
-function isInvisibleIdentifierCharacter(code) {
-  return code === 8232 || code === 8233 || code >= 8203 && code <= 8205 || code === 8288 || code === 65279;
+var MAX_DEAL_ID_BYTES = MAX_DEAL_ID_LENGTH * MAX_UTF8_BYTES_PER_CODE_POINT;
+function isHangulFiller(codePoint) {
+  return codePoint === 4447 || codePoint === 4448 || codePoint === 12644 || codePoint === 65440;
 }
 function hasInvisibleCharacter(text) {
-  for (let index = 0;index < text.length; index += 1) {
-    if (isInvisibleIdentifierCharacter(text.charCodeAt(index))) {
+  if (/\p{Cf}/u.test(text)) {
+    return true;
+  }
+  for (const character of text) {
+    const codePoint = character.codePointAt(0) ?? 0;
+    if (codePoint === 8232 || codePoint === 8233 || isHangulFiller(codePoint)) {
       return true;
     }
   }
@@ -1052,8 +1061,9 @@ function normaliseDealId(dealId) {
 }
 var dealIdSchema = z17.string().max(MAX_RAW_DEAL_ID_LENGTH).transform(normaliseDealId).pipe(z17.string().min(1).max(MAX_DEAL_ID_LENGTH).refine(isWellFormedText, "Well-formed text only").refine((id) => !hasStrippableCharacter(id), "No control or direction characters").refine((id) => !hasInvisibleCharacter(id), "No invisible characters"));
 var MAX_DEAL_NAME_LENGTH = 200;
+var MAX_DEAL_NAME_BYTES = MAX_DEAL_NAME_LENGTH * MAX_UTF8_BYTES_PER_CODE_POINT;
 var dealNameSchema = z17.string().max(1000).trim().pipe(z17.string().min(1).max(MAX_DEAL_NAME_LENGTH).refine(isWellFormedText, "Well-formed text only").refine((name) => !hasStrippableCharacter(name), "No control or direction characters"));
-var dealAmountSchema = z17.string().regex(/^\d{1,15}(\.\d{1,2})?$/);
+var dealAmountSchema = z17.string().regex(/^(0|[1-9]\d{0,14})(\.\d{1,2})?$/);
 var dealCurrencySchema = z17.string().regex(/^[A-Z]{3}$/);
 var MAX_DEAL_IMPORT_BYTES = 10 * 1024 * 1024;
 var MAX_DEAL_IMPORT_ROWS = 50000;
@@ -1126,11 +1136,153 @@ var DEAL_IMPORT_ROW_REASONS = [
   "deal_limit_reached"
 ];
 var dealImportRowReasonSchema = z17.enum(DEAL_IMPORT_ROW_REASONS);
+var INVALID_CELL = { ok: false };
+function parseOutcomeCell(cell) {
+  const result = outcomeSchema.safeParse(cell.trim().toLowerCase());
+  return result.success ? { ok: true, value: result.data } : INVALID_CELL;
+}
+function parseClosedAtCell(cell) {
+  const text = cell.trim();
+  if (text === "") {
+    return { ok: true, value: null };
+  }
+  const date = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+  if (date) {
+    const [year, month, day] = [Number(date[1]), Number(date[2]), Number(date[3])];
+    const parsed = new Date(Date.UTC(year, month - 1, day));
+    const real = parsed.getUTCFullYear() === year && parsed.getUTCMonth() === month - 1 && parsed.getUTCDate() === day;
+    return real ? { ok: true, value: `${text}T00:00:00.000Z` } : INVALID_CELL;
+  }
+  if (!z17.iso.datetime({ offset: true }).max(64).safeParse(text).success) {
+    return INVALID_CELL;
+  }
+  const time = new Date(text);
+  return Number.isNaN(time.getTime()) ? INVALID_CELL : { ok: true, value: time.toISOString() };
+}
+function parseAmountCell(cell) {
+  const text = cell.trim();
+  if (text === "") {
+    return { ok: true, value: null };
+  }
+  return dealAmountSchema.safeParse(text).success ? { ok: true, value: text } : INVALID_CELL;
+}
+function parseCurrencyCell(cell) {
+  const text = cell.trim();
+  if (text === "") {
+    return { ok: true, value: null };
+  }
+  const result = dealCurrencySchema.safeParse(text.toUpperCase());
+  return result.success && /^[A-Za-z]{3}$/.test(text) ? { ok: true, value: result.data } : INVALID_CELL;
+}
+function checkDealImportRow(cells, hasName) {
+  const reject = (reason) => ({ ok: false, reason });
+  if (cells.length !== DEAL_IMPORT_REQUIRED_COLUMNS.length + (hasName ? 1 : 0)) {
+    return reject("wrong_column_count");
+  }
+  const [dealCell = "", outcomeCell = "", closedCell = "", amountCell = "", currencyCell = ""] = cells;
+  const dealId = dealIdSchema.safeParse(dealCell);
+  if (!dealId.success) {
+    return reject("invalid_deal_id");
+  }
+  const outcome = parseOutcomeCell(outcomeCell);
+  if (!outcome.ok) {
+    return reject("invalid_outcome");
+  }
+  const closedAt = parseClosedAtCell(closedCell);
+  if (!closedAt.ok) {
+    return reject("invalid_closed_at");
+  }
+  const amount = parseAmountCell(amountCell);
+  if (!amount.ok) {
+    return reject("invalid_amount");
+  }
+  const currency = parseCurrencyCell(currencyCell);
+  if (!currency.ok || amount.value !== null && currency.value === null) {
+    return reject("invalid_currency");
+  }
+  let name = null;
+  const nameCell = (cells[DEAL_IMPORT_REQUIRED_COLUMNS.length] ?? "").trim();
+  if (hasName && nameCell !== "") {
+    const parsed = dealNameSchema.safeParse(nameCell);
+    if (!parsed.success) {
+      return reject("invalid_name");
+    }
+    name = parsed.data;
+  }
+  return {
+    ok: true,
+    row: {
+      dealId: dealId.data,
+      outcome: outcome.value,
+      closedAt: closedAt.value,
+      amount: amount.value,
+      currency: currency.value,
+      name
+    }
+  };
+}
+function parseCsv(text) {
+  const source = text.startsWith("\uFEFF") ? text.slice(1) : text;
+  const records = [];
+  let record = [];
+  let cell = "";
+  let quoted = false;
+  let touched = false;
+  for (let index = 0;index < source.length; index += 1) {
+    const char = source.charAt(index);
+    if (quoted) {
+      if (char === '"') {
+        if (source.charAt(index + 1) === '"') {
+          cell += '"';
+          index += 1;
+        } else {
+          quoted = false;
+        }
+      } else {
+        cell += char;
+      }
+      continue;
+    }
+    if (char === '"' && cell === "") {
+      quoted = true;
+      touched = true;
+    } else if (char === ",") {
+      record.push(cell);
+      cell = "";
+      touched = true;
+    } else if (char === `
+` || char === "\r") {
+      if (char === "\r" && source.charAt(index + 1) === `
+`) {
+        index += 1;
+      }
+      record.push(cell);
+      records.push(record);
+      record = [];
+      cell = "";
+      touched = false;
+    } else {
+      cell += char;
+      touched = true;
+    }
+  }
+  if (quoted) {
+    return;
+  }
+  if (touched || cell !== "") {
+    record.push(cell);
+    records.push(record);
+  }
+  return records;
+}
 
 // src/playbook/call.ts
 var callSchema = z18.object({
   id: callIdSchema,
   dealId: dealIdSchema,
+  dealRecordId: dealRecordIdSchema,
+  dealOutcome: outcomeSchema,
+  inSearch: z18.boolean(),
   kind: callKindSchema,
   fileName: documentFileNameSchema,
   mediaType: callMediaTypeSchema,
@@ -1174,6 +1326,9 @@ var callSchema = z18.object({
   }
   if (new Set(call.speakerLabels).size !== call.speakerLabels.length) {
     issue("speakerLabels", "Speaker labels are unique");
+  }
+  if (call.inSearch && (call.state !== "ready" || call.dealOutcome !== "won")) {
+    issue("inSearch", "A Call is in search only when it is ready and its Deal is won");
   }
   if (call.state === "ready" && call.rep?.by === "speaker" && !call.speakerLabels.includes(call.rep.label)) {
     issue("rep", "A ready Call's Rep label is among its speakers");
@@ -1253,6 +1408,7 @@ function checkCallFile(input) {
 // src/playbook/deal.ts
 import { z as z19 } from "zod";
 var dealSchema = z19.object({
+  id: dealRecordIdSchema,
   dealId: dealIdSchema,
   name: dealNameSchema.nullable(),
   outcome: outcomeSchema,
@@ -1263,10 +1419,14 @@ var dealSchema = z19.object({
   appearedInImport: z19.boolean(),
   createdAt: timestampSchema,
   updatedAt: timestampSchema
+}).refine((deal) => deal.amount === null || deal.currency !== null, {
+  message: "An amount comes with a currency",
+  path: ["currency"]
 });
-var dealParamsSchema = z19.strictObject({ dealId: dealIdSchema });
+var dealParamsSchema = z19.strictObject({ dealRecordId: dealRecordIdSchema });
 var listDealsQuerySchema = pageQuerySchema.extend({
   outcome: outcomeSchema.optional(),
+  dealId: dealIdSchema.optional(),
   appearedInImport: z19.enum(["true", "false"]).transform((value) => value === "true").optional()
 }).strict();
 var listDealsResponseSchema = pageSchema(dealSchema);
@@ -1478,7 +1638,7 @@ var CALL_DELETED_MESSAGE = {
   payload: callDeletedPayloadSchema
 };
 var dealOutcomeChangedPayloadSchema = z22.strictObject({
-  dealId: dealIdSchema,
+  dealRecordId: dealRecordIdSchema,
   outcomeSeq: seqSchema
 });
 var DEAL_OUTCOME_CHANGED_MESSAGE = {
@@ -1544,13 +1704,16 @@ export {
   INVITATION_STATES,
   MAX_CALL_SPEAKERS,
   MAX_CURSOR_LENGTH,
+  MAX_DEAL_ID_BYTES,
   MAX_DEAL_ID_LENGTH,
   MAX_DEAL_IMPORT_BYTES,
   MAX_DEAL_IMPORT_HEADER_LENGTH,
   MAX_DEAL_IMPORT_ROWS,
+  MAX_DEAL_NAME_BYTES,
   MAX_DEAL_NAME_LENGTH,
   MAX_DELETION_SEQ,
   MAX_DOCUMENT_BYTES,
+  MAX_DOCUMENT_FILE_NAME_BYTES,
   MAX_DOCUMENT_FILE_NAME_LENGTH,
   MAX_DOCUMENT_PAGES,
   MAX_EMAIL_LENGTH,
@@ -1564,8 +1727,10 @@ export {
   MAX_REP_FOLLOWING_TURNS,
   MAX_RIGHTS_WORDING_VERSION,
   MAX_SEQ,
+  MAX_SPEAKER_LABEL_BYTES,
   MAX_SPEAKER_LABEL_LENGTH,
   MAX_TRANSCRIPT_BYTES,
+  MAX_UTF8_BYTES_PER_CODE_POINT,
   MEDIA_TYPE_BY_CALL_EXTENSION,
   MEDIA_TYPE_BY_EXTENSION,
   ORGANIZATION_STATUSES,
@@ -1599,6 +1764,7 @@ export {
   changeMemberRoleRequestSchema,
   checkCallFile,
   checkDealImportHeader,
+  checkDealImportRow,
   checkUploadFile,
   confirmRightsRequestSchema,
   createInvitationRequestSchema,
@@ -1618,6 +1784,7 @@ export {
   dealNameSchema,
   dealOutcomeChangedPayloadSchema,
   dealParamsSchema,
+  dealRecordIdSchema,
   dealSchema,
   decodeCursor,
   defineErrors,
@@ -1698,6 +1865,11 @@ export {
   outcomeSchema,
   pageQuerySchema,
   pageSchema,
+  parseAmountCell,
+  parseClosedAtCell,
+  parseCsv,
+  parseCurrencyCell,
+  parseOutcomeCell,
   parseRepField,
   personNameSchema,
   prospectIdSchema,
