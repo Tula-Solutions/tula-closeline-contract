@@ -79,11 +79,24 @@ export const DEFAULT_MAX_DOCUMENTS = 500
 /** The lead's default (ADR 0016), not the owner's: bytes an Organization may hold, 2 GB counted as 2 * 1024^3. */
 export const DEFAULT_MAX_DOCUMENT_BYTES_TOTAL = 2 * 1024 * 1024 * 1024
 
-/** The longest file name, in characters, once control and direction characters are stripped. */
+/**
+ * How lengths are counted in this area: in Unicode code points, as Zod's string `min` and `max`
+ * count them, so an astral-plane character counts as 1 (not 2 as JavaScript's `.length` has it). A
+ * database `varchar(n)` or `char_length` check counts code points too, so the column limit is the
+ * same number; a column must also allow {@link MAX_UTF8_BYTES_PER_CODE_POINT} bytes per code point
+ * (the most UTF-8 takes), such as `MAX_DOCUMENT_FILE_NAME_BYTES`.
+ */
+export const MAX_UTF8_BYTES_PER_CODE_POINT = 4
+
+/** The longest file name, in Unicode code points, once control and direction characters are stripped. */
 export const MAX_DOCUMENT_FILE_NAME_LENGTH = 255
 
-/** The most raw characters a file name may carry before stripping and trimming. */
+/** The most raw Unicode code points a file name may carry before stripping and trimming. */
 const MAX_RAW_FILE_NAME_LENGTH = 1000
+
+/** The most UTF-8 bytes a stored file name can take: 255 code points at 4 bytes each. A column must allow this many bytes. */
+export const MAX_DOCUMENT_FILE_NAME_BYTES =
+  MAX_DOCUMENT_FILE_NAME_LENGTH * MAX_UTF8_BYTES_PER_CODE_POINT
 
 /** Whether a code unit is a control character (C0, DEL, C1) or a bidirectional mark, embedding, override or isolate. */
 function isStripped(code: number): boolean {
@@ -146,9 +159,9 @@ function hasStem(name: string): boolean {
 }
 
 /**
- * A document's file name, in a request and in a response: at most 1000 raw UTF-16 code units,
+ * A document's file name, in a request and in a response: at most 1000 raw Unicode code points,
  * then control and bidirectional characters are removed (not rejected) and the rest is trimmed to
- * 1 to 255 well-formed UTF-16 code units with no `/` or `\` and a visible stem before the last
+ * 1 to 255 well-formed Unicode code points with no `/` or `\` and a visible stem before the last
  * dot (`.pdf`, or an invisible character plus `.pdf`, is rejected). It does not check the
  * extension: that is {@link documentTypeCheckSchema}, which has its own error code. Parsing a
  * stored name yields a safe one. The name is for display only and is never a storage key or a
@@ -198,4 +211,19 @@ export const documentSizeCheckSchema = z.number().max(MAX_DOCUMENT_BYTES)
 /** Lower-cases a media type and drops its parameters, so `Text/Plain; charset=utf-8` becomes `text/plain`. */
 export function normaliseMediaType(mediaType: string): string {
   return (mediaType.split(';')[0] ?? '').trim().toLowerCase()
+}
+
+/** Whether text holds a control or bidirectional character (the ones a file name has stripped), so an identifier can refuse it. */
+export function hasStrippableCharacter(text: string): boolean {
+  for (let index = 0; index < text.length; index += 1) {
+    if (isStripped(text.charCodeAt(index))) {
+      return true
+    }
+  }
+  return false
+}
+
+/** Whether text is well-formed UTF-16: no lone surrogate. */
+export function isWellFormedText(text: string): boolean {
+  return isWellFormed(text)
 }

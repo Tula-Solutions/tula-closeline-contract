@@ -1,0 +1,23 @@
+import { PLAYBOOK_ERRORS } from './errors'
+import { PLAYBOOK_ROUTES, type PlaybookRoute, type PlaybookRouteName } from './routes'
+import { SALES_HISTORY_ERRORS } from './sales-history-errors'
+import {
+  SALES_HISTORY_ROUTES,
+  type SalesHistoryRoute,
+  type SalesHistoryRouteName,
+} from './sales-history-routes'
+
+/** Every Playbook route name: the document routes of 0.7.0 and the sales-history routes. */
+export type AllPlaybookRouteName = PlaybookRouteName | SalesHistoryRouteName
+
+/**
+ * Every Playbook route in one map, for a service that builds one OpenAPI document. `PLAYBOOK_ROUTES`
+ * and `PLAYBOOK_ERRORS` keep their 0.7.0 types, so code written against them still compiles; use
+ * this map and `ALL_PLAYBOOK_ERRORS` when you want both areas.
+ */
+export const ALL_PLAYBOOK_ROUTES: Readonly<
+  Record<AllPlaybookRouteName, PlaybookRoute | SalesHistoryRoute>
+> = Object.freeze({ ...PLAYBOOK_ROUTES, ...SALES_HISTORY_ROUTES })
+
+/** Every Playbook error code in one registry: the document codes of 0.7.0 and the sales-history codes. */
+export const ALL_PLAYBOOK_ERRORS = Object.freeze({ ...PLAYBOOK_ERRORS, ...SALES_HISTORY_ERRORS })

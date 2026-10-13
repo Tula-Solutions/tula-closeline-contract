@@ -80,7 +80,7 @@ Lists use the existing cursor pagination (`pageQuerySchema`, at most 100 per pag
 list also takes `state` (`pending`, `accepted` or `revoked`, default `pending`). Fold emails and
 Team names with `foldAscii`, never `toLowerCase()`.
 
-## Playbook API surface (0.7.0, ADR 0016)
+## Playbook API surface (0.7.0, ADR 0016; sales history 0.8.0, ADR 0018)
 
 Schemas only, as for core. `PLAYBOOK_ROUTES` holds each route's method, path, roles, success
 statuses, error codes and OpenAPI description (this library has no OpenAPI generator; the service
@@ -93,7 +93,69 @@ builds its document from these).
   `Idempotency-Key` header. Services call `checkUploadFile(file)` on what they read off the part: it runs the size check (`document.too_large`), then the type check on the stored name (`document.unsupported_type`), then the shape (`request.invalid`) and returns the parsed file or the code. `documentSizeCheckSchema`, `documentTypeCheckSchema` and `uploadDocumentFileSchema` are the steps it uses. The extension and `mediaType` of a document are not checked against each other: that is the service's job. The page limit is not an error: a document over it ends `failed` with `failureReason: too_many_pages`. `normaliseMediaType` lower-cases a media type and drops its parameters.
   A new document answers 201; a duplicate of existing content answers 200 with the stored document (a `deleted` match is restored, a `failed` match is re-queued). Delete and restore are idempotent by end state. `DOCUMENT_DELETED_MESSAGE` carries `deletionSeq` (1 to `MAX_DELETION_SEQ`, a Postgres `integer`), which the service bumps on each state-changing delete (a repeated delete does not bump it or publish again); it is not on the public document.
 - **File names** (`documentFileNameSchema`) have control and bidirectional characters stripped, are
-  1 to 255 UTF-16 code units, hold no `/` or `\` and need a visible stem; they are display text, never a storage key.
+  1 to 255 Unicode code points, hold no `/` or `\` and need a visible stem; they are display text, never a storage key.
 - **Limits** are exported constants, each saying whether the owner chose it or it is a default.
 - **Messages** `DOCUMENT_UPLOADED_MESSAGE` and `DOCUMENT_DELETED_MESSAGE` are `{ type, version, scope,
   payload }`, the pieces of the kit's `defineMessage`.
+
+### Sales history (0.8.0, ADR 0018)
+
+Additive; the 0.7.0 types are unchanged (`PlaybookRoute`, `PLAYBOOK_ROUTES` and `PLAYBOOK_ERRORS` do not gain methods or codes). `SALES_HISTORY_ROUTES` (type `SalesHistoryRoute`) describes the 16 routes; for one OpenAPI document use `ALL_PLAYBOOK_ROUTES` and `ALL_PLAYBOOK_ERRORS`, which merge both areas, `SALES_HISTORY_ERRORS` holds the codes
+(`call.*`, `deal.*`, `deal_import.*`, `rights.*`) and the messages are `CALL_UPLOADED_MESSAGE`,
+`CALL_TRANSCRIBED_MESSAGE`, `CALL_REP_CHANGED_MESSAGE`, `CALL_DELETED_MESSAGE`,
+`DEAL_OUTCOME_CHANGED_MESSAGE` and `DEAL_IMPORT_UPLOADED_MESSAGE`. They carry ids and sequences
+(`repSeq`, `deletionSeq`, `outcomeSeq`, each 1 to `MAX_SEQ`) only, never content.
+
+- **Call states** (`CALL_STATES`): `uploaded`, `transcribing`, `awaiting_rep`, `processing`, `ready`,
+  `failed`, `deleted`. Failure reasons: `CALL_FAILURE_REASONS`. Import states and row reasons:
+  `DEAL_IMPORT_STATES`, `DEAL_IMPORT_ROW_REASONS`. A row result is `applied` or `rejected` in the
+  report, never an HTTP error; a report row echoes only the deal id.
+- **Rep** is `repChoiceSchema`: `{by:'speaker', label}` or `{by:'channel', channel:'left'|'right'}`, or
+  absent for a Recording that will wait in `awaiting_rep`. `repChoiceSuits(kind, rep, when)` says
+  which suits. Upload text fields are `uploadCallFieldsSchema`; `rep` is JSON text, read with `parseRepField(text)`, which answers `{ ok: true, rep }` (`rep` is `null` when the field was not sent) or `{ ok: false, code: 'call.rep_invalid' }` for a present field that is empty, too long or invalid. `repChangeAllowed(state, failureReason)` says when a Rep may be changed.
+- **Helpers** (call these, not the pieces): `checkCallFile(file)` (size, type, shape; kind from the
+  extension), `checkDealImportHeader(firstLine)`, `normaliseDealId`, `normaliseSpeakerLabel`.
+- **Deal ids** (`dealIdSchema`) are the customer's text: trimmed, otherwise exact and case-sensitive, 1 to
+  128 Unicode code points, rejected (not stripped) if they hold a control, direction or Unicode
+  format character (category Cf, so no soft hyphen, zero-width, word joiner or tag character), a line
+  or paragraph separator or a Hangul filler; homoglyphs stay accepted. They may hold a name and are
+  never logged, and never travel in a URL path: a Deal's path id is the opaque `deal_…` id
+  (`dealRecordIdSchema`, field `id`; Calls carry it as `dealRecordId`, and the queue message names it).
+  Look a Deal up by the customer's id with `POST /playbook/deals/lookup` (the id in the body, `lookupDealRequestSchema`); no list has a deal id filter, `listCalls` filters by `dealRecordId`, and list cursors (`callCursorSchema`, `dealCursorSchema`, `dealImportCursorSchema`, `dealImportRowCursorSchema`) hold the opaque id or a row number, never a deal id.
+- **Lengths** count Unicode code points (Zod's count, the same as a Postgres `varchar(n)`); a column
+  must allow `MAX_UTF8_BYTES_PER_CODE_POINT` (4) bytes for each: `MAX_DEAL_ID_BYTES`,
+  `MAX_DEAL_NAME_BYTES`, `MAX_SPEAKER_LABEL_BYTES`, `MAX_DOCUMENT_FILE_NAME_BYTES`.
+- **CSV**: split the text in a background job with `parseCsv(text, { maxRecords, maxCellLength })`
+  (defaults `MAX_DEAL_IMPORT_ROWS + 1` records and `MAX_DEAL_IMPORT_CELL_LENGTH`, 1000 code points, which only bounds memory: a cell over 1000 characters, like a quoting error, fails the whole file, while a longer-than-allowed name or a padded cell up to 1000 is a row result; it stops
+  at the first limit with `too_many_records` or `cell_too_long`, and needs the whole text, so never
+  on a request path). Quoting is strict RFC 4180: a quote inside an unquoted cell or text after a
+  closing quote is `bad_quote`, a quote that never closes is `unterminated_quote`. The header is record
+  1 and `rowNumber` is the record number, so a quoted cell spanning lines is one record; a blank line
+  (`isBlankCsvRecord`) is skipped and not reported but still counts in the numbers, as in a
+  spreadsheet. The upload route checks the header early with `checkDealImportHeaderText` on the first `DEAL_IMPORT_HEADER_PREFIX_CHARS` (8192) characters of the file (a header unfinished there answers `{ ok: true, deferred: true }` and the job decides),
+  which reads the first record with `firstCsvRecord` (same rules and limits); the job re-checks the first
+  record of its parse with `checkDealImportHeader(record)`; the two give one verdict. Each record then
+  goes through `checkDealImportRow(cells, hasName)`, which uses `parseOutcomeCell` (`won`/`lost`/`open`,
+  any case, trimmed), `parseClosedAtCell` (`YYYY-MM-DD` as that day 00:00 UTC, or an ISO timestamp with
+  offset; blank is none; every Outcome accepts it; the UTC year must be 1970 to 2100),
+  `parseAmountCell` (non-negative decimal, at most 15 integer and 2 fraction digits, up to
+  999999999999999.99, no leading zeros beyond one `0`; blank is none) and `parseCurrencyCell` (three
+  letters, folded to upper case; required when an amount is present). Example: a record
+  `D-1,won,2026-10-12,10,EUR,"Acme` then `renewal"` is one record, row 2.
+- **What fixes a failed Call** (`CALL_FAILURE_FIXES`):
+
+  | Failure reason | Fix | A same-Deal re-upload of identical content |
+  | --- | --- | --- |
+  | `rep_label_not_found`, `not_per_side` | change the Rep | answers 200 with the failed Call unchanged |
+  | `transcription_failed`, `transcription_timed_out`, `processing_failed` | re-upload (may be transient) | re-queues the Call (`callReuploadRequeues`) |
+  | `too_many_speakers`, `no_turns`, `too_few_speakers`, `too_long`, `unreadable` | delete the Call and upload a corrected file | answers 200 with the failed Call unchanged |
+
+  A `failed` Call with `too_many_speakers` lists no `speakerLabels`.
+- **Search flags**: a Call carries `dealOutcome` and `inSearch` (true only when `ready` and the Deal
+  is won; it may lag for a Deal that has just become won).
+- **Rights**: `rightsStatusSchema`, `confirmRightsRequestSchema`; `rights.confirmation_required` (403)
+  carries `rightsRequiredDetailsSchema` in `details` with the wording version to show.
+- **Limits and defaults** are exported constants, each saying whether it is the owner's or a default:
+  `MAX_TRANSCRIPT_BYTES`, `MAX_RECORDING_BYTES`, `MAX_RECORDING_SECONDS`, `MAX_DEAL_IMPORT_BYTES`,
+  `MAX_DEAL_IMPORT_ROWS`, `MAX_DEAL_ID_LENGTH`, `MAX_REP_FOLLOWING_TURNS`, `MAX_REP_FOLLOWING_CHARACTERS`,
+  `INCOMPLETE_UPLOAD_PARTS_TTL_HOURS`, `DEFAULT_MAX_CALLS`, `DEFAULT_MAX_RECORDING_BYTES_TOTAL`, `DEFAULT_MAX_DEALS`.

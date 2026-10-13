@@ -123,6 +123,6 @@ export const PLAYBOOK_ROUTES: Readonly<Record<PlaybookRouteName, PlaybookRoute>>
       'request.idempotency_in_progress',
     ],
     description:
-      'Internal, for offboarding and erasure; no caller yet. Removes every document, file, chunk and vector an Organization has, soft-deleted ones included, without waiting for retention. Idempotent by end state: it answers 200 whenever nothing remains. Served on the internal network only; takes the Organization from the path.',
+      'Internal, for offboarding and erasure; no caller yet. Removes every document, file, chunk and vector an Organization has, and, since ADR 0018, its Calls, Recordings, Transcripts, Moments, Deals and Deal imports (and the copy the transcription vendor holds of a Recording), soft-deleted ones included, without waiting for retention. Idempotent by end state: it answers 200 whenever nothing remains. Served on the internal network only; takes the Organization from the path.',
   }),
 })
