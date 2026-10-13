@@ -7,7 +7,9 @@ import {
   invitationStateSchema,
   invitationTokenSchema,
   MAX_NAME_LENGTH,
+  MAX_PERSON_NAME_LENGTH,
   organizationNameSchema,
+  personNameSchema,
   storedNameSchema,
   teamNameSchema,
   timestampSchema,
@@ -74,6 +76,32 @@ describe.each([
     ['null', null],
   ])('rejects %s', (_name, input) => {
     expect(schema.safeParse(input).success).toBe(false)
+  })
+})
+
+describe('personNameSchema', () => {
+  test('fits the longest name auth can compose: 100 + a space + 100 characters', () => {
+    expect(MAX_PERSON_NAME_LENGTH).toBe(201)
+    const longest = `${'a'.repeat(100)} ${'b'.repeat(100)}`
+    expect(personNameSchema.parse(longest)).toBe(longest)
+    expect(personNameSchema.safeParse('a'.repeat(202)).success).toBe(false)
+  })
+
+  test('trims, and judges length after the trim', () => {
+    expect(personNameSchema.parse('  Ada Lovelace  ')).toBe('Ada Lovelace')
+    expect(personNameSchema.parse(` ${'a'.repeat(201)} `)).toBe('a'.repeat(201))
+  })
+
+  test.each([
+    ['empty', ''],
+    ['only spaces', '   '],
+    ['a newline inside', 'Ada\nLovelace'],
+    ['a NUL', 'Ada\u0000'],
+    ['a lone surrogate', 'Ada\ud800'],
+    ['null', null],
+    ['a number', 7],
+  ])('rejects %s', (_name, input) => {
+    expect(personNameSchema.safeParse(input).success).toBe(false)
   })
 })
 

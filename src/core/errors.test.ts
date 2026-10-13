@@ -7,6 +7,7 @@ const CORE_MESSAGES = {
   'organization.not_found': 'The Organization was not found.',
   'organization.suspended': 'This Organization is suspended.',
   'organization.deleted': 'This Organization has been deleted.',
+  'organization.not_abandonable': 'This Organization cannot be abandoned.',
   'member.not_found': 'The member was not found.',
   'member.last_owner':
     'The last Owner cannot be removed or demoted. Promote a different member to Owner first.',
@@ -31,6 +32,7 @@ describe('CORE_ERRORS', () => {
     ['organization.not_found', 404],
     ['organization.suspended', 403],
     ['organization.deleted', 410],
+    ['organization.not_abandonable', 409],
     ['member.not_found', 404],
     ['member.last_owner', 409],
     ['membership.already_member', 409],

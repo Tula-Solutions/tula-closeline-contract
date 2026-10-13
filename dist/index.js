@@ -58,7 +58,8 @@ var CORE_ERRORS = {
   ...defineErrors("organization", {
     not_found: { status: 404, message: "The Organization was not found." },
     suspended: { status: 403, message: "This Organization is suspended." },
-    deleted: { status: 410, message: "This Organization has been deleted." }
+    deleted: { status: 410, message: "This Organization has been deleted." },
+    not_abandonable: { status: 409, message: "This Organization cannot be abandoned." }
   }),
   ...defineErrors("member", {
     not_found: { status: 404, message: "The member was not found." },
@@ -239,9 +240,14 @@ function isWellFormed(text) {
   return true;
 }
 var MAX_RAW_NAME_LENGTH = 1000;
-var nameSchema = z5.string().max(MAX_RAW_NAME_LENGTH).trim().pipe(z5.string().min(1).max(MAX_NAME_LENGTH).refine(isWellFormed, "Well-formed text only").refine((text) => !hasControlCharacter(text), "No control characters"));
+function boundedName(maxLength) {
+  return z5.string().max(MAX_RAW_NAME_LENGTH).trim().pipe(z5.string().min(1).max(maxLength).refine(isWellFormed, "Well-formed text only").refine((text) => !hasControlCharacter(text), "No control characters"));
+}
+var nameSchema = boundedName(MAX_NAME_LENGTH);
 var organizationNameSchema = nameSchema;
 var teamNameSchema = nameSchema;
+var MAX_PERSON_NAME_LENGTH = 201;
+var personNameSchema = boundedName(MAX_PERSON_NAME_LENGTH);
 var storedNameSchema = z5.string().min(1).max(1000);
 var INVITATION_STATES = ["pending", "accepted", "revoked"];
 var invitationStateSchema = z5.enum(INVITATION_STATES);
@@ -254,11 +260,15 @@ var idempotencyKeySchema = z5.string().min(16).max(128).regex(/^[A-Za-z0-9_.:-]+
 var INTERNAL_CALL_ERRORS = Object.freeze({
   createOrganization: Object.freeze(["membership.already_member"]),
   acceptInvitation: Object.freeze(["invitation.invalid", "membership.already_member"]),
-  membership: Object.freeze([])
+  membership: Object.freeze([]),
+  updateMemberProfile: Object.freeze(["member.not_found"]),
+  abandonOrganization: Object.freeze(["organization.not_abandonable"])
 });
 var internalCreateOrganizationRequestSchema = z6.strictObject({
   userId: userIdSchema,
-  organizationName: organizationNameSchema
+  organizationName: organizationNameSchema,
+  email: emailSchema.optional(),
+  name: personNameSchema.nullable().optional()
 });
 var internalCreateOrganizationResponseSchema = z6.object({
   organizationId: organizationIdSchema,
@@ -267,6 +277,7 @@ var internalCreateOrganizationResponseSchema = z6.object({
 var internalAcceptInvitationRequestSchema = z6.strictObject({
   userId: userIdSchema,
   email: emailSchema,
+  name: personNameSchema.nullable().optional(),
   invitationToken: invitationTokenSchema
 });
 var internalAcceptInvitationResponseSchema = z6.object({
@@ -285,6 +296,31 @@ var internalMembershipResponseSchema = z6.discriminatedUnion("found", [
   }),
   z6.object({ found: z6.literal(false) })
 ]);
+var internalUpdateMemberProfileParamsSchema = z6.strictObject({
+  userId: userIdSchema
+});
+var internalUpdateMemberProfileRequestSchema = z6.strictObject({
+  email: emailSchema.optional(),
+  name: personNameSchema.nullable().optional()
+}).refine((body) => body.email !== undefined || body.name !== undefined, {
+  message: "Send an email, a name or both"
+});
+var internalUpdateMemberProfileResponseSchema = z6.object({
+  userId: userIdSchema,
+  email: emailSchema,
+  name: storedNameSchema.nullable()
+});
+var ABANDON_MAX_AGE_HOURS = 24;
+var internalAbandonOrganizationParamsSchema = z6.strictObject({
+  organizationId: organizationIdSchema
+});
+var internalAbandonOrganizationRequestSchema = z6.strictObject({
+  userId: userIdSchema
+});
+var internalAbandonOrganizationResponseSchema = z6.object({
+  organizationId: organizationIdSchema,
+  status: z6.literal("deleted")
+});
 // src/core/invitation.ts
 import { z as z8 } from "zod";
 
@@ -358,6 +394,8 @@ import { z as z9 } from "zod";
 var memberSchema = z9.object({
   id: membershipIdSchema,
   userId: userIdSchema,
+  email: emailSchema,
+  name: storedNameSchema.nullable(),
   role: roleSchema,
   createdAt: timestampSchema,
   updatedAt: timestampSchema
@@ -449,6 +487,7 @@ function defineEvent(type, version, dataSchema) {
 // src/index.ts
 var PACKAGE = "tula-closeline-contract";
 export {
+  ABANDON_MAX_AGE_HOURS,
   AUTH_ERRORS,
   CORE_ERRORS,
   DEFAULT_PAGE_SIZE,
@@ -461,6 +500,7 @@ export {
   MAX_EMAIL_LENGTH,
   MAX_NAME_LENGTH,
   MAX_PAGE_SIZE,
+  MAX_PERSON_NAME_LENGTH,
   ORGANIZATION_STATUSES,
   PACKAGE,
   REGIONS,
@@ -484,12 +524,18 @@ export {
   formatId,
   idSchema,
   idempotencyKeySchema,
+  internalAbandonOrganizationParamsSchema,
+  internalAbandonOrganizationRequestSchema,
+  internalAbandonOrganizationResponseSchema,
   internalAcceptInvitationRequestSchema,
   internalAcceptInvitationResponseSchema,
   internalCreateOrganizationRequestSchema,
   internalCreateOrganizationResponseSchema,
   internalMembershipRequestSchema,
   internalMembershipResponseSchema,
+  internalUpdateMemberProfileParamsSchema,
+  internalUpdateMemberProfileRequestSchema,
+  internalUpdateMemberProfileResponseSchema,
   invitableRoleSchema,
   invitationIdSchema,
   invitationParamsSchema,
@@ -511,6 +557,7 @@ export {
   organizationStatusSchema,
   pageQuerySchema,
   pageSchema,
+  personNameSchema,
   prospectIdSchema,
   regionSchema,
   renameOrganizationRequestSchema,

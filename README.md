@@ -15,7 +15,7 @@ bun run verify
 
 Standards: `AGENTS.md` (this repo) and `.claude/COMMON.md` (shared).
 
-## Core's API surface (0.5.0)
+## Core's API surface (0.6.0)
 
 Schemas and inferred types only; routes and handlers live in `tula-closeline-core`.
 
@@ -40,13 +40,13 @@ Schemas and inferred types only; routes and handlers live in `tula-closeline-cor
 | Group | Exports |
 | --- | --- |
 | Ids | `invitationIdSchema` (`inv_…`), beside the existing `organizationIdSchema`, `userIdSchema`, `membershipIdSchema`, `teamIdSchema` |
-| Shared values | `INVITABLE_ROLES`, `invitableRoleSchema` (never `owner`); `ORGANIZATION_STATUSES`, `organizationStatusSchema`; `INVITATION_STATES`, `invitationStateSchema`; `emailSchema`, `foldAscii` (ASCII-only folding; printable ASCII only, so an internationalised domain must already be in its A-label form: the service converts, the schema does not); `organizationNameSchema`, `teamNameSchema` (trimmed, then 1 to 200 characters), `storedNameSchema` (the response form); `invitationTokenSchema`; `timestampSchema`; `IDEMPOTENCY_KEY_HEADER`, `idempotencyKeySchema` |
+| Shared values | `INVITABLE_ROLES`, `invitableRoleSchema` (never `owner`); `ORGANIZATION_STATUSES`, `organizationStatusSchema`; `INVITATION_STATES`, `invitationStateSchema`; `emailSchema`, `foldAscii` (ASCII-only folding; printable ASCII only, so an internationalised domain must already be in its A-label form: the service converts, the schema does not); `organizationNameSchema`, `teamNameSchema` (trimmed, then 1 to 200 characters), `personNameSchema` (a person's display name in a request, 1 to 201), `storedNameSchema` (the response form); `invitationTokenSchema`; `timestampSchema`; `IDEMPOTENCY_KEY_HEADER`, `idempotencyKeySchema` |
 | Organization | `organizationSchema`, `renameOrganizationRequestSchema` |
-| Members | `memberSchema`, `listMembersQuerySchema`, `listMembersResponseSchema`, `memberParamsSchema`, `changeMemberRoleRequestSchema` |
+| Members | `memberSchema` (with `email` and `name`, core's copy of what auth holds; `name` is `null` when the person gave none), `listMembersQuerySchema`, `listMembersResponseSchema`, `memberParamsSchema`, `changeMemberRoleRequestSchema` |
 | Invitations | `invitationSchema`, `createInvitationRequestSchema`, `listInvitationsQuerySchema` (a page plus `state`, default `pending`), `listInvitationsResponseSchema`, `invitationParamsSchema` |
 | Teams | `teamSchema`, `createTeamRequestSchema`, `renameTeamRequestSchema`, `listTeamsQuerySchema`, `listTeamsResponseSchema`, `teamParamsSchema`, `addTeamMemberRequestSchema`, `teamMemberSchema`, `teamMemberParamsSchema` |
-| Internal (auth to core) | `internalCreateOrganizationRequestSchema` / `…ResponseSchema`, `internalAcceptInvitationRequestSchema` / `…ResponseSchema`, `internalMembershipRequestSchema` / `…ResponseSchema` (`found: true` with Organization id, role and status, or `found: false`), `INTERNAL_CALL_ERRORS`, `InternalCallName` |
-| Errors | `CORE_ERRORS` (`organization.*`, `member.*`, `membership.already_member`, `invitation.*`, `team.*`) and `SIGNUP_ERRORS` (`auth.no_organization`, `signup.*`, `membership.unavailable`); a role that is not allowed is the common `auth.forbidden` |
+| Internal (auth to core) | `internalCreateOrganizationRequestSchema` / `…ResponseSchema`, `internalAcceptInvitationRequestSchema` / `…ResponseSchema`, `internalMembershipRequestSchema` / `…ResponseSchema` (`found: true` with Organization id, role and status, or `found: false`), `internalUpdateMemberProfileParamsSchema` / `…RequestSchema` / `…ResponseSchema`, `internalAbandonOrganizationParamsSchema` / `…RequestSchema` / `…ResponseSchema`, `ABANDON_MAX_AGE_HOURS`, `INTERNAL_CALL_ERRORS`, `InternalCallName` |
+| Errors | `CORE_ERRORS` (`organization.*`, including `organization.not_abandonable`, `member.*`, `membership.already_member`, `invitation.*`, `team.*`) and `SIGNUP_ERRORS` (`auth.no_organization`, `signup.*`, `membership.unavailable`); a role that is not allowed is the common `auth.forbidden` |
 
 ### Auth error codes
 
@@ -63,11 +63,18 @@ exported as `INTERNAL_CALL_ERRORS` (a frozen map from call name to codes) for co
 
 | Call | Domain codes it may return |
 | --- | --- |
-| create Organization | `membership.already_member` only. The request has no email: core does not store one. |
-| accept Invitation | `invitation.invalid` or `membership.already_member` only, never an Organization status code. Core compares the request's `email`, folded, with the Invitation's and answers `invitation.invalid` on a mismatch. |
-| membership lookup | none: a user with no membership is answered `found: false`. |
+| create Organization (`POST /internal/organizations`) | `membership.already_member` only. The request carries the person's `email` and `name`, both optional until auth sends them. |
+| accept Invitation (`POST /internal/invitations/accept`) | `invitation.invalid` or `membership.already_member` only, never an Organization status code. Core compares the request's `email`, folded, with the Invitation's and answers `invitation.invalid` on a mismatch. The request's `name` is optional until auth sends it. |
+| membership lookup (`POST /internal/membership`) | none: a user with no membership is answered `found: false`. |
+| profile change (`PATCH /internal/members/{userId}`) | `member.not_found` only, for a user with no membership. The body is a new `email`, a new `name` (`null` clears it) or both; a repeat gives the same answer. Auth has no route that changes either yet. |
+| abandon Organization (`POST /internal/organizations/{organizationId}/abandon`) | `organization.not_abandonable` only, for a live Organization that fails the guard: more than one member, a sole member who is not the `userId` in the body, or `ABANDON_MAX_AGE_HOURS` (24) hours old or more. It answers `{ organizationId, status: 'deleted' }` whenever no live Organization with that id exists when it returns (abandoned by this call or earlier, deleted, or never created), under any key or `userId`, so success does not mean this call deleted it. Success means no live Organization remains, not that the user id is free yet; auth must not depend on that immediately. The holder of the internal token can tell a live id from any other (409 against 200); the single code hides only which guard condition failed. |
 
 Common codes (`auth.*`, `request.*`, `server.*`) can come from any call.
+
+A member's `email` and `name` are core's copy of what the auth service holds for the person. Auth
+keeps a first and a last name (both optional) at sign-up, so the `name` it sends is the two joined
+by one space, and `null` when the person gave neither; a request `name` is at most 201 characters
+(`personNameSchema`). Neither field is a filter or search key on the member list.
 
 Lists use the existing cursor pagination (`pageQuerySchema`, at most 100 per page); the Invitation
 list also takes `state` (`pending`, `accepted` or `revoked`, default `pending`). Fold emails and
