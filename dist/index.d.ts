@@ -72,22 +72,30 @@ declare const SIGNUP_ERRORS: {
 type SignupErrorCode = keyof typeof SIGNUP_ERRORS;
 import { z } from "zod";
 /** The internal calls, by name. */
-type InternalCallName = "createOrganization" | "acceptInvitation" | "membership";
+type InternalCallName = "createOrganization" | "acceptInvitation" | "membership" | "updateMemberProfile";
 /**
 * The complete list of domain error codes each internal call may return, for core's tests to
 * assert against. Common codes (`auth.*`, `request.*`, `server.*`) can come from any call and are
 * not listed. Accepting an Invitation never returns an Organization status code, so a suspended or
 * deleted Organization is indistinguishable from an unknown token. The membership lookup returns
-* no domain error: it answers `found: false`.
+* no domain error: it answers `found: false`. A profile change for a user with no membership is
+* `member.not_found`, which the caller treats as nothing to do.
 */
 declare const INTERNAL_CALL_ERRORS: Readonly<Record<InternalCallName, readonly CoreErrorCode[]>>;
 /**
-* Internal: the body of a sign-up that creates an Organization; the user becomes its Owner. It
-* carries no email: core does not store one. Core returns only `membership.already_member`.
+* Internal: `POST /internal/organizations`, the body of a sign-up that creates an Organization;
+* the user becomes its Owner. `email` and `name` are the person's, copied onto the Membership for
+* the member list (the auth service holds them; see `memberSchema`): `name` is the display name
+* auth composes from the first and last names, or `null` when the person gave neither. Both are
+* optional only so a `0.5.0` caller, which sends neither, still parses and core can deploy before
+* auth sends them; each becomes required once auth sends them. Core returns only
+* `membership.already_member`.
 */
 declare const internalCreateOrganizationRequestSchema: z.ZodObject<{
 	userId: z.core.$ZodBranded<z.ZodString, "usr", "out">;
 	organizationName: z.ZodPipe<z.ZodString, z.ZodString>;
+	email: z.ZodOptional<z.ZodPipe<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>, z.ZodString>>;
+	name: z.ZodOptional<z.ZodNullable<z.ZodPipe<z.ZodString, z.ZodString>>>;
 }, z.core.$strict>;
 /** Internal: the body of a sign-up that creates an Organization. */
 type InternalCreateOrganizationRequest = z.infer<typeof internalCreateOrganizationRequestSchema>;
@@ -99,14 +107,18 @@ declare const internalCreateOrganizationResponseSchema: z.ZodObject<{
 /** Internal: the answer to creating an Organization at sign-up. */
 type InternalCreateOrganizationResponse = z.infer<typeof internalCreateOrganizationResponseSchema>;
 /**
-* Internal: the body of a sign-up that accepts an Invitation with its raw token and the verified
-* address. Core compares the address, folded, with the Invitation's and answers
+* Internal: `POST /internal/invitations/accept`, the body of a sign-up that accepts an Invitation
+* with its raw token and the verified address. `name` is the person's display name as auth
+* composes it, or `null` when the person gave none; the address is copied onto the Membership
+* too. `name` is optional only so a `0.5.0` caller, which sends none, still parses and core can
+* deploy before auth sends it; it becomes required once auth sends it. Core compares the address, folded, with the Invitation's and answers
 * `invitation.invalid` on a mismatch, like an unknown, used, revoked or expired token. Core
 * returns only `invitation.invalid` or `membership.already_member`, never an Organization status.
 */
 declare const internalAcceptInvitationRequestSchema: z.ZodObject<{
 	userId: z.core.$ZodBranded<z.ZodString, "usr", "out">;
 	email: z.ZodPipe<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>, z.ZodString>;
+	name: z.ZodOptional<z.ZodNullable<z.ZodPipe<z.ZodString, z.ZodString>>>;
 	invitationToken: z.ZodString;
 }, z.core.$strict>;
 /** Internal: the body of a sign-up that accepts an Invitation. */
@@ -152,6 +164,36 @@ declare const internalMembershipResponseSchema: z.ZodDiscriminatedUnion<[z.ZodOb
 }, z.core.$strip>], "found">;
 /** Internal: the membership of a user, or none. */
 type InternalMembershipResponse = z.infer<typeof internalMembershipResponseSchema>;
+/** Internal: the path parameters of a profile change; the user is named in the path, never in the body. */
+declare const internalUpdateMemberProfileParamsSchema: z.ZodObject<{
+	userId: z.core.$ZodBranded<z.ZodString, "usr", "out">;
+}, z.core.$strict>;
+/** Internal: the path parameters of a profile change. */
+type InternalUpdateMemberProfileParams = z.infer<typeof internalUpdateMemberProfileParamsSchema>;
+/**
+* Internal: `PATCH /internal/members/{userId}`, the body of the call auth makes when a person's
+* name or email changes, to bring core's copy up to date. Each field is the new value, never a
+* delta, so the call is idempotent: a repeat leaves the same state and answers the same. At least
+* one field is required. `name: null` clears the name; the address cannot be cleared. It applies
+* to the person's Membership in whichever Organization holds it, and answers `member.not_found`
+* for a user with none, which the caller treats as nothing to do. It carries an `Idempotency-Key`
+* header. The auth service has no route that changes a name or an address yet; the call is
+* defined ahead of it.
+*/
+declare const internalUpdateMemberProfileRequestSchema: z.ZodObject<{
+	email: z.ZodOptional<z.ZodPipe<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>, z.ZodString>>;
+	name: z.ZodOptional<z.ZodNullable<z.ZodPipe<z.ZodString, z.ZodString>>>;
+}, z.core.$strict>;
+/** Internal: the body of a profile change. */
+type InternalUpdateMemberProfileRequest = z.infer<typeof internalUpdateMemberProfileRequestSchema>;
+/** Internal: the answer to a profile change: the address and name core now holds for the user. */
+declare const internalUpdateMemberProfileResponseSchema: z.ZodObject<{
+	userId: z.core.$ZodBranded<z.ZodString, "usr", "out">;
+	email: z.ZodPipe<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>, z.ZodString>;
+	name: z.ZodNullable<z.ZodString>;
+}, z.core.$strip>;
+/** Internal: the answer to a profile change. */
+type InternalUpdateMemberProfileResponse = z.infer<typeof internalUpdateMemberProfileResponseSchema>;
 import { z as z2 } from "zod";
 /**
 * An Invitation as core returns it. The raw token is not here and never will be: it is delivered
@@ -241,10 +283,18 @@ declare const invitationParamsSchema: z2.ZodObject<{
 /** The path parameters of a request about one Invitation. */
 type InvitationParams = z2.infer<typeof invitationParamsSchema>;
 import { z as z3 } from "zod";
-/** A member of the caller's Organization: a user's Membership and the role it holds. */
+/**
+* A member of the caller's Organization: a user's Membership and the role it holds. `email` and
+* `name` are core's copy of what the auth service holds for the person: given at sign-up and kept
+* current by the internal profile change. `name` is the display name auth composes from the first
+* and last names, and is `null` when the person gave neither at sign-up (both are optional
+* there). Neither is a search key or a filter in this version.
+*/
 declare const memberSchema: z3.ZodObject<{
 	id: z3.core.$ZodBranded<z3.ZodString, "mem", "out">;
 	userId: z3.core.$ZodBranded<z3.ZodString, "usr", "out">;
+	email: z3.ZodPipe<z3.ZodPipe<z3.ZodString, z3.ZodTransform<string, string>>, z3.ZodString>;
+	name: z3.ZodNullable<z3.ZodString>;
 	role: z3.ZodEnum<{
 		admin: "admin";
 		manager: "manager";
@@ -268,6 +318,8 @@ declare const listMembersResponseSchema: z3.ZodObject<{
 	items: z3.ZodArray<z3.ZodObject<{
 		id: z3.core.$ZodBranded<z3.ZodString, "mem", "out">;
 		userId: z3.core.$ZodBranded<z3.ZodString, "usr", "out">;
+		email: z3.ZodPipe<z3.ZodPipe<z3.ZodString, z3.ZodTransform<string, string>>, z3.ZodString>;
+		name: z3.ZodNullable<z3.ZodString>;
 		role: z3.ZodEnum<{
 			admin: "admin";
 			manager: "manager";
@@ -411,6 +463,16 @@ declare const organizationNameSchema: z6.ZodPipe<z6.ZodString, z6.ZodString>;
 * so display code must treat a name as untrusted text.
 */
 declare const teamNameSchema: z6.ZodPipe<z6.ZodString, z6.ZodString>;
+/** The longest name of a person in a request, in characters: a first and a last name of 100 each and the space between. */
+declare const MAX_PERSON_NAME_LENGTH = 201;
+/**
+* A person's display name in a request, as auth composes it from the first and last names it
+* holds (each at most 100 characters, joined by one space): trimmed, then 1 to 201 characters,
+* well-formed UTF-16 and no control characters. A person with no name is `null` where the
+* request allows it, never an empty string. Zero-width and direction-override characters are
+* allowed, so display code must treat a name as untrusted text.
+*/
+declare const personNameSchema: z6.ZodPipe<z6.ZodString, z6.ZodString>;
 /**
 * A name as a response carries it: any 1 to 1000 character string. The database bounds the length
 * of the name after trimming spaces, so a stored name may carry surrounding spaces and run past
@@ -770,4 +832,4 @@ declare const organizationStatusSchema: z12.ZodEnum<{
 type OrganizationStatus = z12.infer<typeof organizationStatusSchema>;
 /** This library's package name, so a consumer can report which shared libraries it resolved. */
 declare const PACKAGE = "tula-closeline-contract";
-export { AUTH_ERRORS, AddTeamMemberRequest, AuthErrorCode, CORE_ERRORS, ChangeMemberRoleRequest, CommonErrorCode, CoreErrorCode, CreateInvitationRequest, CreateTeamRequest, DEFAULT_PAGE_SIZE, ERRORS, Email, ErrorBody, ErrorDefinition, ErrorInput, EventId, EventType, IDEMPOTENCY_KEY_HEADER, INTERNAL_CALL_ERRORS, INVITABLE_ROLES, INVITATION_STATES, Id, IdempotencyKey, InternalAcceptInvitationRequest, InternalAcceptInvitationResponse, InternalCallName, InternalCreateOrganizationRequest, InternalCreateOrganizationResponse, InternalMembershipRequest, InternalMembershipResponse, InvitableRole, Invitation, InvitationId, InvitationParams, InvitationState, ListInvitationsQuery, ListInvitationsResponse, ListMembersQuery, ListMembersResponse, ListTeamsQuery, ListTeamsResponse, MAX_CURSOR_LENGTH, MAX_EMAIL_LENGTH, MAX_NAME_LENGTH, MAX_PAGE_SIZE, Member, MemberParams, MembershipId, ORGANIZATION_STATUSES, Organization, OrganizationId, OrganizationStatus, PACKAGE, Page, PageQuery, ProspectId, REGIONS, ROLES, Region, RenameOrganizationRequest, RenameTeamRequest, RequestId, Role, SIGNUP_ERRORS, SignupErrorCode, Team, TeamId, TeamMember, TeamMemberParams, TeamParams, UserId, addTeamMemberRequestSchema, changeMemberRoleRequestSchema, createInvitationRequestSchema, createTeamRequestSchema, decodeCursor, defineErrors, defineEvent, emailSchema, encodeCursor, errorBodySchema, errorCodeSchema, eventEnvelopeSchema, eventIdSchema, eventTypeSchema, foldAscii, formatId, idSchema, idempotencyKeySchema, internalAcceptInvitationRequestSchema, internalAcceptInvitationResponseSchema, internalCreateOrganizationRequestSchema, internalCreateOrganizationResponseSchema, internalMembershipRequestSchema, internalMembershipResponseSchema, invitableRoleSchema, invitationIdSchema, invitationParamsSchema, invitationSchema, invitationStateSchema, invitationTokenSchema, listInvitationsQuerySchema, listInvitationsResponseSchema, listMembersQuerySchema, listMembersResponseSchema, listTeamsQuerySchema, listTeamsResponseSchema, memberParamsSchema, memberSchema, membershipIdSchema, organizationIdSchema, organizationNameSchema, organizationSchema, organizationStatusSchema, pageQuerySchema, pageSchema, prospectIdSchema, regionSchema, renameOrganizationRequestSchema, renameTeamRequestSchema, requestIdSchema, roleAtLeast, roleSchema, storedNameSchema, teamIdSchema, teamMemberParamsSchema, teamMemberSchema, teamNameSchema, teamParamsSchema, teamSchema, timestampSchema, userIdSchema };
+export { AUTH_ERRORS, AddTeamMemberRequest, AuthErrorCode, CORE_ERRORS, ChangeMemberRoleRequest, CommonErrorCode, CoreErrorCode, CreateInvitationRequest, CreateTeamRequest, DEFAULT_PAGE_SIZE, ERRORS, Email, ErrorBody, ErrorDefinition, ErrorInput, EventId, EventType, IDEMPOTENCY_KEY_HEADER, INTERNAL_CALL_ERRORS, INVITABLE_ROLES, INVITATION_STATES, Id, IdempotencyKey, InternalAcceptInvitationRequest, InternalAcceptInvitationResponse, InternalCallName, InternalCreateOrganizationRequest, InternalCreateOrganizationResponse, InternalMembershipRequest, InternalMembershipResponse, InternalUpdateMemberProfileParams, InternalUpdateMemberProfileRequest, InternalUpdateMemberProfileResponse, InvitableRole, Invitation, InvitationId, InvitationParams, InvitationState, ListInvitationsQuery, ListInvitationsResponse, ListMembersQuery, ListMembersResponse, ListTeamsQuery, ListTeamsResponse, MAX_CURSOR_LENGTH, MAX_EMAIL_LENGTH, MAX_NAME_LENGTH, MAX_PAGE_SIZE, MAX_PERSON_NAME_LENGTH, Member, MemberParams, MembershipId, ORGANIZATION_STATUSES, Organization, OrganizationId, OrganizationStatus, PACKAGE, Page, PageQuery, ProspectId, REGIONS, ROLES, Region, RenameOrganizationRequest, RenameTeamRequest, RequestId, Role, SIGNUP_ERRORS, SignupErrorCode, Team, TeamId, TeamMember, TeamMemberParams, TeamParams, UserId, addTeamMemberRequestSchema, changeMemberRoleRequestSchema, createInvitationRequestSchema, createTeamRequestSchema, decodeCursor, defineErrors, defineEvent, emailSchema, encodeCursor, errorBodySchema, errorCodeSchema, eventEnvelopeSchema, eventIdSchema, eventTypeSchema, foldAscii, formatId, idSchema, idempotencyKeySchema, internalAcceptInvitationRequestSchema, internalAcceptInvitationResponseSchema, internalCreateOrganizationRequestSchema, internalCreateOrganizationResponseSchema, internalMembershipRequestSchema, internalMembershipResponseSchema, internalUpdateMemberProfileParamsSchema, internalUpdateMemberProfileRequestSchema, internalUpdateMemberProfileResponseSchema, invitableRoleSchema, invitationIdSchema, invitationParamsSchema, invitationSchema, invitationStateSchema, invitationTokenSchema, listInvitationsQuerySchema, listInvitationsResponseSchema, listMembersQuerySchema, listMembersResponseSchema, listTeamsQuerySchema, listTeamsResponseSchema, memberParamsSchema, memberSchema, membershipIdSchema, organizationIdSchema, organizationNameSchema, organizationSchema, organizationStatusSchema, pageQuerySchema, pageSchema, personNameSchema, prospectIdSchema, regionSchema, renameOrganizationRequestSchema, renameTeamRequestSchema, requestIdSchema, roleAtLeast, roleSchema, storedNameSchema, teamIdSchema, teamMemberParamsSchema, teamMemberSchema, teamNameSchema, teamParamsSchema, teamSchema, timestampSchema, userIdSchema };

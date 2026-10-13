@@ -9,6 +9,9 @@ import {
   internalCreateOrganizationResponseSchema,
   internalMembershipRequestSchema,
   internalMembershipResponseSchema,
+  internalUpdateMemberProfileParamsSchema,
+  internalUpdateMemberProfileRequestSchema,
+  internalUpdateMemberProfileResponseSchema,
 } from './internal'
 
 const TOKEN = 'dGhpcyBpcyBhIHRva2Vu0123456789abcdef'
@@ -19,6 +22,7 @@ describe('INTERNAL_CALL_ERRORS', () => {
       createOrganization: ['membership.already_member'],
       acceptInvitation: ['invitation.invalid', 'membership.already_member'],
       membership: [],
+      updateMemberProfile: ['member.not_found'],
     })
   })
 
@@ -52,12 +56,45 @@ describe('internalCreateOrganizationRequestSchema', () => {
   test.each([
     ['a Region', { ...body, region: 'eu' }],
     ['an Organization id', { ...body, organizationId: id('org') }],
-    ['an email, which core does not use', { ...body, email: 'ada@example.com' }],
+    ['a malformed email', { ...body, email: 'not-an-email' }],
+    ['an over-long name', { ...body, name: 'a'.repeat(202) }],
+    ['an empty name', { ...body, name: '' }],
+    ['a first and last name instead of one name', { ...body, firstName: 'Ada', lastName: 'L' }],
     ['an over-long name', { ...body, organizationName: 'a'.repeat(201) }],
     ['an empty name', { ...body, organizationName: '' }],
     ['no user', { organizationName: 'x' }],
   ])('rejects %s', (_name, input) => {
     expect(internalCreateOrganizationRequestSchema.safeParse(input).success).toBe(false)
+  })
+})
+
+describe('internalCreateOrganizationRequestSchema, the person', () => {
+  const body = { userId: id('usr'), organizationName: 'Acme' }
+
+  test('accepts the address and the name auth composes, trimmed and folded', () => {
+    expect(
+      internalCreateOrganizationRequestSchema.parse({
+        ...body,
+        email: 'Ada@Example.com',
+        name: ' Ada Lovelace ',
+      })
+    ).toEqual({ ...body, email: 'ada@example.com', name: 'Ada Lovelace' } as never)
+  })
+
+  test('accepts a null name, for a person who gave none', () => {
+    expect(
+      internalCreateOrganizationRequestSchema.parse({
+        ...body,
+        email: 'ada@example.com',
+        name: null,
+      })
+    ).toEqual({ ...body, email: 'ada@example.com', name: null } as never)
+  })
+
+  test('still parses a 0.5.0 request, which has neither an email nor a name', () => {
+    expect(internalCreateOrganizationRequestSchema.parse(body)).toEqual(body as never)
+    expect('email' in internalCreateOrganizationRequestSchema.parse(body)).toBe(false)
+    expect('name' in internalCreateOrganizationRequestSchema.parse(body)).toBe(false)
   })
 })
 
@@ -94,6 +131,34 @@ describe('internalAcceptInvitationRequestSchema', () => {
     ['no token', { userId: body.userId, email: body.email }],
     ['an unknown key', { ...body, role: 'owner' }],
     ['an unverified blank email', { ...body, email: '' }],
+  ])('rejects %s', (_name, input) => {
+    expect(internalAcceptInvitationRequestSchema.safeParse(input).success).toBe(false)
+  })
+})
+
+describe('internalAcceptInvitationRequestSchema, the name', () => {
+  const body = { userId: id('usr'), email: 'ada@example.com', invitationToken: TOKEN }
+
+  test('accepts the name auth composes, and a null one', () => {
+    expect(
+      internalAcceptInvitationRequestSchema.parse({ ...body, name: ' Ada Lovelace ' })
+    ).toEqual({ ...body, name: 'Ada Lovelace' } as never)
+    expect(internalAcceptInvitationRequestSchema.parse({ ...body, name: null })).toEqual({
+      ...body,
+      name: null,
+    } as never)
+  })
+
+  test('still parses a 0.5.0 request, which has no name', () => {
+    const parsed = internalAcceptInvitationRequestSchema.parse(body)
+    expect(parsed).toEqual(body as never)
+    expect('name' in parsed).toBe(false)
+  })
+
+  test.each([
+    ['an empty name', { ...body, name: '' }],
+    ['a name with a control character', { ...body, name: 'Ada\u0000' }],
+    ['an over-long name', { ...body, name: 'a'.repeat(202) }],
   ])('rejects %s', (_name, input) => {
     expect(internalAcceptInvitationRequestSchema.safeParse(input).success).toBe(false)
   })
@@ -160,5 +225,57 @@ describe('internal membership lookup', () => {
     ],
   ])('rejects %s', (_name, body) => {
     expect(internalMembershipResponseSchema.safeParse(body).success).toBe(false)
+  })
+})
+
+describe('internal profile change', () => {
+  const userId = id('usr')
+
+  test('names the person in the path', () => {
+    expect(internalUpdateMemberProfileParamsSchema.safeParse({ userId }).success).toBe(true)
+    expect(internalUpdateMemberProfileParamsSchema.safeParse({ userId: id('mem') }).success).toBe(
+      false
+    )
+    expect(internalUpdateMemberProfileParamsSchema.safeParse({}).success).toBe(false)
+    expect(
+      internalUpdateMemberProfileParamsSchema.safeParse({ userId, organizationId: id('org') })
+        .success
+    ).toBe(false)
+  })
+
+  test.each([
+    ['a new address', { email: 'Ada@Example.com' }, { email: 'ada@example.com' }],
+    ['a new name', { name: ' Ada King ' }, { name: 'Ada King' }],
+    ['a cleared name', { name: null }, { name: null }],
+    [
+      'both',
+      { email: 'ada@example.com', name: 'Ada King' },
+      { email: 'ada@example.com', name: 'Ada King' },
+    ],
+  ])('accepts %s', (_label, input, parsed) => {
+    expect(internalUpdateMemberProfileRequestSchema.parse(input)).toEqual(parsed as never)
+  })
+
+  test.each([
+    ['nothing to change', {}],
+    ['a null email, which cannot be cleared', { email: null }],
+    ['a malformed email', { email: 'nope' }],
+    ['an empty name', { name: '' }],
+    ['a user id in the body, which is in the path', { userId, name: 'Ada' }],
+    ['an Organization', { name: 'Ada', organizationId: id('org') }],
+    ['a role', { name: 'Ada', role: 'owner' }],
+  ])('rejects %s', (_label, input) => {
+    expect(internalUpdateMemberProfileRequestSchema.safeParse(input).success).toBe(false)
+  })
+
+  test('answers with the profile core now holds', () => {
+    expect(
+      internalUpdateMemberProfileResponseSchema.parse({
+        userId,
+        email: 'ada@example.com',
+        name: null,
+        role: 'owner',
+      })
+    ).toEqual({ userId, email: 'ada@example.com', name: null } as never)
   })
 })

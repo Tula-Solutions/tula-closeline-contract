@@ -1,13 +1,22 @@
 import { z } from 'zod'
+import { emailSchema } from '../email'
 import { membershipIdSchema, userIdSchema } from '../ids'
 import { pageQuerySchema, pageSchema } from '../pagination'
 import { roleSchema } from '../tenancy'
-import { timestampSchema } from './values'
+import { storedNameSchema, timestampSchema } from './values'
 
-/** A member of the caller's Organization: a user's Membership and the role it holds. */
+/**
+ * A member of the caller's Organization: a user's Membership and the role it holds. `email` and
+ * `name` are core's copy of what the auth service holds for the person: given at sign-up and kept
+ * current by the internal profile change. `name` is the display name auth composes from the first
+ * and last names, and is `null` when the person gave neither at sign-up (both are optional
+ * there). Neither is a search key or a filter in this version.
+ */
 export const memberSchema = z.object({
   id: membershipIdSchema,
   userId: userIdSchema,
+  email: emailSchema,
+  name: storedNameSchema.nullable(),
   role: roleSchema,
   createdAt: timestampSchema,
   updatedAt: timestampSchema,

@@ -32,18 +32,22 @@ function isWellFormed(text: string): boolean {
 /** The most raw characters a name request may carry before it is trimmed and bounded to 200. */
 const MAX_RAW_NAME_LENGTH = 1000
 
-const nameSchema = z
-  .string()
-  .max(MAX_RAW_NAME_LENGTH)
-  .trim()
-  .pipe(
-    z
-      .string()
-      .min(1)
-      .max(MAX_NAME_LENGTH)
-      .refine(isWellFormed, 'Well-formed text only')
-      .refine((text) => !hasControlCharacter(text), 'No control characters')
-  )
+function boundedName(maxLength: number) {
+  return z
+    .string()
+    .max(MAX_RAW_NAME_LENGTH)
+    .trim()
+    .pipe(
+      z
+        .string()
+        .min(1)
+        .max(maxLength)
+        .refine(isWellFormed, 'Well-formed text only')
+        .refine((text) => !hasControlCharacter(text), 'No control characters')
+    )
+}
+
+const nameSchema = boundedName(MAX_NAME_LENGTH)
 
 /**
  * An Organization's name in a request: trimmed, then 1 to 200 characters, well-formed UTF-16 (no
@@ -58,6 +62,18 @@ export const organizationNameSchema = nameSchema
  * so display code must treat a name as untrusted text.
  */
 export const teamNameSchema = nameSchema
+
+/** The longest name of a person in a request, in characters: a first and a last name of 100 each and the space between. */
+export const MAX_PERSON_NAME_LENGTH = 201
+
+/**
+ * A person's display name in a request, as auth composes it from the first and last names it
+ * holds (each at most 100 characters, joined by one space): trimmed, then 1 to 201 characters,
+ * well-formed UTF-16 and no control characters. A person with no name is `null` where the
+ * request allows it, never an empty string. Zero-width and direction-override characters are
+ * allowed, so display code must treat a name as untrusted text.
+ */
+export const personNameSchema = boundedName(MAX_PERSON_NAME_LENGTH)
 
 /**
  * A name as a response carries it: any 1 to 1000 character string. The database bounds the length

@@ -4,6 +4,7 @@ import {
   internalAcceptInvitationResponseSchema,
   internalCreateOrganizationResponseSchema,
   internalMembershipResponseSchema,
+  internalUpdateMemberProfileResponseSchema,
 } from './internal'
 import { invitationSchema, listInvitationsResponseSchema } from './invitation'
 import { listMembersResponseSchema, memberSchema } from './member'
@@ -20,7 +21,15 @@ const invitation = {
   expiresAt: NOW,
   createdAt: NOW,
 }
-const member = { id: id('mem'), userId: id('usr'), role: 'rep', createdAt: NOW, updatedAt: NOW }
+const member = {
+  id: id('mem'),
+  userId: id('usr'),
+  email: 'ada@example.com',
+  name: 'Ada Lovelace',
+  role: 'rep',
+  createdAt: NOW,
+  updatedAt: NOW,
+}
 const team = { id: id('team'), name: 'Enterprise', createdAt: NOW, updatedAt: NOW }
 
 const RESPONSES = [
@@ -60,6 +69,16 @@ const RESPONSES = [
     { found: true, organizationId: id('org'), role: 'rep', organizationStatus: 'active' },
   ],
   ['internalMembershipResponseSchema (none)', internalMembershipResponseSchema, { found: false }],
+  [
+    'internalUpdateMemberProfileResponseSchema',
+    internalUpdateMemberProfileResponseSchema,
+    { userId: id('usr'), email: 'ada@example.com', name: 'Ada Lovelace' },
+  ],
+  [
+    'internalUpdateMemberProfileResponseSchema (no name)',
+    internalUpdateMemberProfileResponseSchema,
+    { userId: id('usr'), email: 'ada@example.com', name: null },
+  ],
 ] as const
 
 const EXTRAS = { token: 'A'.repeat(32), tokenHash: 'f'.repeat(64), futureField: 1 }

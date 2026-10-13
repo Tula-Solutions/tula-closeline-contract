@@ -11,3 +11,13 @@ test('the entry point exports the auth, core and common error maps', async () =>
   expect(api.CORE_ERRORS['team.not_found'].status).toBe(404)
   expect(api.ERRORS['request.idempotency_in_progress'].status).toBe(409)
 })
+
+test('the entry point exports the member profile and its internal profile change', async () => {
+  const api = await import('./index')
+  expect(api.personNameSchema.parse(' Ada ')).toBe('Ada')
+  expect(api.MAX_PERSON_NAME_LENGTH).toBe(201)
+  expect(api.INTERNAL_CALL_ERRORS.updateMemberProfile).toEqual(['member.not_found'])
+  expect(typeof api.internalUpdateMemberProfileRequestSchema.safeParse).toBe('function')
+  expect(typeof api.internalUpdateMemberProfileParamsSchema.safeParse).toBe('function')
+  expect(typeof api.internalUpdateMemberProfileResponseSchema.safeParse).toBe('function')
+})
