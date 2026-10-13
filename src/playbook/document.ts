@@ -6,14 +6,18 @@ import {
   documentFailureReasonSchema,
   documentFileNameSchema,
   documentMediaTypeSchema,
+  documentSizeCheckSchema,
   documentStateSchema,
+  documentTypeCheckSchema,
   MAX_DOCUMENT_BYTES,
   MAX_DOCUMENT_PAGES,
 } from './values'
 
 /**
  * A Playbook document as the service returns it. It names the file but never carries its content,
- * and no text taken from it. `failureReason` is set exactly when `state` is `failed`. `purgeAt` is
+ * and no text taken from it. The extension of `fileName` and `mediaType` are not checked against each other: that agreement is
+ * the service's job, as only it knows the declared and the detected type, and the contract does
+ * not enforce it. `failureReason` is set exactly when `state` is `failed`. `purgeAt` is
  * set exactly when `state` is `deleted`: the time the file and record will be purged
  * (`DOCUMENT_RETENTION_DAYS` after `deletedAt`); a restore is refused after it. `pageCount` is
  * `null` until ingestion has counted the pages. The service must send the output of
@@ -68,11 +72,9 @@ export const UPLOAD_CONTENT_TYPE = 'multipart/form-data'
  * counted while reading. The file itself is a multipart part, not a JSON field, and appears in no
  * schema. The request has no other part; it carries an `Idempotency-Key` header.
  *
- * Which check yields which code: this schema checks only shape (a well-formed name, a non-empty
- * file) and a failure is `request.invalid` (400). The service runs
- * {@link documentSizeCheckSchema} on `sizeBytes` for `document.too_large` (413) and
- * {@link documentTypeCheckSchema} on `fileName` for `document.unsupported_type` (415), each
- * before this one, so a large or wrong-type file gets its own code.
+ * This schema checks only shape (a well-formed name, a non-empty file) and a failure is
+ * `request.invalid` (400). A service calls {@link checkUploadFile}, which runs it after the size
+ * and type checks so each gets its own code.
  */
 export const uploadDocumentFileSchema = z.strictObject({
   fileName: documentFileNameSchema,
@@ -148,3 +150,40 @@ export const internalRemoveOrganizationDocumentsResponseSchema = z.object({
 export type InternalRemoveOrganizationDocumentsResponse = z.infer<
   typeof internalRemoveOrganizationDocumentsResponseSchema
 >
+
+/** The answer of {@link checkUploadFile}: the parsed file, or the one error code to return. */
+export type CheckUploadFileResult =
+  | { readonly ok: true; readonly file: UploadDocumentFile }
+  | {
+      readonly ok: false
+      readonly code: 'document.too_large' | 'document.unsupported_type' | 'request.invalid'
+    }
+
+/**
+ * The one call that checks the file part of an upload, so a service cannot skip a step. It runs
+ * the size check first (`document.too_large`, 413, so an over-size `.exe` is only too large), then
+ * the type check on the stored form of the name (`document.unsupported_type`, 415: the extension
+ * is judged after control and bidirectional characters are stripped and the name is trimmed, so
+ * `report.pdf ` is accepted and stored as `report.pdf`), then the shape
+ * ({@link uploadDocumentFileSchema}, `request.invalid`, 400). Input that is not an object with a
+ * string name and a numeric size is `request.invalid`. On success `file` is the parsed form, with
+ * the stored name. The result carries no name or content, so it is safe to log and to return.
+ */
+export function checkUploadFile(input: unknown): CheckUploadFileResult {
+  const invalid = { ok: false, code: 'request.invalid' } as const
+  if (typeof input !== 'object' || input === null) {
+    return invalid
+  }
+  const { fileName, sizeBytes } = input as { fileName?: unknown; sizeBytes?: unknown }
+  if (typeof fileName !== 'string' || typeof sizeBytes !== 'number') {
+    return invalid
+  }
+  if (!documentSizeCheckSchema.safeParse(sizeBytes).success) {
+    return { ok: false, code: 'document.too_large' }
+  }
+  if (!documentTypeCheckSchema.safeParse(fileName).success) {
+    return { ok: false, code: 'document.unsupported_type' }
+  }
+  const parsed = uploadDocumentFileSchema.safeParse(input)
+  return parsed.success ? { ok: true, file: parsed.data } : invalid
+}

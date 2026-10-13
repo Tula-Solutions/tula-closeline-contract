@@ -98,6 +98,11 @@ function isStripped(code: number): boolean {
   )
 }
 
+/** The stored form of a file name: control and bidirectional characters removed, then trimmed. */
+export function normaliseFileName(name: string): string {
+  return stripUnsafe(name).trim()
+}
+
 function stripUnsafe(text: string): string {
   let out = ''
   for (let index = 0; index < text.length; index += 1) {
@@ -156,7 +161,7 @@ function hasStem(name: string): boolean {
 export const documentFileNameSchema = z
   .string()
   .max(MAX_RAW_FILE_NAME_LENGTH)
-  .transform((name) => stripUnsafe(name).trim())
+  .transform(normaliseFileName)
   .pipe(
     z
       .string()
@@ -171,17 +176,21 @@ export const documentFileNameSchema = z
 export type DocumentFileName = z.infer<typeof documentFileNameSchema>
 
 /**
- * The type check of an upload, on the file name: it must end in an accepted extension. A failure
- * is `document.unsupported_type` (415). The service also inspects the content, because the name
+ * The type check of an upload, on the file name in its stored form (control and bidirectional
+ * characters stripped, then trimmed): it must end in an accepted extension. A failure is
+ * `document.unsupported_type` (415). Services call `checkUploadFile`, not this. The service also inspects the content, because the name
  * and the declared type are untrusted.
  */
 export const documentTypeCheckSchema = z
   .string()
-  .refine((name) => documentExtension(name) !== undefined, 'An accepted file type only')
+  .transform(normaliseFileName)
+  .pipe(
+    z.string().refine((name) => documentExtension(name) !== undefined, 'An accepted file type only')
+  )
 
 /**
  * The size check of an upload, on the byte count: at most {@link MAX_DOCUMENT_BYTES}. A failure
- * is `document.too_large` (413). Emptiness is not checked here: an empty file fails the upload
+ * is `document.too_large` (413). Services call `checkUploadFile`, not this. Emptiness is not checked here: an empty file fails the upload
  * schema as `request.invalid`.
  */
 export const documentSizeCheckSchema = z.number().max(MAX_DOCUMENT_BYTES)

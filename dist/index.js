@@ -525,6 +525,9 @@ var MAX_RAW_FILE_NAME_LENGTH = 1000;
 function isStripped(code) {
   return code <= 31 || code >= 127 && code <= 159 || code === 1564 || code === 8206 || code === 8207 || code >= 8234 && code <= 8238 || code >= 8294 && code <= 8297;
 }
+function normaliseFileName(name) {
+  return stripUnsafe(name).trim();
+}
 function stripUnsafe(text) {
   let out = "";
   for (let index = 0;index < text.length; index += 1) {
@@ -559,8 +562,8 @@ function hasStem(name) {
   const stem = dot === -1 ? name : name.slice(0, dot);
   return !INVISIBLE_STEM.test(stem);
 }
-var documentFileNameSchema = z13.string().max(MAX_RAW_FILE_NAME_LENGTH).transform((name) => stripUnsafe(name).trim()).pipe(z13.string().min(1).max(MAX_DOCUMENT_FILE_NAME_LENGTH).refine(isWellFormed2, "Well-formed text only").refine((name) => !/[/\\]/.test(name), "No path separators").refine(hasStem, "A name before the extension"));
-var documentTypeCheckSchema = z13.string().refine((name) => documentExtension(name) !== undefined, "An accepted file type only");
+var documentFileNameSchema = z13.string().max(MAX_RAW_FILE_NAME_LENGTH).transform(normaliseFileName).pipe(z13.string().min(1).max(MAX_DOCUMENT_FILE_NAME_LENGTH).refine(isWellFormed2, "Well-formed text only").refine((name) => !/[/\\]/.test(name), "No path separators").refine(hasStem, "A name before the extension"));
+var documentTypeCheckSchema = z13.string().transform(normaliseFileName).pipe(z13.string().refine((name) => documentExtension(name) !== undefined, "An accepted file type only"));
 var documentSizeCheckSchema = z13.number().max(MAX_DOCUMENT_BYTES);
 function normaliseMediaType(mediaType) {
   return (mediaType.split(";")[0] ?? "").trim().toLowerCase();
@@ -617,6 +620,24 @@ var internalRemoveOrganizationDocumentsResponseSchema = z14.object({
   organizationId: organizationIdSchema,
   status: z14.literal("removed")
 });
+function checkUploadFile(input) {
+  const invalid = { ok: false, code: "request.invalid" };
+  if (typeof input !== "object" || input === null) {
+    return invalid;
+  }
+  const { fileName, sizeBytes } = input;
+  if (typeof fileName !== "string" || typeof sizeBytes !== "number") {
+    return invalid;
+  }
+  if (!documentSizeCheckSchema.safeParse(sizeBytes).success) {
+    return { ok: false, code: "document.too_large" };
+  }
+  if (!documentTypeCheckSchema.safeParse(fileName).success) {
+    return { ok: false, code: "document.unsupported_type" };
+  }
+  const parsed = uploadDocumentFileSchema.safeParse(input);
+  return parsed.success ? { ok: true, file: parsed.data } : invalid;
+}
 // src/playbook/errors.ts
 var PLAYBOOK_ERRORS = {
   ...defineErrors("document", {
@@ -644,9 +665,10 @@ var DOCUMENT_UPLOADED_MESSAGE = {
   scope: "organization",
   payload: documentUploadedPayloadSchema
 };
+var MAX_DELETION_SEQ = 2147483647;
 var documentDeletedPayloadSchema = z15.strictObject({
   documentId: documentIdSchema,
-  deletionSeq: z15.number().int().min(1).max(Number.MAX_SAFE_INTEGER)
+  deletionSeq: z15.number().int().min(1).max(MAX_DELETION_SEQ)
 });
 var DOCUMENT_DELETED_MESSAGE = {
   type: "playbook.document_deleted",
@@ -718,7 +740,7 @@ var PLAYBOOK_ROUTES = Object.freeze({
     success: [200],
     errors: ["document.not_found", "document.not_restorable"],
     commonErrors: ["request.invalid"],
-    description: 'Restores a soft-deleted document within the retention period; it is re-ingested from the kept file and shows as "processing". Owner and Admin only. Idempotent by end state: a document that is no longer deleted (restored by an earlier call, or never deleted) answers 200 with the document as it is. One already purged is document.not_restorable (410), distinct from document.not_found. Takes no body.'
+    description: 'Restores a soft-deleted document within the retention period; it is re-ingested from the kept file and shows as "processing". Owner and Admin only. Idempotent by end state: a document that is no longer deleted (restored by an earlier call, or never deleted) answers 200 with the document as it is. A deleted document whose purge time has passed but which the purge has not yet removed is document.not_restorable (410); once purged the record is gone and the answer is document.not_found (404). Takes no body.'
   }),
   removeOrganizationDocuments: route({
     method: "POST",
@@ -757,6 +779,7 @@ export {
   INVITABLE_ROLES,
   INVITATION_STATES,
   MAX_CURSOR_LENGTH,
+  MAX_DELETION_SEQ,
   MAX_DOCUMENT_BYTES,
   MAX_DOCUMENT_FILE_NAME_LENGTH,
   MAX_DOCUMENT_PAGES,
@@ -778,6 +801,7 @@ export {
   UPLOAD_FILE_FIELD,
   addTeamMemberRequestSchema,
   changeMemberRoleRequestSchema,
+  checkUploadFile,
   createInvitationRequestSchema,
   createTeamRequestSchema,
   decodeCursor,
@@ -838,6 +862,7 @@ export {
   memberParamsSchema,
   memberSchema,
   membershipIdSchema,
+  normaliseFileName,
   normaliseMediaType,
   organizationIdSchema,
   organizationNameSchema,

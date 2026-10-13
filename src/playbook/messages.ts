@@ -29,17 +29,21 @@ export const DOCUMENT_UPLOADED_MESSAGE = {
   payload: documentUploadedPayloadSchema,
 } as const
 
+/** The largest `deletionSeq`: the db column is a Postgres `integer`, so the message cannot carry more. */
+export const MAX_DELETION_SEQ = 2_147_483_647
+
 /**
- * The payload of {@link DOCUMENT_DELETED_MESSAGE}: the document and its `deletionSeq`, a positive
- * safe integer the service increases in the same write as each delete. The cleanup applies only
+ * The payload of {@link DOCUMENT_DELETED_MESSAGE}: the document and its `deletionSeq`, an integer
+ * from 1 to {@link MAX_DELETION_SEQ} that the service increases in the same write as each delete. The cleanup applies only
  * when the document is still `deleted` and its stored sequence equals this one, so a restore, or
  * a later delete, makes an older message do nothing. A timestamp is not the guard: Postgres keeps
  * microseconds, a JSON timestamp does not, and two deletions can share a clock tick. The sequence
- * is not on the public document schema.
+ * is not on the public document schema. Only a delete that changes the state bumps it: a repeated
+ * delete of an already deleted document does not bump the sequence and does not publish again.
  */
 export const documentDeletedPayloadSchema = z.strictObject({
   documentId: documentIdSchema,
-  deletionSeq: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER),
+  deletionSeq: z.number().int().min(1).max(MAX_DELETION_SEQ),
 })
 
 /** The payload of {@link DOCUMENT_DELETED_MESSAGE}. */

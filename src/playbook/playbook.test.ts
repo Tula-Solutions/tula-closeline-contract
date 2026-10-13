@@ -6,6 +6,7 @@ import { MAX_PAGE_SIZE } from '../pagination'
 import {
   ACCEPTED_DOCUMENT_EXTENSIONS,
   ACCEPTED_DOCUMENT_MEDIA_TYPES,
+  checkUploadFile,
   DEFAULT_MAX_DOCUMENT_BYTES_TOTAL,
   DEFAULT_MAX_DOCUMENTS,
   DOCUMENT_DELETED_MESSAGE,
@@ -25,6 +26,7 @@ import {
   internalRemoveOrganizationDocumentsResponseSchema,
   listDocumentsQuerySchema,
   listDocumentsResponseSchema,
+  MAX_DELETION_SEQ,
   MAX_DOCUMENT_BYTES,
   MAX_DOCUMENT_PAGES,
   MEDIA_TYPE_BY_EXTENSION,
@@ -207,6 +209,13 @@ describe('documentSchema', () => {
     expect(documentSchema.safeParse({ ...document, ...change }).success).toBe(false)
   })
 
+  test('the contract does not enforce that the extension agrees with the media type', () => {
+    expect(
+      documentSchema.safeParse({ ...document, fileName: 'a.exe', mediaType: 'application/pdf' })
+        .success
+    ).toBe(true)
+  })
+
   test('sanitises a stored name on the way out', () => {
     expect(documentSchema.parse({ ...document, fileName: 'a‮b.pdf' }).fileName).toBe('ab.pdf')
   })
@@ -318,10 +327,13 @@ describe('messages', () => {
   test('the deleted payload names the deletion it was queued for by sequence', () => {
     const ok = { documentId: id('doc'), deletionSeq: 1 }
     expect(documentDeletedPayloadSchema.safeParse(ok).success).toBe(true)
+    expect(MAX_DELETION_SEQ).toBe(2_147_483_647)
     expect(
-      documentDeletedPayloadSchema.safeParse({ ...ok, deletionSeq: Number.MAX_SAFE_INTEGER })
-        .success
+      documentDeletedPayloadSchema.safeParse({ ...ok, deletionSeq: MAX_DELETION_SEQ }).success
     ).toBe(true)
+    expect(
+      documentDeletedPayloadSchema.safeParse({ ...ok, deletionSeq: MAX_DELETION_SEQ + 1 }).success
+    ).toBe(false)
     for (const bad of [NOW, 0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1, '1', undefined]) {
       expect(documentDeletedPayloadSchema.safeParse({ ...ok, deletionSeq: bad }).success).toBe(
         false
@@ -373,6 +385,11 @@ describe('PLAYBOOK_ERRORS', () => {
   test('the quota message covers count and size and says deleted documents count', () => {
     expect(PLAYBOOK_ERRORS['document.quota_exceeded'].message).toMatch(/number or total size/)
     expect(PLAYBOOK_ERRORS['document.quota_exceeded'].message).toMatch(/Deleted documents count/)
+  })
+
+  test('not_restorable is for a deleted document past its purge time, not a purged one', () => {
+    expect(PLAYBOOK_ROUTES.restoreDocument.description).toContain('purge time has passed')
+    expect(PLAYBOOK_ROUTES.restoreDocument.description).toContain('document.not_found (404)')
   })
 
   test('purged is distinct from not found', () => {
@@ -500,5 +517,73 @@ describe('normaliseMediaType', () => {
     ['', ''],
   ])('%s becomes %s', (input, output) => {
     expect(normaliseMediaType(input)).toBe(output)
+  })
+})
+
+describe('checkUploadFile', () => {
+  const file = { fileName: 'report.pdf', declaredMediaType: 'application/pdf', sizeBytes: 10 }
+
+  test('returns the parsed file when every check passes', () => {
+    expect(checkUploadFile(file)).toEqual({ ok: true, file })
+  })
+
+  test('an over-size .exe yields only document.too_large (size runs first)', () => {
+    expect(
+      checkUploadFile({ ...file, fileName: 'a.exe', sizeBytes: MAX_DOCUMENT_BYTES + 1 })
+    ).toEqual({
+      ok: false,
+      code: 'document.too_large',
+    })
+  })
+
+  test('a wrong type of an allowed size yields document.unsupported_type', () => {
+    expect(checkUploadFile({ ...file, fileName: 'a.exe' })).toEqual({
+      ok: false,
+      code: 'document.unsupported_type',
+    })
+    expect(checkUploadFile({ ...file, fileName: 'noextension' })).toEqual({
+      ok: false,
+      code: 'document.unsupported_type',
+    })
+  })
+
+  test('a trailing space is accepted and stored trimmed', () => {
+    expect(checkUploadFile({ ...file, fileName: 'report.pdf ' })).toEqual({
+      ok: true,
+      file: { ...file, fileName: 'report.pdf' },
+    })
+    expect(documentTypeCheckSchema.safeParse('report.pdf ').success).toBe(true)
+  })
+
+  test('a bidirectional override is judged on its stripped form', () => {
+    expect(checkUploadFile({ ...file, fileName: 'report\u202egnp.exe' })).toEqual({
+      ok: false,
+      code: 'document.unsupported_type',
+    })
+    expect(checkUploadFile({ ...file, fileName: 'repo\u202ert.pdf' })).toEqual({
+      ok: true,
+      file: { ...file, fileName: 'report.pdf' },
+    })
+    expect(checkUploadFile({ ...file, fileName: 'report.pdf\u2066' })).toEqual({
+      ok: true,
+      file: { ...file, fileName: 'report.pdf' },
+    })
+  })
+
+  test.each([
+    ['a negative size', { sizeBytes: -1 }],
+    ['a fractional size', { sizeBytes: 1.5 }],
+    ['an empty file', { sizeBytes: 0 }],
+    ['a name with no stem', { fileName: '.pdf' }],
+    ['a path separator', { fileName: 'a/b.pdf' }],
+    ['an unknown key', { content: 'x' }],
+  ])('%s yields request.invalid', (_name, change) => {
+    expect(checkUploadFile({ ...file, ...change })).toEqual({ ok: false, code: 'request.invalid' })
+  })
+
+  test('input that is not an object yields request.invalid', () => {
+    for (const input of [null, undefined, 'x', 3, {}, { fileName: 3, sizeBytes: 'big' }]) {
+      expect(checkUploadFile(input)).toEqual({ ok: false, code: 'request.invalid' })
+    }
   })
 })

@@ -108,7 +108,7 @@ export const PLAYBOOK_ROUTES: Readonly<Record<PlaybookRouteName, PlaybookRoute>>
     errors: ['document.not_found', 'document.not_restorable'],
     commonErrors: ['request.invalid'],
     description:
-      'Restores a soft-deleted document within the retention period; it is re-ingested from the kept file and shows as "processing". Owner and Admin only. Idempotent by end state: a document that is no longer deleted (restored by an earlier call, or never deleted) answers 200 with the document as it is. One already purged is document.not_restorable (410), distinct from document.not_found. Takes no body.',
+      'Restores a soft-deleted document within the retention period; it is re-ingested from the kept file and shows as "processing". Owner and Admin only. Idempotent by end state: a document that is no longer deleted (restored by an earlier call, or never deleted) answers 200 with the document as it is. A deleted document whose purge time has passed but which the purge has not yet removed is document.not_restorable (410); once purged the record is gone and the answer is document.not_found (404). Takes no body.',
   }),
   removeOrganizationDocuments: route({
     method: 'POST',

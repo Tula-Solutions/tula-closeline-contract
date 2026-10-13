@@ -7,8 +7,9 @@ import { defineErrors } from '../errors'
  * There is no page-limit code: the page count is checked in the ingestion job, so a document over
  * the limit ends in state `failed` with `failureReason: 'too_many_pages'`. `quota_exceeded` covers
  * both the document count and the total size and does not say which, as no domain error in this
- * library carries typed details. `document.not_restorable` (410) is a document
- * whose retention ended and whose file is gone, and is never `document.not_found`.
+ * library carries typed details. `document.not_restorable` (410) is a deleted
+ * document whose purge time has passed but which the purge has not yet removed. There is no
+ * tombstone: once purged the record is gone and the answer is `document.not_found` (404).
  */
 export const PLAYBOOK_ERRORS = {
   ...defineErrors('document', {
