@@ -337,25 +337,9 @@ describe('internal abandon', () => {
     expect(internalAbandonOrganizationResponseSchema.parse(first)).toEqual(first)
   })
 
-  test('is defined by its end state: the four cases it can meet', () => {
-    const success = { organizationId, status: 'deleted' }
-    const cases = [
-      ['abandoned by this call', 'success'],
-      ['abandoned or deleted earlier, by anyone, under any key or user id', 'success'],
-      ['never created', 'success'],
-      [
-        'live but failing the guard: another member, a different sole member, or too old',
-        'organization.not_abandonable',
-      ],
-    ] as const
-    for (const [, outcome] of cases) {
-      if (outcome === 'success') {
-        expect(internalAbandonOrganizationResponseSchema.parse(success)).toEqual(success as never)
-      } else {
-        expect(INTERNAL_CALL_ERRORS.abandonOrganization).toEqual([outcome])
-        expect(CORE_ERRORS[outcome].status).toBe(409)
-      }
-    }
+  test('has one refusal, 409 not_abandonable, and no not-found code', () => {
+    expect(INTERNAL_CALL_ERRORS.abandonOrganization).toEqual(['organization.not_abandonable'])
+    expect(CORE_ERRORS['organization.not_abandonable'].status).toBe(409)
     expect(INTERNAL_CALL_ERRORS.abandonOrganization).not.toContain('organization.not_found')
   })
 

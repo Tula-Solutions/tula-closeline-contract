@@ -220,6 +220,9 @@ type InternalAbandonOrganizationParams = z.infer<typeof internalAbandonOrganizat
 * a live Organization that fails the guard answers `organization.not_abandonable`: it has another
 * member, its one member is not `userId`, or it was created `ABANDON_MAX_AGE_HOURS` hours ago or
 * more. Otherwise core marks the Organization `deleted` and frees the user id.
+* Success means no live Organization remains, not that the user id is free yet: an Organization
+* deleted earlier may still hold its members until the deletion job empties it, so auth must not
+* depend on the id being free immediately.
 *
 * The holder of the internal token can tell a live Organization id from any other id (409 against
 * 200); the single refusal code hides only which guard condition failed. Needing the Organization
