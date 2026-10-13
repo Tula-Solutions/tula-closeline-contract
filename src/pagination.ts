@@ -6,7 +6,8 @@ export const MAX_PAGE_SIZE = 100
 /** The page size used when a request does not ask for one. */
 export const DEFAULT_PAGE_SIZE = 25
 
-const MAX_CURSOR_LENGTH = 512
+/** The longest cursor accepted or produced; about 380 bytes of JSON. */
+export const MAX_CURSOR_LENGTH = 512
 
 const cursorTextSchema = z.string().min(1).max(MAX_CURSOR_LENGTH)
 
@@ -34,22 +35,40 @@ export function pageSchema<T extends z.ZodType>(itemSchema: T) {
 /** One page of items, as returned by a list endpoint. */
 export type Page<T> = { items: T[]; nextCursor: string | null }
 
-/** Encodes a JSON-serialisable value as an opaque URL-safe cursor (base64url of its JSON). */
+/**
+ * Encodes a JSON-serialisable position as a URL-safe cursor (base64url of its JSON); throws if the
+ * result would exceed {@link MAX_CURSOR_LENGTH}. A cursor is not signed or encrypted: the client
+ * can read and forge it, so it must carry only a position. The Organization always comes from the
+ * verified token, never from a cursor.
+ */
 export function encodeCursor(value: unknown): string {
   const bytes = new TextEncoder().encode(JSON.stringify(value))
   let binary = ''
   for (const byte of bytes) {
     binary += String.fromCharCode(byte)
   }
-  return btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '')
+  const cursor = btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '')
+  if (cursor.length > MAX_CURSOR_LENGTH) {
+    throw new Error(
+      `Cursor is ${cursor.length} characters; the limit is ${MAX_CURSOR_LENGTH}. Put less in the position.`
+    )
+  }
+  return cursor
 }
 
-/** Decodes a cursor made by {@link encodeCursor}; returns undefined, never throws, for anything invalid. */
+/**
+ * Decodes a cursor made by {@link encodeCursor}; returns undefined, never throws, for anything
+ * invalid. The decoded value is client-controlled input: use it as a position only.
+ */
 export function decodeCursor<T extends z.ZodType>(
   text: string,
   schema: T
 ): z.output<T> | undefined {
-  if (!/^[A-Za-z0-9_-]+$/.test(text) || text.length > MAX_CURSOR_LENGTH) {
+  if (
+    typeof text !== 'string' ||
+    text.length > MAX_CURSOR_LENGTH ||
+    !/^[A-Za-z0-9_-]+$/.test(text)
+  ) {
     return undefined
   }
   try {

@@ -1,7 +1,6 @@
 import { z } from 'zod'
 
 const PREFIX_PATTERN = /^[a-z]{2,5}$/
-const HEX_PATTERN = /^[0-9a-f]{32}$/
 
 /** An id string branded with its prefix, so ids of different kinds cannot be mixed up. */
 export type Id<Prefix extends string> = string & z.core.$brand<Prefix>
@@ -47,11 +46,14 @@ export type EventId = z.infer<typeof eventIdSchema>
 /** The id of a request. */
 export type RequestId = z.infer<typeof requestIdSchema>
 
-/** Turns a UUID (any case, dashes optional) into an id with the given prefix; throws if it is not a UUID. */
+const UUID_PATTERN =
+  /^(?:[0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i
+
+/** Turns a UUID (any case; 32 hex characters or the dashed 8-4-4-4-12 form) into an id with the given prefix; throws otherwise. */
 export function formatId<const Prefix extends string>(prefix: Prefix, uuid: string): Id<Prefix> {
-  const hex = uuid.replaceAll('-', '').toLowerCase()
-  if (!HEX_PATTERN.test(hex)) {
-    throw new Error('Not a UUID: expected 32 hexadecimal characters')
+  if (typeof uuid !== 'string' || !UUID_PATTERN.test(uuid)) {
+    throw new Error('Not a UUID: expected 32 hexadecimal characters or the 8-4-4-4-12 form')
   }
+  const hex = uuid.replaceAll('-', '').toLowerCase()
   return idSchema(prefix).parse(`${prefix}_${hex}`) as Id<Prefix>
 }

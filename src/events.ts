@@ -44,5 +44,7 @@ export function defineEvent<const T extends string, const V extends number, D ex
     schema,
     /** Parses an envelope of this type and version; throws a ZodError for anything else. */
     parse: (input: unknown) => schema.parse(input),
+    /** Parses without throwing. Queue consumers use this, so a malformed message is a result to handle, not an exception to retry. */
+    safeParse: (input: unknown) => schema.safeParse(input),
   }
 }

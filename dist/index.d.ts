@@ -125,6 +125,60 @@ declare function defineEvent<
 			optout: "optional";
 		};
 	} ? k : never]? : T_3[k]["_zod"]["output"] | undefined } : never) extends infer T_1 ? { [K in keyof T_1] : T_1[K] } : never;
+	/** Parses without throwing. Queue consumers use this, so a malformed message is a result to handle, not an exception to retry. */
+	safeParse: (input: unknown) => z2.ZodSafeParseResult<({
+		id: z2.core.$ZodBranded<z2.ZodString, "evt", "out">;
+		occurredAt: z2.ZodISODateTime;
+		organizationId: z2.core.$ZodBranded<z2.ZodString, "org", "out">;
+		region: z2.ZodEnum<{
+			eu: "eu";
+			us: "us";
+		}>;
+		type: z2.ZodLiteral<T>;
+		version: z2.ZodLiteral<V>;
+		data: D;
+	} extends infer T_2 extends z2.core.$ZodLooseShape ? { -readonly [k in keyof T_2 as {
+		id: z2.core.$ZodBranded<z2.ZodString, "evt", "out">;
+		occurredAt: z2.ZodISODateTime;
+		organizationId: z2.core.$ZodBranded<z2.ZodString, "org", "out">;
+		region: z2.ZodEnum<{
+			eu: "eu";
+			us: "us";
+		}>;
+		type: z2.ZodLiteral<T>;
+		version: z2.ZodLiteral<V>;
+		data: D;
+	}[k] extends {
+		_zod: {
+			optout: "optional";
+		};
+	} ? never : k] : T_2[k]["_zod"]["output"] } : never) & ({
+		id: z2.core.$ZodBranded<z2.ZodString, "evt", "out">;
+		occurredAt: z2.ZodISODateTime;
+		organizationId: z2.core.$ZodBranded<z2.ZodString, "org", "out">;
+		region: z2.ZodEnum<{
+			eu: "eu";
+			us: "us";
+		}>;
+		type: z2.ZodLiteral<T>;
+		version: z2.ZodLiteral<V>;
+		data: D;
+	} extends infer T_3 extends z2.core.$ZodLooseShape ? { -readonly [k in keyof T_3 as {
+		id: z2.core.$ZodBranded<z2.ZodString, "evt", "out">;
+		occurredAt: z2.ZodISODateTime;
+		organizationId: z2.core.$ZodBranded<z2.ZodString, "org", "out">;
+		region: z2.ZodEnum<{
+			eu: "eu";
+			us: "us";
+		}>;
+		type: z2.ZodLiteral<T>;
+		version: z2.ZodLiteral<V>;
+		data: D;
+	}[k] extends {
+		_zod: {
+			optout: "optional";
+		};
+	} ? k : never]? : T_3[k]["_zod"]["output"] | undefined } : never) extends infer T_1 ? { [K in keyof T_1] : T_1[K] } : never>;
 };
 import { z as z3 } from "zod";
 /** An id string branded with its prefix, so ids of different kinds cannot be mixed up. */
@@ -159,13 +213,15 @@ type ProspectId = z3.infer<typeof prospectIdSchema>;
 type EventId = z3.infer<typeof eventIdSchema>;
 /** The id of a request. */
 type RequestId = z3.infer<typeof requestIdSchema>;
-/** Turns a UUID (any case, dashes optional) into an id with the given prefix; throws if it is not a UUID. */
+/** Turns a UUID (any case; 32 hex characters or the dashed 8-4-4-4-12 form) into an id with the given prefix; throws otherwise. */
 declare function formatId<const Prefix extends string>(prefix: Prefix, uuid: string): Id<Prefix>;
 import { z as z4 } from "zod";
 /** The largest page any list endpoint returns. */
 declare const MAX_PAGE_SIZE = 100;
 /** The page size used when a request does not ask for one. */
 declare const DEFAULT_PAGE_SIZE = 25;
+/** The longest cursor accepted or produced; about 380 bytes of JSON. */
+declare const MAX_CURSOR_LENGTH = 512;
 /** The query parameters of a list request: an optional cursor and a bounded limit (from a number or digit string). */
 declare const pageQuerySchema: z4.ZodObject<{
 	cursor: z4.ZodOptional<z4.ZodString>;
@@ -183,9 +239,17 @@ type Page<T> = {
 	items: T[];
 	nextCursor: string | null;
 };
-/** Encodes a JSON-serialisable value as an opaque URL-safe cursor (base64url of its JSON). */
+/**
+* Encodes a JSON-serialisable position as a URL-safe cursor (base64url of its JSON); throws if the
+* result would exceed {@link MAX_CURSOR_LENGTH}. A cursor is not signed or encrypted: the client
+* can read and forge it, so it must carry only a position. The Organization always comes from the
+* verified token, never from a cursor.
+*/
 declare function encodeCursor(value: unknown): string;
-/** Decodes a cursor made by {@link encodeCursor}; returns undefined, never throws, for anything invalid. */
+/**
+* Decodes a cursor made by {@link encodeCursor}; returns undefined, never throws, for anything
+* invalid. The decoded value is client-controlled input: use it as a position only.
+*/
 declare function decodeCursor<T extends z4.ZodType>(text: string, schema: T): z4.output<T> | undefined;
 import { z as z5 } from "zod";
 /** Every Region an Organization can be created in. */
@@ -212,4 +276,4 @@ type Role = z5.infer<typeof roleSchema>;
 declare function roleAtLeast(role: Role, minimum: Role): boolean;
 /** This library's package name, so a consumer can report which shared libraries it resolved. */
 declare const PACKAGE = "tula-closeline-contract";
-export { CommonErrorCode, DEFAULT_PAGE_SIZE, ERRORS, ErrorBody, ErrorDefinition, ErrorInput, EventId, EventType, Id, MAX_PAGE_SIZE, MembershipId, OrganizationId, PACKAGE, Page, PageQuery, ProspectId, REGIONS, ROLES, Region, RequestId, Role, TeamId, UserId, decodeCursor, defineErrors, defineEvent, encodeCursor, errorBodySchema, errorCodeSchema, eventEnvelopeSchema, eventIdSchema, eventTypeSchema, formatId, idSchema, membershipIdSchema, organizationIdSchema, pageQuerySchema, pageSchema, prospectIdSchema, regionSchema, requestIdSchema, roleAtLeast, roleSchema, teamIdSchema, userIdSchema };
+export { CommonErrorCode, DEFAULT_PAGE_SIZE, ERRORS, ErrorBody, ErrorDefinition, ErrorInput, EventId, EventType, Id, MAX_CURSOR_LENGTH, MAX_PAGE_SIZE, MembershipId, OrganizationId, PACKAGE, Page, PageQuery, ProspectId, REGIONS, ROLES, Region, RequestId, Role, TeamId, UserId, decodeCursor, defineErrors, defineEvent, encodeCursor, errorBodySchema, errorCodeSchema, eventEnvelopeSchema, eventIdSchema, eventTypeSchema, formatId, idSchema, membershipIdSchema, organizationIdSchema, pageQuerySchema, pageSchema, prospectIdSchema, regionSchema, requestIdSchema, roleAtLeast, roleSchema, teamIdSchema, userIdSchema };

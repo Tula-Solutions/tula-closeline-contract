@@ -51,7 +51,6 @@ import { z as z4 } from "zod";
 // src/ids.ts
 import { z as z2 } from "zod";
 var PREFIX_PATTERN = /^[a-z]{2,5}$/;
-var HEX_PATTERN = /^[0-9a-f]{32}$/;
 function idSchema(prefix) {
   if (!PREFIX_PATTERN.test(prefix)) {
     throw new Error(`Invalid id prefix: ${prefix}`);
@@ -65,11 +64,12 @@ var teamIdSchema = idSchema("team");
 var prospectIdSchema = idSchema("prs");
 var eventIdSchema = idSchema("evt");
 var requestIdSchema = idSchema("req");
+var UUID_PATTERN = /^(?:[0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
 function formatId(prefix, uuid) {
-  const hex = uuid.replaceAll("-", "").toLowerCase();
-  if (!HEX_PATTERN.test(hex)) {
-    throw new Error("Not a UUID: expected 32 hexadecimal characters");
+  if (typeof uuid !== "string" || !UUID_PATTERN.test(uuid)) {
+    throw new Error("Not a UUID: expected 32 hexadecimal characters or the 8-4-4-4-12 form");
   }
+  const hex = uuid.replaceAll("-", "").toLowerCase();
   return idSchema(prefix).parse(`${prefix}_${hex}`);
 }
 
@@ -111,7 +111,8 @@ function defineEvent(type, version, dataSchema) {
     type,
     version,
     schema,
-    parse: (input) => schema.parse(input)
+    parse: (input) => schema.parse(input),
+    safeParse: (input) => schema.safeParse(input)
   };
 }
 // src/pagination.ts
@@ -136,10 +137,14 @@ function encodeCursor(value) {
   for (const byte of bytes) {
     binary += String.fromCharCode(byte);
   }
-  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
+  const cursor = btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
+  if (cursor.length > MAX_CURSOR_LENGTH) {
+    throw new Error(`Cursor is ${cursor.length} characters; the limit is ${MAX_CURSOR_LENGTH}. Put less in the position.`);
+  }
+  return cursor;
 }
 function decodeCursor(text, schema) {
-  if (!/^[A-Za-z0-9_-]+$/.test(text) || text.length > MAX_CURSOR_LENGTH) {
+  if (typeof text !== "string" || text.length > MAX_CURSOR_LENGTH || !/^[A-Za-z0-9_-]+$/.test(text)) {
     return;
   }
   try {
@@ -159,6 +164,7 @@ var PACKAGE = "tula-closeline-contract";
 export {
   DEFAULT_PAGE_SIZE,
   ERRORS,
+  MAX_CURSOR_LENGTH,
   MAX_PAGE_SIZE,
   PACKAGE,
   REGIONS,

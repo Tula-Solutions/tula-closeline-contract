@@ -117,7 +117,11 @@ describe('cursor', () => {
   })
 
   test('decodeCursor rejects an oversized but otherwise valid cursor', () => {
-    const big = encodeCursor({ at: 'x', id: 'y'.repeat(600) })
+    // encodeCursor refuses to make one this long, so build it by hand: valid base64url of valid JSON.
+    const big = btoa(JSON.stringify({ at: 'x', id: 'y'.repeat(600) }))
+      .replaceAll('+', '-')
+      .replaceAll('/', '_')
+      .replaceAll('=', '')
     expect(big.length).toBeGreaterThan(512)
     expect(decodeCursor(big, schema)).toBeUndefined()
   })
