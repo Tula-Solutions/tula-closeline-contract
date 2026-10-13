@@ -40,6 +40,11 @@ const common = [
     422,
     'The idempotency key was already used with a different request.'
   ),
+  freezeEntry(
+    'request.idempotency_in_progress',
+    409,
+    'A request with this idempotency key is still in progress. Try again shortly.'
+  ),
   freezeEntry('request.too_large', 413, 'The request body is too large.'),
   freezeEntry('request.method_not_allowed', 405, 'This method is not allowed for this route.'),
   freezeEntry('request.unsupported_media_type', 415, 'The request content type is not supported.'),

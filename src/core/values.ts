@@ -92,7 +92,8 @@ export const invitationTokenSchema = z
 /**
  * The header that carries an idempotency key on a call that has effects. Every public POST accepts
  * it too: a replay returns the original result, and the same key with a different body is
- * `request.idempotency_key_reused`.
+ * `request.idempotency_key_reused`, and the same key while the first request is still running is
+ * `request.idempotency_in_progress`.
  */
 export const IDEMPOTENCY_KEY_HEADER = 'Idempotency-Key'
 

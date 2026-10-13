@@ -1,5 +1,41 @@
 import { ErrorDefinition as ErrorDefinition_8gwh45 } from "..";
 /**
+* Every `area.reason` code the auth service answers with, beyond the common ones in `ERRORS`:
+* sign-in, sign-up verification, passwords and sessions. The sign-up codes and core's
+* `organization.deleted` (returned by sign-in and refresh when the user's Organization was deleted)
+* are the same entries as in `SIGNUP_ERRORS` and `CORE_ERRORS`, not copies. A session or access
+* token that is not valid is the common `auth.token_*`; a refresh token that is not valid is
+* `session.invalid_token`.
+*/
+declare const AUTH_ERRORS: {
+	readonly "organization.deleted": ErrorDefinition_8gwh45<"organization.deleted">;
+	readonly "auth.invalid_credentials": ErrorDefinition_8gwh45<"auth.invalid_credentials">;
+	readonly "auth.no_organization": ErrorDefinition_8gwh45<"auth.no_organization">;
+	readonly "auth.user_banned": ErrorDefinition_8gwh45<"auth.user_banned">;
+	readonly "email.invalid": ErrorDefinition_8gwh45<"email.invalid">;
+	readonly "flow.invalid_step": ErrorDefinition_8gwh45<"flow.invalid_step">;
+	readonly "flow.not_found": ErrorDefinition_8gwh45<"flow.not_found">;
+	readonly "mail.unavailable": ErrorDefinition_8gwh45<"mail.unavailable">;
+	readonly "membership.unavailable": ErrorDefinition_8gwh45<"membership.unavailable">;
+	readonly "password.breached": ErrorDefinition_8gwh45<"password.breached">;
+	readonly "password.common": ErrorDefinition_8gwh45<"password.common">;
+	readonly "password.contains_user_info": ErrorDefinition_8gwh45<"password.contains_user_info">;
+	readonly "password.too_long": ErrorDefinition_8gwh45<"password.too_long">;
+	readonly "password.too_short": ErrorDefinition_8gwh45<"password.too_short">;
+	readonly "session.expired": ErrorDefinition_8gwh45<"session.expired">;
+	readonly "session.invalid_token": ErrorDefinition_8gwh45<"session.invalid_token">;
+	readonly "session.reuse_detected": ErrorDefinition_8gwh45<"session.reuse_detected">;
+	readonly "session.revoked": ErrorDefinition_8gwh45<"session.revoked">;
+	readonly "signup.invitation_invalid": ErrorDefinition_8gwh45<"signup.invitation_invalid">;
+	readonly "signup.organization_name_invalid": ErrorDefinition_8gwh45<"signup.organization_name_invalid">;
+	readonly "verification.expired": ErrorDefinition_8gwh45<"verification.expired">;
+	readonly "verification.invalid_code": ErrorDefinition_8gwh45<"verification.invalid_code">;
+	readonly "verification.too_many_attempts": ErrorDefinition_8gwh45<"verification.too_many_attempts">;
+};
+/** A code from the {@link AUTH_ERRORS} registry. */
+type AuthErrorCode = keyof typeof AUTH_ERRORS;
+import { ErrorDefinition as ErrorDefinition_8gwh452 } from "..";
+/**
 * The errors core returns, as `area.reason` codes. None says whether an email address or a user
 * exists in another Organization: `invitation.invalid` covers an unknown, used, revoked and expired
 * token alike, and `membership.already_member` is only ever about the user making the call. A role
@@ -7,17 +43,17 @@ import { ErrorDefinition as ErrorDefinition_8gwh45 } from "..";
 * `INTERNAL_CALL_ERRORS`.
 */
 declare const CORE_ERRORS: {
-	readonly "invitation.already_pending": ErrorDefinition_8gwh45<"invitation.already_pending">;
-	readonly "invitation.invalid": ErrorDefinition_8gwh45<"invitation.invalid">;
-	readonly "invitation.not_found": ErrorDefinition_8gwh45<"invitation.not_found">;
-	readonly "member.last_owner": ErrorDefinition_8gwh45<"member.last_owner">;
-	readonly "member.not_found": ErrorDefinition_8gwh45<"member.not_found">;
-	readonly "membership.already_member": ErrorDefinition_8gwh45<"membership.already_member">;
-	readonly "organization.deleted": ErrorDefinition_8gwh45<"organization.deleted">;
-	readonly "organization.not_found": ErrorDefinition_8gwh45<"organization.not_found">;
-	readonly "organization.suspended": ErrorDefinition_8gwh45<"organization.suspended">;
-	readonly "team.name_taken": ErrorDefinition_8gwh45<"team.name_taken">;
-	readonly "team.not_found": ErrorDefinition_8gwh45<"team.not_found">;
+	readonly "invitation.already_pending": ErrorDefinition_8gwh452<"invitation.already_pending">;
+	readonly "invitation.invalid": ErrorDefinition_8gwh452<"invitation.invalid">;
+	readonly "invitation.not_found": ErrorDefinition_8gwh452<"invitation.not_found">;
+	readonly "member.last_owner": ErrorDefinition_8gwh452<"member.last_owner">;
+	readonly "member.not_found": ErrorDefinition_8gwh452<"member.not_found">;
+	readonly "membership.already_member": ErrorDefinition_8gwh452<"membership.already_member">;
+	readonly "organization.deleted": ErrorDefinition_8gwh452<"organization.deleted">;
+	readonly "organization.not_found": ErrorDefinition_8gwh452<"organization.not_found">;
+	readonly "organization.suspended": ErrorDefinition_8gwh452<"organization.suspended">;
+	readonly "team.name_taken": ErrorDefinition_8gwh452<"team.name_taken">;
+	readonly "team.not_found": ErrorDefinition_8gwh452<"team.not_found">;
 };
 /** A code from the {@link CORE_ERRORS} registry. */
 type CoreErrorCode = keyof typeof CORE_ERRORS;
@@ -27,10 +63,10 @@ type CoreErrorCode = keyof typeof CORE_ERRORS;
 * `signup.invitation_invalid` and an unreachable core into `membership.unavailable`.
 */
 declare const SIGNUP_ERRORS: {
-	readonly "auth.no_organization": ErrorDefinition_8gwh45<"auth.no_organization">;
-	readonly "membership.unavailable": ErrorDefinition_8gwh45<"membership.unavailable">;
-	readonly "signup.invitation_invalid": ErrorDefinition_8gwh45<"signup.invitation_invalid">;
-	readonly "signup.organization_name_invalid": ErrorDefinition_8gwh45<"signup.organization_name_invalid">;
+	readonly "auth.no_organization": ErrorDefinition_8gwh452<"auth.no_organization">;
+	readonly "membership.unavailable": ErrorDefinition_8gwh452<"membership.unavailable">;
+	readonly "signup.invitation_invalid": ErrorDefinition_8gwh452<"signup.invitation_invalid">;
+	readonly "signup.organization_name_invalid": ErrorDefinition_8gwh452<"signup.organization_name_invalid">;
 };
 /** A code from the {@link SIGNUP_ERRORS} registry. */
 type SignupErrorCode = keyof typeof SIGNUP_ERRORS;
@@ -400,7 +436,8 @@ declare const invitationTokenSchema: z6.ZodString;
 /**
 * The header that carries an idempotency key on a call that has effects. Every public POST accepts
 * it too: a replay returns the original result, and the same key with a different body is
-* `request.idempotency_key_reused`.
+* `request.idempotency_key_reused`, and the same key while the first request is still running is
+* `request.idempotency_in_progress`.
 */
 declare const IDEMPOTENCY_KEY_HEADER = "Idempotency-Key";
 /** The value of the {@link IDEMPOTENCY_KEY_HEADER} header: 16 to 128 characters from `A-Za-z0-9_.:-`, such as a UUID. */
@@ -447,7 +484,7 @@ type ErrorDefinition<Code extends string = string> = {
 	readonly status: number;
 	readonly message: string;
 };
-declare const common: readonly [ErrorDefinition<"request.invalid">, ErrorDefinition<"request.not_found">, ErrorDefinition<"request.conflict">, ErrorDefinition<"request.idempotency_key_reused">, ErrorDefinition<"request.too_large">, ErrorDefinition<"request.method_not_allowed">, ErrorDefinition<"request.unsupported_media_type">, ErrorDefinition<"request.unprocessable">, ErrorDefinition<"auth.unauthenticated">, ErrorDefinition<"auth.forbidden">, ErrorDefinition<"auth.token_expired">, ErrorDefinition<"auth.token_invalid">, ErrorDefinition<"auth.unavailable">, ErrorDefinition<"rate.limited">, ErrorDefinition<"server.internal">, ErrorDefinition<"server.unavailable">, ErrorDefinition<"server.timeout">];
+declare const common: readonly [ErrorDefinition<"request.invalid">, ErrorDefinition<"request.not_found">, ErrorDefinition<"request.conflict">, ErrorDefinition<"request.idempotency_key_reused">, ErrorDefinition<"request.idempotency_in_progress">, ErrorDefinition<"request.too_large">, ErrorDefinition<"request.method_not_allowed">, ErrorDefinition<"request.unsupported_media_type">, ErrorDefinition<"request.unprocessable">, ErrorDefinition<"auth.unauthenticated">, ErrorDefinition<"auth.forbidden">, ErrorDefinition<"auth.token_expired">, ErrorDefinition<"auth.token_invalid">, ErrorDefinition<"auth.unavailable">, ErrorDefinition<"rate.limited">, ErrorDefinition<"server.internal">, ErrorDefinition<"server.unavailable">, ErrorDefinition<"server.timeout">];
 type CommonEntry = (typeof common)[number];
 /** The errors common to every service, keyed by code. */
 declare const ERRORS: Readonly<{ [E in CommonEntry as E["code"]] : E }>;
@@ -730,4 +767,4 @@ declare const organizationStatusSchema: z12.ZodEnum<{
 type OrganizationStatus = z12.infer<typeof organizationStatusSchema>;
 /** This library's package name, so a consumer can report which shared libraries it resolved. */
 declare const PACKAGE = "tula-closeline-contract";
-export { AddTeamMemberRequest, CORE_ERRORS, ChangeMemberRoleRequest, CommonErrorCode, CoreErrorCode, CreateInvitationRequest, CreateTeamRequest, DEFAULT_PAGE_SIZE, ERRORS, Email, ErrorBody, ErrorDefinition, ErrorInput, EventId, EventType, IDEMPOTENCY_KEY_HEADER, INTERNAL_CALL_ERRORS, INVITABLE_ROLES, INVITATION_STATES, Id, IdempotencyKey, InternalAcceptInvitationRequest, InternalAcceptInvitationResponse, InternalCallName, InternalCreateOrganizationRequest, InternalCreateOrganizationResponse, InternalMembershipRequest, InternalMembershipResponse, InvitableRole, Invitation, InvitationId, InvitationParams, InvitationState, ListInvitationsQuery, ListInvitationsResponse, ListMembersQuery, ListMembersResponse, ListTeamsQuery, ListTeamsResponse, MAX_CURSOR_LENGTH, MAX_EMAIL_LENGTH, MAX_NAME_LENGTH, MAX_PAGE_SIZE, Member, MemberParams, MembershipId, ORGANIZATION_STATUSES, Organization, OrganizationId, OrganizationStatus, PACKAGE, Page, PageQuery, ProspectId, REGIONS, ROLES, Region, RenameOrganizationRequest, RenameTeamRequest, RequestId, Role, SIGNUP_ERRORS, SignupErrorCode, Team, TeamId, TeamMember, TeamMemberParams, TeamParams, UserId, addTeamMemberRequestSchema, changeMemberRoleRequestSchema, createInvitationRequestSchema, createTeamRequestSchema, decodeCursor, defineErrors, defineEvent, emailSchema, encodeCursor, errorBodySchema, errorCodeSchema, eventEnvelopeSchema, eventIdSchema, eventTypeSchema, foldAscii, formatId, idSchema, idempotencyKeySchema, internalAcceptInvitationRequestSchema, internalAcceptInvitationResponseSchema, internalCreateOrganizationRequestSchema, internalCreateOrganizationResponseSchema, internalMembershipRequestSchema, internalMembershipResponseSchema, invitableRoleSchema, invitationIdSchema, invitationParamsSchema, invitationSchema, invitationStateSchema, invitationTokenSchema, listInvitationsQuerySchema, listInvitationsResponseSchema, listMembersQuerySchema, listMembersResponseSchema, listTeamsQuerySchema, listTeamsResponseSchema, memberParamsSchema, memberSchema, membershipIdSchema, organizationIdSchema, organizationNameSchema, organizationSchema, organizationStatusSchema, pageQuerySchema, pageSchema, prospectIdSchema, regionSchema, renameOrganizationRequestSchema, renameTeamRequestSchema, requestIdSchema, roleAtLeast, roleSchema, storedNameSchema, teamIdSchema, teamMemberParamsSchema, teamMemberSchema, teamNameSchema, teamParamsSchema, teamSchema, timestampSchema, userIdSchema };
+export { AUTH_ERRORS, AddTeamMemberRequest, AuthErrorCode, CORE_ERRORS, ChangeMemberRoleRequest, CommonErrorCode, CoreErrorCode, CreateInvitationRequest, CreateTeamRequest, DEFAULT_PAGE_SIZE, ERRORS, Email, ErrorBody, ErrorDefinition, ErrorInput, EventId, EventType, IDEMPOTENCY_KEY_HEADER, INTERNAL_CALL_ERRORS, INVITABLE_ROLES, INVITATION_STATES, Id, IdempotencyKey, InternalAcceptInvitationRequest, InternalAcceptInvitationResponse, InternalCallName, InternalCreateOrganizationRequest, InternalCreateOrganizationResponse, InternalMembershipRequest, InternalMembershipResponse, InvitableRole, Invitation, InvitationId, InvitationParams, InvitationState, ListInvitationsQuery, ListInvitationsResponse, ListMembersQuery, ListMembersResponse, ListTeamsQuery, ListTeamsResponse, MAX_CURSOR_LENGTH, MAX_EMAIL_LENGTH, MAX_NAME_LENGTH, MAX_PAGE_SIZE, Member, MemberParams, MembershipId, ORGANIZATION_STATUSES, Organization, OrganizationId, OrganizationStatus, PACKAGE, Page, PageQuery, ProspectId, REGIONS, ROLES, Region, RenameOrganizationRequest, RenameTeamRequest, RequestId, Role, SIGNUP_ERRORS, SignupErrorCode, Team, TeamId, TeamMember, TeamMemberParams, TeamParams, UserId, addTeamMemberRequestSchema, changeMemberRoleRequestSchema, createInvitationRequestSchema, createTeamRequestSchema, decodeCursor, defineErrors, defineEvent, emailSchema, encodeCursor, errorBodySchema, errorCodeSchema, eventEnvelopeSchema, eventIdSchema, eventTypeSchema, foldAscii, formatId, idSchema, idempotencyKeySchema, internalAcceptInvitationRequestSchema, internalAcceptInvitationResponseSchema, internalCreateOrganizationRequestSchema, internalCreateOrganizationResponseSchema, internalMembershipRequestSchema, internalMembershipResponseSchema, invitableRoleSchema, invitationIdSchema, invitationParamsSchema, invitationSchema, invitationStateSchema, invitationTokenSchema, listInvitationsQuerySchema, listInvitationsResponseSchema, listMembersQuerySchema, listMembersResponseSchema, listTeamsQuerySchema, listTeamsResponseSchema, memberParamsSchema, memberSchema, membershipIdSchema, organizationIdSchema, organizationNameSchema, organizationSchema, organizationStatusSchema, pageQuerySchema, pageSchema, prospectIdSchema, regionSchema, renameOrganizationRequestSchema, renameTeamRequestSchema, requestIdSchema, roleAtLeast, roleSchema, storedNameSchema, teamIdSchema, teamMemberParamsSchema, teamMemberSchema, teamNameSchema, teamParamsSchema, teamSchema, timestampSchema, userIdSchema };

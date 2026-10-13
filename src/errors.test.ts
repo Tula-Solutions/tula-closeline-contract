@@ -75,6 +75,7 @@ describe('ERRORS', () => {
     ['request.not_found', 404],
     ['request.conflict', 409],
     ['request.idempotency_key_reused', 422],
+    ['request.idempotency_in_progress', 409],
     ['request.too_large', 413],
     ['request.method_not_allowed', 405],
     ['request.unsupported_media_type', 415],
@@ -96,11 +97,12 @@ describe('ERRORS', () => {
   })
 
   test('lists exactly the codes under test, each keyed by itself', () => {
-    expect(Object.keys(ERRORS)).toHaveLength(17)
+    expect(Object.keys(ERRORS)).toHaveLength(18)
     for (const code of [
       'auth.token_expired',
       'auth.token_invalid',
       'auth.unavailable',
+      'request.idempotency_in_progress',
       'request.method_not_allowed',
       'request.unsupported_media_type',
       'request.unprocessable',
