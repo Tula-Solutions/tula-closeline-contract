@@ -1,6 +1,6 @@
 {
   "name": "tula-closeline-contract",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Closeline API schemas, types and error codes shared by services and the portal",
   "private": true,
   "type": "module",
@@ -34,6 +34,10 @@
     "bun-types": "^1.4.2",
     "bunup": "^0.16.32",
     "husky": "^9.1.7",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "zod": "^4.6.5"
+  },
+  "peerDependencies": {
+    "zod": "^4.6.5"
   }
 }
