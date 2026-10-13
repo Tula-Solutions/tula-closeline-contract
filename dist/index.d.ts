@@ -3,9 +3,9 @@ import { ErrorDefinition as ErrorDefinition_8gwh45 } from "..";
 * Every `area.reason` code the auth service answers with, beyond the common ones in `ERRORS`:
 * sign-in, sign-up verification, passwords and sessions. The sign-up codes and core's
 * `organization.deleted` (returned by sign-in and refresh when the user's Organization was deleted)
-* are the same entries as in `SIGNUP_ERRORS` and `CORE_ERRORS`, not copies. A session or access
-* token that is not valid is the common `auth.token_*`; a refresh token that is not valid is
-* `session.invalid_token`.
+* are the same entries as in `SIGNUP_ERRORS` and `CORE_ERRORS`, not copies. A missing or
+* invalid access token is one of the common `auth.*` token codes in `ERRORS`; a refresh token that
+* is not valid is `session.invalid_token`.
 */
 declare const AUTH_ERRORS: {
 	readonly "organization.deleted": ErrorDefinition_8gwh45<"organization.deleted">;
@@ -180,8 +180,9 @@ type Invitation = z2.infer<typeof invitationSchema>;
 /**
 * The body of a request to invite someone: an address and a role that is never `owner`. The call
 * accepts an `Idempotency-Key` header (`idempotencyKeySchema`): a replay returns the original
-* Invitation instead of `invitation.already_pending`, and the same key with a different body is
-* `request.idempotency_key_reused`.
+* Invitation instead of `invitation.already_pending`, the same key with a different body is
+* `request.idempotency_key_reused`, and the same key while the first request is still running is
+* `request.idempotency_in_progress`.
 */
 declare const createInvitationRequestSchema: z2.ZodObject<{
 	email: z2.ZodPipe<z2.ZodPipe<z2.ZodString, z2.ZodTransform<string, string>>, z2.ZodString>;
@@ -334,8 +335,9 @@ declare const teamSchema: z5.ZodObject<{
 type Team = z5.infer<typeof teamSchema>;
 /**
 * The body of a request to create a Team. The call accepts an `Idempotency-Key` header
-* (`idempotencyKeySchema`): a replay returns the original Team, and the same key with a different
-* body is `request.idempotency_key_reused`.
+* (`idempotencyKeySchema`): a replay returns the original Team, the same key with a different
+* body is `request.idempotency_key_reused`, and the same key while the first request is still
+* running is `request.idempotency_in_progress`.
 */
 declare const createTeamRequestSchema: z5.ZodObject<{
 	name: z5.ZodPipe<z5.ZodString, z5.ZodString>;
@@ -435,9 +437,10 @@ declare const timestampSchema: z6.ZodISODateTime;
 declare const invitationTokenSchema: z6.ZodString;
 /**
 * The header that carries an idempotency key on a call that has effects. Every public POST accepts
-* it too: a replay returns the original result, and the same key with a different body is
+* it too: a replay returns the original result, the same key with a different body is
 * `request.idempotency_key_reused`, and the same key while the first request is still running is
-* `request.idempotency_in_progress`.
+* `request.idempotency_in_progress`, answered with `details.retryAfter` in seconds and a
+* `Retry-After` header, as a rate-limited call is.
 */
 declare const IDEMPOTENCY_KEY_HEADER = "Idempotency-Key";
 /** The value of the {@link IDEMPOTENCY_KEY_HEADER} header: 16 to 128 characters from `A-Za-z0-9_.:-`, such as a UUID. */

@@ -16,8 +16,9 @@ export type Team = z.infer<typeof teamSchema>
 
 /**
  * The body of a request to create a Team. The call accepts an `Idempotency-Key` header
- * (`idempotencyKeySchema`): a replay returns the original Team, and the same key with a different
- * body is `request.idempotency_key_reused`.
+ * (`idempotencyKeySchema`): a replay returns the original Team, the same key with a different
+ * body is `request.idempotency_key_reused`, and the same key while the first request is still
+ * running is `request.idempotency_in_progress`.
  */
 export const createTeamRequestSchema = z.strictObject({
   name: teamNameSchema,

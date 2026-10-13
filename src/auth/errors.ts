@@ -5,9 +5,9 @@ import { defineErrors } from '../errors'
  * Every `area.reason` code the auth service answers with, beyond the common ones in `ERRORS`:
  * sign-in, sign-up verification, passwords and sessions. The sign-up codes and core's
  * `organization.deleted` (returned by sign-in and refresh when the user's Organization was deleted)
- * are the same entries as in `SIGNUP_ERRORS` and `CORE_ERRORS`, not copies. A session or access
- * token that is not valid is the common `auth.token_*`; a refresh token that is not valid is
- * `session.invalid_token`.
+ * are the same entries as in `SIGNUP_ERRORS` and `CORE_ERRORS`, not copies. A missing or
+ * invalid access token is one of the common `auth.*` token codes in `ERRORS`; a refresh token that
+ * is not valid is `session.invalid_token`.
  */
 export const AUTH_ERRORS = {
   ...defineErrors('auth', {

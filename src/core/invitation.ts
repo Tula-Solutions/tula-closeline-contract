@@ -26,8 +26,9 @@ export type Invitation = z.infer<typeof invitationSchema>
 /**
  * The body of a request to invite someone: an address and a role that is never `owner`. The call
  * accepts an `Idempotency-Key` header (`idempotencyKeySchema`): a replay returns the original
- * Invitation instead of `invitation.already_pending`, and the same key with a different body is
- * `request.idempotency_key_reused`.
+ * Invitation instead of `invitation.already_pending`, the same key with a different body is
+ * `request.idempotency_key_reused`, and the same key while the first request is still running is
+ * `request.idempotency_in_progress`.
  */
 export const createInvitationRequestSchema = z.strictObject({
   email: emailSchema,
