@@ -17,7 +17,7 @@ export const memberSchema = z.object({
 export type Member = z.infer<typeof memberSchema>
 
 /** The query parameters of a request to list members: a cursor and a limit of at most the maximum page size. */
-export const listMembersQuerySchema = pageQuerySchema
+export const listMembersQuerySchema = pageQuerySchema.strict()
 
 /** The query parameters of a request to list members. */
 export type ListMembersQuery = z.infer<typeof listMembersQuerySchema>

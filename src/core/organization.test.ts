@@ -20,7 +20,7 @@ describe('organizationSchema', () => {
     ['a Team id as its id', { ...organization, id: id('team') }],
     ['an unknown status', { ...organization, status: 'closed' }],
     ['an unknown Region', { ...organization, region: 'ap' }],
-    ['an over-long name', { ...organization, name: 'a'.repeat(201) }],
+    ['an over-long name', { ...organization, name: 'a'.repeat(1001) }],
     ['no name', { ...organization, name: undefined }],
   ])('rejects %s', (_name, body) => {
     expect(organizationSchema.safeParse(body).success).toBe(false)

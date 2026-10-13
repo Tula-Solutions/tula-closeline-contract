@@ -3,6 +3,7 @@ import { id, NOW } from './fixtures'
 import {
   addTeamMemberRequestSchema,
   createTeamRequestSchema,
+  listTeamsQuerySchema,
   listTeamsResponseSchema,
   renameTeamRequestSchema,
   teamMemberParamsSchema,
@@ -18,7 +19,7 @@ describe('teamSchema', () => {
     expect(teamSchema.parse(team)).toEqual(team as never)
   })
 
-  test.each([['an over-long name', { ...team, name: 'a'.repeat(201) }]])(
+  test.each([['an over-long name', { ...team, name: 'a'.repeat(1001) }]])(
     'rejects %s',
     (_name, body) => {
       expect(teamSchema.safeParse(body).success).toBe(false)
@@ -48,6 +49,13 @@ describe('listTeamsResponseSchema', () => {
     expect(listTeamsResponseSchema.safeParse({ items: [team], nextCursor: 'abc' }).success).toBe(
       true
     )
+  })
+})
+
+describe('listTeamsQuerySchema', () => {
+  test('defaults the limit and rejects a filter it does not have', () => {
+    expect(listTeamsQuerySchema.parse({}).limit).toBe(25)
+    expect(listTeamsQuerySchema.safeParse({ role: 'x' }).success).toBe(false)
   })
 })
 

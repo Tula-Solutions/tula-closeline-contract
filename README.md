@@ -28,8 +28,10 @@ Schemas and inferred types only; routes and handlers live in `tula-closeline-cor
   column the schema does not name (an Invitation response has no token or token hash).
 - **Names are untrusted text.** Name schemas trim, bound the length (1 to 200) and reject control
   characters and a lone surrogate, but allow zero-width and direction-override characters. Display
-  code must treat a name as untrusted. Response schemas accept any stored 1 to 200 character name
-  (`storedNameSchema`), so a stored name never fails a parse.
+  code must treat a name as untrusted. Name requests are capped at 1000 raw characters before the trim.
+  Response schemas accept any 1 to 1000 character name (`storedNameSchema`): the database bounds
+  the name after trimming spaces, so a stored name may carry surrounding spaces, and core writes
+  only the trimmed output of the request schemas.
 - **Every public POST accepts the `Idempotency-Key` header** (`idempotencyKeySchema`), including
   create Invitation and create Team. A replay returns the original result; the same key with a
   different body returns the common code `request.idempotency_key_reused`.

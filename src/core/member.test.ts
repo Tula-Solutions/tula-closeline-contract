@@ -30,6 +30,10 @@ describe('listMembersQuerySchema', () => {
     expect(listMembersQuerySchema.safeParse({ limit: MAX_PAGE_SIZE }).success).toBe(true)
     expect(listMembersQuerySchema.safeParse({ limit: MAX_PAGE_SIZE + 1 }).success).toBe(false)
   })
+
+  test('rejects a filter it does not have, rather than ignoring it', () => {
+    expect(listMembersQuerySchema.safeParse({ role: 'x' }).success).toBe(false)
+  })
 })
 
 describe('listMembersResponseSchema', () => {
@@ -41,10 +45,6 @@ describe('listMembersResponseSchema', () => {
     expect(listMembersResponseSchema.safeParse({ items: tooMany, nextCursor: null }).success).toBe(
       false
     )
-  })
-
-  test('rejects a missing membership id', () => {
-    expect(memberParamsSchema.safeParse({}).success).toBe(false)
   })
 })
 
@@ -66,5 +66,9 @@ describe('memberParamsSchema', () => {
   test('wants a membership id', () => {
     expect(memberParamsSchema.safeParse({ membershipId: id('mem') }).success).toBe(true)
     expect(memberParamsSchema.safeParse({ membershipId: id('usr') }).success).toBe(false)
+  })
+
+  test('rejects a missing membership id', () => {
+    expect(memberParamsSchema.safeParse({}).success).toBe(false)
   })
 })

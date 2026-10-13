@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { z } from 'zod'
 import {
   IDEMPOTENCY_KEY_HEADER,
   INVITATION_STATES,
@@ -39,6 +40,24 @@ describe.each([
     expect(schema.safeParse('a\ud800b').success).toBe(false)
   })
 
+  test('judges surrogates at the edges of their ranges', () => {
+    expect(schema.safeParse('\ud800\udc00').success).toBe(true)
+    expect(schema.safeParse('\udbff\udfff').success).toBe(true)
+    expect(schema.safeParse('a\u{10FFFF}b').success).toBe(true)
+    expect(schema.safeParse('ab\udbff').success).toBe(false)
+    expect(schema.safeParse('ab\udfff').success).toBe(false)
+    expect(schema.safeParse('\udfffab').success).toBe(false)
+    expect(schema.safeParse('\udbff\udbff').success).toBe(false)
+    expect(schema.safeParse('\ud800\ud800').success).toBe(false)
+  })
+
+  test('caps the raw input before it trims, and says so in its JSON schema', () => {
+    expect(schema.safeParse(`${' '.repeat(400)}Acme${' '.repeat(400)}`).success).toBe(true)
+    expect(schema.safeParse(`${' '.repeat(1000)}Acme`).success).toBe(false)
+    const json = z.toJSONSchema(schema, { io: 'input' })
+    expect(json.maxLength).toBe(1000)
+  })
+
   test('leaves zero-width and direction-override characters alone', () => {
     expect(schema.safeParse('Ac\u200bme').success).toBe(true)
     expect(schema.safeParse('\u202eAcme').success).toBe(true)
@@ -59,14 +78,19 @@ describe.each([
 })
 
 describe('storedNameSchema', () => {
-  test('accepts any stored name of 1 to 200 characters, as it was stored', () => {
+  test('accepts a name the database allows: 200 characters with surrounding spaces', () => {
+    const stored = `  ${'a'.repeat(200)}  `
+    expect(storedNameSchema.parse(stored)).toBe(stored)
+    expect(storedNameSchema.safeParse('a'.repeat(1000)).success).toBe(true)
+  })
+
+  test('accepts any stored name, as it was stored', () => {
     expect(storedNameSchema.parse('Acme\tSales')).toBe('Acme\tSales')
     expect(storedNameSchema.parse('ab\ud800')).toBe('ab\ud800')
     expect(storedNameSchema.parse(' padded ')).toBe(' padded ')
-    expect(storedNameSchema.safeParse('a'.repeat(200)).success).toBe(true)
   })
 
-  test.each(['', 'a'.repeat(201), 7, null])('rejects %p', (value) => {
+  test.each(['', 'a'.repeat(1001), 7, null])('rejects %p', (value) => {
     expect(storedNameSchema.safeParse(value).success).toBe(false)
   })
 })

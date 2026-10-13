@@ -35,7 +35,7 @@ export const renameTeamRequestSchema = z.strictObject({
 export type RenameTeamRequest = z.infer<typeof renameTeamRequestSchema>
 
 /** The query parameters of a request to list Teams. */
-export const listTeamsQuerySchema = pageQuerySchema
+export const listTeamsQuerySchema = pageQuerySchema.strict()
 
 /** The query parameters of a request to list Teams. */
 export type ListTeamsQuery = z.infer<typeof listTeamsQuerySchema>

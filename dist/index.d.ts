@@ -223,7 +223,7 @@ type Member = z3.infer<typeof memberSchema>;
 declare const listMembersQuerySchema: z3.ZodObject<{
 	cursor: z3.ZodOptional<z3.ZodString>;
 	limit: z3.ZodDefault<z3.ZodPipe<z3.ZodPipe<z3.ZodUnion<readonly [z3.ZodNumber, z3.ZodString]>, z3.ZodTransform<number, string | number>>, z3.ZodNumber>>;
-}, z3.core.$strip>;
+}, z3.core.$strict>;
 /** The query parameters of a request to list members. */
 type ListMembersQuery = z3.infer<typeof listMembersQuerySchema>;
 /** One page of members. */
@@ -316,7 +316,7 @@ type RenameTeamRequest = z5.infer<typeof renameTeamRequestSchema>;
 declare const listTeamsQuerySchema: z5.ZodObject<{
 	cursor: z5.ZodOptional<z5.ZodString>;
 	limit: z5.ZodDefault<z5.ZodPipe<z5.ZodPipe<z5.ZodUnion<readonly [z5.ZodNumber, z5.ZodString]>, z5.ZodTransform<number, string | number>>, z5.ZodNumber>>;
-}, z5.core.$strip>;
+}, z5.core.$strict>;
 /** The query parameters of a request to list Teams. */
 type ListTeamsQuery = z5.infer<typeof listTeamsQuerySchema>;
 /** One page of Teams. */
@@ -374,8 +374,10 @@ declare const organizationNameSchema: z6.ZodPipe<z6.ZodString, z6.ZodString>;
 */
 declare const teamNameSchema: z6.ZodPipe<z6.ZodString, z6.ZodString>;
 /**
-* A name as a response carries it: any 1 to 200 character string, so a name that is already
-* stored can never fail a response parse. Display code must treat it as untrusted text.
+* A name as a response carries it: any 1 to 1000 character string. The database bounds the length
+* of the name after trimming spaces, so a stored name may carry surrounding spaces and run past
+* 200; the response form is loose enough for anything the database allows. Core writes only the
+* trimmed output of the request schemas. Display code must treat a name as untrusted text.
 */
 declare const storedNameSchema: z6.ZodString;
 /** The states an Invitation is in; "expired" is not a state, it is read from `expiresAt`. */

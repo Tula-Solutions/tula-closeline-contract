@@ -29,8 +29,12 @@ function isWellFormed(text: string): boolean {
   return true
 }
 
+/** The most raw characters a name request may carry before it is trimmed and bounded to 200. */
+const MAX_RAW_NAME_LENGTH = 1000
+
 const nameSchema = z
   .string()
+  .max(MAX_RAW_NAME_LENGTH)
   .trim()
   .pipe(
     z
@@ -56,10 +60,12 @@ export const organizationNameSchema = nameSchema
 export const teamNameSchema = nameSchema
 
 /**
- * A name as a response carries it: any 1 to 200 character string, so a name that is already
- * stored can never fail a response parse. Display code must treat it as untrusted text.
+ * A name as a response carries it: any 1 to 1000 character string. The database bounds the length
+ * of the name after trimming spaces, so a stored name may carry surrounding spaces and run past
+ * 200; the response form is loose enough for anything the database allows. Core writes only the
+ * trimmed output of the request schemas. Display code must treat a name as untrusted text.
  */
-export const storedNameSchema = z.string().min(1).max(MAX_NAME_LENGTH)
+export const storedNameSchema = z.string().min(1).max(1000)
 
 /** The states an Invitation is in; "expired" is not a state, it is read from `expiresAt`. */
 export const INVITATION_STATES = ['pending', 'accepted', 'revoked'] as const

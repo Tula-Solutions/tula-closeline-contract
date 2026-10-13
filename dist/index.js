@@ -193,10 +193,11 @@ function isWellFormed(text) {
   }
   return true;
 }
-var nameSchema = z5.string().trim().pipe(z5.string().min(1).max(MAX_NAME_LENGTH).refine(isWellFormed, "Well-formed text only").refine((text) => !hasControlCharacter(text), "No control characters"));
+var MAX_RAW_NAME_LENGTH = 1000;
+var nameSchema = z5.string().max(MAX_RAW_NAME_LENGTH).trim().pipe(z5.string().min(1).max(MAX_NAME_LENGTH).refine(isWellFormed, "Well-formed text only").refine((text) => !hasControlCharacter(text), "No control characters"));
 var organizationNameSchema = nameSchema;
 var teamNameSchema = nameSchema;
-var storedNameSchema = z5.string().min(1).max(MAX_NAME_LENGTH);
+var storedNameSchema = z5.string().min(1).max(1000);
 var INVITATION_STATES = ["pending", "accepted", "revoked"];
 var invitationStateSchema = z5.enum(INVITATION_STATES);
 var timestampSchema = z5.iso.datetime({ offset: true }).max(64);
@@ -316,7 +317,7 @@ var memberSchema = z9.object({
   createdAt: timestampSchema,
   updatedAt: timestampSchema
 });
-var listMembersQuerySchema = pageQuerySchema;
+var listMembersQuerySchema = pageQuerySchema.strict();
 var listMembersResponseSchema = pageSchema(memberSchema);
 var memberParamsSchema = z9.strictObject({
   membershipId: membershipIdSchema
@@ -351,7 +352,7 @@ var createTeamRequestSchema = z11.strictObject({
 var renameTeamRequestSchema = z11.strictObject({
   name: teamNameSchema
 });
-var listTeamsQuerySchema = pageQuerySchema;
+var listTeamsQuerySchema = pageQuerySchema.strict();
 var listTeamsResponseSchema = pageSchema(teamSchema);
 var teamParamsSchema = z11.strictObject({
   teamId: teamIdSchema
