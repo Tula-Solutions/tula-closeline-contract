@@ -262,10 +262,7 @@ var INTERNAL_CALL_ERRORS = Object.freeze({
   acceptInvitation: Object.freeze(["invitation.invalid", "membership.already_member"]),
   membership: Object.freeze([]),
   updateMemberProfile: Object.freeze(["member.not_found"]),
-  abandonOrganization: Object.freeze([
-    "organization.not_found",
-    "organization.not_abandonable"
-  ])
+  abandonOrganization: Object.freeze(["organization.not_abandonable"])
 });
 var internalCreateOrganizationRequestSchema = z6.strictObject({
   userId: userIdSchema,

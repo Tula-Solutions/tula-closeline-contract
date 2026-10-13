@@ -63,7 +63,11 @@ export const organizationNameSchema = nameSchema
  */
 export const teamNameSchema = nameSchema
 
-/** The longest name of a person in a request, in characters: a first and a last name of 100 each and the space between. */
+/**
+ * The longest name of a person in a request, in characters: a first and a last name of 100 each
+ * and the space between. The database column for a member's name must allow at least this many
+ * characters after trimming, which is more than the 200 of Organization and Team names.
+ */
 export const MAX_PERSON_NAME_LENGTH = 201
 
 /**

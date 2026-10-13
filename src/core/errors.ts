@@ -5,8 +5,8 @@ import { defineErrors } from '../errors'
  * exists in another Organization: `invitation.invalid` covers an unknown, used, revoked and expired
  * token alike, and `membership.already_member` is only ever about the user making the call. A role
  * that is not allowed is the common `auth.forbidden`. `organization.not_abandonable` is the one
- * answer when the abandon guard refuses, whichever of its conditions failed. Which internal call returns which code is
- * `INTERNAL_CALL_ERRORS`.
+ * answer when the abandon guard refuses, whichever of its conditions failed. Which internal call
+ * returns which code is `INTERNAL_CALL_ERRORS`.
  */
 export const CORE_ERRORS = {
   ...defineErrors('organization', {

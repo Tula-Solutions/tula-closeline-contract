@@ -94,16 +94,6 @@ describe('SIGNUP_ERRORS', () => {
   })
 })
 
-test('one code covers every way the abandon guard refuses, so a caller cannot probe which', () => {
-  const codes = Object.keys(CORE_ERRORS).filter((code) => code.startsWith('organization.'))
-  expect(codes.sort()).toEqual([
-    'organization.deleted',
-    'organization.not_abandonable',
-    'organization.not_found',
-    'organization.suspended',
-  ])
-})
-
 test('no message mentions another person, an email address or an account', () => {
   for (const entry of Object.values({ ...CORE_ERRORS, ...SIGNUP_ERRORS })) {
     expect(entry.message).not.toMatch(

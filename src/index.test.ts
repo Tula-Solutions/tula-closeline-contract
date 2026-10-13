@@ -26,9 +26,6 @@ test('the entry point exports the internal abandon call and its code', async () 
   const api = await import('./index')
   expect(api.ABANDON_MAX_AGE_HOURS).toBe(24)
   expect(api.CORE_ERRORS['organization.not_abandonable'].status).toBe(409)
-  expect(api.INTERNAL_CALL_ERRORS.abandonOrganization).toEqual([
-    'organization.not_found',
-    'organization.not_abandonable',
-  ])
+  expect(api.INTERNAL_CALL_ERRORS.abandonOrganization).toEqual(['organization.not_abandonable'])
   expect(typeof api.internalAbandonOrganizationRequestSchema.safeParse).toBe('function')
 })

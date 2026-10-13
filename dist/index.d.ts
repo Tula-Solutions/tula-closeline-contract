@@ -40,8 +40,8 @@ import { ErrorDefinition as ErrorDefinition_8gwh452 } from "..";
 * exists in another Organization: `invitation.invalid` covers an unknown, used, revoked and expired
 * token alike, and `membership.already_member` is only ever about the user making the call. A role
 * that is not allowed is the common `auth.forbidden`. `organization.not_abandonable` is the one
-* answer when the abandon guard refuses, whichever of its conditions failed. Which internal call returns which code is
-* `INTERNAL_CALL_ERRORS`.
+* answer when the abandon guard refuses, whichever of its conditions failed. Which internal call
+* returns which code is `INTERNAL_CALL_ERRORS`.
 */
 declare const CORE_ERRORS: {
 	readonly "invitation.already_pending": ErrorDefinition_8gwh452<"invitation.already_pending">;
@@ -81,10 +81,9 @@ type InternalCallName = "createOrganization" | "acceptInvitation" | "membership"
 * not listed. Accepting an Invitation never returns an Organization status code, so a suspended or
 * deleted Organization is indistinguishable from an unknown token. The membership lookup returns
 * no domain error: it answers `found: false`. A profile change for a user with no membership is
-* `member.not_found`, which the caller treats as nothing to do. Abandoning an Organization answers
-* `organization.not_found` for an unknown id and the single `organization.not_abandonable` when
-* the guard refuses, so a caller cannot tell which condition failed; a suspended or deleted status
-* is never revealed.
+* `member.not_found`, which the caller treats as nothing to do. Abandoning an Organization returns
+* only `organization.not_abandonable`, for a live Organization that fails the guard; it has no
+* not-found code (see `internalAbandonOrganizationRequestSchema`).
 */
 declare const INTERNAL_CALL_ERRORS: Readonly<Record<InternalCallName, readonly CoreErrorCode[]>>;
 /**
@@ -116,9 +115,10 @@ type InternalCreateOrganizationResponse = z.infer<typeof internalCreateOrganizat
 * with its raw token and the verified address. `name` is the person's display name as auth
 * composes it, or `null` when the person gave none; the address is copied onto the Membership
 * too. `name` is optional only so a `0.5.0` caller, which sends none, still parses and core can
-* deploy before auth sends it; it becomes required once auth sends it. Core compares the address, folded, with the Invitation's and answers
-* `invitation.invalid` on a mismatch, like an unknown, used, revoked or expired token. Core
-* returns only `invitation.invalid` or `membership.already_member`, never an Organization status.
+* deploy before auth sends it; it becomes required once auth sends it. Core compares the address,
+* folded, with the Invitation's and answers `invitation.invalid` on a mismatch, like an unknown,
+* used, revoked or expired token. Core returns only `invitation.invalid` or
+* `membership.already_member`, never an Organization status.
 */
 declare const internalAcceptInvitationRequestSchema: z.ZodObject<{
 	userId: z.core.$ZodBranded<z.ZodString, "usr", "out">;
@@ -169,7 +169,7 @@ declare const internalMembershipResponseSchema: z.ZodDiscriminatedUnion<[z.ZodOb
 }, z.core.$strip>], "found">;
 /** Internal: the membership of a user, or none. */
 type InternalMembershipResponse = z.infer<typeof internalMembershipResponseSchema>;
-/** Internal: the path parameters of a profile change; the user is named in the path, never in the body. */
+/** Internal: the path parameters of a profile change; the user is in the path, not the body. */
 declare const internalUpdateMemberProfileParamsSchema: z.ZodObject<{
 	userId: z.core.$ZodBranded<z.ZodString, "usr", "out">;
 }, z.core.$strict>;
@@ -199,7 +199,7 @@ declare const internalUpdateMemberProfileResponseSchema: z.ZodObject<{
 }, z.core.$strip>;
 /** Internal: the answer to a profile change. */
 type InternalUpdateMemberProfileResponse = z.infer<typeof internalUpdateMemberProfileResponseSchema>;
-/** The hours an Organization stays abandonable after it is created; older than this, the guard refuses. */
+/** The hours after creation during which an Organization can be abandoned. */
 declare const ABANDON_MAX_AGE_HOURS = 24;
 /** Internal: the path parameters of an abandon; the Organization is named in the path. */
 declare const internalAbandonOrganizationParamsSchema: z.ZodObject<{
@@ -210,12 +210,21 @@ type InternalAbandonOrganizationParams = z.infer<typeof internalAbandonOrganizat
 /**
 * Internal: `POST /internal/organizations/{organizationId}/abandon`, the body of the call auth
 * makes when the account write fails after core created the Organization, and from its sweep of
-* abandoned sign-ups. Core marks the Organization `deleted` and frees the user id only if the
-* Organization has exactly one member, that member is `userId`, and it was created less than
-* `ABANDON_MAX_AGE_HOURS` hours ago. The Organization id and the user id are needed together, so
-* an id cannot be abandoned by guessing. It carries an `Idempotency-Key` header, and a repeat
-* answers as the first success did. Any failed condition is the one `organization.not_abandonable`;
-* an unknown id is `organization.not_found`.
+* abandoned sign-ups. It carries an `Idempotency-Key` header.
+*
+* The call is defined by its end state. It answers success,
+* `{ organizationId, status: 'deleted' }`, whenever no live Organization with that id exists when
+* the call returns: abandoned by this call, abandoned or deleted earlier by anyone, or never
+* created. A repeat with the same key, a new key or a different `userId` after the Organization
+* is gone all answer success, so the caller must not read success as "this call deleted it". Only
+* a live Organization that fails the guard answers `organization.not_abandonable`: it has another
+* member, its one member is not `userId`, or it was created `ABANDON_MAX_AGE_HOURS` hours ago or
+* more. Otherwise core marks the Organization `deleted` and frees the user id.
+*
+* The holder of the internal token can tell a live Organization id from any other id (409 against
+* 200); the single refusal code hides only which guard condition failed. Needing the Organization
+* id and the user id together means a guess cannot abandon an Organization, not that an id cannot
+* be probed.
 */
 declare const internalAbandonOrganizationRequestSchema: z.ZodObject<{
 	userId: z.core.$ZodBranded<z.ZodString, "usr", "out">;
@@ -223,8 +232,8 @@ declare const internalAbandonOrganizationRequestSchema: z.ZodObject<{
 /** Internal: the body of an abandon. */
 type InternalAbandonOrganizationRequest = z.infer<typeof internalAbandonOrganizationRequestSchema>;
 /**
-* Internal: the answer to an abandon. The first success and every repeat of it are this same
-* value, so a retry cannot be told from the original; there is nothing else to learn from it.
+* Internal: the answer to an abandon: always `deleted`, whether this call, an earlier one or
+* nobody ever created the Organization. A retry cannot be told from the original.
 */
 declare const internalAbandonOrganizationResponseSchema: z.ZodObject<{
 	organizationId: z.core.$ZodBranded<z.ZodString, "org", "out">;
@@ -501,7 +510,11 @@ declare const organizationNameSchema: z6.ZodPipe<z6.ZodString, z6.ZodString>;
 * so display code must treat a name as untrusted text.
 */
 declare const teamNameSchema: z6.ZodPipe<z6.ZodString, z6.ZodString>;
-/** The longest name of a person in a request, in characters: a first and a last name of 100 each and the space between. */
+/**
+* The longest name of a person in a request, in characters: a first and a last name of 100 each
+* and the space between. The database column for a member's name must allow at least this many
+* characters after trimming, which is more than the 200 of Organization and Team names.
+*/
 declare const MAX_PERSON_NAME_LENGTH = 201;
 /**
 * A person's display name in a request, as auth composes it from the first and last names it
