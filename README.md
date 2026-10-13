@@ -126,13 +126,13 @@ Additive; the 0.7.0 types are unchanged (`PlaybookRoute`, `PLAYBOOK_ROUTES` and 
   must allow `MAX_UTF8_BYTES_PER_CODE_POINT` (4) bytes for each: `MAX_DEAL_ID_BYTES`,
   `MAX_DEAL_NAME_BYTES`, `MAX_SPEAKER_LABEL_BYTES`, `MAX_DOCUMENT_FILE_NAME_BYTES`.
 - **CSV**: split the text in a background job with `parseCsv(text, { maxRecords, maxCellLength })`
-  (defaults `MAX_DEAL_IMPORT_ROWS + 1` records and `MAX_DEAL_IMPORT_CELL_LENGTH` code points; it stops
+  (defaults `MAX_DEAL_IMPORT_ROWS + 1` records and `MAX_DEAL_IMPORT_CELL_LENGTH`, 1000 code points, which only bounds memory: a cell over 1000 characters, like a quoting error, fails the whole file, while a longer-than-allowed name or a padded cell up to 1000 is a row result; it stops
   at the first limit with `too_many_records` or `cell_too_long`, and needs the whole text, so never
   on a request path). Quoting is strict RFC 4180: a quote inside an unquoted cell or text after a
   closing quote is `bad_quote`, a quote that never closes is `unterminated_quote`. The header is record
   1 and `rowNumber` is the record number, so a quoted cell spanning lines is one record; a blank line
   (`isBlankCsvRecord`) is skipped and not reported but still counts in the numbers, as in a
-  spreadsheet. The upload route checks the header early with `checkDealImportHeaderText(start of file)`,
+  spreadsheet. The upload route checks the header early with `checkDealImportHeaderText` on the first `DEAL_IMPORT_HEADER_PREFIX_CHARS` (8192) characters of the file (a header unfinished there answers `{ ok: true, deferred: true }` and the job decides),
   which reads the first record with `firstCsvRecord` (same rules and limits); the job re-checks the first
   record of its parse with `checkDealImportHeader(record)`; the two give one verdict. Each record then
   goes through `checkDealImportRow(cells, hasName)`, which uses `parseOutcomeCell` (`won`/`lost`/`open`,

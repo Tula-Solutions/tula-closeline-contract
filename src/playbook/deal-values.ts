@@ -128,8 +128,18 @@ export const DEAL_IMPORT_REQUIRED_COLUMNS = [
 /** The optional column of the CSV template, which may follow the required ones. */
 export const DEAL_IMPORT_OPTIONAL_COLUMN = 'name'
 
-/** The longest header, its trimmed cells joined by commas, in characters; a longer one is refused. */
+/** The longest header, its trimmed cells joined by commas, in characters; a longer one is refused. A valid header is under 50, so this only bounds padding-free garbage. It is about the trimmed content, not how much of the file is read: that is {@link DEAL_IMPORT_HEADER_PREFIX_CHARS}. */
 export const MAX_DEAL_IMPORT_HEADER_LENGTH = 1024
+
+/**
+ * How much of the start of the file the upload route passes to {@link checkDealImportHeaderText}:
+ * 8192 characters, more than the largest header that is valid under the cell limit (six cells of
+ * 1000 characters, each also quoted, plus separators, a byte order mark and a line break, about
+ * 6020). A header record that is still not finished at the end of a full prefix cannot be judged, so
+ * the early check answers `{ ok: true, deferred: true }` (no refusal) and leaves the verdict to the
+ * job; it never refuses a header it has only seen part of.
+ */
+export const DEAL_IMPORT_HEADER_PREFIX_CHARS = 8192
 
 /** Why a CSV header was refused: a closed list, so the answer never echoes a cell. */
 export const DEAL_IMPORT_HEADER_PROBLEMS = [
@@ -192,22 +202,35 @@ export function checkDealImportHeader(record: readonly string[]): CheckDealImpor
   return { ok: true, hasName: cells.length === DEAL_IMPORT_REQUIRED_COLUMNS.length + 1 }
 }
 
+/** The answer of {@link checkDealImportHeaderText}: the verdict, or `{ ok: true, deferred: true }` when the prefix ended before the header did and the job must decide. */
+export type CheckDealImportHeaderTextResult =
+  | CheckDealImportHeaderResult
+  | { readonly ok: true; readonly deferred: true }
+
 /**
  * The early header check of the upload route: reads the first record of the start of the file with
  * {@link firstCsvRecord} (the same rules and limits as the full parse) and checks it with
- * {@link checkDealImportHeader}. The caller passes enough of the start of the file to hold a header,
- * such as `MAX_DEAL_IMPORT_HEADER_LENGTH` times a few characters. A cell over the limit is
+ * {@link checkDealImportHeader}. The caller passes the first `DEAL_IMPORT_HEADER_PREFIX_CHARS`
+ * characters of the file (or all of it if shorter). If that is a full prefix and the header record is
+ * still unfinished, the answer is `{ ok: true, deferred: true }`, not a refusal. A cell over the limit is
  * `too_long` and a quoting error is `malformed_csv`, and the verdict equals the one the job reaches
  * from the whole file.
  */
-export function checkDealImportHeaderText(text: string): CheckDealImportHeaderResult {
+export function checkDealImportHeaderText(text: string): CheckDealImportHeaderTextResult {
+  const cut = text.length >= DEAL_IMPORT_HEADER_PREFIX_CHARS
   const first = firstCsvRecord(text)
   if (!first.ok) {
+    if (cut && first.failure === 'unterminated_quote') {
+      return { ok: true, deferred: true }
+    }
     return {
       ok: false,
       code: 'deal_import.header_invalid',
       problem: first.failure === 'cell_too_long' ? 'too_long' : 'malformed_csv',
     }
+  }
+  if (cut && !first.complete) {
+    return { ok: true, deferred: true }
   }
   return checkDealImportHeader(first.record ?? [])
 }
@@ -417,8 +440,13 @@ export function checkDealImportRow(
   }
 }
 
-/** The longest cell a valid import can hold, in Unicode code points: the longest column limit, a Deal name (`MAX_DEAL_NAME_LENGTH`). */
-export const MAX_DEAL_IMPORT_CELL_LENGTH = MAX_DEAL_NAME_LENGTH
+/**
+ * The longest cell {@link parseCsv} reads, in Unicode code points: 1000, the raw bound the deal id
+ * and Deal name schemas allow before they trim. It only bounds memory; the row checks do the
+ * reporting, so a name of 201 characters is a rejected row (`invalid_name`) and a valid name padded
+ * with spaces still imports. A cell over 1000 characters, like a quoting error, fails the whole file.
+ */
+export const MAX_DEAL_IMPORT_CELL_LENGTH = 1000
 
 /** Why a CSV could not be read: more records than allowed, a cell over the length limit, a quote that never closes, or a quote where RFC 4180 does not allow one. */
 export const CSV_FAILURES = [
@@ -444,112 +472,113 @@ export type CsvResult =
   | { readonly ok: true; readonly records: string[][] }
   | { readonly ok: false; readonly failure: CsvFailure; readonly recordsRead: number }
 
-/** The answer of {@link firstCsvRecord}: the first record (`undefined` for empty text), or the failure. */
+/** The answer of {@link firstCsvRecord}: the first record (`undefined` for empty text) and whether a line break ended it, or the failure. */
 export type FirstCsvRecordResult =
-  | { readonly ok: true; readonly record: string[] | undefined }
+  | { readonly ok: true; readonly record: string[] | undefined; readonly complete: boolean }
   | { readonly ok: false; readonly failure: CsvFailure; readonly recordsRead: number }
 
-function readCsv(text: string, options: CsvOptions | undefined, firstOnly: boolean): CsvResult {
+const NEWLINE = 10
+const RETURN = 13
+const COMMA = 44
+const QUOTE = 34
+
+function readCsv(
+  text: string,
+  options: CsvOptions | undefined,
+  firstOnly: boolean
+): CsvResult & { complete?: boolean } {
   const maxRecords = options?.maxRecords ?? MAX_DEAL_IMPORT_ROWS + 1
   const maxCell = options?.maxCellLength ?? MAX_DEAL_IMPORT_CELL_LENGTH
-  const source = text.startsWith('\ufeff') ? text.slice(1) : text
+  const length = text.length
   const records: string[][] = []
-  let record: string[] = []
-  let cell = ''
-  let cellLength = 0
-  let quoted = false
-  let afterQuote = false
-  let started = false
-  const fail = (failure: CsvFailure): CsvResult => ({
-    ok: false,
-    failure,
-    recordsRead: records.length,
-  })
-  const endRecord = (): CsvResult | undefined => {
+  let index = text.charCodeAt(0) === 0xfeff ? 1 : 0
+  const fail = (failure: CsvFailure) =>
+    ({ ok: false, failure, recordsRead: records.length }) as const
+  while (index < length) {
     if (records.length >= maxRecords) {
       return fail('too_many_records')
     }
-    record.push(cell)
-    records.push(record)
-    record = []
-    cell = ''
-    cellLength = 0
-    afterQuote = false
-    started = false
-    return undefined
-  }
-  for (let index = 0; index < source.length; index += 1) {
-    const char = source.charAt(index)
-    if (quoted) {
-      if (char === '"') {
-        if (source.charAt(index + 1) === '"') {
-          cell += '"'
-          cellLength += 1
+    const record: string[] = []
+    let ended = false
+    while (!ended) {
+      let cell: string
+      let count = 0
+      if (text.charCodeAt(index) === QUOTE) {
+        // A quoted cell: slice between quotes, and join pieces only where `""` escapes a quote.
+        index += 1
+        let segment = index
+        let joined = ''
+        for (;;) {
+          if (index >= length) {
+            return fail('unterminated_quote')
+          }
+          const code = text.charCodeAt(index)
+          if (code === QUOTE) {
+            if (text.charCodeAt(index + 1) === QUOTE) {
+              joined += text.slice(segment, index + 1)
+              count += 1
+              index += 2
+              segment = index
+              if (count > maxCell) {
+                return fail('cell_too_long')
+              }
+              continue
+            }
+            cell = joined === '' ? text.slice(segment, index) : joined + text.slice(segment, index)
+            index += 1
+            break
+          }
+          if (code < 0xdc00 || code > 0xdfff) {
+            count += 1
+            if (count > maxCell) {
+              return fail('cell_too_long')
+            }
+          }
           index += 1
-        } else {
-          quoted = false
-          afterQuote = true
+        }
+        const next = text.charCodeAt(index)
+        if (index < length && next !== COMMA && next !== NEWLINE && next !== RETURN) {
+          return fail('bad_quote')
         }
       } else {
-        cell += char
-        const code = char.charCodeAt(0)
-        cellLength += code >= 0xdc00 && code <= 0xdfff ? 0 : 1
+        const start = index
+        while (index < length) {
+          const code = text.charCodeAt(index)
+          if (code === COMMA || code === NEWLINE || code === RETURN) {
+            break
+          }
+          if (code === QUOTE) {
+            return fail('bad_quote')
+          }
+          if (code < 0xdc00 || code > 0xdfff) {
+            count += 1
+            if (count > maxCell) {
+              return fail('cell_too_long')
+            }
+          }
+          index += 1
+        }
+        cell = text.slice(start, index)
       }
-      if (cellLength > maxCell) {
-        return fail('cell_too_long')
-      }
-      continue
-    }
-    if (char === ',' || char === '\n' || char === '\r') {
-      if (char === ',') {
-        record.push(cell)
-        cell = ''
-        cellLength = 0
-        afterQuote = false
-        started = true
+      record.push(cell)
+      const code = index < length ? text.charCodeAt(index) : -1
+      if (code === COMMA) {
+        index += 1
         continue
       }
-      if (char === '\r' && source.charAt(index + 1) === '\n') {
+      ended = true
+      if (code === RETURN && text.charCodeAt(index + 1) === NEWLINE) {
+        index += 2
+      } else if (code !== -1) {
         index += 1
       }
-      const failed = endRecord()
-      if (failed) {
-        return failed
-      }
+      records.push(record)
       if (firstOnly) {
-        return { ok: true, records }
+        return { ok: true, records, complete: code !== -1 }
       }
-      continue
-    }
-    if (afterQuote) {
-      return fail('bad_quote')
-    }
-    if (char === '"') {
-      if (cellLength !== 0 || cell !== '') {
-        return fail('bad_quote')
-      }
-      quoted = true
-      started = true
-      continue
-    }
-    cell += char
-    started = true
-    const code = char.charCodeAt(0)
-    cellLength += code >= 0xdc00 && code <= 0xdfff ? 0 : 1
-    if (cellLength > maxCell) {
-      return fail('cell_too_long')
     }
   }
-  if (quoted) {
-    return fail('unterminated_quote')
-  }
-  if (started || cell !== '' || record.length > 0) {
-    const failed = endRecord()
-    if (failed) {
-      return failed
-    }
-  }
-  return { ok: true, records }
+  return { ok: true, records, complete: false }
 }
 
 /**
@@ -575,16 +604,19 @@ function readCsv(text: string, options: CsvOptions | undefined, firstOnly: boole
  * skips it without reporting it.
  */
 export function parseCsv(text: string, options?: CsvOptions): CsvResult {
-  return readCsv(text, options, false)
+  const result = readCsv(text, options, false)
+  return result.ok ? { ok: true, records: result.records } : result
 }
 
 /**
  * Reads only the first record of CSV text with the same rules and limits as {@link parseCsv}, and
- * stops there: a later bad record does not change its answer. `record` is `undefined` for empty text.
+ * stops there: a later bad record does not change its answer. `record` is `undefined` for empty text, and `complete` is whether a line break ended it (false when the text ran out first).
  */
 export function firstCsvRecord(text: string, options?: CsvOptions): FirstCsvRecordResult {
   const result = readCsv(text, options, true)
-  return result.ok ? { ok: true, record: result.records[0] } : result
+  return result.ok
+    ? { ok: true, record: result.records[0], complete: result.complete === true }
+    : { ok: false, failure: result.failure, recordsRead: result.recordsRead }
 }
 
 /** Whether a CSV record is a blank line: one empty cell. A caller skips it without reporting it, but it still counts in the record number. */

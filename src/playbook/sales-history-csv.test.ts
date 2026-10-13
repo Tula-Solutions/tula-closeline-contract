@@ -9,6 +9,8 @@ import {
   callSchema,
   checkDealImportHeader,
   checkDealImportHeaderText,
+  checkDealImportRow,
+  DEAL_IMPORT_HEADER_PREFIX_CHARS,
   dealCursorSchema,
   dealImportCursorSchema,
   dealImportRowCursorSchema,
@@ -54,7 +56,7 @@ const call = {
 
 describe('parseCsv limits (F12)', () => {
   test('the cell limit is the longest column limit', () => {
-    expect(MAX_DEAL_IMPORT_CELL_LENGTH).toBe(200)
+    expect(MAX_DEAL_IMPORT_CELL_LENGTH).toBe(1000)
   })
 
   test('10 MB of bare line breaks stops at the record limit having read at most that many', () => {
@@ -92,8 +94,8 @@ describe('parseCsv limits (F12)', () => {
   })
 
   test('the limits are exact: the maximum passes and one over fails', () => {
-    expect(parseCsv('a'.repeat(200)).ok).toBe(true)
-    expect(parseCsv('a'.repeat(201)).ok).toBe(false)
+    expect(parseCsv('a'.repeat(1000)).ok).toBe(true)
+    expect(parseCsv('a'.repeat(1001)).ok).toBe(false)
     expect(parseCsv('x\n'.repeat(5), { maxRecords: 5 }).ok).toBe(true)
     expect(parseCsv('x\n'.repeat(6), { maxRecords: 5 })).toEqual({
       ok: false,
@@ -106,8 +108,8 @@ describe('parseCsv limits (F12)', () => {
 
   test('a cell length counts code points', () => {
     const astral = String.fromCodePoint(0x1f600)
-    expect(parseCsv(astral.repeat(200)).ok).toBe(true)
-    expect(parseCsv(astral.repeat(201)).ok).toBe(false)
+    expect(parseCsv(astral.repeat(1000)).ok).toBe(true)
+    expect(parseCsv(astral.repeat(1001)).ok).toBe(false)
   })
 
   test('an unterminated quote that stays within the limit is reported at the end', () => {
@@ -202,9 +204,13 @@ describe('one reader for the header (F14)', () => {
   })
 
   test('firstCsvRecord reads only the first record, with the same limits', () => {
-    expect(firstCsvRecord(`a,b\nc,d\n`)).toEqual({ ok: true, record: ['a', 'b'] })
-    expect(firstCsvRecord('')).toEqual({ ok: true, record: undefined })
-    expect(firstCsvRecord('"a\nb",c\nd')).toEqual({ ok: true, record: ['a\nb', 'c'] })
+    expect(firstCsvRecord(`a,b\nc,d\n`)).toEqual({ ok: true, record: ['a', 'b'], complete: true })
+    expect(firstCsvRecord('')).toEqual({ ok: true, record: undefined, complete: false })
+    expect(firstCsvRecord('"a\nb",c\nd')).toEqual({
+      ok: true,
+      record: ['a\nb', 'c'],
+      complete: true,
+    })
     expect(firstCsvRecord('a"b')).toEqual({ ok: false, failure: 'bad_quote', recordsRead: 0 })
     expect(firstCsvRecord('x'.repeat(5000))).toEqual({
       ok: false,
@@ -212,7 +218,11 @@ describe('one reader for the header (F14)', () => {
       recordsRead: 0,
     })
     // a bad later record does not change the verdict of the header
-    expect(firstCsvRecord('a,b\n"unterminated')).toEqual({ ok: true, record: ['a', 'b'] })
+    expect(firstCsvRecord('a,b\n"unterminated')).toEqual({
+      ok: true,
+      record: ['a', 'b'],
+      complete: true,
+    })
   })
 
   test('the import route says which reader the upload uses and that the job re-checks', () => {
@@ -353,5 +363,151 @@ describe('failure reasons and what fixes them (F16)', () => {
     expect(
       callSchema.safeParse({ ...call, failureReason: 'no_turns', speakerLabels: ['A'] }).success
     ).toBe(true)
+  })
+})
+
+describe('a bad cell is a bad row, not a bad file (F17)', () => {
+  const nameRow = (name: string) => `${HEADER},name
+D-1,won,,,,${name}
+`
+  const rowOf = (text: string) => {
+    const parsed = parseCsv(text)
+    expect(parsed.ok).toBe(true)
+    return parsed.ok ? (parsed.records[1] ?? []) : []
+  }
+
+  test('a 200-character name followed by padding imports', () => {
+    const cells = rowOf(nameRow(`${'n'.repeat(200)}${' '.repeat(300)}`))
+    expect(checkDealImportRow(cells, true)).toMatchObject({
+      ok: true,
+      row: { name: 'n'.repeat(200) },
+    })
+  })
+
+  test('a 201-character name is a rejected row with invalid_name', () => {
+    const cells = rowOf(nameRow('n'.repeat(201)))
+    expect(checkDealImportRow(cells, true)).toEqual({ ok: false, reason: 'invalid_name' })
+  })
+
+  test('a cell over 1000 characters fails the whole file, like a quoting error', () => {
+    expect(parseCsv(nameRow('n'.repeat(1001)))).toMatchObject({
+      ok: false,
+      failure: 'cell_too_long',
+    })
+    expect(parseCsv(nameRow('n'.repeat(1000))).ok).toBe(true)
+  })
+
+  test('the docs say a cell over the limit fails the whole file', () => {
+    expect(SALES_HISTORY_ROUTES.uploadDealImport.description).toContain(
+      'a cell over 1000 characters fails the whole file'
+    )
+  })
+})
+
+describe('the header prefix the upload route reads (F18)', () => {
+  const pad = (text: string, width: number) => text + ' '.repeat(width - text.length)
+  const cells = ['deal_id', 'outcome', 'closed_at', 'amount', 'currency', 'name']
+
+  test('is large enough for a maximal header under the cell limit', () => {
+    const maximal = `${cells.map((cell) => pad(cell, MAX_DEAL_IMPORT_CELL_LENGTH)).join(',')}\r\n`
+    expect(maximal.length).toBeLessThan(DEAL_IMPORT_HEADER_PREFIX_CHARS)
+    const quoted = `\ufeff${cells.map((cell) => `"${pad(cell, MAX_DEAL_IMPORT_CELL_LENGTH)}"`).join(',')}\r\n`
+    expect(quoted.length).toBeLessThan(DEAL_IMPORT_HEADER_PREFIX_CHARS)
+  })
+
+  test('a header cut at the prefix gives the same verdict as the full file', () => {
+    for (const header of [
+      cells.map((cell) => pad(cell, MAX_DEAL_IMPORT_CELL_LENGTH)).join(','),
+      `\ufeff${cells.map((cell) => `"${pad(cell, MAX_DEAL_IMPORT_CELL_LENGTH)}"`).join(',')}`,
+    ]) {
+      const full = `${header}\r\n${'D-1,won,,,,x\n'.repeat(5000)}`
+      const cut = full.slice(0, DEAL_IMPORT_HEADER_PREFIX_CHARS)
+      expect(checkDealImportHeaderText(cut)).toEqual({ ok: true, hasName: true })
+      expect(checkDealImportHeaderText(full)).toEqual({ ok: true, hasName: true })
+    }
+  })
+
+  test('a header longer than the prefix defers to the job instead of refusing', () => {
+    const wide = Array.from({ length: 10 }, (_, index) =>
+      pad(`c${index}`, MAX_DEAL_IMPORT_CELL_LENGTH)
+    )
+    const full = `${wide.join(',')}\n${'x\n'.repeat(100)}`
+    expect(full.length).toBeGreaterThan(DEAL_IMPORT_HEADER_PREFIX_CHARS)
+    expect(checkDealImportHeaderText(full.slice(0, DEAL_IMPORT_HEADER_PREFIX_CHARS))).toEqual({
+      ok: true,
+      deferred: true,
+    })
+    // cut inside a quoted cell: unterminated within the prefix, still not a refusal
+    const quoted = `${Array.from({ length: 10 }, (_, index) => `"${pad(`q${index}`, 900)}"`).join(',')}\n`
+    expect(checkDealImportHeaderText(quoted.slice(0, DEAL_IMPORT_HEADER_PREFIX_CHARS))).toEqual({
+      ok: true,
+      deferred: true,
+    })
+    // the job reaches its own verdict on the whole file
+    const parsed = parseCsv(full)
+    expect(parsed.ok && checkDealImportHeader(parsed.records[0] ?? [])).toMatchObject({
+      ok: false,
+      problem: 'unexpected_column',
+    })
+  })
+
+  test('a short text with no line break is a whole file and is judged, not deferred', () => {
+    expect(checkDealImportHeaderText('deal_id,outcome')).toMatchObject({
+      ok: false,
+      problem: 'missing_column',
+    })
+    expect(checkDealImportHeaderText(`${HEADER}`)).toEqual({ ok: true, hasName: false })
+  })
+
+  test('a real quoting error inside the prefix is still refused', () => {
+    expect(
+      checkDealImportHeaderText(`a"b,c\n${'x'.repeat(DEAL_IMPORT_HEADER_PREFIX_CHARS)}`)
+    ).toMatchObject({
+      ok: false,
+      problem: 'malformed_csv',
+    })
+  })
+
+  test('the import route description names the prefix', () => {
+    expect(SALES_HISTORY_ROUTES.uploadDealImport.description).toContain('the first 8192 characters')
+    expect(DEAL_IMPORT_HEADER_PREFIX_CHARS).toBe(8192)
+  })
+})
+
+describe('slicing cells keeps the escaped-quote path correct (F18b)', () => {
+  test('escaped quotes at the start, middle and end of a cell', () => {
+    expect(parseCsv('"""a","b""c","d"""\n"x""""y"')).toEqual({
+      ok: true,
+      records: [['"a', 'b"c', 'd"'], ['x""y']],
+    })
+    expect(parseCsv('"a,""b""\nc",d')).toEqual({ ok: true, records: [['a,"b"\nc', 'd']] })
+  })
+
+  test('empty cells, trailing separators and a lone final cell', () => {
+    expect(parseCsv('a,,b,\n,\n')).toEqual({
+      ok: true,
+      records: [
+        ['a', '', 'b', ''],
+        ['', ''],
+      ],
+    })
+    expect(parseCsv(',')).toEqual({ ok: true, records: [['', '']] })
+    expect(parseCsv('\n')).toEqual({ ok: true, records: [['']] })
+  })
+
+  test('a maximal valid file parses with modest memory', () => {
+    const header = 'deal_id,outcome,closed_at,amount,currency,name\n'
+    const row = (index: number) => `D-${index},won,2026-10-12,10.50,EUR,${'n'.repeat(120)}\n`
+    const text = header + Array.from({ length: 50_000 }, (_, index) => row(index)).join('')
+    expect(text.length).toBeGreaterThan(7_000_000)
+    Bun.gc(true)
+    const before = process.memoryUsage().heapUsed
+    const started = performance.now()
+    const parsed = parseCsv(text)
+    const elapsed = performance.now() - started
+    const grown = process.memoryUsage().heapUsed - before
+    expect(parsed.ok && parsed.records.length).toBe(50_001)
+    expect(elapsed).toBeLessThan(3000)
+    expect(grown).toBeLessThan(120 * 1024 * 1024)
   })
 })

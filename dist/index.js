@@ -788,7 +788,7 @@ var SALES_HISTORY_ROUTES = Object.freeze({
       "deal_import.header_invalid"
     ],
     commonErrors: [...ENVELOPE_ERRORS],
-    description: 'Uploads the fixed CSV template (columns deal_id, outcome, closed_at, amount, currency and optionally name; up to 10 MB and 50,000 rows) as multipart/form-data with one file part named "file". Owner and Admin only. The type, size and first row are checked before anything is stored: deal_import.unsupported_type (415), deal_import.too_large (413) and deal_import.header_invalid (422). The first row is read with checkDealImportHeaderText (the same reader and limits as parseCsv) on the start of the file, and the job re-checks the header of its full parse with the same verdict. The rest of the file is parsed in the background job, never on the request path, under strict RFC 4180 quoting: a stray quote fails the file; a blank line is skipped and not reported but still counts in the row numbers, and rowNumber is the record number with the header as record 1. Answers 202 with the import in state "uploaded"; it is processed in the background. Imports are not deduplicated by content: each upload is a new import, and only the Idempotency-Key makes a retry of the same request answer with the stored import. Valid rows are applied and bad rows are reported, never dropped: a deal id already won or lost, or repeated within the file, is a rejected row in the report, not an HTTP error. A file with more rows than the limit, a cell over the length limit or a quoting error ends in state "failed" with failureReason "too_many_rows" or "unreadable". Accepts an Idempotency-Key header.'
+    description: 'Uploads the fixed CSV template (columns deal_id, outcome, closed_at, amount, currency and optionally name; up to 10 MB and 50,000 rows) as multipart/form-data with one file part named "file". Owner and Admin only. The type, size and first row are checked before anything is stored: deal_import.unsupported_type (415), deal_import.too_large (413) and deal_import.header_invalid (422). The header is read with checkDealImportHeaderText (the same reader and limits as parseCsv) on the first 8192 characters of the file (a header still unfinished there is deferred to the job, not refused), and the job re-checks the header of its full parse with the same verdict. The rest of the file is parsed in the background job, never on the request path, under strict RFC 4180 quoting: a stray quote fails the file, and a cell over 1000 characters fails the whole file too (a cell up to 1000 characters is checked row by row, and a bad one is a rejected row); a blank line is skipped and not reported but still counts in the row numbers, and rowNumber is the record number with the header as record 1. Answers 202 with the import in state "uploaded"; it is processed in the background. Imports are not deduplicated by content: each upload is a new import, and only the Idempotency-Key makes a retry of the same request answer with the stored import. Valid rows are applied and bad rows are reported, never dropped: a deal id already won or lost, or repeated within the file, is a rejected row in the report, not an HTTP error. A file with more rows than the limit, a cell over the length limit or a quoting error ends in state "failed" with failureReason "too_many_rows" or "unreadable". Accepts an Idempotency-Key header.'
   }),
   listDealImports: route2({
     method: "GET",
@@ -1101,6 +1101,7 @@ var DEAL_IMPORT_REQUIRED_COLUMNS = [
 ];
 var DEAL_IMPORT_OPTIONAL_COLUMN = "name";
 var MAX_DEAL_IMPORT_HEADER_LENGTH = 1024;
+var DEAL_IMPORT_HEADER_PREFIX_CHARS = 8192;
 var DEAL_IMPORT_HEADER_PROBLEMS = [
   "empty",
   "too_long",
@@ -1135,13 +1136,20 @@ function checkDealImportHeader(record) {
   return { ok: true, hasName: cells.length === DEAL_IMPORT_REQUIRED_COLUMNS.length + 1 };
 }
 function checkDealImportHeaderText(text) {
+  const cut = text.length >= DEAL_IMPORT_HEADER_PREFIX_CHARS;
   const first = firstCsvRecord(text);
   if (!first.ok) {
+    if (cut && first.failure === "unterminated_quote") {
+      return { ok: true, deferred: true };
+    }
     return {
       ok: false,
       code: "deal_import.header_invalid",
       problem: first.failure === "cell_too_long" ? "too_long" : "malformed_csv"
     };
+  }
+  if (cut && !first.complete) {
+    return { ok: true, deferred: true };
   }
   return checkDealImportHeader(first.record ?? []);
 }
@@ -1256,123 +1264,116 @@ function checkDealImportRow(cells, hasName) {
     }
   };
 }
-var MAX_DEAL_IMPORT_CELL_LENGTH = MAX_DEAL_NAME_LENGTH;
+var MAX_DEAL_IMPORT_CELL_LENGTH = 1000;
 var CSV_FAILURES = [
   "too_many_records",
   "cell_too_long",
   "unterminated_quote",
   "bad_quote"
 ];
+var NEWLINE = 10;
+var RETURN = 13;
+var COMMA = 44;
+var QUOTE = 34;
 function readCsv(text, options, firstOnly) {
   const maxRecords = options?.maxRecords ?? MAX_DEAL_IMPORT_ROWS + 1;
   const maxCell = options?.maxCellLength ?? MAX_DEAL_IMPORT_CELL_LENGTH;
-  const source = text.startsWith("\uFEFF") ? text.slice(1) : text;
+  const length = text.length;
   const records = [];
-  let record = [];
-  let cell = "";
-  let cellLength = 0;
-  let quoted = false;
-  let afterQuote = false;
-  let started = false;
-  const fail = (failure) => ({
-    ok: false,
-    failure,
-    recordsRead: records.length
-  });
-  const endRecord = () => {
+  let index = text.charCodeAt(0) === 65279 ? 1 : 0;
+  const fail = (failure) => ({ ok: false, failure, recordsRead: records.length });
+  while (index < length) {
     if (records.length >= maxRecords) {
       return fail("too_many_records");
     }
-    record.push(cell);
-    records.push(record);
-    record = [];
-    cell = "";
-    cellLength = 0;
-    afterQuote = false;
-    started = false;
-    return;
-  };
-  for (let index = 0;index < source.length; index += 1) {
-    const char = source.charAt(index);
-    if (quoted) {
-      if (char === '"') {
-        if (source.charAt(index + 1) === '"') {
-          cell += '"';
-          cellLength += 1;
+    const record = [];
+    let ended = false;
+    while (!ended) {
+      let cell;
+      let count = 0;
+      if (text.charCodeAt(index) === QUOTE) {
+        index += 1;
+        let segment = index;
+        let joined = "";
+        for (;; ) {
+          if (index >= length) {
+            return fail("unterminated_quote");
+          }
+          const code = text.charCodeAt(index);
+          if (code === QUOTE) {
+            if (text.charCodeAt(index + 1) === QUOTE) {
+              joined += text.slice(segment, index + 1);
+              count += 1;
+              index += 2;
+              segment = index;
+              if (count > maxCell) {
+                return fail("cell_too_long");
+              }
+              continue;
+            }
+            cell = joined === "" ? text.slice(segment, index) : joined + text.slice(segment, index);
+            index += 1;
+            break;
+          }
+          if (code < 56320 || code > 57343) {
+            count += 1;
+            if (count > maxCell) {
+              return fail("cell_too_long");
+            }
+          }
           index += 1;
-        } else {
-          quoted = false;
-          afterQuote = true;
+        }
+        const next = text.charCodeAt(index);
+        if (index < length && next !== COMMA && next !== NEWLINE && next !== RETURN) {
+          return fail("bad_quote");
         }
       } else {
-        cell += char;
-        const code = char.charCodeAt(0);
-        cellLength += code >= 56320 && code <= 57343 ? 0 : 1;
+        const start = index;
+        while (index < length) {
+          const code = text.charCodeAt(index);
+          if (code === COMMA || code === NEWLINE || code === RETURN) {
+            break;
+          }
+          if (code === QUOTE) {
+            return fail("bad_quote");
+          }
+          if (code < 56320 || code > 57343) {
+            count += 1;
+            if (count > maxCell) {
+              return fail("cell_too_long");
+            }
+          }
+          index += 1;
+        }
+        cell = text.slice(start, index);
       }
-      if (cellLength > maxCell) {
-        return fail("cell_too_long");
-      }
-      continue;
-    }
-    if (char === "," || char === `
-` || char === "\r") {
-      if (char === ",") {
-        record.push(cell);
-        cell = "";
-        cellLength = 0;
-        afterQuote = false;
-        started = true;
+      record.push(cell);
+      const code = index < length ? text.charCodeAt(index) : -1;
+      if (code === COMMA) {
+        index += 1;
         continue;
       }
-      if (char === "\r" && source.charAt(index + 1) === `
-`) {
+      ended = true;
+      if (code === RETURN && text.charCodeAt(index + 1) === NEWLINE) {
+        index += 2;
+      } else if (code !== -1) {
         index += 1;
       }
-      const failed = endRecord();
-      if (failed) {
-        return failed;
-      }
+      records.push(record);
       if (firstOnly) {
-        return { ok: true, records };
+        return { ok: true, records, complete: code !== -1 };
       }
-      continue;
-    }
-    if (afterQuote) {
-      return fail("bad_quote");
-    }
-    if (char === '"') {
-      if (cellLength !== 0 || cell !== "") {
-        return fail("bad_quote");
-      }
-      quoted = true;
-      started = true;
-      continue;
-    }
-    cell += char;
-    started = true;
-    const code = char.charCodeAt(0);
-    cellLength += code >= 56320 && code <= 57343 ? 0 : 1;
-    if (cellLength > maxCell) {
-      return fail("cell_too_long");
     }
   }
-  if (quoted) {
-    return fail("unterminated_quote");
-  }
-  if (started || cell !== "" || record.length > 0) {
-    const failed = endRecord();
-    if (failed) {
-      return failed;
-    }
-  }
-  return { ok: true, records };
+  return { ok: true, records, complete: false };
 }
 function parseCsv(text, options) {
-  return readCsv(text, options, false);
+  const result = readCsv(text, options, false);
+  return result.ok ? { ok: true, records: result.records } : result;
 }
 function firstCsvRecord(text, options) {
   const result = readCsv(text, options, true);
-  return result.ok ? { ok: true, record: result.records[0] } : result;
+  return result.ok ? { ok: true, record: result.records[0], complete: result.complete === true } : { ok: false, failure: result.failure, recordsRead: result.recordsRead };
 }
 function isBlankCsvRecord(record) {
   return record.length === 1 && record[0] === "";
@@ -1796,6 +1797,7 @@ export {
   DEAL_CLOSED_AT_MIN_YEAR,
   DEAL_IMPORT_FAILURE_REASONS,
   DEAL_IMPORT_FILE_FIELD,
+  DEAL_IMPORT_HEADER_PREFIX_CHARS,
   DEAL_IMPORT_HEADER_PROBLEMS,
   DEAL_IMPORT_OPTIONAL_COLUMN,
   DEAL_IMPORT_REQUIRED_COLUMNS,
