@@ -76,8 +76,14 @@ describe('ERRORS', () => {
     ['request.conflict', 409],
     ['request.idempotency_key_reused', 422],
     ['request.too_large', 413],
+    ['request.method_not_allowed', 405],
+    ['request.unsupported_media_type', 415],
+    ['request.unprocessable', 422],
     ['auth.unauthenticated', 401],
     ['auth.forbidden', 403],
+    ['auth.token_expired', 401],
+    ['auth.token_invalid', 401],
+    ['auth.unavailable', 503],
     ['rate.limited', 429],
     ['server.internal', 500],
     ['server.unavailable', 503],
@@ -87,6 +93,20 @@ describe('ERRORS', () => {
     expect(entry?.status).toBe(status)
     expect(errorCodeSchema.safeParse(code).success).toBe(true)
     expect(entry?.message.length).toBeGreaterThan(0)
+  })
+
+  test('lists exactly the codes under test, each keyed by itself', () => {
+    expect(Object.keys(ERRORS)).toHaveLength(17)
+    for (const code of [
+      'auth.token_expired',
+      'auth.token_invalid',
+      'auth.unavailable',
+      'request.method_not_allowed',
+      'request.unsupported_media_type',
+      'request.unprocessable',
+    ] as const) {
+      expect(ERRORS[code].code).toBe(code)
+    }
   })
 
   test('is frozen, and so is each entry', () => {
