@@ -1,0 +1,48 @@
+import { z } from 'zod'
+import { errorCodeSchema } from './errors'
+import { eventIdSchema, organizationIdSchema } from './ids'
+import { regionSchema } from './tenancy'
+
+/** An event type in `area.event_name` form, such as `team.created`. */
+export const eventTypeSchema = errorCodeSchema
+
+/** An event type. */
+export type EventType = z.infer<typeof eventTypeSchema>
+
+const versionSchema = z.number().int().positive()
+const occurredAtSchema = z.iso.datetime({ offset: true }).max(64)
+
+const envelopeShape = {
+  id: eventIdSchema,
+  type: eventTypeSchema,
+  version: versionSchema,
+  occurredAt: occurredAtSchema,
+  organizationId: organizationIdSchema,
+  region: regionSchema,
+}
+
+/** The envelope every event shares, wrapping a payload validated by `dataSchema`. */
+export function eventEnvelopeSchema<D extends z.ZodType>(dataSchema: D) {
+  return z.object({ ...envelopeShape, data: dataSchema })
+}
+
+/** Declares one event type at one version; its schema accepts only that type and version. */
+export function defineEvent<const T extends string, const V extends number, D extends z.ZodType>(
+  type: T,
+  version: V,
+  dataSchema: D
+) {
+  const schema = z.object({
+    ...envelopeShape,
+    type: z.literal(eventTypeSchema.parse(type) as T),
+    version: z.literal(versionSchema.parse(version) as V),
+    data: dataSchema,
+  })
+  return {
+    type,
+    version,
+    schema,
+    /** Parses an envelope of this type and version; throws a ZodError for anything else. */
+    parse: (input: unknown) => schema.parse(input),
+  }
+}
