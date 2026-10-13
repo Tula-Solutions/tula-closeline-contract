@@ -581,6 +581,56 @@ describe('checkUploadFile', () => {
     expect(checkUploadFile({ ...file, ...change })).toEqual({ ok: false, code: 'request.invalid' })
   })
 
+  test.each([
+    ['NaN', Number.NaN],
+    ['Infinity', Number.POSITIVE_INFINITY],
+    ['-Infinity', Number.NEGATIVE_INFINITY],
+  ])('a size of %s yields request.invalid, not document.too_large', (_name, sizeBytes) => {
+    expect(checkUploadFile({ ...file, sizeBytes })).toEqual({ ok: false, code: 'request.invalid' })
+  })
+
+  test.each([
+    ['fileName', ['a.pdf', 'a.exe']],
+    ['fileName', ['a.exe', 'a.pdf']],
+    ['sizeBytes', [10, MAX_DOCUMENT_BYTES + 1]],
+    ['sizeBytes', [MAX_DOCUMENT_BYTES + 1, 10]],
+  ] as const)(
+    'a flipping getter on %s is read once and the checked value is the one used',
+    (key, values) => {
+      let reads = 0
+      const input = { ...file }
+      Object.defineProperty(input, key, {
+        enumerable: true,
+        get: () => values[reads++ === 0 ? 0 : 1],
+      })
+      const result = checkUploadFile(input)
+      expect(reads).toBe(1)
+      if (result.ok) {
+        expect(result.file[key]).toBe(values[0])
+        expect(result.file[key]).toBe(key === 'fileName' ? 'a.pdf' : 10)
+      } else {
+        expect(['document.too_large', 'document.unsupported_type']).toContain(result.code)
+      }
+    }
+  )
+
+  test('a polluted Object.prototype.sizeBytes does not satisfy a missing size', () => {
+    Object.defineProperty(Object.prototype, 'sizeBytes', {
+      value: 10,
+      configurable: true,
+      enumerable: false,
+      writable: true,
+    })
+    try {
+      expect(checkUploadFile({ fileName: 'a.pdf', declaredMediaType: null })).toEqual({
+        ok: false,
+        code: 'request.invalid',
+      })
+    } finally {
+      Reflect.deleteProperty(Object.prototype, 'sizeBytes')
+    }
+  })
+
   test('input that is not an object yields request.invalid', () => {
     for (const input of [null, undefined, 'x', 3, {}, { fileName: 3, sizeBytes: 'big' }]) {
       expect(checkUploadFile(input)).toEqual({ ok: false, code: 'request.invalid' })

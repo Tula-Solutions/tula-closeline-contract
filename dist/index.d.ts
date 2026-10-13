@@ -1017,7 +1017,10 @@ type CheckUploadFileResult = {
 * is judged after control and bidirectional characters are stripped and the name is trimmed, so
 * `report.pdf ` is accepted and stored as `report.pdf`), then the shape
 * ({@link uploadDocumentFileSchema}, `request.invalid`, 400). Input that is not an object with a
-* string name and a numeric size is `request.invalid`. On success `file` is the parsed form, with
+* string name and a finite numeric size (so `NaN` and the infinities too), or that has an own key
+* other than the three, is `request.invalid`. Each field is read once, as an own property, into a
+* copy that all three checks use, so a changing getter or an inherited property cannot pass a check
+* the parsed value would fail. On success `file` is the parsed form, with
 * the stored name. The result carries no name or content, so it is safe to log and to return.
 */
 declare function checkUploadFile(input: unknown): CheckUploadFileResult;

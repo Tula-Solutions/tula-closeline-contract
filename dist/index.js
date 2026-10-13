@@ -620,13 +620,24 @@ var internalRemoveOrganizationDocumentsResponseSchema = z14.object({
   organizationId: organizationIdSchema,
   status: z14.literal("removed")
 });
+var UPLOAD_FILE_KEYS = ["fileName", "declaredMediaType", "sizeBytes"];
 function checkUploadFile(input) {
   const invalid = { ok: false, code: "request.invalid" };
   if (typeof input !== "object" || input === null) {
     return invalid;
   }
-  const { fileName, sizeBytes } = input;
-  if (typeof fileName !== "string" || typeof sizeBytes !== "number") {
+  const keys = Object.keys(input);
+  if (keys.some((key) => !UPLOAD_FILE_KEYS.includes(key))) {
+    return invalid;
+  }
+  const copy = {};
+  for (const key of UPLOAD_FILE_KEYS) {
+    if (Object.hasOwn(input, key)) {
+      copy[key] = input[key];
+    }
+  }
+  const { fileName, sizeBytes } = copy;
+  if (typeof fileName !== "string" || typeof sizeBytes !== "number" || !Number.isFinite(sizeBytes)) {
     return invalid;
   }
   if (!documentSizeCheckSchema.safeParse(sizeBytes).success) {
@@ -635,7 +646,7 @@ function checkUploadFile(input) {
   if (!documentTypeCheckSchema.safeParse(fileName).success) {
     return { ok: false, code: "document.unsupported_type" };
   }
-  const parsed = uploadDocumentFileSchema.safeParse(input);
+  const parsed = uploadDocumentFileSchema.safeParse(copy);
   return parsed.success ? { ok: true, file: parsed.data } : invalid;
 }
 // src/playbook/errors.ts

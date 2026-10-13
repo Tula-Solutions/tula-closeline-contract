@@ -151,6 +151,8 @@ export type InternalRemoveOrganizationDocumentsResponse = z.infer<
   typeof internalRemoveOrganizationDocumentsResponseSchema
 >
 
+const UPLOAD_FILE_KEYS: readonly string[] = ['fileName', 'declaredMediaType', 'sizeBytes']
+
 /** The answer of {@link checkUploadFile}: the parsed file, or the one error code to return. */
 export type CheckUploadFileResult =
   | { readonly ok: true; readonly file: UploadDocumentFile }
@@ -166,7 +168,10 @@ export type CheckUploadFileResult =
  * is judged after control and bidirectional characters are stripped and the name is trimmed, so
  * `report.pdf ` is accepted and stored as `report.pdf`), then the shape
  * ({@link uploadDocumentFileSchema}, `request.invalid`, 400). Input that is not an object with a
- * string name and a numeric size is `request.invalid`. On success `file` is the parsed form, with
+ * string name and a finite numeric size (so `NaN` and the infinities too), or that has an own key
+ * other than the three, is `request.invalid`. Each field is read once, as an own property, into a
+ * copy that all three checks use, so a changing getter or an inherited property cannot pass a check
+ * the parsed value would fail. On success `file` is the parsed form, with
  * the stored name. The result carries no name or content, so it is safe to log and to return.
  */
 export function checkUploadFile(input: unknown): CheckUploadFileResult {
@@ -174,8 +179,24 @@ export function checkUploadFile(input: unknown): CheckUploadFileResult {
   if (typeof input !== 'object' || input === null) {
     return invalid
   }
-  const { fileName, sizeBytes } = input as { fileName?: unknown; sizeBytes?: unknown }
-  if (typeof fileName !== 'string' || typeof sizeBytes !== 'number') {
+  // Read each field once, own properties only, so a getter that changes between reads or an
+  // inherited (polluted) property cannot make the checked value differ from the parsed one.
+  const keys = Object.keys(input)
+  if (keys.some((key) => !UPLOAD_FILE_KEYS.includes(key))) {
+    return invalid
+  }
+  const copy: Record<string, unknown> = {}
+  for (const key of UPLOAD_FILE_KEYS) {
+    if (Object.hasOwn(input, key)) {
+      copy[key] = (input as Record<string, unknown>)[key]
+    }
+  }
+  const { fileName, sizeBytes } = copy
+  if (
+    typeof fileName !== 'string' ||
+    typeof sizeBytes !== 'number' ||
+    !Number.isFinite(sizeBytes)
+  ) {
     return invalid
   }
   if (!documentSizeCheckSchema.safeParse(sizeBytes).success) {
@@ -184,6 +205,6 @@ export function checkUploadFile(input: unknown): CheckUploadFileResult {
   if (!documentTypeCheckSchema.safeParse(fileName).success) {
     return { ok: false, code: 'document.unsupported_type' }
   }
-  const parsed = uploadDocumentFileSchema.safeParse(input)
+  const parsed = uploadDocumentFileSchema.safeParse(copy)
   return parsed.success ? { ok: true, file: parsed.data } : invalid
 }
