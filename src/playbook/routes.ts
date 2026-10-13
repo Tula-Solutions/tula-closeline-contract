@@ -1,7 +1,6 @@
 import type { CommonErrorCode } from '../errors'
 import type { Role } from '../tenancy'
 import type { PlaybookErrorCode } from './errors'
-import type { SalesHistoryErrorCode } from './sales-history-errors'
 
 /** The roles that may change the Playbook (ADR 0016, choice 4). */
 export const PLAYBOOK_WRITE_ROLES = ['owner', 'admin'] as const satisfies readonly Role[]
@@ -25,7 +24,7 @@ export type PlaybookRouteName =
 
 /** What the service needs to describe one route: its method, path, who may call it, what it answers. */
 export type PlaybookRoute = {
-  readonly method: 'GET' | 'POST' | 'PUT' | 'DELETE'
+  readonly method: 'GET' | 'POST' | 'DELETE'
   readonly path: string
   /** True for a route on the internal network only; it takes no role and names the Organization in the path. */
   readonly internal: boolean
@@ -34,7 +33,7 @@ export type PlaybookRoute = {
   /** The success statuses, the first being the usual one. */
   readonly success: readonly number[]
   /** The domain codes the route may return, beyond the common ones. */
-  readonly errors: readonly (PlaybookErrorCode | SalesHistoryErrorCode)[]
+  readonly errors: readonly PlaybookErrorCode[]
   /** The common codes the route may return, beyond those every route may. */
   readonly commonErrors: readonly CommonErrorCode[]
   /** The description for the OpenAPI document, role rules included. */

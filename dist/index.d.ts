@@ -853,932 +853,49 @@ declare function encodeCursor(value: unknown): string;
 * invalid. The decoded value is client-controlled input: use it as a position only.
 */
 declare function decodeCursor<T extends z11.ZodType>(text: string, schema: T): z11.output<T> | undefined;
-import { z as z13 } from "zod";
 import { z as z12 } from "zod";
-/**
-* The states a Call is in (ADR 0018, with ADR 0016). A Transcript goes `uploaded`, `processing`,
-* `ready`; a Recording goes `uploaded`, `transcribing`, then `awaiting_rep` (no Rep chosen yet) or
-* `processing`, then `ready`. `processing` is also where a Call goes when its Rep changes and its
-* Moments are rebuilt, and where a restored Call goes. `awaiting_rep` is the named wait of choice 9:
-* no Moments exist and the Call is not in search. `deleted` is soft-deleted and awaiting purge. A
-* Call held back from search because its Deal is not won is `ready`: that is read from the Deal,
-* not a state. An upload still streaming has no Call yet, so it has no state.
-*/
-declare const CALL_STATES: readonly ["uploaded", "transcribing", "awaiting_rep", "processing", "ready", "failed", "deleted"];
-/** The state of a Call. */
-declare const callStateSchema: z12.ZodEnum<{
-	awaiting_rep: "awaiting_rep";
+/** Every Region an Organization can be created in. */
+declare const REGIONS: readonly ["us", "eu"];
+/** A Region: the geography whose boundary an Organization's data never crosses. */
+declare const regionSchema: z12.ZodEnum<{
+	eu: "eu";
+	us: "us";
+}>;
+/** A Region. */
+type Region = z12.infer<typeof regionSchema>;
+/** Every role, ordered from most to least privileged. */
+declare const ROLES: readonly ["owner", "admin", "manager", "rep"];
+/** A member's role in an Organization. */
+declare const roleSchema: z12.ZodEnum<{
+	admin: "admin";
+	manager: "manager";
+	owner: "owner";
+	rep: "rep";
+}>;
+/** A role. */
+type Role = z12.infer<typeof roleSchema>;
+/** Whether `role` is at least as privileged as `minimum`; an unrecognised role is never enough. */
+declare function roleAtLeast(role: Role, minimum: Role): boolean;
+/** The roles an Invitation can offer; ownership passes by promoting a member, never by Invitation. */
+declare const INVITABLE_ROLES: readonly ["admin", "manager", "rep"];
+/** A role an Invitation can offer: any role except `owner`. */
+declare const invitableRoleSchema: z12.ZodEnum<{
+	admin: "admin";
+	manager: "manager";
+	rep: "rep";
+}>;
+/** A role an Invitation can offer. */
+type InvitableRole = z12.infer<typeof invitableRoleSchema>;
+/** Every state an Organization is in; `deleted` keeps the record for the retention window. */
+declare const ORGANIZATION_STATUSES: readonly ["active", "suspended", "deleted"];
+/** The state of an Organization. */
+declare const organizationStatusSchema: z12.ZodEnum<{
+	active: "active";
 	deleted: "deleted";
-	failed: "failed";
-	processing: "processing";
-	ready: "ready";
-	transcribing: "transcribing";
-	uploaded: "uploaded";
+	suspended: "suspended";
 }>;
-/** The state of a Call. */
-type CallState = z12.infer<typeof callStateSchema>;
-/**
-* Why a Call ended in `failed`: a closed list the portal maps to its own wording, never free text.
-* `too_long` is found by the job from the audio, not at upload, so it is a reason and not an HTTP
-* code. `too_many_speakers` is a Call with more speakers than `MAX_CALL_SPEAKERS`. `rep_label_not_found` and `not_per_side` can be fixed by changing the Rep (see {@link repChangeAllowed}). The list is the
-* lead's reading of ADR 0018.
-*/
-declare const CALL_FAILURE_REASONS: readonly ["no_turns", "too_few_speakers", "too_many_speakers", "rep_label_not_found", "not_per_side", "too_long", "transcription_failed", "transcription_timed_out", "unreadable", "processing_failed"];
-/** Why a Call ended in `failed`. */
-declare const callFailureReasonSchema: z12.ZodEnum<{
-	no_turns: "no_turns";
-	not_per_side: "not_per_side";
-	processing_failed: "processing_failed";
-	rep_label_not_found: "rep_label_not_found";
-	too_few_speakers: "too_few_speakers";
-	too_long: "too_long";
-	too_many_speakers: "too_many_speakers";
-	transcription_failed: "transcription_failed";
-	transcription_timed_out: "transcription_timed_out";
-	unreadable: "unreadable";
-}>;
-/** Why a Call ended in `failed`. */
-type CallFailureReason = z12.infer<typeof callFailureReasonSchema>;
-/** What a Call was uploaded as: a written Transcript or an audio Recording. */
-declare const CALL_KINDS: readonly ["transcript", "recording"];
-/** What a Call was uploaded as. */
-declare const callKindSchema: z12.ZodEnum<{
-	recording: "recording";
-	transcript: "transcript";
-}>;
-/** What a Call was uploaded as. */
-type CallKind = z12.infer<typeof callKindSchema>;
-/** The lead's default (ADR 0018, refinements; not the owner's): the Transcript extensions accepted: plain text, WebVTT, SRT and a JSON turn list. */
-declare const ACCEPTED_TRANSCRIPT_EXTENSIONS: readonly [".txt", ".vtt", ".srt", ".json"];
-/** The lead's default (ADR 0018, refinements; not the owner's): the Recording extensions accepted. */
-declare const ACCEPTED_RECORDING_EXTENSIONS: readonly [".mp3", ".m4a", ".wav", ".ogg", ".webm", ".flac"];
-/** An accepted Call file extension. */
-type AcceptedCallExtension = (typeof ACCEPTED_TRANSCRIPT_EXTENSIONS)[number] | (typeof ACCEPTED_RECORDING_EXTENSIONS)[number];
-/** The media type of a stored Call file, as the service detected it from the content. */
-declare const CALL_MEDIA_TYPES: readonly ["text/plain", "text/vtt", "application/x-subrip", "application/json", "audio/mpeg", "audio/mp4", "audio/wav", "audio/ogg", "audio/webm", "audio/flac"];
-/** The media type of a stored Call file. */
-declare const callMediaTypeSchema: z12.ZodEnum<{
-	"application/json": "application/json";
-	"application/x-subrip": "application/x-subrip";
-	"audio/flac": "audio/flac";
-	"audio/mp4": "audio/mp4";
-	"audio/mpeg": "audio/mpeg";
-	"audio/ogg": "audio/ogg";
-	"audio/wav": "audio/wav";
-	"audio/webm": "audio/webm";
-	"text/plain": "text/plain";
-	"text/vtt": "text/vtt";
-}>;
-/** The media type of a stored Call file. */
-type CallMediaType = z12.infer<typeof callMediaTypeSchema>;
-/** The media type each accepted Call extension stands for. */
-declare const MEDIA_TYPE_BY_CALL_EXTENSION: Readonly<Record<AcceptedCallExtension, CallMediaType>>;
-/** The lead's default (ADR 0018, refinements; not the owner's): the largest Transcript accepted, 5 MB counted as 5 * 1024 * 1024 bytes. */
-declare const MAX_TRANSCRIPT_BYTES: number;
-/** The lead's default (ADR 0018, refinements; not the owner's): the largest Recording accepted, 500 MB counted as 500 * 1024 * 1024 bytes; streamed, never held whole. */
-declare const MAX_RECORDING_BYTES: number;
-/** The lead's default (ADR 0018, refinements; not the owner's): the longest Recording, 3 hours in seconds; the job checks it, so a longer one ends `failed` with `too_long`. */
-declare const MAX_RECORDING_SECONDS: number;
-/** The ticket's default (ADR 0018 leaves it open): hours after which the parts of an incomplete streamed upload are discarded. */
-declare const INCOMPLETE_UPLOAD_PARTS_TTL_HOURS = 24;
-/** The ticket's default (ADR 0018 leaves it open): the most Rep turns stored after a Moment (choice 11). */
-declare const MAX_REP_FOLLOWING_TURNS = 5;
-/** The ticket's default (ADR 0018 leaves it open): the most characters (UTF-16 code units) of Rep turns stored after a Moment, so a long turn cannot make it unbounded. */
-declare const MAX_REP_FOLLOWING_CHARACTERS = 4e3;
-/** The ticket's default (ADR 0018 leaves it open): Calls an Organization may hold, soft-deleted and `awaiting_rep` ones included until purged. */
-declare const DEFAULT_MAX_CALLS = 2e3;
-/** The ticket's default (ADR 0018 leaves it open): Recording bytes an Organization may hold, 50 GB counted as 50 * 1024^3. */
-declare const DEFAULT_MAX_RECORDING_BYTES_TOTAL: number;
-/** The ticket's default (ADR 0018 leaves it open): Deals an Organization may hold. */
-declare const DEFAULT_MAX_DEALS = 2e4;
-/** The ticket's default (ADR 0018 leaves it open): the most speakers a Call may have and list for a Rep pick; a Call with more fails with `too_many_speakers`. */
-declare const MAX_CALL_SPEAKERS = 20;
-/** The longest speaker label, in UTF-16 code units, once control and direction characters are stripped. */
-declare const MAX_SPEAKER_LABEL_LENGTH = 64;
-/** The stored form of a speaker label: control and bidirectional characters removed, then trimmed. Labels read from a file and labels in a request must both pass through this. */
-declare function normaliseSpeakerLabel(label: string): string;
-/**
-* A speaker label, in a request and in a response: at most 1000 raw characters, then control and
-* bidirectional characters are removed and the rest trimmed to 1 to 64 well-formed UTF-16 code
-* units. It is text taken from a file (`Alice`, or `A` from the transcriber), so display code must
-* treat it as untrusted text, and it never appears in an error body. It is compared exactly and
-* case-sensitively with the labels in the file.
-*/
-declare const speakerLabelSchema: z12.ZodPipe<z12.ZodPipe<z12.ZodString, z12.ZodTransform<string, string>>, z12.ZodString>;
-/** The channels of a per-side Recording: the left one or the right one. */
-declare const CALL_CHANNELS: readonly ["left", "right"];
-/** A channel of a per-side Recording. */
-declare const callChannelSchema: z12.ZodEnum<{
-	left: "left";
-	right: "right";
-}>;
-/**
-* Which side of a Call is the Rep: a speaker label (a Transcript, or a Recording that waited in
-* `awaiting_rep`) or a channel (a per-side Recording). A Recording whose Rep is not yet known has
-* no choice at all (`null` on the Call, an absent `rep` at upload).
-*/
-declare const repChoiceSchema: z12.ZodDiscriminatedUnion<[z12.ZodObject<{
-	by: z12.ZodLiteral<"speaker">;
-	label: z12.ZodPipe<z12.ZodPipe<z12.ZodString, z12.ZodTransform<string, string>>, z12.ZodString>;
-}, z12.core.$strict>, z12.ZodObject<{
-	by: z12.ZodLiteral<"channel">;
-	channel: z12.ZodEnum<{
-		left: "left";
-		right: "right";
-	}>;
-}, z12.core.$strict>], "by">;
-/** Which side of a Call is the Rep. */
-type RepChoice = z12.infer<typeof repChoiceSchema>;
-/**
-* Whether a Rep choice suits a Call of this kind, for the one moment named. At `upload`, a
-* Transcript needs a speaker label (ADR 0018, refinements), and a Recording takes a channel (the
-* uploader declares it per-side) or nothing (it then waits in `awaiting_rep`); a speaker label for
-* a Recording is not known at upload. At `change`, a choice is required: a Transcript takes a
-* speaker label and a Recording takes a speaker label (from the detected speakers) or a channel.
-* Whether a channel fits the file (exactly two channels) is the service's check, and a mismatch
-* ends the Call `failed` with `not_per_side`. A failure here is `call.rep_invalid`.
-*/
-declare function repChoiceSuits(kind: CallKind, rep: RepChoice | null | undefined, when: "upload" | "change"): boolean;
-/**
-* Whether a Call's Rep may be picked or changed: when it is `ready` or `awaiting_rep`, or `failed`
-* with a reason a different Rep can fix (`rep_label_not_found`, `not_per_side`). Any other state
-* or reason is `call.rep_not_changeable`.
-*/
-declare function repChangeAllowed(state: CallState, failureReason: CallFailureReason | null): boolean;
-/**
-* A Call as the service returns it. It names the file and the Deal but never carries a Transcript,
-* audio or any turn. `kind` is what it was uploaded as. `rep` is the chosen Rep and is `null`
-* exactly while the state is `awaiting_rep` (and for a Recording not yet transcribed or failed
-* before a choice); a `ready` Call always has one. `speakerLabels` are the labels the Call's
-* speakers carry (those of the file, or `A`, `B` from the transcriber), at most
-* `MAX_CALL_SPEAKERS`, for the portal's Rep pick; they are untrusted text. `failureReason` is set
-* exactly when `state` is `failed`; `deletedAt` and `purgeAt` exactly when it is `deleted`. A
-* Transcript is never `transcribing` or `awaiting_rep`, has no duration and is within
-* `MAX_TRANSCRIPT_BYTES`; `kind` agrees with `mediaType` (text for a Transcript, audio for a
-* Recording); the labels are unique; and a `ready` Call's speaker Rep is one of them. A Call with
-* more speakers than `MAX_CALL_SPEAKERS` fails with `too_many_speakers` and never reaches a
-* response, so a read route cannot throw on it. `durationSeconds` is `null` for a
-* Transcript and until a Recording has been read. Whether the Call is held back from search
-* because its Deal is not won is read from the Deal, not here. The service must send the output of
-* `callSchema.parse(row)`, never the row.
-*/
-declare const callSchema: z13.ZodObject<{
-	id: z13.core.$ZodBranded<z13.ZodString, "call", "out">;
-	dealId: z13.ZodPipe<z13.ZodPipe<z13.ZodString, z13.ZodTransform<string, string>>, z13.ZodString>;
-	kind: z13.ZodEnum<{
-		recording: "recording";
-		transcript: "transcript";
-	}>;
-	fileName: z13.ZodPipe<z13.ZodPipe<z13.ZodString, z13.ZodTransform<string, string>>, z13.ZodString>;
-	mediaType: z13.ZodEnum<{
-		"application/json": "application/json";
-		"application/x-subrip": "application/x-subrip";
-		"audio/flac": "audio/flac";
-		"audio/mp4": "audio/mp4";
-		"audio/mpeg": "audio/mpeg";
-		"audio/ogg": "audio/ogg";
-		"audio/wav": "audio/wav";
-		"audio/webm": "audio/webm";
-		"text/plain": "text/plain";
-		"text/vtt": "text/vtt";
-	}>;
-	sizeBytes: z13.ZodNumber;
-	durationSeconds: z13.ZodNullable<z13.ZodNumber>;
-	state: z13.ZodEnum<{
-		awaiting_rep: "awaiting_rep";
-		deleted: "deleted";
-		failed: "failed";
-		processing: "processing";
-		ready: "ready";
-		transcribing: "transcribing";
-		uploaded: "uploaded";
-	}>;
-	failureReason: z13.ZodNullable<z13.ZodEnum<{
-		no_turns: "no_turns";
-		not_per_side: "not_per_side";
-		processing_failed: "processing_failed";
-		rep_label_not_found: "rep_label_not_found";
-		too_few_speakers: "too_few_speakers";
-		too_long: "too_long";
-		too_many_speakers: "too_many_speakers";
-		transcription_failed: "transcription_failed";
-		transcription_timed_out: "transcription_timed_out";
-		unreadable: "unreadable";
-	}>>;
-	rep: z13.ZodNullable<z13.ZodDiscriminatedUnion<[z13.ZodObject<{
-		by: z13.ZodLiteral<"speaker">;
-		label: z13.ZodPipe<z13.ZodPipe<z13.ZodString, z13.ZodTransform<string, string>>, z13.ZodString>;
-	}, z13.core.$strict>, z13.ZodObject<{
-		by: z13.ZodLiteral<"channel">;
-		channel: z13.ZodEnum<{
-			left: "left";
-			right: "right";
-		}>;
-	}, z13.core.$strict>], "by">>;
-	speakerLabels: z13.ZodArray<z13.ZodPipe<z13.ZodPipe<z13.ZodString, z13.ZodTransform<string, string>>, z13.ZodString>>;
-	deletedAt: z13.ZodNullable<z13.ZodISODateTime>;
-	purgeAt: z13.ZodNullable<z13.ZodISODateTime>;
-	uploadedByUserId: z13.core.$ZodBranded<z13.ZodString, "usr", "out">;
-	createdAt: z13.ZodISODateTime;
-	updatedAt: z13.ZodISODateTime;
-}, z13.core.$strip>;
-/** A Call as the service returns it. */
-type Call = z13.infer<typeof callSchema>;
-/** The most characters the `rep` form field may hold; a longer text is refused without being parsed. */
-declare const MAX_REP_FIELD_LENGTH = 512;
-/**
-* The text fields of the multipart upload of a Call, beside the one file part
-* ({@link UPLOAD_FILE_FIELD} `file`, as for a document): `dealId` (a deal id; a Deal that does not
-* exist is created `open`) and `rep`, the {@link repChoiceSchema} as JSON text, which is a speaker
-* label for a Transcript, a channel for a per-side Recording (the uploader declares it), or absent
-* for a Recording that will wait in `awaiting_rep`. The request carries an `Idempotency-Key`
-* header. Parse the text of `rep` with {@link parseRepField}.
-*/
-declare const uploadCallFieldsSchema: z13.ZodObject<{
-	dealId: z13.ZodPipe<z13.ZodPipe<z13.ZodString, z13.ZodTransform<string, string>>, z13.ZodString>;
-	rep: z13.ZodOptional<z13.ZodString>;
-}, z13.core.$strict>;
-/** The text fields of the multipart upload of a Call. */
-type UploadCallFields = z13.infer<typeof uploadCallFieldsSchema>;
-/** What {@link parseRepField} answers: a Rep choice, no Rep at all (the field was not sent), or an invalid field. */
-type ParseRepFieldResult = {
-	readonly ok: true;
-	readonly rep: RepChoice | null;
-} | {
-	readonly ok: false;
-	readonly code: "call.rep_invalid";
-};
-/**
-* Reads the `rep` form field. An absent field (`undefined`) is `{ ok: true, rep: null }`, which
-* suits a Recording that will wait in `awaiting_rep`; a field that is present but empty, longer
-* than {@link MAX_REP_FIELD_LENGTH}, not JSON or not a valid Rep choice is `call.rep_invalid`
-* (422), never silently treated as absent. It never throws.
-*/
-declare function parseRepField(text: string | undefined): ParseRepFieldResult;
-/** The path parameters of a request about one Call. */
-declare const callParamsSchema: z13.ZodObject<{
-	callId: z13.core.$ZodBranded<z13.ZodString, "call", "out">;
-}, z13.core.$strict>;
-/** The path parameters of a request about one Call. */
-type CallParams = z13.infer<typeof callParamsSchema>;
-/**
-* The query parameters of a request to list Calls: a page, and optionally one `state` and one
-* `dealId`. With no `state`, every Call that is not `deleted` is listed; `state=deleted` lists
-* those that can still be restored, and `state=awaiting_rep` the ones waiting for a Rep. An
-* unknown parameter is rejected.
-*/
-declare const listCallsQuerySchema: z13.ZodObject<{
-	cursor: z13.ZodOptional<z13.ZodString>;
-	limit: z13.ZodDefault<z13.ZodPipe<z13.ZodPipe<z13.ZodUnion<readonly [z13.ZodNumber, z13.ZodString]>, z13.ZodTransform<number, string | number>>, z13.ZodNumber>>;
-	state: z13.ZodOptional<z13.ZodEnum<{
-		awaiting_rep: "awaiting_rep";
-		deleted: "deleted";
-		failed: "failed";
-		processing: "processing";
-		ready: "ready";
-		transcribing: "transcribing";
-		uploaded: "uploaded";
-	}>>;
-	dealId: z13.ZodOptional<z13.ZodPipe<z13.ZodPipe<z13.ZodString, z13.ZodTransform<string, string>>, z13.ZodString>>;
-}, z13.core.$strict>;
-/** The query parameters of a request to list Calls. */
-type ListCallsQuery = z13.infer<typeof listCallsQuerySchema>;
-/** One page of Calls. */
-declare const listCallsResponseSchema: z13.ZodObject<{
-	items: z13.ZodArray<z13.ZodObject<{
-		id: z13.core.$ZodBranded<z13.ZodString, "call", "out">;
-		dealId: z13.ZodPipe<z13.ZodPipe<z13.ZodString, z13.ZodTransform<string, string>>, z13.ZodString>;
-		kind: z13.ZodEnum<{
-			recording: "recording";
-			transcript: "transcript";
-		}>;
-		fileName: z13.ZodPipe<z13.ZodPipe<z13.ZodString, z13.ZodTransform<string, string>>, z13.ZodString>;
-		mediaType: z13.ZodEnum<{
-			"application/json": "application/json";
-			"application/x-subrip": "application/x-subrip";
-			"audio/flac": "audio/flac";
-			"audio/mp4": "audio/mp4";
-			"audio/mpeg": "audio/mpeg";
-			"audio/ogg": "audio/ogg";
-			"audio/wav": "audio/wav";
-			"audio/webm": "audio/webm";
-			"text/plain": "text/plain";
-			"text/vtt": "text/vtt";
-		}>;
-		sizeBytes: z13.ZodNumber;
-		durationSeconds: z13.ZodNullable<z13.ZodNumber>;
-		state: z13.ZodEnum<{
-			awaiting_rep: "awaiting_rep";
-			deleted: "deleted";
-			failed: "failed";
-			processing: "processing";
-			ready: "ready";
-			transcribing: "transcribing";
-			uploaded: "uploaded";
-		}>;
-		failureReason: z13.ZodNullable<z13.ZodEnum<{
-			no_turns: "no_turns";
-			not_per_side: "not_per_side";
-			processing_failed: "processing_failed";
-			rep_label_not_found: "rep_label_not_found";
-			too_few_speakers: "too_few_speakers";
-			too_long: "too_long";
-			too_many_speakers: "too_many_speakers";
-			transcription_failed: "transcription_failed";
-			transcription_timed_out: "transcription_timed_out";
-			unreadable: "unreadable";
-		}>>;
-		rep: z13.ZodNullable<z13.ZodDiscriminatedUnion<[z13.ZodObject<{
-			by: z13.ZodLiteral<"speaker">;
-			label: z13.ZodPipe<z13.ZodPipe<z13.ZodString, z13.ZodTransform<string, string>>, z13.ZodString>;
-		}, z13.core.$strict>, z13.ZodObject<{
-			by: z13.ZodLiteral<"channel">;
-			channel: z13.ZodEnum<{
-				left: "left";
-				right: "right";
-			}>;
-		}, z13.core.$strict>], "by">>;
-		speakerLabels: z13.ZodArray<z13.ZodPipe<z13.ZodPipe<z13.ZodString, z13.ZodTransform<string, string>>, z13.ZodString>>;
-		deletedAt: z13.ZodNullable<z13.ZodISODateTime>;
-		purgeAt: z13.ZodNullable<z13.ZodISODateTime>;
-		uploadedByUserId: z13.core.$ZodBranded<z13.ZodString, "usr", "out">;
-		createdAt: z13.ZodISODateTime;
-		updatedAt: z13.ZodISODateTime;
-	}, z13.core.$strip>>;
-	nextCursor: z13.ZodNullable<z13.ZodString>;
-}, z13.core.$strip>;
-/** One page of Calls. */
-type ListCallsResponse = z13.infer<typeof listCallsResponseSchema>;
-/**
-* The body of the request that picks or changes a Call's Rep: a required choice (`null` is not a
-* choice). It is for a Call `awaiting_rep`, `ready` or `failed`, otherwise `call.rep_not_changeable`;
-* a choice that does not suit the Call's kind or, for a speaker, is not among its labels is
-* `call.rep_invalid`. It is idempotent by end state.
-*/
-declare const setCallRepRequestSchema: z13.ZodObject<{
-	rep: z13.ZodDiscriminatedUnion<[z13.ZodObject<{
-		by: z13.ZodLiteral<"speaker">;
-		label: z13.ZodPipe<z13.ZodPipe<z13.ZodString, z13.ZodTransform<string, string>>, z13.ZodString>;
-	}, z13.core.$strict>, z13.ZodObject<{
-		by: z13.ZodLiteral<"channel">;
-		channel: z13.ZodEnum<{
-			left: "left";
-			right: "right";
-		}>;
-	}, z13.core.$strict>], "by">;
-}, z13.core.$strict>;
-/** The body of the request that picks or changes a Call's Rep. */
-type SetCallRepRequest = z13.infer<typeof setCallRepRequestSchema>;
-/** What the service reads off the file part of a Call upload, and the kind it was recognised as. */
-declare const uploadCallFileSchema: z13.ZodObject<{
-	fileName: z13.ZodPipe<z13.ZodPipe<z13.ZodString, z13.ZodTransform<string, string>>, z13.ZodString>;
-	declaredMediaType: z13.ZodNullable<z13.ZodString>;
-	sizeBytes: z13.ZodNumber;
-}, z13.core.$strict>;
-/** The answer of {@link checkCallFile}: the parsed file and its kind, or the one error code to return. */
-type CheckCallFileResult = {
-	readonly ok: true;
-	readonly kind: CallKind;
-	readonly file: z13.infer<typeof uploadCallFileSchema>;
-} | {
-	readonly ok: false;
-	readonly code: "call.too_large" | "call.unsupported_type" | "request.invalid";
-};
-/**
-* The one call that checks the file part of a Call upload, in the style of `checkUploadFile`. It
-* runs the size check first against the largest limit (`MAX_RECORDING_BYTES`, `call.too_large`
-* 413), then the type on the stored form of the name (`call.unsupported_type` 415: the extension
-* is judged after control and bidirectional characters are stripped and the name trimmed), then
-* the limit of the recognised kind (a Transcript over `MAX_TRANSCRIPT_BYTES` is `call.too_large`),
-* then the shape (`request.invalid`). The kind comes from the extension; the service confirms it
-* from the content. Fields are read once, as own properties, into a copy all checks use, and a
-* non-finite size, a missing field or an extra own key is `request.invalid`. The Recording's
-* duration is not known here: the job checks `MAX_RECORDING_SECONDS`. The result carries no name or
-* content, so it is safe to log.
-*/
-declare function checkCallFile(input: unknown): CheckCallFileResult;
-import { z as z14 } from "zod";
-/**
-* A Deal as the service returns it. A Deal is named by the Organization's own `dealId` and is
-* never deleted on its own in phase 1. `closedAt`, `amount`, `currency` and `name` are `null`
-* until given. `callCount` counts Calls that are not deleted. `appearedInImport` is false for a
-* Deal created by a Call upload that no CSV has named, so the portal can list likely typos. The
-* Outcome sequence the re-tag job uses is not here. The service must send the output of
-* `dealSchema.parse(row)`.
-*/
-declare const dealSchema: z14.ZodObject<{
-	dealId: z14.ZodPipe<z14.ZodPipe<z14.ZodString, z14.ZodTransform<string, string>>, z14.ZodString>;
-	name: z14.ZodNullable<z14.ZodPipe<z14.ZodString, z14.ZodString>>;
-	outcome: z14.ZodEnum<{
-		lost: "lost";
-		open: "open";
-		won: "won";
-	}>;
-	closedAt: z14.ZodNullable<z14.ZodISODateTime>;
-	amount: z14.ZodNullable<z14.ZodString>;
-	currency: z14.ZodNullable<z14.ZodString>;
-	callCount: z14.ZodNumber;
-	appearedInImport: z14.ZodBoolean;
-	createdAt: z14.ZodISODateTime;
-	updatedAt: z14.ZodISODateTime;
-}, z14.core.$strip>;
-/** A Deal as the service returns it. */
-type Deal = z14.infer<typeof dealSchema>;
-/** The path parameters of a request about one Deal; the deal id is trimmed and otherwise exact. */
-declare const dealParamsSchema: z14.ZodObject<{
-	dealId: z14.ZodPipe<z14.ZodPipe<z14.ZodString, z14.ZodTransform<string, string>>, z14.ZodString>;
-}, z14.core.$strict>;
-/** The path parameters of a request about one Deal. */
-type DealParams = z14.infer<typeof dealParamsSchema>;
-/**
-* The query parameters of a request to list Deals: a page, and optionally one `outcome` and
-* `appearedInImport` (`true` or `false`). `appearedInImport=false` lists the Deals that have Calls
-* but never appeared in a CSV. An unknown parameter is rejected.
-*/
-declare const listDealsQuerySchema: z14.ZodObject<{
-	cursor: z14.ZodOptional<z14.ZodString>;
-	limit: z14.ZodDefault<z14.ZodPipe<z14.ZodPipe<z14.ZodUnion<readonly [z14.ZodNumber, z14.ZodString]>, z14.ZodTransform<number, string | number>>, z14.ZodNumber>>;
-	outcome: z14.ZodOptional<z14.ZodEnum<{
-		lost: "lost";
-		open: "open";
-		won: "won";
-	}>>;
-	appearedInImport: z14.ZodOptional<z14.ZodPipe<z14.ZodEnum<{
-		false: "false";
-		true: "true";
-	}>, z14.ZodTransform<boolean, "false" | "true">>>;
-}, z14.core.$strict>;
-/** The query parameters of a request to list Deals. */
-type ListDealsQuery = z14.infer<typeof listDealsQuerySchema>;
-/** One page of Deals. */
-declare const listDealsResponseSchema: z14.ZodObject<{
-	items: z14.ZodArray<z14.ZodObject<{
-		dealId: z14.ZodPipe<z14.ZodPipe<z14.ZodString, z14.ZodTransform<string, string>>, z14.ZodString>;
-		name: z14.ZodNullable<z14.ZodPipe<z14.ZodString, z14.ZodString>>;
-		outcome: z14.ZodEnum<{
-			lost: "lost";
-			open: "open";
-			won: "won";
-		}>;
-		closedAt: z14.ZodNullable<z14.ZodISODateTime>;
-		amount: z14.ZodNullable<z14.ZodString>;
-		currency: z14.ZodNullable<z14.ZodString>;
-		callCount: z14.ZodNumber;
-		appearedInImport: z14.ZodBoolean;
-		createdAt: z14.ZodISODateTime;
-		updatedAt: z14.ZodISODateTime;
-	}, z14.core.$strip>>;
-	nextCursor: z14.ZodNullable<z14.ZodString>;
-}, z14.core.$strip>;
-/** One page of Deals. */
-type ListDealsResponse = z14.infer<typeof listDealsResponseSchema>;
-/**
-* The body of the request that sets or corrects a Deal's Outcome (Owner and Admin, any Deal, even
-* a decided one): the `outcome` and, for `won` or `lost`, an optional `closedAt`; `open` takes no
-* `closedAt`. It is idempotent by end state, and a change queues the re-tag of the Deal's Moments.
-*/
-declare const setDealOutcomeRequestSchema: z14.ZodObject<{
-	outcome: z14.ZodEnum<{
-		lost: "lost";
-		open: "open";
-		won: "won";
-	}>;
-	closedAt: z14.ZodOptional<z14.ZodNullable<z14.ZodISODateTime>>;
-}, z14.core.$strict>;
-/** The body of the request that sets or corrects a Deal's Outcome. */
-type SetDealOutcomeRequest = z14.infer<typeof setDealOutcomeRequestSchema>;
-/** The fields of the multipart upload of a Deal import: the CSV is the one file part (`file`), with no other part. The request carries an `Idempotency-Key` header. */
-declare const DEAL_IMPORT_FILE_FIELD = "file";
-/**
-* A Deal import as the service returns it. It carries no file name and no cell. The counts are
-* `null` until `completed`; `failureReason` is set exactly when `state` is `failed`. The report is
-* the paginated rows ({@link listDealImportRowsResponseSchema}).
-*/
-declare const dealImportSchema: z14.ZodObject<{
-	id: z14.core.$ZodBranded<z14.ZodString, "dimp", "out">;
-	state: z14.ZodEnum<{
-		completed: "completed";
-		failed: "failed";
-		processing: "processing";
-		uploaded: "uploaded";
-	}>;
-	failureReason: z14.ZodNullable<z14.ZodEnum<{
-		processing_failed: "processing_failed";
-		too_many_rows: "too_many_rows";
-		unreadable: "unreadable";
-	}>>;
-	rowCount: z14.ZodNullable<z14.ZodNumber>;
-	appliedCount: z14.ZodNullable<z14.ZodNumber>;
-	rejectedCount: z14.ZodNullable<z14.ZodNumber>;
-	uploadedByUserId: z14.core.$ZodBranded<z14.ZodString, "usr", "out">;
-	createdAt: z14.ZodISODateTime;
-	updatedAt: z14.ZodISODateTime;
-}, z14.core.$strip>;
-/** A Deal import as the service returns it. */
-type DealImport = z14.infer<typeof dealImportSchema>;
-/** The path parameters of a request about one Deal import. */
-declare const dealImportParamsSchema: z14.ZodObject<{
-	importId: z14.core.$ZodBranded<z14.ZodString, "dimp", "out">;
-}, z14.core.$strict>;
-/** The path parameters of a request about one Deal import. */
-type DealImportParams = z14.infer<typeof dealImportParamsSchema>;
-/** The query parameters of a request to list Deal imports: a page. An unknown parameter is rejected. */
-declare const listDealImportsQuerySchema: z14.ZodObject<{
-	cursor: z14.ZodOptional<z14.ZodString>;
-	limit: z14.ZodDefault<z14.ZodPipe<z14.ZodPipe<z14.ZodUnion<readonly [z14.ZodNumber, z14.ZodString]>, z14.ZodTransform<number, string | number>>, z14.ZodNumber>>;
-}, z14.core.$strict>;
-/** The query parameters of a request to list Deal imports. */
-type ListDealImportsQuery = z14.infer<typeof listDealImportsQuerySchema>;
-/** One page of Deal imports. */
-declare const listDealImportsResponseSchema: z14.ZodObject<{
-	items: z14.ZodArray<z14.ZodObject<{
-		id: z14.core.$ZodBranded<z14.ZodString, "dimp", "out">;
-		state: z14.ZodEnum<{
-			completed: "completed";
-			failed: "failed";
-			processing: "processing";
-			uploaded: "uploaded";
-		}>;
-		failureReason: z14.ZodNullable<z14.ZodEnum<{
-			processing_failed: "processing_failed";
-			too_many_rows: "too_many_rows";
-			unreadable: "unreadable";
-		}>>;
-		rowCount: z14.ZodNullable<z14.ZodNumber>;
-		appliedCount: z14.ZodNullable<z14.ZodNumber>;
-		rejectedCount: z14.ZodNullable<z14.ZodNumber>;
-		uploadedByUserId: z14.core.$ZodBranded<z14.ZodString, "usr", "out">;
-		createdAt: z14.ZodISODateTime;
-		updatedAt: z14.ZodISODateTime;
-	}, z14.core.$strip>>;
-	nextCursor: z14.ZodNullable<z14.ZodString>;
-}, z14.core.$strip>;
-/** One page of Deal imports. */
-type ListDealImportsResponse = z14.infer<typeof listDealImportsResponseSchema>;
-/**
-* One row of an import report: the CSV `rowNumber` (the header is row 1, the first data row 2),
-* the `dealId` (the one free-text cell echoed; `null` when the cell was missing or not a valid deal
-* id, so a bad cell is never echoed), the `result` and, for a rejected row, the `reason`. `reason`
-* is `null` exactly when the result is `applied`. No other cell is ever part of a report.
-*/
-declare const dealImportRowSchema: z14.ZodObject<{
-	rowNumber: z14.ZodNumber;
-	dealId: z14.ZodNullable<z14.ZodPipe<z14.ZodPipe<z14.ZodString, z14.ZodTransform<string, string>>, z14.ZodString>>;
-	result: z14.ZodEnum<{
-		applied: "applied";
-		rejected: "rejected";
-	}>;
-	reason: z14.ZodNullable<z14.ZodEnum<{
-		deal_limit_reached: "deal_limit_reached";
-		duplicate_in_file: "duplicate_in_file";
-		invalid_amount: "invalid_amount";
-		invalid_closed_at: "invalid_closed_at";
-		invalid_currency: "invalid_currency";
-		invalid_deal_id: "invalid_deal_id";
-		invalid_name: "invalid_name";
-		invalid_outcome: "invalid_outcome";
-		outcome_already_decided: "outcome_already_decided";
-		wrong_column_count: "wrong_column_count";
-	}>>;
-}, z14.core.$strip>;
-/** One row of an import report. */
-type DealImportRow = z14.infer<typeof dealImportRowSchema>;
-/** The query parameters of a request to read an import's rows: a page, and optionally only the `rejected` or only the `applied` rows. Rows are in CSV order. An unknown parameter is rejected. */
-declare const listDealImportRowsQuerySchema: z14.ZodObject<{
-	cursor: z14.ZodOptional<z14.ZodString>;
-	limit: z14.ZodDefault<z14.ZodPipe<z14.ZodPipe<z14.ZodUnion<readonly [z14.ZodNumber, z14.ZodString]>, z14.ZodTransform<number, string | number>>, z14.ZodNumber>>;
-	result: z14.ZodOptional<z14.ZodEnum<{
-		applied: "applied";
-		rejected: "rejected";
-	}>>;
-}, z14.core.$strict>;
-/** The query parameters of a request to read an import's rows. */
-type ListDealImportRowsQuery = z14.infer<typeof listDealImportRowsQuerySchema>;
-/** One page of an import report. */
-declare const listDealImportRowsResponseSchema: z14.ZodObject<{
-	items: z14.ZodArray<z14.ZodObject<{
-		rowNumber: z14.ZodNumber;
-		dealId: z14.ZodNullable<z14.ZodPipe<z14.ZodPipe<z14.ZodString, z14.ZodTransform<string, string>>, z14.ZodString>>;
-		result: z14.ZodEnum<{
-			applied: "applied";
-			rejected: "rejected";
-		}>;
-		reason: z14.ZodNullable<z14.ZodEnum<{
-			deal_limit_reached: "deal_limit_reached";
-			duplicate_in_file: "duplicate_in_file";
-			invalid_amount: "invalid_amount";
-			invalid_closed_at: "invalid_closed_at";
-			invalid_currency: "invalid_currency";
-			invalid_deal_id: "invalid_deal_id";
-			invalid_name: "invalid_name";
-			invalid_outcome: "invalid_outcome";
-			outcome_already_decided: "outcome_already_decided";
-			wrong_column_count: "wrong_column_count";
-		}>>;
-	}, z14.core.$strip>>;
-	nextCursor: z14.ZodNullable<z14.ZodString>;
-}, z14.core.$strip>;
-/** One page of an import report. */
-type ListDealImportRowsResponse = z14.infer<typeof listDealImportRowsResponseSchema>;
-import { z as z15 } from "zod";
-/** The Outcome of a Deal: `won`, `lost` or still `open` (glossary). */
-declare const OUTCOMES: readonly ["won", "lost", "open"];
-/** The Outcome of a Deal. */
-declare const outcomeSchema: z15.ZodEnum<{
-	lost: "lost";
-	open: "open";
-	won: "won";
-}>;
-/** The Outcome of a Deal. */
-type Outcome = z15.infer<typeof outcomeSchema>;
-/** The ticket's choice (ADR 0018 leaves it open): the longest deal id, in UTF-16 code units, after trimming. */
-declare const MAX_DEAL_ID_LENGTH = 128;
-/**
-* Normalises a deal id: trims surrounding whitespace and changes nothing else. The comparison is
-* exact and case-sensitive (`A-1` and `a-1` are two Deals) with no Unicode normalisation, as ADR
-* 0018 says, so two ids are the same only if they are the same code units after the trim.
-*/
-declare function normaliseDealId(dealId: string): string;
-/**
-* A deal id (the Organization's own identifier for a Deal), in a request, a path, a CSV cell and a
-* response: at most 1000 raw characters, trimmed, then 1 to 128 UTF-16 code units, well-formed,
-* with no control character, bidirectional character, line or paragraph separator or zero-width
-* character. Unlike a file name it is rejected, not stripped, because stripping could make two
-* ids equal. It is compared exactly and case-sensitively after the trim ({@link normaliseDealId}).
-* It is the only free-text cell an import report may echo. It is untrusted text for display.
-*/
-declare const dealIdSchema: z15.ZodPipe<z15.ZodPipe<z15.ZodString, z15.ZodTransform<string, string>>, z15.ZodString>;
-/** A deal id. */
-type DealId = z15.infer<typeof dealIdSchema>;
-/** The longest Deal name, in UTF-16 code units, once trimmed. */
-declare const MAX_DEAL_NAME_LENGTH = 200;
-/** A Deal's optional name: trimmed, 1 to 200 well-formed UTF-16 code units, no control character. Untrusted text for display. */
-declare const dealNameSchema: z15.ZodPipe<z15.ZodString, z15.ZodString>;
-/** A money amount as a decimal string, never a float: up to 15 digits and at most 2 decimals, not negative. */
-declare const dealAmountSchema: z15.ZodString;
-/** A currency as an upper-case ISO 4217 code of three letters. */
-declare const dealCurrencySchema: z15.ZodString;
-/** The lead's default (ADR 0018, refinements; not the owner's): the largest CSV accepted, 10 MB counted as 10 * 1024 * 1024 bytes. */
-declare const MAX_DEAL_IMPORT_BYTES: number;
-/** The lead's default (ADR 0018, refinements; not the owner's): the most data rows in one CSV. */
-declare const MAX_DEAL_IMPORT_ROWS = 5e4;
-/** The required columns of the CSV template, in order. */
-declare const DEAL_IMPORT_REQUIRED_COLUMNS: readonly ["deal_id", "outcome", "closed_at", "amount", "currency"];
-/** The optional column of the CSV template, which may follow the required ones. */
-declare const DEAL_IMPORT_OPTIONAL_COLUMN = "name";
-/** The longest first row the header check reads, in characters; a longer one is refused. */
-declare const MAX_DEAL_IMPORT_HEADER_LENGTH = 1024;
-/** Why a CSV header was refused: a closed list, so the answer never echoes a cell. */
-declare const DEAL_IMPORT_HEADER_PROBLEMS: readonly ["empty", "too_long", "missing_column", "unexpected_column", "wrong_order"];
-/** Why a CSV header was refused. */
-type DealImportHeaderProblem = (typeof DEAL_IMPORT_HEADER_PROBLEMS)[number];
-/** The answer of {@link checkDealImportHeader}. */
-type CheckDealImportHeaderResult = {
-	readonly ok: true;
-	readonly hasName: boolean;
-} | {
-	readonly ok: false;
-	readonly code: "deal_import.header_invalid";
-	readonly problem: DealImportHeaderProblem;
-};
-/**
-* Checks the first row of a CSV against the fixed template: `deal_id,outcome,closed_at,amount,
-* currency` in that order, optionally followed by `name`. Column names are lower case and exact;
-* a leading byte order mark, surrounding spaces and surrounding double quotes on a cell are
-* ignored. The caller passes the text up to the first line break; one trailing carriage return is
-* dropped, and any other line break inside is an `unexpected_column`. A refusal is `deal_import.header_invalid` (422) and names a closed `problem`, never a cell.
-*/
-declare function checkDealImportHeader(line: string): CheckDealImportHeaderResult;
-/** The states a Deal import is in: `uploaded`, then `processing`, then `completed` or `failed`. */
-declare const DEAL_IMPORT_STATES: readonly ["uploaded", "processing", "completed", "failed"];
-/** The state of a Deal import. */
-declare const dealImportStateSchema: z15.ZodEnum<{
-	completed: "completed";
-	failed: "failed";
-	processing: "processing";
-	uploaded: "uploaded";
-}>;
-/** The state of a Deal import. */
-type DealImportState = z15.infer<typeof dealImportStateSchema>;
-/** Why a whole import ended `failed`: a closed list. A bad row is not a failure of the import. */
-declare const DEAL_IMPORT_FAILURE_REASONS: readonly ["too_many_rows", "unreadable", "processing_failed"];
-/** Why a whole import ended `failed`. */
-declare const dealImportFailureReasonSchema: z15.ZodEnum<{
-	processing_failed: "processing_failed";
-	too_many_rows: "too_many_rows";
-	unreadable: "unreadable";
-}>;
-/** Why a whole import ended `failed`. */
-type DealImportFailureReason = z15.infer<typeof dealImportFailureReasonSchema>;
-/** The result of one CSV row: `applied`, or `rejected` with a reason. */
-declare const DEAL_IMPORT_ROW_RESULTS: readonly ["applied", "rejected"];
-/** The result of one CSV row. */
-declare const dealImportRowResultSchema: z15.ZodEnum<{
-	applied: "applied";
-	rejected: "rejected";
-}>;
-/** The result of one CSV row. */
-type DealImportRowResult = z15.infer<typeof dealImportRowResultSchema>;
-/**
-* Why a row was rejected: a closed list, never a cell. A row is rejected, not silently dropped,
-* and never an HTTP error. `outcome_already_decided` is a row for a Deal already `won` or `lost`
-* (ADR 0018, choice 5); `duplicate_in_file` is a deal id repeated after its first row.
-*/
-declare const DEAL_IMPORT_ROW_REASONS: readonly ["wrong_column_count", "invalid_deal_id", "duplicate_in_file", "invalid_outcome", "invalid_closed_at", "invalid_amount", "invalid_currency", "invalid_name", "outcome_already_decided", "deal_limit_reached"];
-/** Why a row was rejected. */
-declare const dealImportRowReasonSchema: z15.ZodEnum<{
-	deal_limit_reached: "deal_limit_reached";
-	duplicate_in_file: "duplicate_in_file";
-	invalid_amount: "invalid_amount";
-	invalid_closed_at: "invalid_closed_at";
-	invalid_currency: "invalid_currency";
-	invalid_deal_id: "invalid_deal_id";
-	invalid_name: "invalid_name";
-	invalid_outcome: "invalid_outcome";
-	outcome_already_decided: "outcome_already_decided";
-	wrong_column_count: "wrong_column_count";
-}>;
-/** Why a row was rejected. */
-type DealImportRowReason = z15.infer<typeof dealImportRowReasonSchema>;
-import { z as z16 } from "zod";
-/**
-* A Playbook document as the service returns it. It names the file but never carries its content,
-* and no text taken from it. The extension of `fileName` and `mediaType` are not checked against each other: that agreement is
-* the service's job, as only it knows the declared and the detected type, and the contract does
-* not enforce it. `failureReason` is set exactly when `state` is `failed`. `purgeAt` is
-* set exactly when `state` is `deleted`: the time the file and record will be purged
-* (`DOCUMENT_RETENTION_DAYS` after `deletedAt`); a restore is refused after it. `pageCount` is
-* `null` until ingestion has counted the pages. The service must send the output of
-* `documentSchema.parse(row)`, never the row.
-*/
-declare const documentSchema: z16.ZodObject<{
-	id: z16.core.$ZodBranded<z16.ZodString, "doc", "out">;
-	fileName: z16.ZodPipe<z16.ZodPipe<z16.ZodString, z16.ZodTransform<string, string>>, z16.ZodString>;
-	mediaType: z16.ZodEnum<{
-		"application/pdf": "application/pdf";
-		"application/vnd.openxmlformats-officedocument.presentationml.presentation": "application/vnd.openxmlformats-officedocument.presentationml.presentation";
-		"application/vnd.openxmlformats-officedocument.wordprocessingml.document": "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-		"text/markdown": "text/markdown";
-		"text/plain": "text/plain";
-	}>;
-	sizeBytes: z16.ZodNumber;
-	pageCount: z16.ZodNullable<z16.ZodNumber>;
-	state: z16.ZodEnum<{
-		deleted: "deleted";
-		failed: "failed";
-		processing: "processing";
-		ready: "ready";
-		uploaded: "uploaded";
-	}>;
-	failureReason: z16.ZodNullable<z16.ZodEnum<{
-		no_text: "no_text";
-		password_protected: "password_protected";
-		processing_failed: "processing_failed";
-		too_many_pages: "too_many_pages";
-		unreadable: "unreadable";
-	}>>;
-	deletedAt: z16.ZodNullable<z16.ZodISODateTime>;
-	purgeAt: z16.ZodNullable<z16.ZodISODateTime>;
-	uploadedByUserId: z16.core.$ZodBranded<z16.ZodString, "usr", "out">;
-	createdAt: z16.ZodISODateTime;
-	updatedAt: z16.ZodISODateTime;
-}, z16.core.$strip>;
-/** A Playbook document as the service returns it. */
-type PlaybookDocument = z16.infer<typeof documentSchema>;
-/** The name of the multipart form field that carries the file. */
-declare const UPLOAD_FILE_FIELD = "file";
-/** The content type of an upload request: `multipart/form-data` with one file part named {@link UPLOAD_FILE_FIELD}. */
-declare const UPLOAD_CONTENT_TYPE = "multipart/form-data";
-/**
-* What the service reads off the file part of an upload before it stores anything: the
-* `fileName` of the part, the media type the client declared (`declaredMediaType`, advisory only;
-* the service inspects the content too, because an upload is untrusted data) and the `sizeBytes`
-* counted while reading. The file itself is a multipart part, not a JSON field, and appears in no
-* schema. The request has no other part; it carries an `Idempotency-Key` header.
-*
-* This schema checks only shape (a well-formed name, a non-empty file) and a failure is
-* `request.invalid` (400). A service calls {@link checkUploadFile}, which runs it after the size
-* and type checks so each gets its own code.
-*/
-declare const uploadDocumentFileSchema: z16.ZodObject<{
-	fileName: z16.ZodPipe<z16.ZodPipe<z16.ZodString, z16.ZodTransform<string, string>>, z16.ZodString>;
-	declaredMediaType: z16.ZodNullable<z16.ZodString>;
-	sizeBytes: z16.ZodNumber;
-}, z16.core.$strict>;
-/** What the service reads off the file part of an upload. */
-type UploadDocumentFile = z16.infer<typeof uploadDocumentFileSchema>;
-/** The path parameters of a request about one document. */
-declare const documentParamsSchema: z16.ZodObject<{
-	documentId: z16.core.$ZodBranded<z16.ZodString, "doc", "out">;
-}, z16.core.$strict>;
-/** The path parameters of a request about one document. */
-type DocumentParams = z16.infer<typeof documentParamsSchema>;
-/**
-* The query parameters of a request to list documents: a page, and optionally one `state`. With
-* no `state`, every document that is not `deleted` is listed; `state=deleted` lists the documents
-* that can still be restored. An unknown parameter is rejected.
-*/
-declare const listDocumentsQuerySchema: z16.ZodObject<{
-	cursor: z16.ZodOptional<z16.ZodString>;
-	limit: z16.ZodDefault<z16.ZodPipe<z16.ZodPipe<z16.ZodUnion<readonly [z16.ZodNumber, z16.ZodString]>, z16.ZodTransform<number, string | number>>, z16.ZodNumber>>;
-	state: z16.ZodOptional<z16.ZodEnum<{
-		deleted: "deleted";
-		failed: "failed";
-		processing: "processing";
-		ready: "ready";
-		uploaded: "uploaded";
-	}>>;
-}, z16.core.$strict>;
-/** The query parameters of a request to list documents. */
-type ListDocumentsQuery = z16.infer<typeof listDocumentsQuerySchema>;
-/** One page of documents. */
-declare const listDocumentsResponseSchema: z16.ZodObject<{
-	items: z16.ZodArray<z16.ZodObject<{
-		id: z16.core.$ZodBranded<z16.ZodString, "doc", "out">;
-		fileName: z16.ZodPipe<z16.ZodPipe<z16.ZodString, z16.ZodTransform<string, string>>, z16.ZodString>;
-		mediaType: z16.ZodEnum<{
-			"application/pdf": "application/pdf";
-			"application/vnd.openxmlformats-officedocument.presentationml.presentation": "application/vnd.openxmlformats-officedocument.presentationml.presentation";
-			"application/vnd.openxmlformats-officedocument.wordprocessingml.document": "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-			"text/markdown": "text/markdown";
-			"text/plain": "text/plain";
-		}>;
-		sizeBytes: z16.ZodNumber;
-		pageCount: z16.ZodNullable<z16.ZodNumber>;
-		state: z16.ZodEnum<{
-			deleted: "deleted";
-			failed: "failed";
-			processing: "processing";
-			ready: "ready";
-			uploaded: "uploaded";
-		}>;
-		failureReason: z16.ZodNullable<z16.ZodEnum<{
-			no_text: "no_text";
-			password_protected: "password_protected";
-			processing_failed: "processing_failed";
-			too_many_pages: "too_many_pages";
-			unreadable: "unreadable";
-		}>>;
-		deletedAt: z16.ZodNullable<z16.ZodISODateTime>;
-		purgeAt: z16.ZodNullable<z16.ZodISODateTime>;
-		uploadedByUserId: z16.core.$ZodBranded<z16.ZodString, "usr", "out">;
-		createdAt: z16.ZodISODateTime;
-		updatedAt: z16.ZodISODateTime;
-	}, z16.core.$strip>>;
-	nextCursor: z16.ZodNullable<z16.ZodString>;
-}, z16.core.$strip>;
-/** One page of documents. */
-type ListDocumentsResponse = z16.infer<typeof listDocumentsResponseSchema>;
-/**
-* Internal: the path parameters of the call that removes everything an Organization has in the
-* Playbook. The Organization is named in the path, never taken from the caller's token.
-*/
-declare const internalRemoveOrganizationDocumentsParamsSchema: z16.ZodObject<{
-	organizationId: z16.core.$ZodBranded<z16.ZodString, "org", "out">;
-}, z16.core.$strict>;
-/** Internal: the path parameters of the remove-everything call. */
-type InternalRemoveOrganizationDocumentsParams = z16.infer<typeof internalRemoveOrganizationDocumentsParamsSchema>;
-/**
-* Internal: `POST /internal/playbook/organizations/{organizationId}/remove-all`, for offboarding
-* and erasure; no caller yet. The body is empty. It cancels ingestion in flight and removes every
-* file, chunk, vector and record the Organization has, soft-deleted documents included, without
-* waiting for retention. It carries an `Idempotency-Key` header and is defined by its end state:
-* it answers success whenever nothing remains when it returns, whether this call, an earlier one
-* or nobody ever stored anything, so a repeat under any key answers the same and success does not
-* mean this call removed anything. It returns no domain error code.
-*/
-declare const internalRemoveOrganizationDocumentsRequestSchema: z16.ZodObject<{}, z16.core.$strict>;
-/** Internal: the body of the remove-everything call. */
-type InternalRemoveOrganizationDocumentsRequest = z16.infer<typeof internalRemoveOrganizationDocumentsRequestSchema>;
-/** Internal: the answer to the remove-everything call: always `removed`. */
-declare const internalRemoveOrganizationDocumentsResponseSchema: z16.ZodObject<{
-	organizationId: z16.core.$ZodBranded<z16.ZodString, "org", "out">;
-	status: z16.ZodLiteral<"removed">;
-}, z16.core.$strip>;
-/** Internal: the answer to the remove-everything call. */
-type InternalRemoveOrganizationDocumentsResponse = z16.infer<typeof internalRemoveOrganizationDocumentsResponseSchema>;
-/** The answer of {@link checkUploadFile}: the parsed file, or the one error code to return. */
-type CheckUploadFileResult = {
-	readonly ok: true;
-	readonly file: UploadDocumentFile;
-} | {
-	readonly ok: false;
-	readonly code: "document.too_large" | "document.unsupported_type" | "request.invalid";
-};
-/**
-* The one call that checks the file part of an upload, so a service cannot skip a step. It runs
-* the size check first (`document.too_large`, 413, so an over-size `.exe` is only too large), then
-* the type check on the stored form of the name (`document.unsupported_type`, 415: the extension
-* is judged after control and bidirectional characters are stripped and the name is trimmed, so
-* `report.pdf ` is accepted and stored as `report.pdf`), then the shape
-* ({@link uploadDocumentFileSchema}, `request.invalid`, 400). Input that is not an object with a
-* string name and a finite numeric size (so `NaN` and the infinities too), or that has an own key
-* other than the three, is `request.invalid`. Each field is read once, as an own property, into a
-* copy that all three checks use, so a changing getter or an inherited property cannot pass a check
-* the parsed value would fail. On success `file` is the parsed form, with
-* the stored name. The result carries no name or content, so it is safe to log and to return.
-*/
-declare function checkUploadFile(input: unknown): CheckUploadFileResult;
+/** The state of an Organization. */
+type OrganizationStatus = z12.infer<typeof organizationStatusSchema>;
 import { ErrorDefinition as ErrorDefinition_8gwh453 } from "..";
 /**
 * The errors the playbook service returns, as `area.reason` codes. No body carries a file name,
@@ -1800,144 +917,37 @@ declare const PLAYBOOK_ERRORS: {
 };
 /** A code from the {@link PLAYBOOK_ERRORS} registry. */
 type PlaybookErrorCode = keyof typeof PLAYBOOK_ERRORS;
-import { z as z17 } from "zod";
-/** The payload of {@link DOCUMENT_UPLOADED_MESSAGE}: the document to ingest. */
-declare const documentUploadedPayloadSchema: z17.ZodObject<{
-	documentId: z17.core.$ZodBranded<z17.ZodString, "doc", "out">;
-}, z17.core.$strict>;
-/** The payload of {@link DOCUMENT_UPLOADED_MESSAGE}. */
-type DocumentUploadedPayload = z17.infer<typeof documentUploadedPayloadSchema>;
-/**
-* The message that starts ingestion of a document: published after an upload is stored, and again
-* when a soft-deleted document is restored (it is re-ingested from the kept file). The job is
-* idempotent and resumable, keyed on the document.
-*/
-declare const DOCUMENT_UPLOADED_MESSAGE: {
-	readonly type: "playbook.document_uploaded";
-	readonly version: 1;
-	readonly scope: "organization";
-	readonly payload: z17.ZodObject<{
-		documentId: z17.core.$ZodBranded<z17.ZodString, "doc", "out">;
-	}, z17.core.$strict>;
+/** The roles that may change the Playbook (ADR 0016, choice 4). */
+declare const PLAYBOOK_WRITE_ROLES: readonly ["owner", "admin"];
+/** The roles that may list and read documents: every role (ADR 0016, choice 4). */
+declare const PLAYBOOK_READ_ROLES: readonly ["owner", "admin", "manager", "rep"];
+/** The playbook routes, by name. */
+type PlaybookRouteName = "uploadDocument" | "listDocuments" | "getDocument" | "deleteDocument" | "restoreDocument" | "removeOrganizationDocuments";
+/** What the service needs to describe one route: its method, path, who may call it, what it answers. */
+type PlaybookRoute = {
+	readonly method: "GET" | "POST" | "DELETE";
+	readonly path: string;
+	/** True for a route on the internal network only; it takes no role and names the Organization in the path. */
+	readonly internal: boolean;
+	/** The roles allowed; empty for an internal route. Any other role is the common `auth.forbidden`. */
+	readonly roles: readonly Role[];
+	/** The success statuses, the first being the usual one. */
+	readonly success: readonly number[];
+	/** The domain codes the route may return, beyond the common ones. */
+	readonly errors: readonly PlaybookErrorCode[];
+	/** The common codes the route may return, beyond those every route may. */
+	readonly commonErrors: readonly CommonErrorCode[];
+	/** The description for the OpenAPI document, role rules included. */
+	readonly description: string;
 };
-/** The largest `deletionSeq`: the db column is a Postgres `integer`, so the message cannot carry more. */
-declare const MAX_DELETION_SEQ = 2147483647;
 /**
-* The payload of {@link DOCUMENT_DELETED_MESSAGE}: the document and its `deletionSeq`, an integer
-* from 1 to {@link MAX_DELETION_SEQ} that the service increases in the same write as each delete. The cleanup applies only
-* when the document is still `deleted` and its stored sequence equals this one, so a restore, or
-* a later delete, makes an older message do nothing. A timestamp is not the guard: Postgres keeps
-* microseconds, a JSON timestamp does not, and two deletions can share a clock tick. The sequence
-* is not on the public document schema. Only a delete that changes the state bumps it: a repeated
-* delete of an already deleted document does not bump the sequence and does not publish again.
+* The playbook routes: the description a service puts in its OpenAPI document, the roles, the
+* success statuses and every error code each route may answer with. Every route may also return
+* the common `auth.*`, `rate.limited` and `server.*` codes. A route on another Organization's
+* document answers `document.not_found`.
 */
-declare const documentDeletedPayloadSchema: z17.ZodObject<{
-	documentId: z17.core.$ZodBranded<z17.ZodString, "doc", "out">;
-	deletionSeq: z17.ZodNumber;
-}, z17.core.$strict>;
-/** The payload of {@link DOCUMENT_DELETED_MESSAGE}. */
-type DocumentDeletedPayload = z17.infer<typeof documentDeletedPayloadSchema>;
-/**
-* The message that queues the removal of a deleted document's vectors, published by the delete
-* request. It is cleanup only: search hides a deleted document by its state, never by this job.
-*/
-declare const DOCUMENT_DELETED_MESSAGE: {
-	readonly type: "playbook.document_deleted";
-	readonly version: 1;
-	readonly scope: "organization";
-	readonly payload: z17.ZodObject<{
-		documentId: z17.core.$ZodBranded<z17.ZodString, "doc", "out">;
-		deletionSeq: z17.ZodNumber;
-	}, z17.core.$strict>;
-};
-import { z as z18 } from "zod";
-/** The largest wording version number; versions are positive integers the service raises when a lawyer changes the wording. */
-declare const MAX_RIGHTS_WORDING_VERSION = 1e6;
-/** The version of the rights-confirmation wording: a positive integer. The wording itself lives in the portal, checked by a lawyer, and is not in this library. */
-declare const rightsWordingVersionSchema: z18.ZodNumber;
-/**
-* The recorded confirmation (ADR 0018, choice 12): that an Owner or Admin confirmed the
-* Organization may share its Recordings and Transcripts, with the `wordingVersion` shown, who
-* (`confirmedByUserId`) and when. There is one per Organization; a new one replaces it.
-*/
-declare const rightsConfirmationSchema: z18.ZodObject<{
-	wordingVersion: z18.ZodNumber;
-	confirmedByUserId: z18.core.$ZodBranded<z18.ZodString, "usr", "out">;
-	confirmedAt: z18.ZodISODateTime;
-}, z18.core.$strip>;
-/** The recorded confirmation. */
-type RightsConfirmation = z18.infer<typeof rightsConfirmationSchema>;
-/**
-* The answer to reading the confirmation: the `currentWordingVersion` the portal must show,
-* the stored `confirmation` (`null` if none) and `confirmed`, true only when the stored version
-* is the current one. Uploads of Calls are refused with `rights.confirmation_required` unless
-* `confirmed`; existing Calls stay and stay searchable.
-*/
-declare const rightsStatusSchema: z18.ZodObject<{
-	currentWordingVersion: z18.ZodNumber;
-	confirmation: z18.ZodNullable<z18.ZodObject<{
-		wordingVersion: z18.ZodNumber;
-		confirmedByUserId: z18.core.$ZodBranded<z18.ZodString, "usr", "out">;
-		confirmedAt: z18.ZodISODateTime;
-	}, z18.core.$strip>>;
-	confirmed: z18.ZodBoolean;
-}, z18.core.$strip>;
-/** The answer to reading the confirmation. */
-type RightsStatus = z18.infer<typeof rightsStatusSchema>;
-/**
-* The body of the request that records the confirmation: the `wordingVersion` the member was shown,
-* which must be the current one (else `rights.version_outdated`). Who and when come from the token
-* and the clock, never from the body. Idempotent by end state.
-*/
-declare const confirmRightsRequestSchema: z18.ZodObject<{
-	wordingVersion: z18.ZodNumber;
-}, z18.core.$strict>;
-/** The body of the request that records the confirmation. */
-type ConfirmRightsRequest = z18.infer<typeof confirmRightsRequestSchema>;
-import { z as z19 } from "zod";
-/** Every Region an Organization can be created in. */
-declare const REGIONS: readonly ["us", "eu"];
-/** A Region: the geography whose boundary an Organization's data never crosses. */
-declare const regionSchema: z19.ZodEnum<{
-	eu: "eu";
-	us: "us";
-}>;
-/** A Region. */
-type Region = z19.infer<typeof regionSchema>;
-/** Every role, ordered from most to least privileged. */
-declare const ROLES: readonly ["owner", "admin", "manager", "rep"];
-/** A member's role in an Organization. */
-declare const roleSchema: z19.ZodEnum<{
-	admin: "admin";
-	manager: "manager";
-	owner: "owner";
-	rep: "rep";
-}>;
-/** A role. */
-type Role = z19.infer<typeof roleSchema>;
-/** Whether `role` is at least as privileged as `minimum`; an unrecognised role is never enough. */
-declare function roleAtLeast(role: Role, minimum: Role): boolean;
-/** The roles an Invitation can offer; ownership passes by promoting a member, never by Invitation. */
-declare const INVITABLE_ROLES: readonly ["admin", "manager", "rep"];
-/** A role an Invitation can offer: any role except `owner`. */
-declare const invitableRoleSchema: z19.ZodEnum<{
-	admin: "admin";
-	manager: "manager";
-	rep: "rep";
-}>;
-/** A role an Invitation can offer. */
-type InvitableRole = z19.infer<typeof invitableRoleSchema>;
-/** Every state an Organization is in; `deleted` keeps the record for the retention window. */
-declare const ORGANIZATION_STATUSES: readonly ["active", "suspended", "deleted"];
-/** The state of an Organization. */
-declare const organizationStatusSchema: z19.ZodEnum<{
-	active: "active";
-	deleted: "deleted";
-	suspended: "suspended";
-}>;
-/** The state of an Organization. */
-type OrganizationStatus = z19.infer<typeof organizationStatusSchema>;
-import { z as z20 } from "zod";
+declare const PLAYBOOK_ROUTES: Readonly<Record<PlaybookRouteName, PlaybookRoute>>;
+import { z as z13 } from "zod";
 import { ErrorDefinition as ErrorDefinition_8gwh454 } from "..";
 /**
 * The errors the sales-history routes return, as `area.reason` codes. No body carries a file name,
@@ -1978,41 +988,1096 @@ declare const SALES_HISTORY_ERRORS: {
 /** A code from the {@link SALES_HISTORY_ERRORS} registry. */
 type SalesHistoryErrorCode = keyof typeof SALES_HISTORY_ERRORS;
 /** The `details` of a `rights.confirmation_required` body: the version of the wording the portal must show. */
-declare const rightsRequiredDetailsSchema: z20.ZodObject<{
-	wordingVersion: z20.ZodNumber;
-}, z20.core.$strict>;
+declare const rightsRequiredDetailsSchema: z13.ZodObject<{
+	wordingVersion: z13.ZodNumber;
+}, z13.core.$strict>;
 /** The `details` of a `rights.confirmation_required` body. */
-type RightsRequiredDetails = z20.infer<typeof rightsRequiredDetailsSchema>;
-/** The roles that may change the Playbook (ADR 0016, choice 4). */
-declare const PLAYBOOK_WRITE_ROLES: readonly ["owner", "admin"];
-/** The roles that may list and read documents: every role (ADR 0016, choice 4). */
-declare const PLAYBOOK_READ_ROLES: readonly ["owner", "admin", "manager", "rep"];
-/** The playbook routes, by name. */
-type PlaybookRouteName = "uploadDocument" | "listDocuments" | "getDocument" | "deleteDocument" | "restoreDocument" | "removeOrganizationDocuments";
-/** What the service needs to describe one route: its method, path, who may call it, what it answers. */
-type PlaybookRoute = {
+type RightsRequiredDetails = z13.infer<typeof rightsRequiredDetailsSchema>;
+/** The roles that may read Calls, Deals, imports and the rights confirmation: Owner and Admin only, the owner's decision of 2026-10-13 (the writers are the same two roles). Managers and Reps get `auth.forbidden`. */
+declare const SALES_HISTORY_READ_ROLES: readonly ["owner", "admin"];
+/** The sales-history routes, by name. */
+type SalesHistoryRouteName = "uploadCall" | "listCalls" | "getCall" | "deleteCall" | "restoreCall" | "setCallRep" | "listDeals" | "getDeal" | "setDealOutcome" | "uploadDealImport" | "listDealImports" | "getDealImport" | "listDealImportRows" | "getRightsConfirmation" | "confirmRights";
+/**
+* What the service needs to describe one sales-history route. It has the shape of `PlaybookRoute`
+* but its own method list (it adds `PUT`) and its own error codes, so the 0.7.0 `PlaybookRoute`
+* type is not widened. Use `ALL_PLAYBOOK_ROUTES` for both tables in one map.
+*/
+type SalesHistoryRoute = {
 	readonly method: "GET" | "POST" | "PUT" | "DELETE";
 	readonly path: string;
-	/** True for a route on the internal network only; it takes no role and names the Organization in the path. */
+	/** True for a route on the internal network only; none of these is. */
 	readonly internal: boolean;
-	/** The roles allowed; empty for an internal route. Any other role is the common `auth.forbidden`. */
+	/** The roles allowed. Any other role is the common `auth.forbidden`. */
 	readonly roles: readonly Role[];
 	/** The success statuses, the first being the usual one. */
 	readonly success: readonly number[];
 	/** The domain codes the route may return, beyond the common ones. */
-	readonly errors: readonly (PlaybookErrorCode | SalesHistoryErrorCode)[];
+	readonly errors: readonly SalesHistoryErrorCode[];
 	/** The common codes the route may return, beyond those every route may. */
 	readonly commonErrors: readonly CommonErrorCode[];
 	/** The description for the OpenAPI document, role rules included. */
 	readonly description: string;
 };
 /**
-* The playbook routes: the description a service puts in its OpenAPI document, the roles, the
-* success statuses and every error code each route may answer with. Every route may also return
-* the common `auth.*`, `rate.limited` and `server.*` codes. A route on another Organization's
-* document answers `document.not_found`.
+* The sales-history routes (ADR 0018), described as `PLAYBOOK_ROUTES` describes the document
+* routes: method, path, roles, success statuses, domain error codes and the OpenAPI description.
+* Every route may also return the common `auth.*`, `rate.limited` and `server.*` codes. A route on
+* another Organization's Call, Deal or import answers the not-found code. No response carries a
+* Transcript, audio or a turn. Reads are Owner and Admin only ({@link SALES_HISTORY_READ_ROLES}).
 */
-declare const PLAYBOOK_ROUTES: Readonly<Record<PlaybookRouteName, PlaybookRoute>>;
+declare const SALES_HISTORY_ROUTES: Readonly<Record<SalesHistoryRouteName, SalesHistoryRoute>>;
+import { ErrorDefinition as ErrorDefinition_8gwh455 } from "..";
+/** Every Playbook route name: the document routes of 0.7.0 and the sales-history routes. */
+type AllPlaybookRouteName = PlaybookRouteName | SalesHistoryRouteName;
+/**
+* Every Playbook route in one map, for a service that builds one OpenAPI document. `PLAYBOOK_ROUTES`
+* and `PLAYBOOK_ERRORS` keep their 0.7.0 types, so code written against them still compiles; use
+* this map and `ALL_PLAYBOOK_ERRORS` when you want both areas.
+*/
+declare const ALL_PLAYBOOK_ROUTES: Readonly<Record<AllPlaybookRouteName, PlaybookRoute | SalesHistoryRoute>>;
+/** Every Playbook error code in one registry: the document codes of 0.7.0 and the sales-history codes. */
+declare const ALL_PLAYBOOK_ERRORS: Readonly<{
+	"call.content_in_other_deal": ErrorDefinition_8gwh455<"call.content_in_other_deal">;
+	"call.not_found": ErrorDefinition_8gwh455<"call.not_found">;
+	"call.not_restorable": ErrorDefinition_8gwh455<"call.not_restorable">;
+	"call.quota_exceeded": ErrorDefinition_8gwh455<"call.quota_exceeded">;
+	"call.rep_invalid": ErrorDefinition_8gwh455<"call.rep_invalid">;
+	"call.rep_not_changeable": ErrorDefinition_8gwh455<"call.rep_not_changeable">;
+	"call.too_large": ErrorDefinition_8gwh455<"call.too_large">;
+	"call.unsupported_type": ErrorDefinition_8gwh455<"call.unsupported_type">;
+	"deal.not_found": ErrorDefinition_8gwh455<"deal.not_found">;
+	"deal_import.header_invalid": ErrorDefinition_8gwh455<"deal_import.header_invalid">;
+	"deal_import.not_found": ErrorDefinition_8gwh455<"deal_import.not_found">;
+	"deal_import.too_large": ErrorDefinition_8gwh455<"deal_import.too_large">;
+	"deal_import.unsupported_type": ErrorDefinition_8gwh455<"deal_import.unsupported_type">;
+	"document.not_found": ErrorDefinition_8gwh455<"document.not_found">;
+	"document.not_restorable": ErrorDefinition_8gwh455<"document.not_restorable">;
+	"document.quota_exceeded": ErrorDefinition_8gwh455<"document.quota_exceeded">;
+	"document.too_large": ErrorDefinition_8gwh455<"document.too_large">;
+	"document.unsupported_type": ErrorDefinition_8gwh455<"document.unsupported_type">;
+	"rights.confirmation_required": ErrorDefinition_8gwh455<"rights.confirmation_required">;
+	"rights.version_outdated": ErrorDefinition_8gwh455<"rights.version_outdated">;
+}>;
+import { z as z15 } from "zod";
+import { z as z14 } from "zod";
+/**
+* The states a Call is in (ADR 0018, with ADR 0016). A Transcript goes `uploaded`, `processing`,
+* `ready`; a Recording goes `uploaded`, `transcribing`, then `awaiting_rep` (no Rep chosen yet) or
+* `processing`, then `ready`. `processing` is also where a Call goes when its Rep changes and its
+* Moments are rebuilt, and where a restored Call goes. `awaiting_rep` is the named wait of choice 9:
+* no Moments exist and the Call is not in search. `deleted` is soft-deleted and awaiting purge. A
+* Call held back from search because its Deal is not won is `ready`: that is read from the Deal,
+* not a state. An upload still streaming has no Call yet, so it has no state.
+*/
+declare const CALL_STATES: readonly ["uploaded", "transcribing", "awaiting_rep", "processing", "ready", "failed", "deleted"];
+/** The state of a Call. */
+declare const callStateSchema: z14.ZodEnum<{
+	awaiting_rep: "awaiting_rep";
+	deleted: "deleted";
+	failed: "failed";
+	processing: "processing";
+	ready: "ready";
+	transcribing: "transcribing";
+	uploaded: "uploaded";
+}>;
+/** The state of a Call. */
+type CallState = z14.infer<typeof callStateSchema>;
+/**
+* Why a Call ended in `failed`: a closed list the portal maps to its own wording, never free text.
+* `too_long` is found by the job from the audio, not at upload, so it is a reason and not an HTTP
+* code. `too_many_speakers` is a Call with more speakers than `MAX_CALL_SPEAKERS`. `rep_label_not_found` and `not_per_side` can be fixed by changing the Rep (see {@link repChangeAllowed}). The list is the
+* lead's reading of ADR 0018.
+*/
+declare const CALL_FAILURE_REASONS: readonly ["no_turns", "too_few_speakers", "too_many_speakers", "rep_label_not_found", "not_per_side", "too_long", "transcription_failed", "transcription_timed_out", "unreadable", "processing_failed"];
+/** Why a Call ended in `failed`. */
+declare const callFailureReasonSchema: z14.ZodEnum<{
+	no_turns: "no_turns";
+	not_per_side: "not_per_side";
+	processing_failed: "processing_failed";
+	rep_label_not_found: "rep_label_not_found";
+	too_few_speakers: "too_few_speakers";
+	too_long: "too_long";
+	too_many_speakers: "too_many_speakers";
+	transcription_failed: "transcription_failed";
+	transcription_timed_out: "transcription_timed_out";
+	unreadable: "unreadable";
+}>;
+/** Why a Call ended in `failed`. */
+type CallFailureReason = z14.infer<typeof callFailureReasonSchema>;
+/** What a Call was uploaded as: a written Transcript or an audio Recording. */
+declare const CALL_KINDS: readonly ["transcript", "recording"];
+/** What a Call was uploaded as. */
+declare const callKindSchema: z14.ZodEnum<{
+	recording: "recording";
+	transcript: "transcript";
+}>;
+/** What a Call was uploaded as. */
+type CallKind = z14.infer<typeof callKindSchema>;
+/** The lead's default (ADR 0018, refinements; not the owner's): the Transcript extensions accepted: plain text, WebVTT, SRT and a JSON turn list. */
+declare const ACCEPTED_TRANSCRIPT_EXTENSIONS: readonly [".txt", ".vtt", ".srt", ".json"];
+/** The lead's default (ADR 0018, refinements; not the owner's): the Recording extensions accepted. */
+declare const ACCEPTED_RECORDING_EXTENSIONS: readonly [".mp3", ".m4a", ".wav", ".ogg", ".webm", ".flac"];
+/** An accepted Call file extension. */
+type AcceptedCallExtension = (typeof ACCEPTED_TRANSCRIPT_EXTENSIONS)[number] | (typeof ACCEPTED_RECORDING_EXTENSIONS)[number];
+/** The media type of a stored Call file, as the service detected it from the content. */
+declare const CALL_MEDIA_TYPES: readonly ["text/plain", "text/vtt", "application/x-subrip", "application/json", "audio/mpeg", "audio/mp4", "audio/wav", "audio/ogg", "audio/webm", "audio/flac"];
+/** The media type of a stored Call file. */
+declare const callMediaTypeSchema: z14.ZodEnum<{
+	"application/json": "application/json";
+	"application/x-subrip": "application/x-subrip";
+	"audio/flac": "audio/flac";
+	"audio/mp4": "audio/mp4";
+	"audio/mpeg": "audio/mpeg";
+	"audio/ogg": "audio/ogg";
+	"audio/wav": "audio/wav";
+	"audio/webm": "audio/webm";
+	"text/plain": "text/plain";
+	"text/vtt": "text/vtt";
+}>;
+/** The media type of a stored Call file. */
+type CallMediaType = z14.infer<typeof callMediaTypeSchema>;
+/** The media type each accepted Call extension stands for. */
+declare const MEDIA_TYPE_BY_CALL_EXTENSION: Readonly<Record<AcceptedCallExtension, CallMediaType>>;
+/** The lead's default (ADR 0018, refinements; not the owner's): the largest Transcript accepted, 5 MB counted as 5 * 1024 * 1024 bytes. */
+declare const MAX_TRANSCRIPT_BYTES: number;
+/** The lead's default (ADR 0018, refinements; not the owner's): the largest Recording accepted, 500 MB counted as 500 * 1024 * 1024 bytes; streamed, never held whole. */
+declare const MAX_RECORDING_BYTES: number;
+/** The lead's default (ADR 0018, refinements; not the owner's): the longest Recording, 3 hours in seconds; the job checks it, so a longer one ends `failed` with `too_long`. */
+declare const MAX_RECORDING_SECONDS: number;
+/** The ticket's default (ADR 0018 leaves it open): hours after which the parts of an incomplete streamed upload are discarded. */
+declare const INCOMPLETE_UPLOAD_PARTS_TTL_HOURS = 24;
+/** The ticket's default (ADR 0018 leaves it open): the most Rep turns stored after a Moment (choice 11). */
+declare const MAX_REP_FOLLOWING_TURNS = 5;
+/** The ticket's default (ADR 0018 leaves it open): the most characters (UTF-16 code units) of Rep turns stored after a Moment, so a long turn cannot make it unbounded. */
+declare const MAX_REP_FOLLOWING_CHARACTERS = 4e3;
+/** The ticket's default (ADR 0018 leaves it open): Calls an Organization may hold, soft-deleted and `awaiting_rep` ones included until purged. */
+declare const DEFAULT_MAX_CALLS = 2e3;
+/** The ticket's default (ADR 0018 leaves it open): Recording bytes an Organization may hold, 50 GB counted as 50 * 1024^3. */
+declare const DEFAULT_MAX_RECORDING_BYTES_TOTAL: number;
+/** The ticket's default (ADR 0018 leaves it open): Deals an Organization may hold. */
+declare const DEFAULT_MAX_DEALS = 2e4;
+/** The ticket's default (ADR 0018 leaves it open): the most speakers a Call may have and list for a Rep pick; a Call with more fails with `too_many_speakers`. */
+declare const MAX_CALL_SPEAKERS = 20;
+/** The longest speaker label, in UTF-16 code units, once control and direction characters are stripped. */
+declare const MAX_SPEAKER_LABEL_LENGTH = 64;
+/** The stored form of a speaker label: control and bidirectional characters removed, then trimmed. Labels read from a file and labels in a request must both pass through this. */
+declare function normaliseSpeakerLabel(label: string): string;
+/**
+* A speaker label, in a request and in a response: at most 1000 raw characters, then control and
+* bidirectional characters are removed and the rest trimmed to 1 to 64 well-formed UTF-16 code
+* units. It is text taken from a file (`Alice`, or `A` from the transcriber), so display code must
+* treat it as untrusted text, and it never appears in an error body. It is compared exactly and
+* case-sensitively with the labels in the file.
+*/
+declare const speakerLabelSchema: z14.ZodPipe<z14.ZodPipe<z14.ZodString, z14.ZodTransform<string, string>>, z14.ZodString>;
+/** The channels of a per-side Recording: the left one or the right one. */
+declare const CALL_CHANNELS: readonly ["left", "right"];
+/** A channel of a per-side Recording. */
+declare const callChannelSchema: z14.ZodEnum<{
+	left: "left";
+	right: "right";
+}>;
+/**
+* Which side of a Call is the Rep: a speaker label (a Transcript, or a Recording that waited in
+* `awaiting_rep`) or a channel (a per-side Recording). A Recording whose Rep is not yet known has
+* no choice at all (`null` on the Call, an absent `rep` at upload).
+*/
+declare const repChoiceSchema: z14.ZodDiscriminatedUnion<[z14.ZodObject<{
+	by: z14.ZodLiteral<"speaker">;
+	label: z14.ZodPipe<z14.ZodPipe<z14.ZodString, z14.ZodTransform<string, string>>, z14.ZodString>;
+}, z14.core.$strict>, z14.ZodObject<{
+	by: z14.ZodLiteral<"channel">;
+	channel: z14.ZodEnum<{
+		left: "left";
+		right: "right";
+	}>;
+}, z14.core.$strict>], "by">;
+/** Which side of a Call is the Rep. */
+type RepChoice = z14.infer<typeof repChoiceSchema>;
+/**
+* Whether a Rep choice suits a Call of this kind, for the one moment named. At `upload`, a
+* Transcript needs a speaker label (ADR 0018, refinements), and a Recording takes a channel (the
+* uploader declares it per-side) or nothing (it then waits in `awaiting_rep`); a speaker label for
+* a Recording is not known at upload. At `change`, a choice is required: a Transcript takes a
+* speaker label and a Recording takes a speaker label (from the detected speakers) or a channel.
+* Whether a channel fits the file (exactly two channels) is the service's check, and a mismatch
+* ends the Call `failed` with `not_per_side`. A failure here is `call.rep_invalid`.
+*/
+declare function repChoiceSuits(kind: CallKind, rep: RepChoice | null | undefined, when: "upload" | "change"): boolean;
+/**
+* Whether a Call's Rep may be picked or changed: when it is `ready` or `awaiting_rep`, or `failed`
+* with a reason a different Rep can fix (`rep_label_not_found`, `not_per_side`). Any other state
+* or reason is `call.rep_not_changeable`.
+*/
+declare function repChangeAllowed(state: CallState, failureReason: CallFailureReason | null): boolean;
+/**
+* A Call as the service returns it. It names the file and the Deal but never carries a Transcript,
+* audio or any turn. `kind` is what it was uploaded as. `rep` is the chosen Rep and is `null`
+* exactly while the state is `awaiting_rep` (and for a Recording not yet transcribed or failed
+* before a choice); a `ready` Call always has one. `speakerLabels` are the labels the Call's
+* speakers carry (those of the file, or `A`, `B` from the transcriber), at most
+* `MAX_CALL_SPEAKERS`, for the portal's Rep pick; they are untrusted text. `failureReason` is set
+* exactly when `state` is `failed`; `deletedAt` and `purgeAt` exactly when it is `deleted`. A
+* Transcript is never `transcribing` or `awaiting_rep`, has no duration and is within
+* `MAX_TRANSCRIPT_BYTES`; `kind` agrees with `mediaType` (text for a Transcript, audio for a
+* Recording); the labels are unique; and a `ready` Call's speaker Rep is one of them. A Call with
+* more speakers than `MAX_CALL_SPEAKERS` fails with `too_many_speakers` and never reaches a
+* response, so a read route cannot throw on it. `durationSeconds` is `null` for a
+* Transcript and until a Recording has been read. Whether the Call is held back from search
+* because its Deal is not won is read from the Deal, not here. The service must send the output of
+* `callSchema.parse(row)`, never the row.
+*/
+declare const callSchema: z15.ZodObject<{
+	id: z15.core.$ZodBranded<z15.ZodString, "call", "out">;
+	dealId: z15.ZodPipe<z15.ZodPipe<z15.ZodString, z15.ZodTransform<string, string>>, z15.ZodString>;
+	kind: z15.ZodEnum<{
+		recording: "recording";
+		transcript: "transcript";
+	}>;
+	fileName: z15.ZodPipe<z15.ZodPipe<z15.ZodString, z15.ZodTransform<string, string>>, z15.ZodString>;
+	mediaType: z15.ZodEnum<{
+		"application/json": "application/json";
+		"application/x-subrip": "application/x-subrip";
+		"audio/flac": "audio/flac";
+		"audio/mp4": "audio/mp4";
+		"audio/mpeg": "audio/mpeg";
+		"audio/ogg": "audio/ogg";
+		"audio/wav": "audio/wav";
+		"audio/webm": "audio/webm";
+		"text/plain": "text/plain";
+		"text/vtt": "text/vtt";
+	}>;
+	sizeBytes: z15.ZodNumber;
+	durationSeconds: z15.ZodNullable<z15.ZodNumber>;
+	state: z15.ZodEnum<{
+		awaiting_rep: "awaiting_rep";
+		deleted: "deleted";
+		failed: "failed";
+		processing: "processing";
+		ready: "ready";
+		transcribing: "transcribing";
+		uploaded: "uploaded";
+	}>;
+	failureReason: z15.ZodNullable<z15.ZodEnum<{
+		no_turns: "no_turns";
+		not_per_side: "not_per_side";
+		processing_failed: "processing_failed";
+		rep_label_not_found: "rep_label_not_found";
+		too_few_speakers: "too_few_speakers";
+		too_long: "too_long";
+		too_many_speakers: "too_many_speakers";
+		transcription_failed: "transcription_failed";
+		transcription_timed_out: "transcription_timed_out";
+		unreadable: "unreadable";
+	}>>;
+	rep: z15.ZodNullable<z15.ZodDiscriminatedUnion<[z15.ZodObject<{
+		by: z15.ZodLiteral<"speaker">;
+		label: z15.ZodPipe<z15.ZodPipe<z15.ZodString, z15.ZodTransform<string, string>>, z15.ZodString>;
+	}, z15.core.$strict>, z15.ZodObject<{
+		by: z15.ZodLiteral<"channel">;
+		channel: z15.ZodEnum<{
+			left: "left";
+			right: "right";
+		}>;
+	}, z15.core.$strict>], "by">>;
+	speakerLabels: z15.ZodArray<z15.ZodPipe<z15.ZodPipe<z15.ZodString, z15.ZodTransform<string, string>>, z15.ZodString>>;
+	deletedAt: z15.ZodNullable<z15.ZodISODateTime>;
+	purgeAt: z15.ZodNullable<z15.ZodISODateTime>;
+	uploadedByUserId: z15.core.$ZodBranded<z15.ZodString, "usr", "out">;
+	createdAt: z15.ZodISODateTime;
+	updatedAt: z15.ZodISODateTime;
+}, z15.core.$strip>;
+/** A Call as the service returns it. */
+type Call = z15.infer<typeof callSchema>;
+/** The most characters the `rep` form field may hold; a longer text is refused without being parsed. */
+declare const MAX_REP_FIELD_LENGTH = 512;
+/**
+* The text fields of the multipart upload of a Call, beside the one file part
+* ({@link UPLOAD_FILE_FIELD} `file`, as for a document): `dealId` (a deal id; a Deal that does not
+* exist is created `open`) and `rep`, the {@link repChoiceSchema} as JSON text, which is a speaker
+* label for a Transcript, a channel for a per-side Recording (the uploader declares it), or absent
+* for a Recording that will wait in `awaiting_rep`. The request carries an `Idempotency-Key`
+* header. Parse the text of `rep` with {@link parseRepField}.
+*/
+declare const uploadCallFieldsSchema: z15.ZodObject<{
+	dealId: z15.ZodPipe<z15.ZodPipe<z15.ZodString, z15.ZodTransform<string, string>>, z15.ZodString>;
+	rep: z15.ZodOptional<z15.ZodString>;
+}, z15.core.$strict>;
+/** The text fields of the multipart upload of a Call. */
+type UploadCallFields = z15.infer<typeof uploadCallFieldsSchema>;
+/** What {@link parseRepField} answers: a Rep choice, no Rep at all (the field was not sent), or an invalid field. */
+type ParseRepFieldResult = {
+	readonly ok: true;
+	readonly rep: RepChoice | null;
+} | {
+	readonly ok: false;
+	readonly code: "call.rep_invalid";
+};
+/**
+* Reads the `rep` form field. An absent field (`undefined`) is `{ ok: true, rep: null }`, which
+* suits a Recording that will wait in `awaiting_rep`; a field that is present but empty, longer
+* than {@link MAX_REP_FIELD_LENGTH}, not JSON or not a valid Rep choice is `call.rep_invalid`
+* (422), never silently treated as absent. It never throws.
+*/
+declare function parseRepField(text: string | undefined): ParseRepFieldResult;
+/** The path parameters of a request about one Call. */
+declare const callParamsSchema: z15.ZodObject<{
+	callId: z15.core.$ZodBranded<z15.ZodString, "call", "out">;
+}, z15.core.$strict>;
+/** The path parameters of a request about one Call. */
+type CallParams = z15.infer<typeof callParamsSchema>;
+/**
+* The query parameters of a request to list Calls: a page, and optionally one `state` and one
+* `dealId`. With no `state`, every Call that is not `deleted` is listed; `state=deleted` lists
+* those that can still be restored, and `state=awaiting_rep` the ones waiting for a Rep. An
+* unknown parameter is rejected.
+*/
+declare const listCallsQuerySchema: z15.ZodObject<{
+	cursor: z15.ZodOptional<z15.ZodString>;
+	limit: z15.ZodDefault<z15.ZodPipe<z15.ZodPipe<z15.ZodUnion<readonly [z15.ZodNumber, z15.ZodString]>, z15.ZodTransform<number, string | number>>, z15.ZodNumber>>;
+	state: z15.ZodOptional<z15.ZodEnum<{
+		awaiting_rep: "awaiting_rep";
+		deleted: "deleted";
+		failed: "failed";
+		processing: "processing";
+		ready: "ready";
+		transcribing: "transcribing";
+		uploaded: "uploaded";
+	}>>;
+	dealId: z15.ZodOptional<z15.ZodPipe<z15.ZodPipe<z15.ZodString, z15.ZodTransform<string, string>>, z15.ZodString>>;
+}, z15.core.$strict>;
+/** The query parameters of a request to list Calls. */
+type ListCallsQuery = z15.infer<typeof listCallsQuerySchema>;
+/** One page of Calls. */
+declare const listCallsResponseSchema: z15.ZodObject<{
+	items: z15.ZodArray<z15.ZodObject<{
+		id: z15.core.$ZodBranded<z15.ZodString, "call", "out">;
+		dealId: z15.ZodPipe<z15.ZodPipe<z15.ZodString, z15.ZodTransform<string, string>>, z15.ZodString>;
+		kind: z15.ZodEnum<{
+			recording: "recording";
+			transcript: "transcript";
+		}>;
+		fileName: z15.ZodPipe<z15.ZodPipe<z15.ZodString, z15.ZodTransform<string, string>>, z15.ZodString>;
+		mediaType: z15.ZodEnum<{
+			"application/json": "application/json";
+			"application/x-subrip": "application/x-subrip";
+			"audio/flac": "audio/flac";
+			"audio/mp4": "audio/mp4";
+			"audio/mpeg": "audio/mpeg";
+			"audio/ogg": "audio/ogg";
+			"audio/wav": "audio/wav";
+			"audio/webm": "audio/webm";
+			"text/plain": "text/plain";
+			"text/vtt": "text/vtt";
+		}>;
+		sizeBytes: z15.ZodNumber;
+		durationSeconds: z15.ZodNullable<z15.ZodNumber>;
+		state: z15.ZodEnum<{
+			awaiting_rep: "awaiting_rep";
+			deleted: "deleted";
+			failed: "failed";
+			processing: "processing";
+			ready: "ready";
+			transcribing: "transcribing";
+			uploaded: "uploaded";
+		}>;
+		failureReason: z15.ZodNullable<z15.ZodEnum<{
+			no_turns: "no_turns";
+			not_per_side: "not_per_side";
+			processing_failed: "processing_failed";
+			rep_label_not_found: "rep_label_not_found";
+			too_few_speakers: "too_few_speakers";
+			too_long: "too_long";
+			too_many_speakers: "too_many_speakers";
+			transcription_failed: "transcription_failed";
+			transcription_timed_out: "transcription_timed_out";
+			unreadable: "unreadable";
+		}>>;
+		rep: z15.ZodNullable<z15.ZodDiscriminatedUnion<[z15.ZodObject<{
+			by: z15.ZodLiteral<"speaker">;
+			label: z15.ZodPipe<z15.ZodPipe<z15.ZodString, z15.ZodTransform<string, string>>, z15.ZodString>;
+		}, z15.core.$strict>, z15.ZodObject<{
+			by: z15.ZodLiteral<"channel">;
+			channel: z15.ZodEnum<{
+				left: "left";
+				right: "right";
+			}>;
+		}, z15.core.$strict>], "by">>;
+		speakerLabels: z15.ZodArray<z15.ZodPipe<z15.ZodPipe<z15.ZodString, z15.ZodTransform<string, string>>, z15.ZodString>>;
+		deletedAt: z15.ZodNullable<z15.ZodISODateTime>;
+		purgeAt: z15.ZodNullable<z15.ZodISODateTime>;
+		uploadedByUserId: z15.core.$ZodBranded<z15.ZodString, "usr", "out">;
+		createdAt: z15.ZodISODateTime;
+		updatedAt: z15.ZodISODateTime;
+	}, z15.core.$strip>>;
+	nextCursor: z15.ZodNullable<z15.ZodString>;
+}, z15.core.$strip>;
+/** One page of Calls. */
+type ListCallsResponse = z15.infer<typeof listCallsResponseSchema>;
+/**
+* The body of the request that picks or changes a Call's Rep: a required choice (`null` is not a
+* choice). It is for a Call `awaiting_rep`, `ready` or `failed`, otherwise `call.rep_not_changeable`;
+* a choice that does not suit the Call's kind or, for a speaker, is not among its labels is
+* `call.rep_invalid`. It is idempotent by end state.
+*/
+declare const setCallRepRequestSchema: z15.ZodObject<{
+	rep: z15.ZodDiscriminatedUnion<[z15.ZodObject<{
+		by: z15.ZodLiteral<"speaker">;
+		label: z15.ZodPipe<z15.ZodPipe<z15.ZodString, z15.ZodTransform<string, string>>, z15.ZodString>;
+	}, z15.core.$strict>, z15.ZodObject<{
+		by: z15.ZodLiteral<"channel">;
+		channel: z15.ZodEnum<{
+			left: "left";
+			right: "right";
+		}>;
+	}, z15.core.$strict>], "by">;
+}, z15.core.$strict>;
+/** The body of the request that picks or changes a Call's Rep. */
+type SetCallRepRequest = z15.infer<typeof setCallRepRequestSchema>;
+/** What the service reads off the file part of a Call upload, and the kind it was recognised as. */
+declare const uploadCallFileSchema: z15.ZodObject<{
+	fileName: z15.ZodPipe<z15.ZodPipe<z15.ZodString, z15.ZodTransform<string, string>>, z15.ZodString>;
+	declaredMediaType: z15.ZodNullable<z15.ZodString>;
+	sizeBytes: z15.ZodNumber;
+}, z15.core.$strict>;
+/** The answer of {@link checkCallFile}: the parsed file and its kind, or the one error code to return. */
+type CheckCallFileResult = {
+	readonly ok: true;
+	readonly kind: CallKind;
+	readonly file: z15.infer<typeof uploadCallFileSchema>;
+} | {
+	readonly ok: false;
+	readonly code: "call.too_large" | "call.unsupported_type" | "request.invalid";
+};
+/**
+* The one call that checks the file part of a Call upload, in the style of `checkUploadFile`. It
+* runs the size check first against the largest limit (`MAX_RECORDING_BYTES`, `call.too_large`
+* 413), then the type on the stored form of the name (`call.unsupported_type` 415: the extension
+* is judged after control and bidirectional characters are stripped and the name trimmed), then
+* the limit of the recognised kind (a Transcript over `MAX_TRANSCRIPT_BYTES` is `call.too_large`),
+* then the shape (`request.invalid`). The kind comes from the extension; the service confirms it
+* from the content. Fields are read once, as own properties, into a copy all checks use, and a
+* non-finite size, a missing field or an extra own key is `request.invalid`. The Recording's
+* duration is not known here: the job checks `MAX_RECORDING_SECONDS`. The result carries no name or
+* content, so it is safe to log.
+*/
+declare function checkCallFile(input: unknown): CheckCallFileResult;
+import { z as z16 } from "zod";
+/**
+* A Deal as the service returns it. A Deal is named by the Organization's own `dealId` and is
+* never deleted on its own in phase 1. `closedAt`, `amount`, `currency` and `name` are `null`
+* until given. `callCount` counts Calls that are not deleted. `appearedInImport` is false for a
+* Deal created by a Call upload that no CSV has named, so the portal can list likely typos. The
+* Outcome sequence the re-tag job uses is not here. The service must send the output of
+* `dealSchema.parse(row)`.
+*/
+declare const dealSchema: z16.ZodObject<{
+	dealId: z16.ZodPipe<z16.ZodPipe<z16.ZodString, z16.ZodTransform<string, string>>, z16.ZodString>;
+	name: z16.ZodNullable<z16.ZodPipe<z16.ZodString, z16.ZodString>>;
+	outcome: z16.ZodEnum<{
+		lost: "lost";
+		open: "open";
+		won: "won";
+	}>;
+	closedAt: z16.ZodNullable<z16.ZodISODateTime>;
+	amount: z16.ZodNullable<z16.ZodString>;
+	currency: z16.ZodNullable<z16.ZodString>;
+	callCount: z16.ZodNumber;
+	appearedInImport: z16.ZodBoolean;
+	createdAt: z16.ZodISODateTime;
+	updatedAt: z16.ZodISODateTime;
+}, z16.core.$strip>;
+/** A Deal as the service returns it. */
+type Deal = z16.infer<typeof dealSchema>;
+/** The path parameters of a request about one Deal; the deal id is trimmed and otherwise exact. */
+declare const dealParamsSchema: z16.ZodObject<{
+	dealId: z16.ZodPipe<z16.ZodPipe<z16.ZodString, z16.ZodTransform<string, string>>, z16.ZodString>;
+}, z16.core.$strict>;
+/** The path parameters of a request about one Deal. */
+type DealParams = z16.infer<typeof dealParamsSchema>;
+/**
+* The query parameters of a request to list Deals: a page, and optionally one `outcome` and
+* `appearedInImport` (`true` or `false`). `appearedInImport=false` lists the Deals that have Calls
+* but never appeared in a CSV. An unknown parameter is rejected.
+*/
+declare const listDealsQuerySchema: z16.ZodObject<{
+	cursor: z16.ZodOptional<z16.ZodString>;
+	limit: z16.ZodDefault<z16.ZodPipe<z16.ZodPipe<z16.ZodUnion<readonly [z16.ZodNumber, z16.ZodString]>, z16.ZodTransform<number, string | number>>, z16.ZodNumber>>;
+	outcome: z16.ZodOptional<z16.ZodEnum<{
+		lost: "lost";
+		open: "open";
+		won: "won";
+	}>>;
+	appearedInImport: z16.ZodOptional<z16.ZodPipe<z16.ZodEnum<{
+		false: "false";
+		true: "true";
+	}>, z16.ZodTransform<boolean, "false" | "true">>>;
+}, z16.core.$strict>;
+/** The query parameters of a request to list Deals. */
+type ListDealsQuery = z16.infer<typeof listDealsQuerySchema>;
+/** One page of Deals. */
+declare const listDealsResponseSchema: z16.ZodObject<{
+	items: z16.ZodArray<z16.ZodObject<{
+		dealId: z16.ZodPipe<z16.ZodPipe<z16.ZodString, z16.ZodTransform<string, string>>, z16.ZodString>;
+		name: z16.ZodNullable<z16.ZodPipe<z16.ZodString, z16.ZodString>>;
+		outcome: z16.ZodEnum<{
+			lost: "lost";
+			open: "open";
+			won: "won";
+		}>;
+		closedAt: z16.ZodNullable<z16.ZodISODateTime>;
+		amount: z16.ZodNullable<z16.ZodString>;
+		currency: z16.ZodNullable<z16.ZodString>;
+		callCount: z16.ZodNumber;
+		appearedInImport: z16.ZodBoolean;
+		createdAt: z16.ZodISODateTime;
+		updatedAt: z16.ZodISODateTime;
+	}, z16.core.$strip>>;
+	nextCursor: z16.ZodNullable<z16.ZodString>;
+}, z16.core.$strip>;
+/** One page of Deals. */
+type ListDealsResponse = z16.infer<typeof listDealsResponseSchema>;
+/**
+* The body of the request that sets or corrects a Deal's Outcome (Owner and Admin, any Deal, even
+* a decided one): the `outcome` and, for `won` or `lost`, an optional `closedAt`; `open` takes no
+* `closedAt`. It is idempotent by end state, and a change queues the re-tag of the Deal's Moments.
+*/
+declare const setDealOutcomeRequestSchema: z16.ZodObject<{
+	outcome: z16.ZodEnum<{
+		lost: "lost";
+		open: "open";
+		won: "won";
+	}>;
+	closedAt: z16.ZodOptional<z16.ZodNullable<z16.ZodISODateTime>>;
+}, z16.core.$strict>;
+/** The body of the request that sets or corrects a Deal's Outcome. */
+type SetDealOutcomeRequest = z16.infer<typeof setDealOutcomeRequestSchema>;
+/** The fields of the multipart upload of a Deal import: the CSV is the one file part (`file`), with no other part. The request carries an `Idempotency-Key` header. */
+declare const DEAL_IMPORT_FILE_FIELD = "file";
+/**
+* A Deal import as the service returns it. It carries no file name and no cell. The counts are
+* `null` until `completed`; `failureReason` is set exactly when `state` is `failed`. The report is
+* the paginated rows ({@link listDealImportRowsResponseSchema}).
+*/
+declare const dealImportSchema: z16.ZodObject<{
+	id: z16.core.$ZodBranded<z16.ZodString, "dimp", "out">;
+	state: z16.ZodEnum<{
+		completed: "completed";
+		failed: "failed";
+		processing: "processing";
+		uploaded: "uploaded";
+	}>;
+	failureReason: z16.ZodNullable<z16.ZodEnum<{
+		processing_failed: "processing_failed";
+		too_many_rows: "too_many_rows";
+		unreadable: "unreadable";
+	}>>;
+	rowCount: z16.ZodNullable<z16.ZodNumber>;
+	appliedCount: z16.ZodNullable<z16.ZodNumber>;
+	rejectedCount: z16.ZodNullable<z16.ZodNumber>;
+	uploadedByUserId: z16.core.$ZodBranded<z16.ZodString, "usr", "out">;
+	createdAt: z16.ZodISODateTime;
+	updatedAt: z16.ZodISODateTime;
+}, z16.core.$strip>;
+/** A Deal import as the service returns it. */
+type DealImport = z16.infer<typeof dealImportSchema>;
+/** The path parameters of a request about one Deal import. */
+declare const dealImportParamsSchema: z16.ZodObject<{
+	importId: z16.core.$ZodBranded<z16.ZodString, "dimp", "out">;
+}, z16.core.$strict>;
+/** The path parameters of a request about one Deal import. */
+type DealImportParams = z16.infer<typeof dealImportParamsSchema>;
+/** The query parameters of a request to list Deal imports: a page. An unknown parameter is rejected. */
+declare const listDealImportsQuerySchema: z16.ZodObject<{
+	cursor: z16.ZodOptional<z16.ZodString>;
+	limit: z16.ZodDefault<z16.ZodPipe<z16.ZodPipe<z16.ZodUnion<readonly [z16.ZodNumber, z16.ZodString]>, z16.ZodTransform<number, string | number>>, z16.ZodNumber>>;
+}, z16.core.$strict>;
+/** The query parameters of a request to list Deal imports. */
+type ListDealImportsQuery = z16.infer<typeof listDealImportsQuerySchema>;
+/** One page of Deal imports. */
+declare const listDealImportsResponseSchema: z16.ZodObject<{
+	items: z16.ZodArray<z16.ZodObject<{
+		id: z16.core.$ZodBranded<z16.ZodString, "dimp", "out">;
+		state: z16.ZodEnum<{
+			completed: "completed";
+			failed: "failed";
+			processing: "processing";
+			uploaded: "uploaded";
+		}>;
+		failureReason: z16.ZodNullable<z16.ZodEnum<{
+			processing_failed: "processing_failed";
+			too_many_rows: "too_many_rows";
+			unreadable: "unreadable";
+		}>>;
+		rowCount: z16.ZodNullable<z16.ZodNumber>;
+		appliedCount: z16.ZodNullable<z16.ZodNumber>;
+		rejectedCount: z16.ZodNullable<z16.ZodNumber>;
+		uploadedByUserId: z16.core.$ZodBranded<z16.ZodString, "usr", "out">;
+		createdAt: z16.ZodISODateTime;
+		updatedAt: z16.ZodISODateTime;
+	}, z16.core.$strip>>;
+	nextCursor: z16.ZodNullable<z16.ZodString>;
+}, z16.core.$strip>;
+/** One page of Deal imports. */
+type ListDealImportsResponse = z16.infer<typeof listDealImportsResponseSchema>;
+/**
+* One row of an import report: the CSV `rowNumber` (the header is row 1, the first data row 2),
+* the `dealId` (the one free-text cell echoed; `null` when the cell was missing or not a valid deal
+* id, so a bad cell is never echoed), the `result` and, for a rejected row, the `reason`. `reason`
+* is `null` exactly when the result is `applied`. No other cell is ever part of a report.
+*/
+declare const dealImportRowSchema: z16.ZodObject<{
+	rowNumber: z16.ZodNumber;
+	dealId: z16.ZodNullable<z16.ZodPipe<z16.ZodPipe<z16.ZodString, z16.ZodTransform<string, string>>, z16.ZodString>>;
+	result: z16.ZodEnum<{
+		applied: "applied";
+		rejected: "rejected";
+	}>;
+	reason: z16.ZodNullable<z16.ZodEnum<{
+		deal_limit_reached: "deal_limit_reached";
+		duplicate_in_file: "duplicate_in_file";
+		invalid_amount: "invalid_amount";
+		invalid_closed_at: "invalid_closed_at";
+		invalid_currency: "invalid_currency";
+		invalid_deal_id: "invalid_deal_id";
+		invalid_name: "invalid_name";
+		invalid_outcome: "invalid_outcome";
+		outcome_already_decided: "outcome_already_decided";
+		wrong_column_count: "wrong_column_count";
+	}>>;
+}, z16.core.$strip>;
+/** One row of an import report. */
+type DealImportRow = z16.infer<typeof dealImportRowSchema>;
+/** The query parameters of a request to read an import's rows: a page, and optionally only the `rejected` or only the `applied` rows. Rows are in CSV order. An unknown parameter is rejected. */
+declare const listDealImportRowsQuerySchema: z16.ZodObject<{
+	cursor: z16.ZodOptional<z16.ZodString>;
+	limit: z16.ZodDefault<z16.ZodPipe<z16.ZodPipe<z16.ZodUnion<readonly [z16.ZodNumber, z16.ZodString]>, z16.ZodTransform<number, string | number>>, z16.ZodNumber>>;
+	result: z16.ZodOptional<z16.ZodEnum<{
+		applied: "applied";
+		rejected: "rejected";
+	}>>;
+}, z16.core.$strict>;
+/** The query parameters of a request to read an import's rows. */
+type ListDealImportRowsQuery = z16.infer<typeof listDealImportRowsQuerySchema>;
+/** One page of an import report. */
+declare const listDealImportRowsResponseSchema: z16.ZodObject<{
+	items: z16.ZodArray<z16.ZodObject<{
+		rowNumber: z16.ZodNumber;
+		dealId: z16.ZodNullable<z16.ZodPipe<z16.ZodPipe<z16.ZodString, z16.ZodTransform<string, string>>, z16.ZodString>>;
+		result: z16.ZodEnum<{
+			applied: "applied";
+			rejected: "rejected";
+		}>;
+		reason: z16.ZodNullable<z16.ZodEnum<{
+			deal_limit_reached: "deal_limit_reached";
+			duplicate_in_file: "duplicate_in_file";
+			invalid_amount: "invalid_amount";
+			invalid_closed_at: "invalid_closed_at";
+			invalid_currency: "invalid_currency";
+			invalid_deal_id: "invalid_deal_id";
+			invalid_name: "invalid_name";
+			invalid_outcome: "invalid_outcome";
+			outcome_already_decided: "outcome_already_decided";
+			wrong_column_count: "wrong_column_count";
+		}>>;
+	}, z16.core.$strip>>;
+	nextCursor: z16.ZodNullable<z16.ZodString>;
+}, z16.core.$strip>;
+/** One page of an import report. */
+type ListDealImportRowsResponse = z16.infer<typeof listDealImportRowsResponseSchema>;
+import { z as z17 } from "zod";
+/** The Outcome of a Deal: `won`, `lost` or still `open` (glossary). */
+declare const OUTCOMES: readonly ["won", "lost", "open"];
+/** The Outcome of a Deal. */
+declare const outcomeSchema: z17.ZodEnum<{
+	lost: "lost";
+	open: "open";
+	won: "won";
+}>;
+/** The Outcome of a Deal. */
+type Outcome = z17.infer<typeof outcomeSchema>;
+/** The ticket's choice (ADR 0018 leaves it open): the longest deal id, in UTF-16 code units, after trimming. */
+declare const MAX_DEAL_ID_LENGTH = 128;
+/**
+* Normalises a deal id: trims surrounding whitespace and changes nothing else. The comparison is
+* exact and case-sensitive (`A-1` and `a-1` are two Deals) with no Unicode normalisation, as ADR
+* 0018 says, so two ids are the same only if they are the same code units after the trim.
+*/
+declare function normaliseDealId(dealId: string): string;
+/**
+* A deal id (the Organization's own identifier for a Deal), in a request, a path, a CSV cell and a
+* response: at most 1000 raw characters, trimmed, then 1 to 128 UTF-16 code units, well-formed,
+* with no control character, bidirectional character, line or paragraph separator or zero-width
+* character. Unlike a file name it is rejected, not stripped, because stripping could make two
+* ids equal. It is compared exactly and case-sensitively after the trim ({@link normaliseDealId}).
+* It is the only free-text cell an import report may echo. It is untrusted text for display.
+*/
+declare const dealIdSchema: z17.ZodPipe<z17.ZodPipe<z17.ZodString, z17.ZodTransform<string, string>>, z17.ZodString>;
+/** A deal id. */
+type DealId = z17.infer<typeof dealIdSchema>;
+/** The longest Deal name, in UTF-16 code units, once trimmed. */
+declare const MAX_DEAL_NAME_LENGTH = 200;
+/** A Deal's optional name: trimmed, 1 to 200 well-formed UTF-16 code units, no control character. Untrusted text for display. */
+declare const dealNameSchema: z17.ZodPipe<z17.ZodString, z17.ZodString>;
+/** A money amount as a decimal string, never a float: up to 15 digits and at most 2 decimals, not negative. */
+declare const dealAmountSchema: z17.ZodString;
+/** A currency as an upper-case ISO 4217 code of three letters. */
+declare const dealCurrencySchema: z17.ZodString;
+/** The lead's default (ADR 0018, refinements; not the owner's): the largest CSV accepted, 10 MB counted as 10 * 1024 * 1024 bytes. */
+declare const MAX_DEAL_IMPORT_BYTES: number;
+/** The lead's default (ADR 0018, refinements; not the owner's): the most data rows in one CSV. */
+declare const MAX_DEAL_IMPORT_ROWS = 5e4;
+/** The required columns of the CSV template, in order. */
+declare const DEAL_IMPORT_REQUIRED_COLUMNS: readonly ["deal_id", "outcome", "closed_at", "amount", "currency"];
+/** The optional column of the CSV template, which may follow the required ones. */
+declare const DEAL_IMPORT_OPTIONAL_COLUMN = "name";
+/** The longest first row the header check reads, in characters; a longer one is refused. */
+declare const MAX_DEAL_IMPORT_HEADER_LENGTH = 1024;
+/** Why a CSV header was refused: a closed list, so the answer never echoes a cell. */
+declare const DEAL_IMPORT_HEADER_PROBLEMS: readonly ["empty", "too_long", "missing_column", "unexpected_column", "wrong_order"];
+/** Why a CSV header was refused. */
+type DealImportHeaderProblem = (typeof DEAL_IMPORT_HEADER_PROBLEMS)[number];
+/** The answer of {@link checkDealImportHeader}. */
+type CheckDealImportHeaderResult = {
+	readonly ok: true;
+	readonly hasName: boolean;
+} | {
+	readonly ok: false;
+	readonly code: "deal_import.header_invalid";
+	readonly problem: DealImportHeaderProblem;
+};
+/**
+* Checks the first row of a CSV against the fixed template: `deal_id,outcome,closed_at,amount,
+* currency` in that order, optionally followed by `name`. Column names are lower case and exact;
+* a leading byte order mark, surrounding spaces and surrounding double quotes on a cell are
+* ignored. The caller passes the text up to the first line break; one trailing carriage return is
+* dropped, and any other line break inside is an `unexpected_column`. A refusal is `deal_import.header_invalid` (422) and names a closed `problem`, never a cell.
+*/
+declare function checkDealImportHeader(line: string): CheckDealImportHeaderResult;
+/** The states a Deal import is in: `uploaded`, then `processing`, then `completed` or `failed`. */
+declare const DEAL_IMPORT_STATES: readonly ["uploaded", "processing", "completed", "failed"];
+/** The state of a Deal import. */
+declare const dealImportStateSchema: z17.ZodEnum<{
+	completed: "completed";
+	failed: "failed";
+	processing: "processing";
+	uploaded: "uploaded";
+}>;
+/** The state of a Deal import. */
+type DealImportState = z17.infer<typeof dealImportStateSchema>;
+/** Why a whole import ended `failed`: a closed list. A bad row is not a failure of the import. */
+declare const DEAL_IMPORT_FAILURE_REASONS: readonly ["too_many_rows", "unreadable", "processing_failed"];
+/** Why a whole import ended `failed`. */
+declare const dealImportFailureReasonSchema: z17.ZodEnum<{
+	processing_failed: "processing_failed";
+	too_many_rows: "too_many_rows";
+	unreadable: "unreadable";
+}>;
+/** Why a whole import ended `failed`. */
+type DealImportFailureReason = z17.infer<typeof dealImportFailureReasonSchema>;
+/** The result of one CSV row: `applied`, or `rejected` with a reason. */
+declare const DEAL_IMPORT_ROW_RESULTS: readonly ["applied", "rejected"];
+/** The result of one CSV row. */
+declare const dealImportRowResultSchema: z17.ZodEnum<{
+	applied: "applied";
+	rejected: "rejected";
+}>;
+/** The result of one CSV row. */
+type DealImportRowResult = z17.infer<typeof dealImportRowResultSchema>;
+/**
+* Why a row was rejected: a closed list, never a cell. A row is rejected, not silently dropped,
+* and never an HTTP error. `outcome_already_decided` is a row for a Deal already `won` or `lost`
+* (ADR 0018, choice 5); `duplicate_in_file` is a deal id repeated after its first row.
+*/
+declare const DEAL_IMPORT_ROW_REASONS: readonly ["wrong_column_count", "invalid_deal_id", "duplicate_in_file", "invalid_outcome", "invalid_closed_at", "invalid_amount", "invalid_currency", "invalid_name", "outcome_already_decided", "deal_limit_reached"];
+/** Why a row was rejected. */
+declare const dealImportRowReasonSchema: z17.ZodEnum<{
+	deal_limit_reached: "deal_limit_reached";
+	duplicate_in_file: "duplicate_in_file";
+	invalid_amount: "invalid_amount";
+	invalid_closed_at: "invalid_closed_at";
+	invalid_currency: "invalid_currency";
+	invalid_deal_id: "invalid_deal_id";
+	invalid_name: "invalid_name";
+	invalid_outcome: "invalid_outcome";
+	outcome_already_decided: "outcome_already_decided";
+	wrong_column_count: "wrong_column_count";
+}>;
+/** Why a row was rejected. */
+type DealImportRowReason = z17.infer<typeof dealImportRowReasonSchema>;
+import { z as z18 } from "zod";
+/**
+* A Playbook document as the service returns it. It names the file but never carries its content,
+* and no text taken from it. The extension of `fileName` and `mediaType` are not checked against each other: that agreement is
+* the service's job, as only it knows the declared and the detected type, and the contract does
+* not enforce it. `failureReason` is set exactly when `state` is `failed`. `purgeAt` is
+* set exactly when `state` is `deleted`: the time the file and record will be purged
+* (`DOCUMENT_RETENTION_DAYS` after `deletedAt`); a restore is refused after it. `pageCount` is
+* `null` until ingestion has counted the pages. The service must send the output of
+* `documentSchema.parse(row)`, never the row.
+*/
+declare const documentSchema: z18.ZodObject<{
+	id: z18.core.$ZodBranded<z18.ZodString, "doc", "out">;
+	fileName: z18.ZodPipe<z18.ZodPipe<z18.ZodString, z18.ZodTransform<string, string>>, z18.ZodString>;
+	mediaType: z18.ZodEnum<{
+		"application/pdf": "application/pdf";
+		"application/vnd.openxmlformats-officedocument.presentationml.presentation": "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+		"application/vnd.openxmlformats-officedocument.wordprocessingml.document": "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+		"text/markdown": "text/markdown";
+		"text/plain": "text/plain";
+	}>;
+	sizeBytes: z18.ZodNumber;
+	pageCount: z18.ZodNullable<z18.ZodNumber>;
+	state: z18.ZodEnum<{
+		deleted: "deleted";
+		failed: "failed";
+		processing: "processing";
+		ready: "ready";
+		uploaded: "uploaded";
+	}>;
+	failureReason: z18.ZodNullable<z18.ZodEnum<{
+		no_text: "no_text";
+		password_protected: "password_protected";
+		processing_failed: "processing_failed";
+		too_many_pages: "too_many_pages";
+		unreadable: "unreadable";
+	}>>;
+	deletedAt: z18.ZodNullable<z18.ZodISODateTime>;
+	purgeAt: z18.ZodNullable<z18.ZodISODateTime>;
+	uploadedByUserId: z18.core.$ZodBranded<z18.ZodString, "usr", "out">;
+	createdAt: z18.ZodISODateTime;
+	updatedAt: z18.ZodISODateTime;
+}, z18.core.$strip>;
+/** A Playbook document as the service returns it. */
+type PlaybookDocument = z18.infer<typeof documentSchema>;
+/** The name of the multipart form field that carries the file. */
+declare const UPLOAD_FILE_FIELD = "file";
+/** The content type of an upload request: `multipart/form-data` with one file part named {@link UPLOAD_FILE_FIELD}. */
+declare const UPLOAD_CONTENT_TYPE = "multipart/form-data";
+/**
+* What the service reads off the file part of an upload before it stores anything: the
+* `fileName` of the part, the media type the client declared (`declaredMediaType`, advisory only;
+* the service inspects the content too, because an upload is untrusted data) and the `sizeBytes`
+* counted while reading. The file itself is a multipart part, not a JSON field, and appears in no
+* schema. The request has no other part; it carries an `Idempotency-Key` header.
+*
+* This schema checks only shape (a well-formed name, a non-empty file) and a failure is
+* `request.invalid` (400). A service calls {@link checkUploadFile}, which runs it after the size
+* and type checks so each gets its own code.
+*/
+declare const uploadDocumentFileSchema: z18.ZodObject<{
+	fileName: z18.ZodPipe<z18.ZodPipe<z18.ZodString, z18.ZodTransform<string, string>>, z18.ZodString>;
+	declaredMediaType: z18.ZodNullable<z18.ZodString>;
+	sizeBytes: z18.ZodNumber;
+}, z18.core.$strict>;
+/** What the service reads off the file part of an upload. */
+type UploadDocumentFile = z18.infer<typeof uploadDocumentFileSchema>;
+/** The path parameters of a request about one document. */
+declare const documentParamsSchema: z18.ZodObject<{
+	documentId: z18.core.$ZodBranded<z18.ZodString, "doc", "out">;
+}, z18.core.$strict>;
+/** The path parameters of a request about one document. */
+type DocumentParams = z18.infer<typeof documentParamsSchema>;
+/**
+* The query parameters of a request to list documents: a page, and optionally one `state`. With
+* no `state`, every document that is not `deleted` is listed; `state=deleted` lists the documents
+* that can still be restored. An unknown parameter is rejected.
+*/
+declare const listDocumentsQuerySchema: z18.ZodObject<{
+	cursor: z18.ZodOptional<z18.ZodString>;
+	limit: z18.ZodDefault<z18.ZodPipe<z18.ZodPipe<z18.ZodUnion<readonly [z18.ZodNumber, z18.ZodString]>, z18.ZodTransform<number, string | number>>, z18.ZodNumber>>;
+	state: z18.ZodOptional<z18.ZodEnum<{
+		deleted: "deleted";
+		failed: "failed";
+		processing: "processing";
+		ready: "ready";
+		uploaded: "uploaded";
+	}>>;
+}, z18.core.$strict>;
+/** The query parameters of a request to list documents. */
+type ListDocumentsQuery = z18.infer<typeof listDocumentsQuerySchema>;
+/** One page of documents. */
+declare const listDocumentsResponseSchema: z18.ZodObject<{
+	items: z18.ZodArray<z18.ZodObject<{
+		id: z18.core.$ZodBranded<z18.ZodString, "doc", "out">;
+		fileName: z18.ZodPipe<z18.ZodPipe<z18.ZodString, z18.ZodTransform<string, string>>, z18.ZodString>;
+		mediaType: z18.ZodEnum<{
+			"application/pdf": "application/pdf";
+			"application/vnd.openxmlformats-officedocument.presentationml.presentation": "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+			"application/vnd.openxmlformats-officedocument.wordprocessingml.document": "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+			"text/markdown": "text/markdown";
+			"text/plain": "text/plain";
+		}>;
+		sizeBytes: z18.ZodNumber;
+		pageCount: z18.ZodNullable<z18.ZodNumber>;
+		state: z18.ZodEnum<{
+			deleted: "deleted";
+			failed: "failed";
+			processing: "processing";
+			ready: "ready";
+			uploaded: "uploaded";
+		}>;
+		failureReason: z18.ZodNullable<z18.ZodEnum<{
+			no_text: "no_text";
+			password_protected: "password_protected";
+			processing_failed: "processing_failed";
+			too_many_pages: "too_many_pages";
+			unreadable: "unreadable";
+		}>>;
+		deletedAt: z18.ZodNullable<z18.ZodISODateTime>;
+		purgeAt: z18.ZodNullable<z18.ZodISODateTime>;
+		uploadedByUserId: z18.core.$ZodBranded<z18.ZodString, "usr", "out">;
+		createdAt: z18.ZodISODateTime;
+		updatedAt: z18.ZodISODateTime;
+	}, z18.core.$strip>>;
+	nextCursor: z18.ZodNullable<z18.ZodString>;
+}, z18.core.$strip>;
+/** One page of documents. */
+type ListDocumentsResponse = z18.infer<typeof listDocumentsResponseSchema>;
+/**
+* Internal: the path parameters of the call that removes everything an Organization has in the
+* Playbook. The Organization is named in the path, never taken from the caller's token.
+*/
+declare const internalRemoveOrganizationDocumentsParamsSchema: z18.ZodObject<{
+	organizationId: z18.core.$ZodBranded<z18.ZodString, "org", "out">;
+}, z18.core.$strict>;
+/** Internal: the path parameters of the remove-everything call. */
+type InternalRemoveOrganizationDocumentsParams = z18.infer<typeof internalRemoveOrganizationDocumentsParamsSchema>;
+/**
+* Internal: `POST /internal/playbook/organizations/{organizationId}/remove-all`, for offboarding
+* and erasure; no caller yet. The body is empty. It cancels ingestion in flight and removes every
+* file, chunk, vector and record the Organization has, soft-deleted documents included, without
+* waiting for retention. It carries an `Idempotency-Key` header and is defined by its end state:
+* it answers success whenever nothing remains when it returns, whether this call, an earlier one
+* or nobody ever stored anything, so a repeat under any key answers the same and success does not
+* mean this call removed anything. It returns no domain error code.
+*/
+declare const internalRemoveOrganizationDocumentsRequestSchema: z18.ZodObject<{}, z18.core.$strict>;
+/** Internal: the body of the remove-everything call. */
+type InternalRemoveOrganizationDocumentsRequest = z18.infer<typeof internalRemoveOrganizationDocumentsRequestSchema>;
+/** Internal: the answer to the remove-everything call: always `removed`. */
+declare const internalRemoveOrganizationDocumentsResponseSchema: z18.ZodObject<{
+	organizationId: z18.core.$ZodBranded<z18.ZodString, "org", "out">;
+	status: z18.ZodLiteral<"removed">;
+}, z18.core.$strip>;
+/** Internal: the answer to the remove-everything call. */
+type InternalRemoveOrganizationDocumentsResponse = z18.infer<typeof internalRemoveOrganizationDocumentsResponseSchema>;
+/** The answer of {@link checkUploadFile}: the parsed file, or the one error code to return. */
+type CheckUploadFileResult = {
+	readonly ok: true;
+	readonly file: UploadDocumentFile;
+} | {
+	readonly ok: false;
+	readonly code: "document.too_large" | "document.unsupported_type" | "request.invalid";
+};
+/**
+* The one call that checks the file part of an upload, so a service cannot skip a step. It runs
+* the size check first (`document.too_large`, 413, so an over-size `.exe` is only too large), then
+* the type check on the stored form of the name (`document.unsupported_type`, 415: the extension
+* is judged after control and bidirectional characters are stripped and the name is trimmed, so
+* `report.pdf ` is accepted and stored as `report.pdf`), then the shape
+* ({@link uploadDocumentFileSchema}, `request.invalid`, 400). Input that is not an object with a
+* string name and a finite numeric size (so `NaN` and the infinities too), or that has an own key
+* other than the three, is `request.invalid`. Each field is read once, as an own property, into a
+* copy that all three checks use, so a changing getter or an inherited property cannot pass a check
+* the parsed value would fail. On success `file` is the parsed form, with
+* the stored name. The result carries no name or content, so it is safe to log and to return.
+*/
+declare function checkUploadFile(input: unknown): CheckUploadFileResult;
+import { z as z19 } from "zod";
+/** The payload of {@link DOCUMENT_UPLOADED_MESSAGE}: the document to ingest. */
+declare const documentUploadedPayloadSchema: z19.ZodObject<{
+	documentId: z19.core.$ZodBranded<z19.ZodString, "doc", "out">;
+}, z19.core.$strict>;
+/** The payload of {@link DOCUMENT_UPLOADED_MESSAGE}. */
+type DocumentUploadedPayload = z19.infer<typeof documentUploadedPayloadSchema>;
+/**
+* The message that starts ingestion of a document: published after an upload is stored, and again
+* when a soft-deleted document is restored (it is re-ingested from the kept file). The job is
+* idempotent and resumable, keyed on the document.
+*/
+declare const DOCUMENT_UPLOADED_MESSAGE: {
+	readonly type: "playbook.document_uploaded";
+	readonly version: 1;
+	readonly scope: "organization";
+	readonly payload: z19.ZodObject<{
+		documentId: z19.core.$ZodBranded<z19.ZodString, "doc", "out">;
+	}, z19.core.$strict>;
+};
+/** The largest `deletionSeq`: the db column is a Postgres `integer`, so the message cannot carry more. */
+declare const MAX_DELETION_SEQ = 2147483647;
+/**
+* The payload of {@link DOCUMENT_DELETED_MESSAGE}: the document and its `deletionSeq`, an integer
+* from 1 to {@link MAX_DELETION_SEQ} that the service increases in the same write as each delete. The cleanup applies only
+* when the document is still `deleted` and its stored sequence equals this one, so a restore, or
+* a later delete, makes an older message do nothing. A timestamp is not the guard: Postgres keeps
+* microseconds, a JSON timestamp does not, and two deletions can share a clock tick. The sequence
+* is not on the public document schema. Only a delete that changes the state bumps it: a repeated
+* delete of an already deleted document does not bump the sequence and does not publish again.
+*/
+declare const documentDeletedPayloadSchema: z19.ZodObject<{
+	documentId: z19.core.$ZodBranded<z19.ZodString, "doc", "out">;
+	deletionSeq: z19.ZodNumber;
+}, z19.core.$strict>;
+/** The payload of {@link DOCUMENT_DELETED_MESSAGE}. */
+type DocumentDeletedPayload = z19.infer<typeof documentDeletedPayloadSchema>;
+/**
+* The message that queues the removal of a deleted document's vectors, published by the delete
+* request. It is cleanup only: search hides a deleted document by its state, never by this job.
+*/
+declare const DOCUMENT_DELETED_MESSAGE: {
+	readonly type: "playbook.document_deleted";
+	readonly version: 1;
+	readonly scope: "organization";
+	readonly payload: z19.ZodObject<{
+		documentId: z19.core.$ZodBranded<z19.ZodString, "doc", "out">;
+		deletionSeq: z19.ZodNumber;
+	}, z19.core.$strict>;
+};
+import { z as z20 } from "zod";
+/** The largest wording version number; versions are positive integers the service raises when a lawyer changes the wording. */
+declare const MAX_RIGHTS_WORDING_VERSION = 1e6;
+/** The version of the rights-confirmation wording: a positive integer. The wording itself lives in the portal, checked by a lawyer, and is not in this library. */
+declare const rightsWordingVersionSchema: z20.ZodNumber;
+/**
+* The recorded confirmation (ADR 0018, choice 12): that an Owner or Admin confirmed the
+* Organization may share its Recordings and Transcripts, with the `wordingVersion` shown, who
+* (`confirmedByUserId`) and when. There is one per Organization; a new one replaces it.
+*/
+declare const rightsConfirmationSchema: z20.ZodObject<{
+	wordingVersion: z20.ZodNumber;
+	confirmedByUserId: z20.core.$ZodBranded<z20.ZodString, "usr", "out">;
+	confirmedAt: z20.ZodISODateTime;
+}, z20.core.$strip>;
+/** The recorded confirmation. */
+type RightsConfirmation = z20.infer<typeof rightsConfirmationSchema>;
+/**
+* The answer to reading the confirmation: the `currentWordingVersion` the portal must show,
+* the stored `confirmation` (`null` if none) and `confirmed`, true only when the stored version
+* is the current one. Uploads of Calls are refused with `rights.confirmation_required` unless
+* `confirmed`; existing Calls stay and stay searchable.
+*/
+declare const rightsStatusSchema: z20.ZodObject<{
+	currentWordingVersion: z20.ZodNumber;
+	confirmation: z20.ZodNullable<z20.ZodObject<{
+		wordingVersion: z20.ZodNumber;
+		confirmedByUserId: z20.core.$ZodBranded<z20.ZodString, "usr", "out">;
+		confirmedAt: z20.ZodISODateTime;
+	}, z20.core.$strip>>;
+	confirmed: z20.ZodBoolean;
+}, z20.core.$strip>;
+/** The answer to reading the confirmation. */
+type RightsStatus = z20.infer<typeof rightsStatusSchema>;
+/**
+* The body of the request that records the confirmation: the `wordingVersion` the member was shown,
+* which must be the current one (else `rights.version_outdated`). Who and when come from the token
+* and the clock, never from the body. Idempotent by end state.
+*/
+declare const confirmRightsRequestSchema: z20.ZodObject<{
+	wordingVersion: z20.ZodNumber;
+}, z20.core.$strict>;
+/** The body of the request that records the confirmation. */
+type ConfirmRightsRequest = z20.infer<typeof confirmRightsRequestSchema>;
 import { z as z21 } from "zod";
 /** The largest Outcome or Rep sequence: the db column is a Postgres `integer`, like {@link MAX_DELETION_SEQ}. */
 declare const MAX_SEQ = 2147483647;
@@ -2112,18 +2177,6 @@ declare const DEAL_IMPORT_UPLOADED_MESSAGE: {
 		importId: z21.core.$ZodBranded<z21.ZodString, "dimp", "out">;
 	}, z21.core.$strict>;
 };
-/** The roles that may read Calls, Deals, imports and the rights confirmation: Owner and Admin only, the owner's decision of 2026-10-13 (the writers are the same two roles). Managers and Reps get `auth.forbidden`. */
-declare const SALES_HISTORY_READ_ROLES: readonly ["owner", "admin"];
-/** The sales-history routes, by name. */
-type SalesHistoryRouteName = "uploadCall" | "listCalls" | "getCall" | "deleteCall" | "restoreCall" | "setCallRep" | "listDeals" | "getDeal" | "setDealOutcome" | "uploadDealImport" | "listDealImports" | "getDealImport" | "listDealImportRows" | "getRightsConfirmation" | "confirmRights";
-/**
-* The sales-history routes (ADR 0018), described as `PLAYBOOK_ROUTES` describes the document
-* routes: method, path, roles, success statuses, domain error codes and the OpenAPI description.
-* Every route may also return the common `auth.*`, `rate.limited` and `server.*` codes. A route on
-* another Organization's Call, Deal or import answers the not-found code. No response carries a
-* Transcript, audio or a turn. Reads are Owner and Admin only ({@link SALES_HISTORY_READ_ROLES}).
-*/
-declare const SALES_HISTORY_ROUTES: Readonly<Record<SalesHistoryRouteName, PlaybookRoute>>;
 import { z as z22 } from "zod";
 /**
 * The states a Playbook document is in, in the order a document passes through them (ADR 0016).
@@ -2228,4 +2281,4 @@ declare function hasStrippableCharacter(text: string): boolean;
 declare function isWellFormedText(text: string): boolean;
 /** This library's package name, so a consumer can report which shared libraries it resolved. */
 declare const PACKAGE = "tula-closeline-contract";
-export { ABANDON_MAX_AGE_HOURS, ACCEPTED_DOCUMENT_EXTENSIONS, ACCEPTED_DOCUMENT_MEDIA_TYPES, ACCEPTED_RECORDING_EXTENSIONS, ACCEPTED_TRANSCRIPT_EXTENSIONS, AUTH_ERRORS, AcceptedCallExtension, AcceptedDocumentExtension, AddTeamMemberRequest, AuthErrorCode, CALL_CHANNELS, CALL_DELETED_MESSAGE, CALL_FAILURE_REASONS, CALL_KINDS, CALL_MEDIA_TYPES, CALL_REP_CHANGED_MESSAGE, CALL_STATES, CALL_TRANSCRIBED_MESSAGE, CALL_UPLOADED_MESSAGE, CORE_ERRORS, Call, CallDeletedPayload, CallFailureReason, CallId, CallKind, CallMediaType, CallParams, CallRepChangedPayload, CallState, CallTranscribedPayload, CallUploadedPayload, ChangeMemberRoleRequest, CheckCallFileResult, CheckDealImportHeaderResult, CheckUploadFileResult, CommonErrorCode, ConfirmRightsRequest, CoreErrorCode, CreateInvitationRequest, CreateTeamRequest, DEAL_IMPORT_FAILURE_REASONS, DEAL_IMPORT_FILE_FIELD, DEAL_IMPORT_HEADER_PROBLEMS, DEAL_IMPORT_OPTIONAL_COLUMN, DEAL_IMPORT_REQUIRED_COLUMNS, DEAL_IMPORT_ROW_REASONS, DEAL_IMPORT_ROW_RESULTS, DEAL_IMPORT_STATES, DEAL_IMPORT_UPLOADED_MESSAGE, DEAL_OUTCOME_CHANGED_MESSAGE, DEFAULT_MAX_CALLS, DEFAULT_MAX_DEALS, DEFAULT_MAX_DOCUMENTS, DEFAULT_MAX_DOCUMENT_BYTES_TOTAL, DEFAULT_MAX_RECORDING_BYTES_TOTAL, DEFAULT_PAGE_SIZE, DOCUMENT_DELETED_MESSAGE, DOCUMENT_FAILURE_REASONS, DOCUMENT_RETENTION_DAYS, DOCUMENT_STATES, DOCUMENT_UPLOADED_MESSAGE, Deal, DealId, DealImport, DealImportFailureReason, DealImportHeaderProblem, DealImportId, DealImportParams, DealImportRow, DealImportRowReason, DealImportRowResult, DealImportState, DealImportUploadedPayload, DealOutcomeChangedPayload, DealParams, DocumentDeletedPayload, DocumentFailureReason, DocumentFileName, DocumentId, DocumentMediaType, DocumentParams, DocumentState, DocumentUploadedPayload, ERRORS, Email, ErrorBody, ErrorDefinition, ErrorInput, EventId, EventType, IDEMPOTENCY_KEY_HEADER, INCOMPLETE_UPLOAD_PARTS_TTL_HOURS, INTERNAL_CALL_ERRORS, INVITABLE_ROLES, INVITATION_STATES, Id, IdempotencyKey, InternalAbandonOrganizationParams, InternalAbandonOrganizationRequest, InternalAbandonOrganizationResponse, InternalAcceptInvitationRequest, InternalAcceptInvitationResponse, InternalCallName, InternalCreateOrganizationRequest, InternalCreateOrganizationResponse, InternalMembershipRequest, InternalMembershipResponse, InternalRemoveOrganizationDocumentsParams, InternalRemoveOrganizationDocumentsRequest, InternalRemoveOrganizationDocumentsResponse, InternalUpdateMemberProfileParams, InternalUpdateMemberProfileRequest, InternalUpdateMemberProfileResponse, InvitableRole, Invitation, InvitationId, InvitationParams, InvitationState, ListCallsQuery, ListCallsResponse, ListDealImportRowsQuery, ListDealImportRowsResponse, ListDealImportsQuery, ListDealImportsResponse, ListDealsQuery, ListDealsResponse, ListDocumentsQuery, ListDocumentsResponse, ListInvitationsQuery, ListInvitationsResponse, ListMembersQuery, ListMembersResponse, ListTeamsQuery, ListTeamsResponse, MAX_CALL_SPEAKERS, MAX_CURSOR_LENGTH, MAX_DEAL_ID_LENGTH, MAX_DEAL_IMPORT_BYTES, MAX_DEAL_IMPORT_HEADER_LENGTH, MAX_DEAL_IMPORT_ROWS, MAX_DEAL_NAME_LENGTH, MAX_DELETION_SEQ, MAX_DOCUMENT_BYTES, MAX_DOCUMENT_FILE_NAME_LENGTH, MAX_DOCUMENT_PAGES, MAX_EMAIL_LENGTH, MAX_NAME_LENGTH, MAX_PAGE_SIZE, MAX_PERSON_NAME_LENGTH, MAX_RECORDING_BYTES, MAX_RECORDING_SECONDS, MAX_REP_FIELD_LENGTH, MAX_REP_FOLLOWING_CHARACTERS, MAX_REP_FOLLOWING_TURNS, MAX_RIGHTS_WORDING_VERSION, MAX_SEQ, MAX_SPEAKER_LABEL_LENGTH, MAX_TRANSCRIPT_BYTES, MEDIA_TYPE_BY_CALL_EXTENSION, MEDIA_TYPE_BY_EXTENSION, Member, MemberParams, MembershipId, ORGANIZATION_STATUSES, OUTCOMES, Organization, OrganizationId, OrganizationStatus, Outcome, PACKAGE, PLAYBOOK_ERRORS, PLAYBOOK_READ_ROLES, PLAYBOOK_ROUTES, PLAYBOOK_WRITE_ROLES, Page, PageQuery, ParseRepFieldResult, PlaybookDocument, PlaybookErrorCode, PlaybookRoute, PlaybookRouteName, ProspectId, REGIONS, ROLES, Region, RenameOrganizationRequest, RenameTeamRequest, RepChoice, RequestId, RightsConfirmation, RightsRequiredDetails, RightsStatus, Role, SALES_HISTORY_ERRORS, SALES_HISTORY_READ_ROLES, SALES_HISTORY_ROUTES, SIGNUP_ERRORS, SalesHistoryErrorCode, SalesHistoryRouteName, SetCallRepRequest, SetDealOutcomeRequest, SignupErrorCode, Team, TeamId, TeamMember, TeamMemberParams, TeamParams, UPLOAD_CONTENT_TYPE, UPLOAD_FILE_FIELD, UploadCallFields, UploadDocumentFile, UserId, addTeamMemberRequestSchema, callChannelSchema, callDeletedPayloadSchema, callFailureReasonSchema, callIdSchema, callKindSchema, callMediaTypeSchema, callParamsSchema, callRepChangedPayloadSchema, callSchema, callStateSchema, callTranscribedPayloadSchema, callUploadedPayloadSchema, changeMemberRoleRequestSchema, checkCallFile, checkDealImportHeader, checkUploadFile, confirmRightsRequestSchema, createInvitationRequestSchema, createTeamRequestSchema, dealAmountSchema, dealCurrencySchema, dealIdSchema, dealImportFailureReasonSchema, dealImportIdSchema, dealImportParamsSchema, dealImportRowReasonSchema, dealImportRowResultSchema, dealImportRowSchema, dealImportSchema, dealImportStateSchema, dealImportUploadedPayloadSchema, dealNameSchema, dealOutcomeChangedPayloadSchema, dealParamsSchema, dealSchema, decodeCursor, defineErrors, defineEvent, documentDeletedPayloadSchema, documentExtension, documentFailureReasonSchema, documentFileNameSchema, documentIdSchema, documentMediaTypeSchema, documentParamsSchema, documentSchema, documentSizeCheckSchema, documentStateSchema, documentTypeCheckSchema, documentUploadedPayloadSchema, emailSchema, encodeCursor, errorBodySchema, errorCodeSchema, eventEnvelopeSchema, eventIdSchema, eventTypeSchema, foldAscii, formatId, hasStrippableCharacter, idSchema, idempotencyKeySchema, internalAbandonOrganizationParamsSchema, internalAbandonOrganizationRequestSchema, internalAbandonOrganizationResponseSchema, internalAcceptInvitationRequestSchema, internalAcceptInvitationResponseSchema, internalCreateOrganizationRequestSchema, internalCreateOrganizationResponseSchema, internalMembershipRequestSchema, internalMembershipResponseSchema, internalRemoveOrganizationDocumentsParamsSchema, internalRemoveOrganizationDocumentsRequestSchema, internalRemoveOrganizationDocumentsResponseSchema, internalUpdateMemberProfileParamsSchema, internalUpdateMemberProfileRequestSchema, internalUpdateMemberProfileResponseSchema, invitableRoleSchema, invitationIdSchema, invitationParamsSchema, invitationSchema, invitationStateSchema, invitationTokenSchema, isWellFormedText, listCallsQuerySchema, listCallsResponseSchema, listDealImportRowsQuerySchema, listDealImportRowsResponseSchema, listDealImportsQuerySchema, listDealImportsResponseSchema, listDealsQuerySchema, listDealsResponseSchema, listDocumentsQuerySchema, listDocumentsResponseSchema, listInvitationsQuerySchema, listInvitationsResponseSchema, listMembersQuerySchema, listMembersResponseSchema, listTeamsQuerySchema, listTeamsResponseSchema, memberParamsSchema, memberSchema, membershipIdSchema, normaliseDealId, normaliseFileName, normaliseMediaType, normaliseSpeakerLabel, organizationIdSchema, organizationNameSchema, organizationSchema, organizationStatusSchema, outcomeSchema, pageQuerySchema, pageSchema, parseRepField, personNameSchema, prospectIdSchema, regionSchema, renameOrganizationRequestSchema, renameTeamRequestSchema, repChangeAllowed, repChoiceSchema, repChoiceSuits, requestIdSchema, rightsConfirmationSchema, rightsRequiredDetailsSchema, rightsStatusSchema, rightsWordingVersionSchema, roleAtLeast, roleSchema, setCallRepRequestSchema, setDealOutcomeRequestSchema, speakerLabelSchema, storedNameSchema, teamIdSchema, teamMemberParamsSchema, teamMemberSchema, teamNameSchema, teamParamsSchema, teamSchema, timestampSchema, uploadCallFieldsSchema, uploadCallFileSchema, uploadDocumentFileSchema, userIdSchema };
+export { ABANDON_MAX_AGE_HOURS, ACCEPTED_DOCUMENT_EXTENSIONS, ACCEPTED_DOCUMENT_MEDIA_TYPES, ACCEPTED_RECORDING_EXTENSIONS, ACCEPTED_TRANSCRIPT_EXTENSIONS, ALL_PLAYBOOK_ERRORS, ALL_PLAYBOOK_ROUTES, AUTH_ERRORS, AcceptedCallExtension, AcceptedDocumentExtension, AddTeamMemberRequest, AllPlaybookRouteName, AuthErrorCode, CALL_CHANNELS, CALL_DELETED_MESSAGE, CALL_FAILURE_REASONS, CALL_KINDS, CALL_MEDIA_TYPES, CALL_REP_CHANGED_MESSAGE, CALL_STATES, CALL_TRANSCRIBED_MESSAGE, CALL_UPLOADED_MESSAGE, CORE_ERRORS, Call, CallDeletedPayload, CallFailureReason, CallId, CallKind, CallMediaType, CallParams, CallRepChangedPayload, CallState, CallTranscribedPayload, CallUploadedPayload, ChangeMemberRoleRequest, CheckCallFileResult, CheckDealImportHeaderResult, CheckUploadFileResult, CommonErrorCode, ConfirmRightsRequest, CoreErrorCode, CreateInvitationRequest, CreateTeamRequest, DEAL_IMPORT_FAILURE_REASONS, DEAL_IMPORT_FILE_FIELD, DEAL_IMPORT_HEADER_PROBLEMS, DEAL_IMPORT_OPTIONAL_COLUMN, DEAL_IMPORT_REQUIRED_COLUMNS, DEAL_IMPORT_ROW_REASONS, DEAL_IMPORT_ROW_RESULTS, DEAL_IMPORT_STATES, DEAL_IMPORT_UPLOADED_MESSAGE, DEAL_OUTCOME_CHANGED_MESSAGE, DEFAULT_MAX_CALLS, DEFAULT_MAX_DEALS, DEFAULT_MAX_DOCUMENTS, DEFAULT_MAX_DOCUMENT_BYTES_TOTAL, DEFAULT_MAX_RECORDING_BYTES_TOTAL, DEFAULT_PAGE_SIZE, DOCUMENT_DELETED_MESSAGE, DOCUMENT_FAILURE_REASONS, DOCUMENT_RETENTION_DAYS, DOCUMENT_STATES, DOCUMENT_UPLOADED_MESSAGE, Deal, DealId, DealImport, DealImportFailureReason, DealImportHeaderProblem, DealImportId, DealImportParams, DealImportRow, DealImportRowReason, DealImportRowResult, DealImportState, DealImportUploadedPayload, DealOutcomeChangedPayload, DealParams, DocumentDeletedPayload, DocumentFailureReason, DocumentFileName, DocumentId, DocumentMediaType, DocumentParams, DocumentState, DocumentUploadedPayload, ERRORS, Email, ErrorBody, ErrorDefinition, ErrorInput, EventId, EventType, IDEMPOTENCY_KEY_HEADER, INCOMPLETE_UPLOAD_PARTS_TTL_HOURS, INTERNAL_CALL_ERRORS, INVITABLE_ROLES, INVITATION_STATES, Id, IdempotencyKey, InternalAbandonOrganizationParams, InternalAbandonOrganizationRequest, InternalAbandonOrganizationResponse, InternalAcceptInvitationRequest, InternalAcceptInvitationResponse, InternalCallName, InternalCreateOrganizationRequest, InternalCreateOrganizationResponse, InternalMembershipRequest, InternalMembershipResponse, InternalRemoveOrganizationDocumentsParams, InternalRemoveOrganizationDocumentsRequest, InternalRemoveOrganizationDocumentsResponse, InternalUpdateMemberProfileParams, InternalUpdateMemberProfileRequest, InternalUpdateMemberProfileResponse, InvitableRole, Invitation, InvitationId, InvitationParams, InvitationState, ListCallsQuery, ListCallsResponse, ListDealImportRowsQuery, ListDealImportRowsResponse, ListDealImportsQuery, ListDealImportsResponse, ListDealsQuery, ListDealsResponse, ListDocumentsQuery, ListDocumentsResponse, ListInvitationsQuery, ListInvitationsResponse, ListMembersQuery, ListMembersResponse, ListTeamsQuery, ListTeamsResponse, MAX_CALL_SPEAKERS, MAX_CURSOR_LENGTH, MAX_DEAL_ID_LENGTH, MAX_DEAL_IMPORT_BYTES, MAX_DEAL_IMPORT_HEADER_LENGTH, MAX_DEAL_IMPORT_ROWS, MAX_DEAL_NAME_LENGTH, MAX_DELETION_SEQ, MAX_DOCUMENT_BYTES, MAX_DOCUMENT_FILE_NAME_LENGTH, MAX_DOCUMENT_PAGES, MAX_EMAIL_LENGTH, MAX_NAME_LENGTH, MAX_PAGE_SIZE, MAX_PERSON_NAME_LENGTH, MAX_RECORDING_BYTES, MAX_RECORDING_SECONDS, MAX_REP_FIELD_LENGTH, MAX_REP_FOLLOWING_CHARACTERS, MAX_REP_FOLLOWING_TURNS, MAX_RIGHTS_WORDING_VERSION, MAX_SEQ, MAX_SPEAKER_LABEL_LENGTH, MAX_TRANSCRIPT_BYTES, MEDIA_TYPE_BY_CALL_EXTENSION, MEDIA_TYPE_BY_EXTENSION, Member, MemberParams, MembershipId, ORGANIZATION_STATUSES, OUTCOMES, Organization, OrganizationId, OrganizationStatus, Outcome, PACKAGE, PLAYBOOK_ERRORS, PLAYBOOK_READ_ROLES, PLAYBOOK_ROUTES, PLAYBOOK_WRITE_ROLES, Page, PageQuery, ParseRepFieldResult, PlaybookDocument, PlaybookErrorCode, PlaybookRoute, PlaybookRouteName, ProspectId, REGIONS, ROLES, Region, RenameOrganizationRequest, RenameTeamRequest, RepChoice, RequestId, RightsConfirmation, RightsRequiredDetails, RightsStatus, Role, SALES_HISTORY_ERRORS, SALES_HISTORY_READ_ROLES, SALES_HISTORY_ROUTES, SIGNUP_ERRORS, SalesHistoryErrorCode, SalesHistoryRoute, SalesHistoryRouteName, SetCallRepRequest, SetDealOutcomeRequest, SignupErrorCode, Team, TeamId, TeamMember, TeamMemberParams, TeamParams, UPLOAD_CONTENT_TYPE, UPLOAD_FILE_FIELD, UploadCallFields, UploadDocumentFile, UserId, addTeamMemberRequestSchema, callChannelSchema, callDeletedPayloadSchema, callFailureReasonSchema, callIdSchema, callKindSchema, callMediaTypeSchema, callParamsSchema, callRepChangedPayloadSchema, callSchema, callStateSchema, callTranscribedPayloadSchema, callUploadedPayloadSchema, changeMemberRoleRequestSchema, checkCallFile, checkDealImportHeader, checkUploadFile, confirmRightsRequestSchema, createInvitationRequestSchema, createTeamRequestSchema, dealAmountSchema, dealCurrencySchema, dealIdSchema, dealImportFailureReasonSchema, dealImportIdSchema, dealImportParamsSchema, dealImportRowReasonSchema, dealImportRowResultSchema, dealImportRowSchema, dealImportSchema, dealImportStateSchema, dealImportUploadedPayloadSchema, dealNameSchema, dealOutcomeChangedPayloadSchema, dealParamsSchema, dealSchema, decodeCursor, defineErrors, defineEvent, documentDeletedPayloadSchema, documentExtension, documentFailureReasonSchema, documentFileNameSchema, documentIdSchema, documentMediaTypeSchema, documentParamsSchema, documentSchema, documentSizeCheckSchema, documentStateSchema, documentTypeCheckSchema, documentUploadedPayloadSchema, emailSchema, encodeCursor, errorBodySchema, errorCodeSchema, eventEnvelopeSchema, eventIdSchema, eventTypeSchema, foldAscii, formatId, hasStrippableCharacter, idSchema, idempotencyKeySchema, internalAbandonOrganizationParamsSchema, internalAbandonOrganizationRequestSchema, internalAbandonOrganizationResponseSchema, internalAcceptInvitationRequestSchema, internalAcceptInvitationResponseSchema, internalCreateOrganizationRequestSchema, internalCreateOrganizationResponseSchema, internalMembershipRequestSchema, internalMembershipResponseSchema, internalRemoveOrganizationDocumentsParamsSchema, internalRemoveOrganizationDocumentsRequestSchema, internalRemoveOrganizationDocumentsResponseSchema, internalUpdateMemberProfileParamsSchema, internalUpdateMemberProfileRequestSchema, internalUpdateMemberProfileResponseSchema, invitableRoleSchema, invitationIdSchema, invitationParamsSchema, invitationSchema, invitationStateSchema, invitationTokenSchema, isWellFormedText, listCallsQuerySchema, listCallsResponseSchema, listDealImportRowsQuerySchema, listDealImportRowsResponseSchema, listDealImportsQuerySchema, listDealImportsResponseSchema, listDealsQuerySchema, listDealsResponseSchema, listDocumentsQuerySchema, listDocumentsResponseSchema, listInvitationsQuerySchema, listInvitationsResponseSchema, listMembersQuerySchema, listMembersResponseSchema, listTeamsQuerySchema, listTeamsResponseSchema, memberParamsSchema, memberSchema, membershipIdSchema, normaliseDealId, normaliseFileName, normaliseMediaType, normaliseSpeakerLabel, organizationIdSchema, organizationNameSchema, organizationSchema, organizationStatusSchema, outcomeSchema, pageQuerySchema, pageSchema, parseRepField, personNameSchema, prospectIdSchema, regionSchema, renameOrganizationRequestSchema, renameTeamRequestSchema, repChangeAllowed, repChoiceSchema, repChoiceSuits, requestIdSchema, rightsConfirmationSchema, rightsRequiredDetailsSchema, rightsStatusSchema, rightsWordingVersionSchema, roleAtLeast, roleSchema, setCallRepRequestSchema, setDealOutcomeRequestSchema, speakerLabelSchema, storedNameSchema, teamIdSchema, teamMemberParamsSchema, teamMemberSchema, teamNameSchema, teamParamsSchema, teamSchema, timestampSchema, uploadCallFieldsSchema, uploadCallFileSchema, uploadDocumentFileSchema, userIdSchema };

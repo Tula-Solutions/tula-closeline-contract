@@ -6,6 +6,8 @@ import { MAX_PAGE_SIZE } from '../pagination'
 import {
   ACCEPTED_DOCUMENT_EXTENSIONS,
   ACCEPTED_DOCUMENT_MEDIA_TYPES,
+  ALL_PLAYBOOK_ERRORS,
+  ALL_PLAYBOOK_ROUTES,
   checkUploadFile,
   DEFAULT_MAX_DOCUMENT_BYTES_TOTAL,
   DEFAULT_MAX_DOCUMENTS,
@@ -33,7 +35,9 @@ import {
   normaliseMediaType,
   PLAYBOOK_ERRORS,
   PLAYBOOK_ROUTES,
+  type PlaybookRoute,
   SALES_HISTORY_ERRORS,
+  SALES_HISTORY_ROUTES,
   uploadDocumentFileSchema,
 } from './index'
 
@@ -452,9 +456,7 @@ describe('PLAYBOOK_ROUTES', () => {
   test('every listed code exists in a registry and every route answers with its error responses', () => {
     for (const [, route] of routes) {
       for (const code of route.errors) {
-        expect({ ...PLAYBOOK_ERRORS, ...SALES_HISTORY_ERRORS }[code].status).toBeGreaterThanOrEqual(
-          400
-        )
+        expect(PLAYBOOK_ERRORS[code].status).toBeGreaterThanOrEqual(400)
       }
       for (const code of route.commonErrors) {
         expect(ERRORS[code].status).toBeGreaterThanOrEqual(400)
@@ -638,5 +640,52 @@ describe('checkUploadFile', () => {
     for (const input of [null, undefined, 'x', 3, {}, { fileName: 3, sizeBytes: 'big' }]) {
       expect(checkUploadFile(input)).toEqual({ ok: false, code: 'request.invalid' })
     }
+  })
+})
+
+describe('0.7.0 types are not widened (code written against them still compiles)', () => {
+  // An exhaustive switch on the 0.7.0 methods: a new method in PlaybookRoute would fail the `never`.
+  function verb(method: PlaybookRoute['method']): string {
+    switch (method) {
+      case 'GET':
+        return 'read'
+      case 'POST':
+        return 'create'
+      case 'DELETE':
+        return 'delete'
+      default: {
+        const unreachable: never = method
+        return unreachable
+      }
+    }
+  }
+
+  test('PlaybookRoute keeps the three methods and PLAYBOOK_ERRORS can be indexed by a route code', () => {
+    for (const route of Object.values(PLAYBOOK_ROUTES)) {
+      expect(verb(route.method)).toMatch(/read|create|delete/)
+      for (const code of route.errors) {
+        expect(PLAYBOOK_ERRORS[code].code).toBe(code)
+      }
+    }
+    expect(Object.keys(PLAYBOOK_ERRORS)).toHaveLength(5)
+  })
+
+  test('the merged route map covers every route of both tables, and the merged registry every code', () => {
+    expect(Object.keys(ALL_PLAYBOOK_ROUTES).sort()).toEqual(
+      [...Object.keys(PLAYBOOK_ROUTES), ...Object.keys(SALES_HISTORY_ROUTES)].sort()
+    )
+    expect(Object.keys(ALL_PLAYBOOK_ERRORS).sort()).toEqual(
+      [...Object.keys(PLAYBOOK_ERRORS), ...Object.keys(SALES_HISTORY_ERRORS)].sort()
+    )
+    for (const route of Object.values(ALL_PLAYBOOK_ROUTES)) {
+      for (const code of route.errors) {
+        expect(ALL_PLAYBOOK_ERRORS[code].status).toBeGreaterThanOrEqual(400)
+      }
+    }
+  })
+
+  test('the merged route paths and methods stay unique', () => {
+    const keys = Object.values(ALL_PLAYBOOK_ROUTES).map((route) => `${route.method} ${route.path}`)
+    expect(new Set(keys).size).toBe(keys.length)
   })
 })
