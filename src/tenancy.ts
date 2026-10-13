@@ -24,3 +24,21 @@ export function roleAtLeast(role: Role, minimum: Role): boolean {
   const need = ROLES.indexOf(minimum)
   return have !== -1 && need !== -1 && have <= need
 }
+
+/** The roles an Invitation can offer; ownership passes by promoting a member, never by Invitation. */
+export const INVITABLE_ROLES = ['admin', 'manager', 'rep'] as const
+
+/** A role an Invitation can offer: any role except `owner`. */
+export const invitableRoleSchema = z.enum(INVITABLE_ROLES)
+
+/** A role an Invitation can offer. */
+export type InvitableRole = z.infer<typeof invitableRoleSchema>
+
+/** Every state an Organization is in; `deleted` keeps the record for the retention window. */
+export const ORGANIZATION_STATUSES = ['active', 'suspended', 'deleted'] as const
+
+/** The state of an Organization. */
+export const organizationStatusSchema = z.enum(ORGANIZATION_STATUSES)
+
+/** The state of an Organization. */
+export type OrganizationStatus = z.infer<typeof organizationStatusSchema>

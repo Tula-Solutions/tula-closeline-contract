@@ -1,5 +1,16 @@
 import { describe, expect, test } from 'bun:test'
-import { REGIONS, ROLES, type Role, regionSchema, roleAtLeast, roleSchema } from './tenancy'
+import {
+  INVITABLE_ROLES,
+  invitableRoleSchema,
+  ORGANIZATION_STATUSES,
+  organizationStatusSchema,
+  REGIONS,
+  ROLES,
+  type Role,
+  regionSchema,
+  roleAtLeast,
+  roleSchema,
+} from './tenancy'
 
 describe('regionSchema', () => {
   test('accepts exactly us and eu', () => {
@@ -49,5 +60,31 @@ describe('roleAtLeast on untrusted input', () => {
     const unknown = 'superuser' as unknown as Role
     expect(roleAtLeast(unknown, 'rep')).toBe(false)
     expect(roleAtLeast('owner', unknown)).toBe(false)
+  })
+})
+
+describe('invitableRoleSchema', () => {
+  test('is every role except owner', () => {
+    expect<string[]>([...INVITABLE_ROLES]).toEqual(ROLES.filter((role) => role !== 'owner'))
+    for (const role of INVITABLE_ROLES) {
+      expect(invitableRoleSchema.safeParse(role).success).toBe(true)
+    }
+  })
+
+  test.each(['owner', 'Owner', 'admin ', '', null])('rejects %p', (value) => {
+    expect(invitableRoleSchema.safeParse(value).success).toBe(false)
+  })
+})
+
+describe('organizationStatusSchema', () => {
+  test('accepts exactly active, suspended and deleted', () => {
+    expect(ORGANIZATION_STATUSES).toEqual(['active', 'suspended', 'deleted'])
+    for (const status of ORGANIZATION_STATUSES) {
+      expect(organizationStatusSchema.safeParse(status).success).toBe(true)
+    }
+  })
+
+  test.each(['Active', 'closed', '', undefined])('rejects %p', (value) => {
+    expect(organizationStatusSchema.safeParse(value).success).toBe(false)
   })
 })

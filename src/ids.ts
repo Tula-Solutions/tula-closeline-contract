@@ -24,6 +24,8 @@ export const userIdSchema = idSchema('usr')
 export const membershipIdSchema = idSchema('mem')
 /** The id of a Team (`team_…`). */
 export const teamIdSchema = idSchema('team')
+/** The id of an Invitation to join an Organization (`inv_…`). */
+export const invitationIdSchema = idSchema('inv')
 /** The id of a Prospect (`prs_…`). */
 export const prospectIdSchema = idSchema('prs')
 /** The id of an event (`evt_…`). */
@@ -39,6 +41,8 @@ export type UserId = z.infer<typeof userIdSchema>
 export type MembershipId = z.infer<typeof membershipIdSchema>
 /** The id of a Team. */
 export type TeamId = z.infer<typeof teamIdSchema>
+/** The id of an Invitation. */
+export type InvitationId = z.infer<typeof invitationIdSchema>
 /** The id of a Prospect. */
 export type ProspectId = z.infer<typeof prospectIdSchema>
 /** The id of an event. */
