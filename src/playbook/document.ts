@@ -185,7 +185,7 @@ export function checkUploadFile(input: unknown): CheckUploadFileResult {
   if (keys.some((key) => !UPLOAD_FILE_KEYS.includes(key))) {
     return invalid
   }
-  const copy: Record<string, unknown> = {}
+  const copy: Record<string, unknown> = Object.create(null)
   for (const key of UPLOAD_FILE_KEYS) {
     if (Object.hasOwn(input, key)) {
       copy[key] = (input as Record<string, unknown>)[key]

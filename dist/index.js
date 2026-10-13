@@ -630,7 +630,7 @@ function checkUploadFile(input) {
   if (keys.some((key) => !UPLOAD_FILE_KEYS.includes(key))) {
     return invalid;
   }
-  const copy = {};
+  const copy = Object.create(null);
   for (const key of UPLOAD_FILE_KEYS) {
     if (Object.hasOwn(input, key)) {
       copy[key] = input[key];
