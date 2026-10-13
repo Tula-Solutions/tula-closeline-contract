@@ -29,12 +29,13 @@ export type CallState = z.infer<typeof callStateSchema>
 /**
  * Why a Call ended in `failed`: a closed list the portal maps to its own wording, never free text.
  * `too_long` is found by the job from the audio, not at upload, so it is a reason and not an HTTP
- * code. `rep_label_not_found` and `not_per_side` can be fixed by changing the Rep. The list is the
+ * code. `too_many_speakers` is a Call with more speakers than `MAX_CALL_SPEAKERS`. `rep_label_not_found` and `not_per_side` can be fixed by changing the Rep (see {@link repChangeAllowed}). The list is the
  * lead's reading of ADR 0018.
  */
 export const CALL_FAILURE_REASONS = [
   'no_turns',
   'too_few_speakers',
+  'too_many_speakers',
   'rep_label_not_found',
   'not_per_side',
   'too_long',
@@ -139,8 +140,8 @@ export const DEFAULT_MAX_RECORDING_BYTES_TOTAL = 50 * 1024 * 1024 * 1024
 /** The ticket's default (ADR 0018 leaves it open): Deals an Organization may hold. */
 export const DEFAULT_MAX_DEALS = 20_000
 
-/** The most speakers a Call lists (the ones the portal offers for a Rep pick). */
-export const MAX_CALL_SPEAKERS = 10
+/** The ticket's default (ADR 0018 leaves it open): the most speakers a Call may have and list for a Rep pick; a Call with more fails with `too_many_speakers`. */
+export const MAX_CALL_SPEAKERS = 20
 
 /** The longest speaker label, in UTF-16 code units, once control and direction characters are stripped. */
 export const MAX_SPEAKER_LABEL_LENGTH = 64
@@ -210,4 +211,22 @@ export function repChoiceSuits(
     return rep.by === 'speaker'
   }
   return when === 'change' || rep.by === 'channel'
+}
+
+/**
+ * Whether a Call's Rep may be picked or changed: when it is `ready` or `awaiting_rep`, or `failed`
+ * with a reason a different Rep can fix (`rep_label_not_found`, `not_per_side`). Any other state
+ * or reason is `call.rep_not_changeable`.
+ */
+export function repChangeAllowed(
+  state: CallState,
+  failureReason: CallFailureReason | null
+): boolean {
+  if (state === 'ready' || state === 'awaiting_rep') {
+    return true
+  }
+  return (
+    state === 'failed' &&
+    (failureReason === 'rep_label_not_found' || failureReason === 'not_per_side')
+  )
 }

@@ -41,7 +41,7 @@ test('the entry point exports the playbook area', async () => {
 test('the entry point exports the sales-history area', async () => {
   const api = await import('./index')
   expect(api.CALL_STATES).toContain('awaiting_rep')
-  expect(api.SALES_HISTORY_ERRORS['rights.confirmation_required'].status).toBe(428)
+  expect(api.SALES_HISTORY_ERRORS['rights.confirmation_required'].status).toBe(403)
   expect(api.checkCallFile({ fileName: 'a.mp3', declaredMediaType: null, sizeBytes: 1 }).ok).toBe(
     true
   )

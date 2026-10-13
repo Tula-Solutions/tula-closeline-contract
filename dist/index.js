@@ -599,6 +599,7 @@ var callStateSchema = z14.enum(CALL_STATES);
 var CALL_FAILURE_REASONS = [
   "no_turns",
   "too_few_speakers",
+  "too_many_speakers",
   "rep_label_not_found",
   "not_per_side",
   "too_long",
@@ -653,7 +654,7 @@ var MAX_REP_FOLLOWING_CHARACTERS = 4000;
 var DEFAULT_MAX_CALLS = 2000;
 var DEFAULT_MAX_RECORDING_BYTES_TOTAL = 50 * 1024 * 1024 * 1024;
 var DEFAULT_MAX_DEALS = 20000;
-var MAX_CALL_SPEAKERS = 10;
+var MAX_CALL_SPEAKERS = 20;
 var MAX_SPEAKER_LABEL_LENGTH = 64;
 function normaliseSpeakerLabel(label) {
   return normaliseFileName(label);
@@ -673,6 +674,12 @@ function repChoiceSuits(kind, rep, when) {
     return rep.by === "speaker";
   }
   return when === "change" || rep.by === "channel";
+}
+function repChangeAllowed(state, failureReason) {
+  if (state === "ready" || state === "awaiting_rep") {
+    return true;
+  }
+  return state === "failed" && (failureReason === "rep_label_not_found" || failureReason === "not_per_side");
 }
 
 // src/playbook/deal-values.ts
@@ -808,17 +815,40 @@ var callSchema = z16.object({
   if (call.kind === "transcript" && (call.state === "transcribing" || call.state === "awaiting_rep")) {
     issue("state", "A Transcript is not transcribed and has its Rep at upload");
   }
+  if (call.kind === "transcript" && call.durationSeconds !== null) {
+    issue("durationSeconds", "A Transcript has no duration");
+  }
+  if (call.kind === "transcript" && call.sizeBytes > MAX_TRANSCRIPT_BYTES) {
+    issue("sizeBytes", "A Transcript is within the Transcript size limit");
+  }
+  if (call.kind === "recording" ? !call.mediaType.startsWith("audio/") : call.mediaType.startsWith("audio/")) {
+    issue("mediaType", "The kind agrees with the media type");
+  }
+  if (new Set(call.speakerLabels).size !== call.speakerLabels.length) {
+    issue("speakerLabels", "Speaker labels are unique");
+  }
+  if (call.state === "ready" && call.rep?.by === "speaker" && !call.speakerLabels.includes(call.rep.label)) {
+    issue("rep", "A ready Call's Rep label is among its speakers");
+  }
 });
+var MAX_REP_FIELD_LENGTH = 512;
 var uploadCallFieldsSchema = z16.strictObject({
   dealId: dealIdSchema,
-  rep: z16.string().max(512).optional()
+  rep: z16.string().max(MAX_REP_FIELD_LENGTH).optional()
 });
 function parseRepField(text) {
+  if (text === undefined) {
+    return { ok: true, rep: null };
+  }
+  const invalid = { ok: false, code: "call.rep_invalid" };
+  if (text.length === 0 || text.length > MAX_REP_FIELD_LENGTH) {
+    return invalid;
+  }
   try {
     const result = repChoiceSchema.safeParse(JSON.parse(text));
-    return result.success ? result.data : undefined;
+    return result.success ? { ok: true, rep: result.data } : invalid;
   } catch {
-    return;
+    return invalid;
   }
 }
 var callParamsSchema = z16.strictObject({ callId: callIdSchema });
@@ -1090,7 +1120,7 @@ var rightsStatusSchema = z20.object({
   currentWordingVersion: rightsWordingVersionSchema,
   confirmation: rightsConfirmationSchema.nullable(),
   confirmed: z20.boolean()
-});
+}).refine((status) => status.confirmed === (status.confirmation !== null && status.confirmation.wordingVersion === status.currentWordingVersion), { message: "Confirmed exactly when the stored version is the current one", path: ["confirmed"] });
 var confirmRightsRequestSchema = z20.strictObject({
   wordingVersion: rightsWordingVersionSchema
 });
@@ -1214,7 +1244,7 @@ var SALES_HISTORY_ERRORS = {
   }),
   ...defineErrors("rights", {
     confirmation_required: {
-      status: 428,
+      status: 403,
       message: "Confirm that your Organization may share these Calls before uploading them."
     },
     version_outdated: {
@@ -1224,7 +1254,7 @@ var SALES_HISTORY_ERRORS = {
   })
 };
 var rightsRequiredDetailsSchema = z21.strictObject({
-  wordingVersion: z21.number().int().min(1).max(1e6)
+  wordingVersion: z21.number().int().min(1).max(MAX_RIGHTS_WORDING_VERSION)
 });
 // src/playbook/sales-history-messages.ts
 import { z as z22 } from "zod";
@@ -1307,7 +1337,7 @@ var SALES_HISTORY_ROUTES = Object.freeze({
       "call.content_in_other_deal"
     ],
     commonErrors: [...ENVELOPE_ERRORS],
-    description: 'Uploads one Call as a Transcript (txt, vtt, srt or json, up to 5 MB) or a Recording (mp3, m4a, wav, ogg, webm or flac, up to 500 MB, streamed to storage and never held whole), as multipart/form-data with one file part named "file" and the text fields "dealId" and "rep". Owner and Admin only; Managers and Reps get auth.forbidden. A Transcript needs "rep", the JSON {"by":"speaker","label":...}; a per-side Recording takes {"by":"channel","channel":"left"|"right"}; a Recording with no "rep" waits in state "awaiting_rep" after transcription until an Owner or Admin picks one. A Deal that does not exist yet is created "open". Refused with rights.confirmation_required (428, its details name the wording version to show) until the Organization has a current rights confirmation. The type and size of the file part are checked before anything is stored: call.unsupported_type (415) and call.too_large (413); a malformed name, an empty file or a bad field is request.invalid, and a Rep choice that does not suit the kind is call.rep_invalid. The common request.too_large and request.unsupported_media_type apply to the whole request instead. Answers 201 with the new Call in state "uploaded". If the content matches a Call the Organization already has under the same Deal, answers 200 with that stored Call (restoring it if it was deleted); the same content under another deal id is call.content_in_other_deal. A recording over 3 hours, a Transcript with no turns or fewer than two speakers, or a Rep label not in the file is not checked here: the Call ends in state "failed" with a failureReason. Accepts an Idempotency-Key header.'
+    description: 'Uploads one Call as a Transcript (txt, vtt, srt or json, up to 5 MB) or a Recording (mp3, m4a, wav, ogg, webm or flac, up to 500 MB, streamed to storage and never held whole), as multipart/form-data with one file part named "file" and the text fields "dealId" and "rep". Owner and Admin only; Managers and Reps get auth.forbidden. A Transcript needs "rep", the JSON {"by":"speaker","label":...}; a per-side Recording takes {"by":"channel","channel":"left"|"right"}; a Recording with no "rep" waits in state "awaiting_rep" after transcription until an Owner or Admin picks one. A Deal that does not exist yet is created "open". Refused with rights.confirmation_required (403, its details name the wording version to show) until the Organization has a current rights confirmation. The type and size of the file part are checked before anything is stored: call.unsupported_type (415) and call.too_large (413); a malformed name, an empty file or a bad field is request.invalid, and a Rep choice that does not suit the kind is call.rep_invalid. The common request.too_large and request.unsupported_media_type apply to the whole request instead. Answers 201 with the new Call in state "uploaded". If the content matches a Call the Organization already has under the same Deal, answers 200 with that stored Call: a match on a "deleted" Call restores it (state "processing") and a match on a "failed" Call under the same Deal re-queues it for processing (state "uploaded"); any other match returns the Call as it is. The same content under another deal id is call.content_in_other_deal. A recording over 3 hours, a Transcript with no turns or fewer than two speakers, or a Rep label not in the file is not checked here: the Call ends in state "failed" with a failureReason. Accepts an Idempotency-Key header.'
   }),
   listCalls: route2({
     method: "GET",
@@ -1357,7 +1387,7 @@ var SALES_HISTORY_ROUTES = Object.freeze({
     success: [200],
     errors: ["call.not_found", "call.rep_invalid", "call.rep_not_changeable"],
     commonErrors: ["request.invalid"],
-    description: 'Picks the Rep of a Call waiting in "awaiting_rep", or changes the Rep of a "ready" or "failed" Call, with {"rep":{"by":"speaker","label":...}} or {"rep":{"by":"channel","channel":...}}. Owner and Admin only, and any of them may pick, not only the uploader. A choice that does not suit the Call, or a label that is not among its speakers, is call.rep_invalid; a Call in any other state is call.rep_not_changeable. Answers 200 with the Call in state "processing": its Moments are rebuilt by a queued job and the Call is out of search until it finishes. Idempotent by end state: choosing the Rep the Call already has changes nothing.'
+    description: 'Picks the Rep of a Call waiting in "awaiting_rep", or changes the Rep of a "ready" Call or a "failed" Call whose failureReason is rep_label_not_found or not_per_side, with {"rep":{"by":"speaker","label":...}} or {"rep":{"by":"channel","channel":...}}. Owner and Admin only, and any of them may pick, not only the uploader. A choice that does not suit the Call, or a label that is not among its speakers, is call.rep_invalid; a Call in any other state or with any other failure reason is call.rep_not_changeable. A different Rep answers 200 with the Call in state "processing": its Moments are rebuilt by a queued job and the Call is out of search until it finishes. Idempotent by end state: choosing the Rep the Call already has changes nothing and answers 200 with the Call as it is.'
   }),
   listDeals: route2({
     method: "GET",
@@ -1394,14 +1424,14 @@ var SALES_HISTORY_ROUTES = Object.freeze({
     path: "/playbook/deal-imports",
     internal: false,
     roles: PLAYBOOK_WRITE_ROLES,
-    success: [202, 200],
+    success: [202],
     errors: [
       "deal_import.unsupported_type",
       "deal_import.too_large",
       "deal_import.header_invalid"
     ],
     commonErrors: [...ENVELOPE_ERRORS],
-    description: 'Uploads the fixed CSV template (columns deal_id, outcome, closed_at, amount, currency and optionally name; up to 10 MB and 50,000 rows) as multipart/form-data with one file part named "file". Owner and Admin only. The type, size and first row are checked before anything is stored: deal_import.unsupported_type (415), deal_import.too_large (413) and deal_import.header_invalid (422). Answers 202 with the import in state "uploaded"; it is processed in the background. A repeat of the same content answers 200 with the stored import. Valid rows are applied and bad rows are reported, never dropped: a deal id already won or lost, or repeated within the file, is a rejected row in the report, not an HTTP error. A file with more rows than the limit ends in state "failed" with failureReason "too_many_rows". Accepts an Idempotency-Key header.'
+    description: 'Uploads the fixed CSV template (columns deal_id, outcome, closed_at, amount, currency and optionally name; up to 10 MB and 50,000 rows) as multipart/form-data with one file part named "file". Owner and Admin only. The type, size and first row are checked before anything is stored: deal_import.unsupported_type (415), deal_import.too_large (413) and deal_import.header_invalid (422). Answers 202 with the import in state "uploaded"; it is processed in the background. Imports are not deduplicated by content: each upload is a new import, and only the Idempotency-Key makes a retry of the same request answer with the stored import. Valid rows are applied and bad rows are reported, never dropped: a deal id already won or lost, or repeated within the file, is a rejected row in the report, not an HTTP error. A file with more rows than the limit ends in state "failed" with failureReason "too_many_rows". Accepts an Idempotency-Key header.'
   }),
   listDealImports: route2({
     method: "GET",
@@ -1517,6 +1547,7 @@ export {
   MAX_PERSON_NAME_LENGTH,
   MAX_RECORDING_BYTES,
   MAX_RECORDING_SECONDS,
+  MAX_REP_FIELD_LENGTH,
   MAX_REP_FOLLOWING_CHARACTERS,
   MAX_REP_FOLLOWING_TURNS,
   MAX_RIGHTS_WORDING_VERSION,
@@ -1661,6 +1692,7 @@ export {
   regionSchema,
   renameOrganizationRequestSchema,
   renameTeamRequestSchema,
+  repChangeAllowed,
   repChoiceSchema,
   repChoiceSuits,
   requestIdSchema,

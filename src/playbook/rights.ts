@@ -28,11 +28,19 @@ export type RightsConfirmation = z.infer<typeof rightsConfirmationSchema>
  * is the current one. Uploads of Calls are refused with `rights.confirmation_required` unless
  * `confirmed`; existing Calls stay and stay searchable.
  */
-export const rightsStatusSchema = z.object({
-  currentWordingVersion: rightsWordingVersionSchema,
-  confirmation: rightsConfirmationSchema.nullable(),
-  confirmed: z.boolean(),
-})
+export const rightsStatusSchema = z
+  .object({
+    currentWordingVersion: rightsWordingVersionSchema,
+    confirmation: rightsConfirmationSchema.nullable(),
+    confirmed: z.boolean(),
+  })
+  .refine(
+    (status) =>
+      status.confirmed ===
+      (status.confirmation !== null &&
+        status.confirmation.wordingVersion === status.currentWordingVersion),
+    { message: 'Confirmed exactly when the stored version is the current one', path: ['confirmed'] }
+  )
 
 /** The answer to reading the confirmation. */
 export type RightsStatus = z.infer<typeof rightsStatusSchema>

@@ -1,6 +1,6 @@
 import { PLAYBOOK_WRITE_ROLES, type PlaybookRoute } from './routes'
 
-/** The roles that may read Calls, Deals, imports and the rights confirmation: Owner and Admin, who manage the Playbook. Managers and Reps get `auth.forbidden`: a Call holds a Prospect's words and a Rep's conversations are private to the Rep (glossary). The lead's reading of ADR 0018. */
+/** The roles that may read Calls, Deals, imports and the rights confirmation: Owner and Admin only, the owner's decision of 2026-10-13 (the writers are the same two roles). Managers and Reps get `auth.forbidden`. */
 export const SALES_HISTORY_READ_ROLES = PLAYBOOK_WRITE_ROLES
 
 /** The sales-history routes, by name. */
@@ -56,7 +56,7 @@ export const SALES_HISTORY_ROUTES: Readonly<Record<SalesHistoryRouteName, Playbo
       ],
       commonErrors: [...ENVELOPE_ERRORS],
       description:
-        'Uploads one Call as a Transcript (txt, vtt, srt or json, up to 5 MB) or a Recording (mp3, m4a, wav, ogg, webm or flac, up to 500 MB, streamed to storage and never held whole), as multipart/form-data with one file part named "file" and the text fields "dealId" and "rep". Owner and Admin only; Managers and Reps get auth.forbidden. A Transcript needs "rep", the JSON {"by":"speaker","label":...}; a per-side Recording takes {"by":"channel","channel":"left"|"right"}; a Recording with no "rep" waits in state "awaiting_rep" after transcription until an Owner or Admin picks one. A Deal that does not exist yet is created "open". Refused with rights.confirmation_required (428, its details name the wording version to show) until the Organization has a current rights confirmation. The type and size of the file part are checked before anything is stored: call.unsupported_type (415) and call.too_large (413); a malformed name, an empty file or a bad field is request.invalid, and a Rep choice that does not suit the kind is call.rep_invalid. The common request.too_large and request.unsupported_media_type apply to the whole request instead. Answers 201 with the new Call in state "uploaded". If the content matches a Call the Organization already has under the same Deal, answers 200 with that stored Call (restoring it if it was deleted); the same content under another deal id is call.content_in_other_deal. A recording over 3 hours, a Transcript with no turns or fewer than two speakers, or a Rep label not in the file is not checked here: the Call ends in state "failed" with a failureReason. Accepts an Idempotency-Key header.',
+        'Uploads one Call as a Transcript (txt, vtt, srt or json, up to 5 MB) or a Recording (mp3, m4a, wav, ogg, webm or flac, up to 500 MB, streamed to storage and never held whole), as multipart/form-data with one file part named "file" and the text fields "dealId" and "rep". Owner and Admin only; Managers and Reps get auth.forbidden. A Transcript needs "rep", the JSON {"by":"speaker","label":...}; a per-side Recording takes {"by":"channel","channel":"left"|"right"}; a Recording with no "rep" waits in state "awaiting_rep" after transcription until an Owner or Admin picks one. A Deal that does not exist yet is created "open". Refused with rights.confirmation_required (403, its details name the wording version to show) until the Organization has a current rights confirmation. The type and size of the file part are checked before anything is stored: call.unsupported_type (415) and call.too_large (413); a malformed name, an empty file or a bad field is request.invalid, and a Rep choice that does not suit the kind is call.rep_invalid. The common request.too_large and request.unsupported_media_type apply to the whole request instead. Answers 201 with the new Call in state "uploaded". If the content matches a Call the Organization already has under the same Deal, answers 200 with that stored Call: a match on a "deleted" Call restores it (state "processing") and a match on a "failed" Call under the same Deal re-queues it for processing (state "uploaded"); any other match returns the Call as it is. The same content under another deal id is call.content_in_other_deal. A recording over 3 hours, a Transcript with no turns or fewer than two speakers, or a Rep label not in the file is not checked here: the Call ends in state "failed" with a failureReason. Accepts an Idempotency-Key header.',
     }),
     listCalls: route({
       method: 'GET',
@@ -111,7 +111,7 @@ export const SALES_HISTORY_ROUTES: Readonly<Record<SalesHistoryRouteName, Playbo
       errors: ['call.not_found', 'call.rep_invalid', 'call.rep_not_changeable'],
       commonErrors: ['request.invalid'],
       description:
-        'Picks the Rep of a Call waiting in "awaiting_rep", or changes the Rep of a "ready" or "failed" Call, with {"rep":{"by":"speaker","label":...}} or {"rep":{"by":"channel","channel":...}}. Owner and Admin only, and any of them may pick, not only the uploader. A choice that does not suit the Call, or a label that is not among its speakers, is call.rep_invalid; a Call in any other state is call.rep_not_changeable. Answers 200 with the Call in state "processing": its Moments are rebuilt by a queued job and the Call is out of search until it finishes. Idempotent by end state: choosing the Rep the Call already has changes nothing.',
+        'Picks the Rep of a Call waiting in "awaiting_rep", or changes the Rep of a "ready" Call or a "failed" Call whose failureReason is rep_label_not_found or not_per_side, with {"rep":{"by":"speaker","label":...}} or {"rep":{"by":"channel","channel":...}}. Owner and Admin only, and any of them may pick, not only the uploader. A choice that does not suit the Call, or a label that is not among its speakers, is call.rep_invalid; a Call in any other state or with any other failure reason is call.rep_not_changeable. A different Rep answers 200 with the Call in state "processing": its Moments are rebuilt by a queued job and the Call is out of search until it finishes. Idempotent by end state: choosing the Rep the Call already has changes nothing and answers 200 with the Call as it is.',
     }),
     listDeals: route({
       method: 'GET',
@@ -151,7 +151,7 @@ export const SALES_HISTORY_ROUTES: Readonly<Record<SalesHistoryRouteName, Playbo
       path: '/playbook/deal-imports',
       internal: false,
       roles: PLAYBOOK_WRITE_ROLES,
-      success: [202, 200],
+      success: [202],
       errors: [
         'deal_import.unsupported_type',
         'deal_import.too_large',
@@ -159,7 +159,7 @@ export const SALES_HISTORY_ROUTES: Readonly<Record<SalesHistoryRouteName, Playbo
       ],
       commonErrors: [...ENVELOPE_ERRORS],
       description:
-        'Uploads the fixed CSV template (columns deal_id, outcome, closed_at, amount, currency and optionally name; up to 10 MB and 50,000 rows) as multipart/form-data with one file part named "file". Owner and Admin only. The type, size and first row are checked before anything is stored: deal_import.unsupported_type (415), deal_import.too_large (413) and deal_import.header_invalid (422). Answers 202 with the import in state "uploaded"; it is processed in the background. A repeat of the same content answers 200 with the stored import. Valid rows are applied and bad rows are reported, never dropped: a deal id already won or lost, or repeated within the file, is a rejected row in the report, not an HTTP error. A file with more rows than the limit ends in state "failed" with failureReason "too_many_rows". Accepts an Idempotency-Key header.',
+        'Uploads the fixed CSV template (columns deal_id, outcome, closed_at, amount, currency and optionally name; up to 10 MB and 50,000 rows) as multipart/form-data with one file part named "file". Owner and Admin only. The type, size and first row are checked before anything is stored: deal_import.unsupported_type (415), deal_import.too_large (413) and deal_import.header_invalid (422). Answers 202 with the import in state "uploaded"; it is processed in the background. Imports are not deduplicated by content: each upload is a new import, and only the Idempotency-Key makes a retry of the same request answer with the stored import. Valid rows are applied and bad rows are reported, never dropped: a deal id already won or lost, or repeated within the file, is a rejected row in the report, not an HTTP error. A file with more rows than the limit ends in state "failed" with failureReason "too_many_rows". Accepts an Idempotency-Key header.',
     }),
     listDealImports: route({
       method: 'GET',

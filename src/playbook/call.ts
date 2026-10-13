@@ -14,6 +14,7 @@ import {
   MAX_RECORDING_BYTES,
   MAX_RECORDING_SECONDS,
   MAX_TRANSCRIPT_BYTES,
+  type RepChoice,
   repChoiceSchema,
   speakerLabelSchema,
 } from './call-values'
@@ -28,7 +29,11 @@ import { documentFileNameSchema, normaliseFileName } from './values'
  * speakers carry (those of the file, or `A`, `B` from the transcriber), at most
  * `MAX_CALL_SPEAKERS`, for the portal's Rep pick; they are untrusted text. `failureReason` is set
  * exactly when `state` is `failed`; `deletedAt` and `purgeAt` exactly when it is `deleted`. A
- * Transcript is never `transcribing` or `awaiting_rep`. `durationSeconds` is `null` for a
+ * Transcript is never `transcribing` or `awaiting_rep`, has no duration and is within
+ * `MAX_TRANSCRIPT_BYTES`; `kind` agrees with `mediaType` (text for a Transcript, audio for a
+ * Recording); the labels are unique; and a `ready` Call's speaker Rep is one of them. A Call with
+ * more speakers than `MAX_CALL_SPEAKERS` fails with `too_many_speakers` and never reaches a
+ * response, so a read route cannot throw on it. `durationSeconds` is `null` for a
  * Transcript and until a Recording has been read. Whether the Call is held back from search
  * because its Deal is not won is read from the Deal, not here. The service must send the output of
  * `callSchema.parse(row)`, never the row.
@@ -74,10 +79,36 @@ export const callSchema = z
     ) {
       issue('state', 'A Transcript is not transcribed and has its Rep at upload')
     }
+    if (call.kind === 'transcript' && call.durationSeconds !== null) {
+      issue('durationSeconds', 'A Transcript has no duration')
+    }
+    if (call.kind === 'transcript' && call.sizeBytes > MAX_TRANSCRIPT_BYTES) {
+      issue('sizeBytes', 'A Transcript is within the Transcript size limit')
+    }
+    if (
+      call.kind === 'recording'
+        ? !call.mediaType.startsWith('audio/')
+        : call.mediaType.startsWith('audio/')
+    ) {
+      issue('mediaType', 'The kind agrees with the media type')
+    }
+    if (new Set(call.speakerLabels).size !== call.speakerLabels.length) {
+      issue('speakerLabels', 'Speaker labels are unique')
+    }
+    if (
+      call.state === 'ready' &&
+      call.rep?.by === 'speaker' &&
+      !call.speakerLabels.includes(call.rep.label)
+    ) {
+      issue('rep', "A ready Call's Rep label is among its speakers")
+    }
   })
 
 /** A Call as the service returns it. */
 export type Call = z.infer<typeof callSchema>
+
+/** The most characters the `rep` form field may hold; a longer text is refused without being parsed. */
+export const MAX_REP_FIELD_LENGTH = 512
 
 /**
  * The text fields of the multipart upload of a Call, beside the one file part
@@ -89,19 +120,36 @@ export type Call = z.infer<typeof callSchema>
  */
 export const uploadCallFieldsSchema = z.strictObject({
   dealId: dealIdSchema,
-  rep: z.string().max(512).optional(),
+  rep: z.string().max(MAX_REP_FIELD_LENGTH).optional(),
 })
 
 /** The text fields of the multipart upload of a Call. */
 export type UploadCallFields = z.infer<typeof uploadCallFieldsSchema>
 
-/** Parses the JSON text of the `rep` form field; returns undefined, never throws, for anything that is not a valid Rep choice. */
-export function parseRepField(text: string): z.infer<typeof repChoiceSchema> | undefined {
+/** What {@link parseRepField} answers: a Rep choice, no Rep at all (the field was not sent), or an invalid field. */
+export type ParseRepFieldResult =
+  | { readonly ok: true; readonly rep: RepChoice | null }
+  | { readonly ok: false; readonly code: 'call.rep_invalid' }
+
+/**
+ * Reads the `rep` form field. An absent field (`undefined`) is `{ ok: true, rep: null }`, which
+ * suits a Recording that will wait in `awaiting_rep`; a field that is present but empty, longer
+ * than {@link MAX_REP_FIELD_LENGTH}, not JSON or not a valid Rep choice is `call.rep_invalid`
+ * (422), never silently treated as absent. It never throws.
+ */
+export function parseRepField(text: string | undefined): ParseRepFieldResult {
+  if (text === undefined) {
+    return { ok: true, rep: null }
+  }
+  const invalid = { ok: false, code: 'call.rep_invalid' } as const
+  if (text.length === 0 || text.length > MAX_REP_FIELD_LENGTH) {
+    return invalid
+  }
   try {
     const result = repChoiceSchema.safeParse(JSON.parse(text))
-    return result.success ? result.data : undefined
+    return result.success ? { ok: true, rep: result.data } : invalid
   } catch {
-    return undefined
+    return invalid
   }
 }
 

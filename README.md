@@ -112,12 +112,12 @@ Additive. `SALES_HISTORY_ROUTES` describes the 15 routes, `SALES_HISTORY_ERRORS`
   report, never an HTTP error; a report row echoes only the deal id.
 - **Rep** is `repChoiceSchema`: `{by:'speaker', label}` or `{by:'channel', channel:'left'|'right'}`, or
   absent for a Recording that will wait in `awaiting_rep`. `repChoiceSuits(kind, rep, when)` says
-  which suits. Upload text fields are `uploadCallFieldsSchema` (`rep` is JSON text, read with `parseRepField`).
+  which suits. Upload text fields are `uploadCallFieldsSchema`; `rep` is JSON text, read with `parseRepField(text)`, which answers `{ ok: true, rep }` (`rep` is `null` when the field was not sent) or `{ ok: false, code: 'call.rep_invalid' }` for a present field that is empty, too long or invalid. `repChangeAllowed(state, failureReason)` says when a Rep may be changed.
 - **Helpers** (call these, not the pieces): `checkCallFile(file)` (size, type, shape; kind from the
   extension), `checkDealImportHeader(firstLine)`, `normaliseDealId`, `normaliseSpeakerLabel`.
 - **Deal ids** (`dealIdSchema`): trimmed, otherwise exact and case-sensitive, 1 to 128 UTF-16 code
   units, rejected (not stripped) if they hold a control, direction, line-separator or zero-width character.
-- **Rights**: `rightsStatusSchema`, `confirmRightsRequestSchema`; `rights.confirmation_required` (428)
+- **Rights**: `rightsStatusSchema`, `confirmRightsRequestSchema`; `rights.confirmation_required` (403)
   carries `rightsRequiredDetailsSchema` in `details` with the wording version to show.
 - **Limits and defaults** are exported constants, each saying whether it is the owner's or a default:
   `MAX_TRANSCRIPT_BYTES`, `MAX_RECORDING_BYTES`, `MAX_RECORDING_SECONDS`, `MAX_DEAL_IMPORT_BYTES`,

@@ -27,15 +27,18 @@ import {
   dealIdSchema,
   dealImportRowSchema,
   dealImportSchema,
+  dealNameSchema,
   dealOutcomeChangedPayloadSchema,
   dealParamsSchema,
   dealSchema,
+  hasStrippableCharacter,
   INCOMPLETE_UPLOAD_PARTS_TTL_HOURS,
   listCallsQuerySchema,
   listCallsResponseSchema,
   listDealImportRowsQuerySchema,
   listDealImportRowsResponseSchema,
   listDealsQuerySchema,
+  MAX_CALL_SPEAKERS,
   MAX_DEAL_ID_LENGTH,
   MAX_DEAL_IMPORT_BYTES,
   MAX_DEAL_IMPORT_ROWS,
@@ -43,6 +46,7 @@ import {
   MAX_RECORDING_SECONDS,
   MAX_REP_FOLLOWING_CHARACTERS,
   MAX_REP_FOLLOWING_TURNS,
+  MAX_RIGHTS_WORDING_VERSION,
   MAX_SEQ,
   MAX_TRANSCRIPT_BYTES,
   MEDIA_TYPE_BY_CALL_EXTENSION,
@@ -50,12 +54,14 @@ import {
   normaliseSpeakerLabel,
   PLAYBOOK_ERRORS,
   parseRepField,
+  repChangeAllowed,
   repChoiceSchema,
   repChoiceSuits,
   rightsConfirmationSchema,
   rightsRequiredDetailsSchema,
   rightsStatusSchema,
   SALES_HISTORY_ERRORS,
+  SALES_HISTORY_READ_ROLES,
   SALES_HISTORY_ROUTES,
   setCallRepRequestSchema,
   setDealOutcomeRequestSchema,
@@ -103,6 +109,7 @@ describe('Call states, reasons and limits', () => {
     expect([...CALL_FAILURE_REASONS]).toEqual([
       'no_turns',
       'too_few_speakers',
+      'too_many_speakers',
       'rep_label_not_found',
       'not_per_side',
       'too_long',
@@ -192,13 +199,23 @@ describe('Rep choice', () => {
     ).toBe(false)
   })
 
-  test('parseRepField reads the JSON text of the form field and never throws', () => {
+  test('parseRepField tells absent, valid and invalid apart', () => {
+    expect(parseRepField(undefined)).toEqual({ ok: true, rep: null })
     expect(parseRepField('{"by":"channel","channel":"left"}')).toEqual({
-      by: 'channel',
-      channel: 'left',
+      ok: true,
+      rep: { by: 'channel', channel: 'left' },
     })
-    for (const bad of ['', 'nope', '{"by":"x"}', '[]', 'null']) {
-      expect(parseRepField(bad)).toBeUndefined()
+    const invalid = { ok: false, code: 'call.rep_invalid' }
+    for (const bad of [
+      '',
+      ' ',
+      'nope',
+      '{"by":"x"}',
+      '[]',
+      'null',
+      `{"by":"speaker","label":"${'a'.repeat(600)}"}`,
+    ]) {
+      expect(parseRepField(bad)).toEqual(invalid as never)
     }
   })
 })
@@ -249,7 +266,25 @@ describe('callSchema', () => {
     ['a media type that is not accepted', { mediaType: 'text/html' }],
     ['a duration over 3 hours', { durationSeconds: MAX_RECORDING_SECONDS + 1 }],
     ['an id of the wrong kind', { id: id('doc') }],
-    ['more than ten speaker labels', { speakerLabels: Array.from({ length: 11 }, () => 'A') }],
+    [
+      'one more speaker label than the cap',
+      { speakerLabels: Array.from({ length: 21 }, (_, i) => `S${i}`) },
+    ],
+    ['a repeated speaker label', { speakerLabels: ['Alice', 'Alice'] }],
+    [
+      'a kind that disagrees with the media type (audio for a Transcript)',
+      { mediaType: 'audio/mpeg' },
+    ],
+    [
+      'a kind that disagrees with the media type (text for a Recording)',
+      { kind: 'recording', state: 'processing', mediaType: 'text/vtt', durationSeconds: 5 },
+    ],
+    ['a Transcript with a duration', { durationSeconds: 60 }],
+    ['a Transcript over the Transcript size limit', { sizeBytes: MAX_TRANSCRIPT_BYTES + 1 }],
+    [
+      'a ready Call whose Rep label is not among its speakers',
+      { rep: { by: 'speaker', label: 'Carol' } },
+    ],
     ['a bad deal id', { dealId: '' }],
   ])('rejects %s', (_name, change) => {
     expect(callSchema.safeParse({ ...call, ...change }).success).toBe(false)
@@ -257,6 +292,80 @@ describe('callSchema', () => {
 
   test('sanitises a stored name on the way out', () => {
     expect(callSchema.parse({ ...call, fileName: `a${RLO}b.vtt` }).fileName).toBe('ab.vtt')
+  })
+})
+
+describe('speaker cap', () => {
+  test('is 20: exactly the cap parses, one over is refused and never reaches a response', () => {
+    expect(MAX_CALL_SPEAKERS).toBe(20)
+    const labels = (n: number) => Array.from({ length: n }, (_, i) => `S${i}`)
+    expect(
+      callSchema.safeParse({ ...call, rep: null, state: 'processing', speakerLabels: labels(20) })
+        .success
+    ).toBe(true)
+    expect(
+      callSchema.safeParse({ ...call, rep: null, state: 'processing', speakerLabels: labels(21) })
+        .success
+    ).toBe(false)
+  })
+
+  test('a ready Recording with a channel Rep needs no label match', () => {
+    expect(
+      callSchema.safeParse({
+        ...call,
+        kind: 'recording',
+        fileName: 'a.mp3',
+        mediaType: 'audio/mpeg',
+        durationSeconds: 5,
+        rep: { by: 'channel', channel: 'left' },
+      }).success
+    ).toBe(true)
+  })
+})
+
+describe('repChangeAllowed', () => {
+  test('is true for ready, awaiting_rep and failed with a Rep-related reason', () => {
+    expect(repChangeAllowed('ready', null)).toBe(true)
+    expect(repChangeAllowed('awaiting_rep', null)).toBe(true)
+    expect(repChangeAllowed('failed', 'rep_label_not_found')).toBe(true)
+    expect(repChangeAllowed('failed', 'not_per_side')).toBe(true)
+  })
+
+  test('is false for every other state and failure reason', () => {
+    for (const state of ['uploaded', 'transcribing', 'processing', 'deleted'] as const) {
+      expect(repChangeAllowed(state, null)).toBe(false)
+    }
+    for (const reason of CALL_FAILURE_REASONS) {
+      expect(repChangeAllowed('failed', reason)).toBe(
+        reason === 'rep_label_not_found' || reason === 'not_per_side'
+      )
+    }
+    expect(repChangeAllowed('failed', null)).toBe(false)
+  })
+})
+
+describe('direct helpers', () => {
+  test('SALES_HISTORY_READ_ROLES is Owner and Admin, the owner decision of 2026-10-13', () => {
+    expect([...SALES_HISTORY_READ_ROLES]).toEqual(['owner', 'admin'])
+  })
+
+  test('hasStrippableCharacter finds control and direction characters only', () => {
+    expect(hasStrippableCharacter('plain text é 日本')).toBe(false)
+    expect(hasStrippableCharacter(`a${ch(0)}`)).toBe(true)
+    expect(hasStrippableCharacter(`a${ch(0x7f)}`)).toBe(true)
+    expect(hasStrippableCharacter(`a${ch(0x85)}`)).toBe(true)
+    expect(hasStrippableCharacter(`a${RLO}`)).toBe(true)
+    expect(hasStrippableCharacter(`a${ch(0x2066)}`)).toBe(true)
+    expect(hasStrippableCharacter(`a${ZWSP}`)).toBe(false)
+    expect(hasStrippableCharacter('')).toBe(false)
+  })
+
+  test('dealNameSchema trims, bounds and refuses control characters', () => {
+    expect(dealNameSchema.parse('  Acme renewal  ')).toBe('Acme renewal')
+    expect(dealNameSchema.safeParse('n'.repeat(200)).success).toBe(true)
+    for (const bad of ['', '   ', 'n'.repeat(201), `a${RLO}`, 'a\nb', `a${ch(0xd800)}`, 5]) {
+      expect(dealNameSchema.safeParse(bad).success).toBe(false)
+    }
   })
 })
 
@@ -688,6 +797,28 @@ describe('rights confirmation', () => {
     )
   })
 
+  test('confirmed is true only when the stored version equals the current one', () => {
+    const status = (
+      currentWordingVersion: number,
+      stored: typeof confirmation | null,
+      confirmed: boolean
+    ) =>
+      rightsStatusSchema.safeParse({ currentWordingVersion, confirmation: stored, confirmed })
+        .success
+    expect(status(1, confirmation, true)).toBe(true)
+    expect(status(2, confirmation, true)).toBe(false)
+    expect(status(2, confirmation, false)).toBe(true)
+    expect(status(1, null, true)).toBe(false)
+    expect(status(1, null, false)).toBe(true)
+    expect(
+      rightsRequiredDetailsSchema.safeParse({ wordingVersion: MAX_RIGHTS_WORDING_VERSION }).success
+    ).toBe(true)
+    expect(
+      rightsRequiredDetailsSchema.safeParse({ wordingVersion: MAX_RIGHTS_WORDING_VERSION + 1 })
+        .success
+    ).toBe(false)
+  })
+
   test('the status says which version is current and whether the stored one is', () => {
     expect(
       rightsStatusSchema.safeParse({ currentWordingVersion: 2, confirmation, confirmed: false })
@@ -718,7 +849,7 @@ describe('rights confirmation', () => {
     expect(rightsRequiredDetailsSchema.parse({ wordingVersion: 2 })).toEqual({ wordingVersion: 2 })
     expect(rightsRequiredDetailsSchema.safeParse({ wordingVersion: 0 }).success).toBe(false)
     expect(rightsRequiredDetailsSchema.safeParse({}).success).toBe(false)
-    expect(SALES_HISTORY_ERRORS['rights.confirmation_required'].status).toBe(428)
+    expect(SALES_HISTORY_ERRORS['rights.confirmation_required'].status).toBe(403)
   })
 })
 
@@ -758,7 +889,7 @@ describe('SALES_HISTORY_ERRORS', () => {
     ['deal_import.unsupported_type', 415],
     ['deal_import.too_large', 413],
     ['deal_import.header_invalid', 422],
-    ['rights.confirmation_required', 428],
+    ['rights.confirmation_required', 403],
     ['rights.version_outdated', 409],
   ] as const)('%s maps to status %d', (code, status) => {
     expect(SALES_HISTORY_ERRORS[code].code).toBe(code)
@@ -910,6 +1041,26 @@ describe('SALES_HISTORY_ROUTES', () => {
       expect(SALES_HISTORY_ROUTES[name].description).toContain('at most 100')
     }
     expect(SALES_HISTORY_ROUTES.listCalls.description).toContain('createdAt, then id')
+  })
+
+  test('a repeat upload matching a failed Call re-queues it', () => {
+    const text = SALES_HISTORY_ROUTES.uploadCall.description
+    expect(text).toContain('a match on a "failed" Call under the same Deal re-queues it')
+  })
+
+  test('the Rep change allows ready, awaiting_rep and two failure reasons, and a repeat changes nothing', () => {
+    const text = SALES_HISTORY_ROUTES.setCallRep.description
+    expect(text).toContain('rep_label_not_found')
+    expect(text).toContain('not_per_side')
+    expect(text).toContain('changes nothing and answers 200 with the Call as it is')
+    expect(text).not.toContain('Answers 200 with the Call in state "processing"')
+  })
+
+  test('imports are not deduplicated by content: only the idempotency key makes a retry safe', () => {
+    const upload = SALES_HISTORY_ROUTES.uploadDealImport
+    expect([...upload.success]).toEqual([202])
+    expect(upload.description).toContain('each upload is a new import')
+    expect(upload.description).not.toContain('A repeat of the same content')
   })
 
   test('the import upload answers 202 and says a decided Deal is a row, not an HTTP error', () => {

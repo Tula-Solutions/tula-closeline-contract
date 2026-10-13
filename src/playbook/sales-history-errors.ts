@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { defineErrors } from '../errors'
+import { MAX_RIGHTS_WORDING_VERSION } from './rights'
 
 /**
  * The errors the sales-history routes return, as `area.reason` codes. No body carries a file name,
@@ -17,7 +18,7 @@ import { defineErrors } from '../errors'
  *   and says deleted Calls count until purged.
  * - `call.not_restorable` (410) is for a deleted Call past its purge time that the purge has not
  *   yet removed; once purged the answer is `call.not_found` (404).
- * - `rights.confirmation_required` (428) carries `details` of {@link rightsRequiredDetailsSchema},
+ * - `rights.confirmation_required` (403) carries `details` of {@link rightsRequiredDetailsSchema},
  *   so the portal knows which version of the wording to show.
  */
 export const SALES_HISTORY_ERRORS = {
@@ -58,7 +59,7 @@ export const SALES_HISTORY_ERRORS = {
   }),
   ...defineErrors('rights', {
     confirmation_required: {
-      status: 428,
+      status: 403,
       message: 'Confirm that your Organization may share these Calls before uploading them.',
     },
     version_outdated: {
@@ -73,7 +74,7 @@ export type SalesHistoryErrorCode = keyof typeof SALES_HISTORY_ERRORS
 
 /** The `details` of a `rights.confirmation_required` body: the version of the wording the portal must show. */
 export const rightsRequiredDetailsSchema = z.strictObject({
-  wordingVersion: z.number().int().min(1).max(1_000_000),
+  wordingVersion: z.number().int().min(1).max(MAX_RIGHTS_WORDING_VERSION),
 })
 
 /** The `details` of a `rights.confirmation_required` body. */
