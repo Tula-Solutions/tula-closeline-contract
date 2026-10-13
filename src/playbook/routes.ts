@@ -55,12 +55,7 @@ export const PLAYBOOK_ROUTES: Readonly<Record<PlaybookRouteName, PlaybookRoute>>
     internal: false,
     roles: PLAYBOOK_WRITE_ROLES,
     success: [201, 200],
-    errors: [
-      'document.unsupported_type',
-      'document.too_large',
-      'document.too_many_pages',
-      'document.quota_exceeded',
-    ],
+    errors: ['document.unsupported_type', 'document.too_large', 'document.quota_exceeded'],
     commonErrors: [
       'request.invalid',
       'request.too_large',
@@ -69,7 +64,7 @@ export const PLAYBOOK_ROUTES: Readonly<Record<PlaybookRouteName, PlaybookRoute>>
       'request.idempotency_in_progress',
     ],
     description:
-      'Uploads one file (multipart/form-data, one part named "file") to the Organization\'s Playbook. Owner and Admin only; Managers and Reps get auth.forbidden. The type and size are checked before anything is stored. Answers 201 with the new document in state "uploaded"; if the content matches a document the Organization already has, answers 200 with that existing document instead (restoring it, in state "processing", if it was soft-deleted), so a duplicate is an answer, not an error. Accepts an Idempotency-Key header.',
+      'Uploads one file (multipart/form-data, one part named "file") to the Organization\'s Playbook. Owner and Admin only; Managers and Reps get auth.forbidden. The type and size of the file part are checked before anything is stored: document.unsupported_type (415) and document.too_large (413); a malformed name or an empty file is request.invalid. The common request.too_large and request.unsupported_media_type apply to the whole request instead: a body over the envelope limit, or a body that is not multipart. Answers 201 with the new document in state "uploaded". If the content matches a document the Organization already has, answers 200 with that stored document, with its stored fileName (not the new upload\'s name), so a duplicate is an answer, not an error: a match on a "deleted" document restores it (state "processing"), and a match on a "failed" document re-queues it for processing and answers with state "uploaded". The page limit is not checked here: a document over it ends in state "failed" with failureReason "too_many_pages". Accepts an Idempotency-Key header.',
   }),
   listDocuments: route({
     method: 'GET',
@@ -80,7 +75,7 @@ export const PLAYBOOK_ROUTES: Readonly<Record<PlaybookRouteName, PlaybookRoute>>
     errors: [],
     commonErrors: ['request.invalid'],
     description:
-      "Lists the Organization's documents, newest first, one cursor-paginated page at a time (at most 100). Owner, Admin, Manager and Rep may read. Soft-deleted documents are left out unless state=deleted is asked for.",
+      "Lists the Organization's documents, newest first (sorted by createdAt, then id, both descending), one cursor-paginated page at a time (at most 100). Owner, Admin, Manager and Rep may read. Soft-deleted documents are left out unless state=deleted is asked for.",
   }),
   getDocument: route({
     method: 'GET',
@@ -102,7 +97,7 @@ export const PLAYBOOK_ROUTES: Readonly<Record<PlaybookRouteName, PlaybookRoute>>
     errors: ['document.not_found'],
     commonErrors: ['request.invalid'],
     description:
-      'Soft-deletes a document: it is hidden at once and purged after the retention period, and can be restored until then. Owner and Admin only. Answers 200 with the document in state "deleted" and its purge time; deleting an already deleted document answers the same. Takes no body.',
+      'Soft-deletes a document: it is hidden at once and purged after the retention period, and can be restored until then. Owner and Admin only. Idempotent by end state: answers 200 with the document in state "deleted" and its purge time, and deleting an already deleted document answers the same. Takes no body.',
   }),
   restoreDocument: route({
     method: 'POST',
@@ -110,10 +105,10 @@ export const PLAYBOOK_ROUTES: Readonly<Record<PlaybookRouteName, PlaybookRoute>>
     internal: false,
     roles: PLAYBOOK_WRITE_ROLES,
     success: [200],
-    errors: ['document.not_found', 'document.not_deleted', 'document.not_restorable'],
+    errors: ['document.not_found', 'document.not_restorable'],
     commonErrors: ['request.invalid'],
     description:
-      'Restores a soft-deleted document within the retention period; it is re-ingested from the kept file and shows as "processing". Owner and Admin only. A document that was never deleted is document.not_deleted; one already purged is document.not_restorable (410), distinct from document.not_found. Takes no body.',
+      'Restores a soft-deleted document within the retention period; it is re-ingested from the kept file and shows as "processing". Owner and Admin only. Idempotent by end state: a document that is no longer deleted (restored by an earlier call, or never deleted) answers 200 with the document as it is. One already purged is document.not_restorable (410), distinct from document.not_found. Takes no body.',
   }),
   removeOrganizationDocuments: route({
     method: 'POST',

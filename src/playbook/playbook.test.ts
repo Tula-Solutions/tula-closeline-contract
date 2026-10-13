@@ -17,6 +17,8 @@ import {
   documentFileNameSchema,
   documentParamsSchema,
   documentSchema,
+  documentSizeCheckSchema,
+  documentTypeCheckSchema,
   documentUploadedPayloadSchema,
   internalRemoveOrganizationDocumentsParamsSchema,
   internalRemoveOrganizationDocumentsRequestSchema,
@@ -26,6 +28,7 @@ import {
   MAX_DOCUMENT_BYTES,
   MAX_DOCUMENT_PAGES,
   MEDIA_TYPE_BY_EXTENSION,
+  normaliseMediaType,
   PLAYBOOK_ERRORS,
   PLAYBOOK_ROUTES,
   uploadDocumentFileSchema,
@@ -81,6 +84,11 @@ describe('limits and states', () => {
 })
 
 describe('documentFileNameSchema', () => {
+  test('the name schema does not judge the extension: the type check does', () => {
+    expect(documentFileNameSchema.safeParse('a.exe').success).toBe(true)
+    expect(documentFileNameSchema.safeParse('a').success).toBe(true)
+  })
+
   test('accepts every accepted extension, with any case', () => {
     for (const name of ['a.pdf', 'a.DOCX', 'a b.pptx', 'a.txt', 'Notes.MD', 'é日本.md']) {
       expect(documentFileNameSchema.safeParse(name).success).toBe(true)
@@ -93,8 +101,9 @@ describe('documentFileNameSchema', () => {
   })
 
   test.each([
-    ['an unaccepted extension', 'a.exe'],
-    ['no extension', 'a'],
+    ['only an extension', '.pdf'],
+    ['invisible characters plus an extension', '\u200b\u202e.pdf'],
+    ['spaces plus an extension', '  .md'],
     ['only an extension after stripping', '‮'],
     ['an empty name', ''],
     ['a forward slash', 'a/b.pdf'],
@@ -126,13 +135,32 @@ describe('uploadDocumentFileSchema', () => {
 
   test.each([
     ['an empty file', { sizeBytes: 0 }],
-    ['a file over 25 MB', { sizeBytes: MAX_DOCUMENT_BYTES + 1 }],
     ['a fractional size', { sizeBytes: 1.5 }],
-    ['an unaccepted name', { fileName: 'a.html' }],
+    ['a name with no stem', { fileName: '.pdf' }],
     ['an over-long declared type', { declaredMediaType: 'a'.repeat(256) }],
     ['an unknown key', { content: 'x' }],
   ])('rejects %s', (_name, change) => {
     expect(uploadDocumentFileSchema.safeParse({ ...upload, ...change }).success).toBe(false)
+  })
+
+  test('shape only: an over-size file and an unaccepted type pass this schema', () => {
+    expect(
+      uploadDocumentFileSchema.safeParse({ ...upload, sizeBytes: MAX_DOCUMENT_BYTES + 1 }).success
+    ).toBe(true)
+    expect(uploadDocumentFileSchema.safeParse({ ...upload, fileName: 'a.exe' }).success).toBe(true)
+  })
+
+  test('an over-size file hits the size check, and only that check', () => {
+    expect(documentSizeCheckSchema.safeParse(MAX_DOCUMENT_BYTES).success).toBe(true)
+    expect(documentSizeCheckSchema.safeParse(MAX_DOCUMENT_BYTES + 1).success).toBe(false)
+    expect(documentTypeCheckSchema.safeParse('big.pdf').success).toBe(true)
+  })
+
+  test('an .exe hits the type check, and only that check', () => {
+    expect(documentTypeCheckSchema.safeParse('a.exe').success).toBe(false)
+    expect(documentTypeCheckSchema.safeParse('a').success).toBe(false)
+    expect(documentTypeCheckSchema.safeParse('A.PDF').success).toBe(true)
+    expect(documentSizeCheckSchema.safeParse(10).success).toBe(true)
   })
 
   test('has no field that can carry file content', () => {
@@ -287,14 +315,24 @@ describe('messages', () => {
     ).toBe(false)
   })
 
-  test('the deleted payload names the deletion it was queued for', () => {
+  test('the deleted payload names the deletion it was queued for by sequence', () => {
+    const ok = { documentId: id('doc'), deletionSeq: 1 }
+    expect(documentDeletedPayloadSchema.safeParse(ok).success).toBe(true)
     expect(
-      documentDeletedPayloadSchema.safeParse({ documentId: id('doc'), deletedAt: NOW }).success
+      documentDeletedPayloadSchema.safeParse({ ...ok, deletionSeq: Number.MAX_SAFE_INTEGER })
+        .success
     ).toBe(true)
+    for (const bad of [NOW, 0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1, '1', undefined]) {
+      expect(documentDeletedPayloadSchema.safeParse({ ...ok, deletionSeq: bad }).success).toBe(
+        false
+      )
+    }
     expect(documentDeletedPayloadSchema.safeParse({ documentId: id('doc') }).success).toBe(false)
-    expect(
-      documentDeletedPayloadSchema.safeParse({ documentId: id('doc'), deletedAt: 'x' }).success
-    ).toBe(false)
+    expect(documentDeletedPayloadSchema.safeParse({ ...ok, deletedAt: NOW }).success).toBe(false)
+  })
+
+  test('the sequence is not on the public document', () => {
+    expect('deletionSeq' in documentSchema.parse({ ...document, deletionSeq: 3 })).toBe(false)
   })
 })
 
@@ -302,9 +340,8 @@ const PLAYBOOK_MESSAGES = {
   'document.not_found': 'The document was not found.',
   'document.unsupported_type': 'This file type is not supported.',
   'document.too_large': 'The file is larger than the upload limit.',
-  'document.too_many_pages': 'The document has more pages than the limit.',
-  'document.quota_exceeded': 'The Organization has reached its document limit.',
-  'document.not_deleted': 'The document has not been deleted.',
+  'document.quota_exceeded':
+    'The Organization has reached its limit on the number or total size of documents. Deleted documents count until they are purged.',
   'document.not_restorable':
     'The document was purged after its retention period and cannot be restored.',
 } as const
@@ -314,9 +351,7 @@ describe('PLAYBOOK_ERRORS', () => {
     ['document.not_found', 404],
     ['document.unsupported_type', 415],
     ['document.too_large', 413],
-    ['document.too_many_pages', 422],
     ['document.quota_exceeded', 409],
-    ['document.not_deleted', 409],
     ['document.not_restorable', 410],
   ] as const)('%s maps to status %d', (code, status) => {
     expect(PLAYBOOK_ERRORS[code].code).toBe(code)
@@ -328,6 +363,16 @@ describe('PLAYBOOK_ERRORS', () => {
     for (const [code, message] of Object.entries(PLAYBOOK_MESSAGES)) {
       expect(PLAYBOOK_ERRORS[code as keyof typeof PLAYBOOK_MESSAGES].message).toBe(message)
     }
+  })
+
+  test('there is no page-limit and no not-deleted code', () => {
+    expect('document.too_many_pages' in PLAYBOOK_ERRORS).toBe(false)
+    expect('document.not_deleted' in PLAYBOOK_ERRORS).toBe(false)
+  })
+
+  test('the quota message covers count and size and says deleted documents count', () => {
+    expect(PLAYBOOK_ERRORS['document.quota_exceeded'].message).toMatch(/number or total size/)
+    expect(PLAYBOOK_ERRORS['document.quota_exceeded'].message).toMatch(/Deleted documents count/)
   })
 
   test('purged is distinct from not found', () => {
@@ -411,9 +456,32 @@ describe('PLAYBOOK_ROUTES', () => {
     expect(upload.description).toContain('multipart/form-data')
   })
 
-  test('restore names the purged and not-deleted cases', () => {
-    expect(PLAYBOOK_ROUTES.restoreDocument.errors).toContain('document.not_restorable')
-    expect(PLAYBOOK_ROUTES.restoreDocument.errors).toContain('document.not_deleted')
+  test('restore names the purged case and is idempotent by end state', () => {
+    expect(PLAYBOOK_ROUTES.restoreDocument.errors).toEqual([
+      'document.not_found',
+      'document.not_restorable',
+    ])
+    expect(PLAYBOOK_ROUTES.restoreDocument.description).toContain('Idempotent by end state')
+    expect(PLAYBOOK_ROUTES.deleteDocument.description).toContain('Idempotent by end state')
+  })
+
+  test('upload states the duplicate rules, the page-limit signal and the envelope codes', () => {
+    const text = PLAYBOOK_ROUTES.uploadDocument.description
+    expect(text).toContain('stored fileName')
+    expect(text).toContain('a match on a "deleted" document restores it')
+    expect(text).toContain('a match on a "failed" document re-queues it')
+    expect(text).toContain('failureReason "too_many_pages"')
+    expect(text).toContain('request.too_large')
+    expect(text).toContain('request.unsupported_media_type')
+    expect(PLAYBOOK_ROUTES.uploadDocument.errors).toEqual([
+      'document.unsupported_type',
+      'document.too_large',
+      'document.quota_exceeded',
+    ])
+  })
+
+  test('the list names its sort key', () => {
+    expect(PLAYBOOK_ROUTES.listDocuments.description).toContain('createdAt, then id')
   })
 
   test('the remove-everything route needs only an idempotency key and has no domain error', () => {
@@ -421,5 +489,16 @@ describe('PLAYBOOK_ROUTES', () => {
     expect(PLAYBOOK_ROUTES.removeOrganizationDocuments.description).toContain(
       'Idempotent by end state'
     )
+  })
+})
+
+describe('normaliseMediaType', () => {
+  test.each([
+    ['text/plain; charset=utf-8', 'text/plain'],
+    ['Text/Markdown', 'text/markdown'],
+    ['  application/pdf ;x=y', 'application/pdf'],
+    ['', ''],
+  ])('%s becomes %s', (input, output) => {
+    expect(normaliseMediaType(input)).toBe(output)
   })
 })

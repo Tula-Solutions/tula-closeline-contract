@@ -130,12 +130,28 @@ export function documentExtension(fileName: string): AcceptedDocumentExtension |
   return ACCEPTED_DOCUMENT_EXTENSIONS.find((extension) => lower.endsWith(extension))
 }
 
+/** Zero-width characters that make a stem look empty without being empty. */
+const INVISIBLE_STEM = /^[\s\u200b-\u200d\u2060\ufeff]*$/
+
+/** Whether a name has a stem: some visible text before its last dot (or no dot at all). */
+function hasStem(name: string): boolean {
+  const dot = name.lastIndexOf('.')
+  const stem = dot === -1 ? name : name.slice(0, dot)
+  return !INVISIBLE_STEM.test(stem)
+}
+
 /**
- * A document's file name, in a request and in a response: at most 1000 raw characters, then
- * control and bidirectional characters are removed (not rejected) and the rest is trimmed to 1 to
- * 255 well-formed characters with no `/` or `\`, ending in an accepted extension. Parsing a stored
- * name therefore yields a safe one. Zero-width characters are allowed, so display code must still
- * treat a name as untrusted text. A name is never part of an error body.
+ * A document's file name, in a request and in a response: at most 1000 raw UTF-16 code units,
+ * then control and bidirectional characters are removed (not rejected) and the rest is trimmed to
+ * 1 to 255 well-formed UTF-16 code units with no `/` or `\` and a visible stem before the last
+ * dot (`.pdf`, or an invisible character plus `.pdf`, is rejected). It does not check the
+ * extension: that is {@link documentTypeCheckSchema}, which has its own error code. Parsing a
+ * stored name yields a safe one. The name is for display only and is never a storage key or a
+ * path: the service keys storage on the document id. It is stricter than a person's name (which
+ * keeps direction characters) because a file name is shown beside the person's own text in lists
+ * and downloads, where a right-to-left override can disguise an extension, and a person's name has
+ * no extension to disguise. Zero-width characters other than in the stem are allowed, so display
+ * code must still treat a name as untrusted text. A name is never part of an error body.
  */
 export const documentFileNameSchema = z
   .string()
@@ -148,8 +164,29 @@ export const documentFileNameSchema = z
       .max(MAX_DOCUMENT_FILE_NAME_LENGTH)
       .refine(isWellFormed, 'Well-formed text only')
       .refine((name) => !/[/\\]/.test(name), 'No path separators')
-      .refine((name) => documentExtension(name) !== undefined, 'An accepted file type only')
+      .refine(hasStem, 'A name before the extension')
   )
 
 /** The name of an uploaded file. */
 export type DocumentFileName = z.infer<typeof documentFileNameSchema>
+
+/**
+ * The type check of an upload, on the file name: it must end in an accepted extension. A failure
+ * is `document.unsupported_type` (415). The service also inspects the content, because the name
+ * and the declared type are untrusted.
+ */
+export const documentTypeCheckSchema = z
+  .string()
+  .refine((name) => documentExtension(name) !== undefined, 'An accepted file type only')
+
+/**
+ * The size check of an upload, on the byte count: at most {@link MAX_DOCUMENT_BYTES}. A failure
+ * is `document.too_large` (413). Emptiness is not checked here: an empty file fails the upload
+ * schema as `request.invalid`.
+ */
+export const documentSizeCheckSchema = z.number().max(MAX_DOCUMENT_BYTES)
+
+/** Lower-cases a media type and drops its parameters, so `Text/Plain; charset=utf-8` becomes `text/plain`. */
+export function normaliseMediaType(mediaType: string): string {
+  return (mediaType.split(';')[0] ?? '').trim().toLowerCase()
+}

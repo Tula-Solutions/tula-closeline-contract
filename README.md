@@ -90,10 +90,10 @@ builds its document from these).
   awaiting purge). A `failed` document carries `failureReason` from `DOCUMENT_FAILURE_REASONS`; a
   `deleted` one carries `deletedAt` and `purgeAt`.
 - **Upload** is `multipart/form-data` with one part, `file` (`UPLOAD_FILE_FIELD`), and an
-  `Idempotency-Key` header. `uploadDocumentFileSchema` validates what the service reads off the part.
-  A new document answers 201; a duplicate of existing content answers 200 with the existing document.
+  `Idempotency-Key` header. `uploadDocumentFileSchema` checks the shape of what the service reads off the part (`request.invalid`); `documentSizeCheckSchema` yields `document.too_large` and `documentTypeCheckSchema` yields `document.unsupported_type`. The page limit is not an error: a document over it ends `failed` with `failureReason: too_many_pages`. `normaliseMediaType` lower-cases a media type and drops its parameters.
+  A new document answers 201; a duplicate of existing content answers 200 with the stored document (a `deleted` match is restored, a `failed` match is re-queued). Delete and restore are idempotent by end state. `DOCUMENT_DELETED_MESSAGE` carries `deletionSeq`, which the service bumps on each delete; it is not on the public document.
 - **File names** (`documentFileNameSchema`) have control and bidirectional characters stripped, are
-  1 to 255 characters, hold no `/` or `\` and end in an accepted extension.
+  1 to 255 UTF-16 code units, hold no `/` or `\` and need a visible stem; they are display text, never a storage key.
 - **Limits** are exported constants, each saying whether the owner chose it or it is a default.
 - **Messages** `DOCUMENT_UPLOADED_MESSAGE` and `DOCUMENT_DELETED_MESSAGE` are `{ type, version, scope,
   payload }`, the pieces of the kit's `defineMessage`.

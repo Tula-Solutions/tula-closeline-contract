@@ -62,17 +62,22 @@ export const UPLOAD_FILE_FIELD = 'file'
 export const UPLOAD_CONTENT_TYPE = 'multipart/form-data'
 
 /**
- * What the service reads off the file part of an upload before it stores anything, validated here
- * so the checks are the same everywhere: the `fileName` of the part, the media type the client
- * declared (`declaredMediaType`) (advisory only; the service inspects the content too, because an upload is
- * untrusted data) and the `sizeBytes` counted while reading. The file itself is a multipart part,
- * not a JSON field, and appears in no schema. The request has no other part; it carries an
- * `Idempotency-Key` header (`idempotencyKeySchema`).
+ * What the service reads off the file part of an upload before it stores anything: the
+ * `fileName` of the part, the media type the client declared (`declaredMediaType`, advisory only;
+ * the service inspects the content too, because an upload is untrusted data) and the `sizeBytes`
+ * counted while reading. The file itself is a multipart part, not a JSON field, and appears in no
+ * schema. The request has no other part; it carries an `Idempotency-Key` header.
+ *
+ * Which check yields which code: this schema checks only shape (a well-formed name, a non-empty
+ * file) and a failure is `request.invalid` (400). The service runs
+ * {@link documentSizeCheckSchema} on `sizeBytes` for `document.too_large` (413) and
+ * {@link documentTypeCheckSchema} on `fileName` for `document.unsupported_type` (415), each
+ * before this one, so a large or wrong-type file gets its own code.
  */
 export const uploadDocumentFileSchema = z.strictObject({
   fileName: documentFileNameSchema,
   declaredMediaType: z.string().max(255).nullable(),
-  sizeBytes: z.number().int().min(1).max(MAX_DOCUMENT_BYTES),
+  sizeBytes: z.number().int().min(1),
 })
 
 /** What the service reads off the file part of an upload. */

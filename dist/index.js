@@ -553,7 +553,18 @@ function documentExtension(fileName) {
   const lower = fileName.toLowerCase();
   return ACCEPTED_DOCUMENT_EXTENSIONS.find((extension) => lower.endsWith(extension));
 }
-var documentFileNameSchema = z13.string().max(MAX_RAW_FILE_NAME_LENGTH).transform((name) => stripUnsafe(name).trim()).pipe(z13.string().min(1).max(MAX_DOCUMENT_FILE_NAME_LENGTH).refine(isWellFormed2, "Well-formed text only").refine((name) => !/[/\\]/.test(name), "No path separators").refine((name) => documentExtension(name) !== undefined, "An accepted file type only"));
+var INVISIBLE_STEM = /^[\s\u200b-\u200d\u2060\ufeff]*$/;
+function hasStem(name) {
+  const dot = name.lastIndexOf(".");
+  const stem = dot === -1 ? name : name.slice(0, dot);
+  return !INVISIBLE_STEM.test(stem);
+}
+var documentFileNameSchema = z13.string().max(MAX_RAW_FILE_NAME_LENGTH).transform((name) => stripUnsafe(name).trim()).pipe(z13.string().min(1).max(MAX_DOCUMENT_FILE_NAME_LENGTH).refine(isWellFormed2, "Well-formed text only").refine((name) => !/[/\\]/.test(name), "No path separators").refine(hasStem, "A name before the extension"));
+var documentTypeCheckSchema = z13.string().refine((name) => documentExtension(name) !== undefined, "An accepted file type only");
+var documentSizeCheckSchema = z13.number().max(MAX_DOCUMENT_BYTES);
+function normaliseMediaType(mediaType) {
+  return (mediaType.split(";")[0] ?? "").trim().toLowerCase();
+}
 
 // src/playbook/document.ts
 var documentSchema = z14.object({
@@ -591,7 +602,7 @@ var UPLOAD_CONTENT_TYPE = "multipart/form-data";
 var uploadDocumentFileSchema = z14.strictObject({
   fileName: documentFileNameSchema,
   declaredMediaType: z14.string().max(255).nullable(),
-  sizeBytes: z14.number().int().min(1).max(MAX_DOCUMENT_BYTES)
+  sizeBytes: z14.number().int().min(1)
 });
 var documentParamsSchema = z14.strictObject({
   documentId: documentIdSchema
@@ -612,12 +623,10 @@ var PLAYBOOK_ERRORS = {
     not_found: { status: 404, message: "The document was not found." },
     unsupported_type: { status: 415, message: "This file type is not supported." },
     too_large: { status: 413, message: "The file is larger than the upload limit." },
-    too_many_pages: { status: 422, message: "The document has more pages than the limit." },
     quota_exceeded: {
       status: 409,
-      message: "The Organization has reached its document limit."
+      message: "The Organization has reached its limit on the number or total size of documents. Deleted documents count until they are purged."
     },
-    not_deleted: { status: 409, message: "The document has not been deleted." },
     not_restorable: {
       status: 410,
       message: "The document was purged after its retention period and cannot be restored."
@@ -637,7 +646,7 @@ var DOCUMENT_UPLOADED_MESSAGE = {
 };
 var documentDeletedPayloadSchema = z15.strictObject({
   documentId: documentIdSchema,
-  deletedAt: timestampSchema
+  deletionSeq: z15.number().int().min(1).max(Number.MAX_SAFE_INTEGER)
 });
 var DOCUMENT_DELETED_MESSAGE = {
   type: "playbook.document_deleted",
@@ -661,12 +670,7 @@ var PLAYBOOK_ROUTES = Object.freeze({
     internal: false,
     roles: PLAYBOOK_WRITE_ROLES,
     success: [201, 200],
-    errors: [
-      "document.unsupported_type",
-      "document.too_large",
-      "document.too_many_pages",
-      "document.quota_exceeded"
-    ],
+    errors: ["document.unsupported_type", "document.too_large", "document.quota_exceeded"],
     commonErrors: [
       "request.invalid",
       "request.too_large",
@@ -674,7 +678,7 @@ var PLAYBOOK_ROUTES = Object.freeze({
       "request.idempotency_key_reused",
       "request.idempotency_in_progress"
     ],
-    description: `Uploads one file (multipart/form-data, one part named "file") to the Organization's Playbook. Owner and Admin only; Managers and Reps get auth.forbidden. The type and size are checked before anything is stored. Answers 201 with the new document in state "uploaded"; if the content matches a document the Organization already has, answers 200 with that existing document instead (restoring it, in state "processing", if it was soft-deleted), so a duplicate is an answer, not an error. Accepts an Idempotency-Key header.`
+    description: `Uploads one file (multipart/form-data, one part named "file") to the Organization's Playbook. Owner and Admin only; Managers and Reps get auth.forbidden. The type and size of the file part are checked before anything is stored: document.unsupported_type (415) and document.too_large (413); a malformed name or an empty file is request.invalid. The common request.too_large and request.unsupported_media_type apply to the whole request instead: a body over the envelope limit, or a body that is not multipart. Answers 201 with the new document in state "uploaded". If the content matches a document the Organization already has, answers 200 with that stored document, with its stored fileName (not the new upload's name), so a duplicate is an answer, not an error: a match on a "deleted" document restores it (state "processing"), and a match on a "failed" document re-queues it for processing and answers with state "uploaded". The page limit is not checked here: a document over it ends in state "failed" with failureReason "too_many_pages". Accepts an Idempotency-Key header.`
   }),
   listDocuments: route({
     method: "GET",
@@ -684,7 +688,7 @@ var PLAYBOOK_ROUTES = Object.freeze({
     success: [200],
     errors: [],
     commonErrors: ["request.invalid"],
-    description: "Lists the Organization's documents, newest first, one cursor-paginated page at a time (at most 100). Owner, Admin, Manager and Rep may read. Soft-deleted documents are left out unless state=deleted is asked for."
+    description: "Lists the Organization's documents, newest first (sorted by createdAt, then id, both descending), one cursor-paginated page at a time (at most 100). Owner, Admin, Manager and Rep may read. Soft-deleted documents are left out unless state=deleted is asked for."
   }),
   getDocument: route({
     method: "GET",
@@ -704,7 +708,7 @@ var PLAYBOOK_ROUTES = Object.freeze({
     success: [200],
     errors: ["document.not_found"],
     commonErrors: ["request.invalid"],
-    description: 'Soft-deletes a document: it is hidden at once and purged after the retention period, and can be restored until then. Owner and Admin only. Answers 200 with the document in state "deleted" and its purge time; deleting an already deleted document answers the same. Takes no body.'
+    description: 'Soft-deletes a document: it is hidden at once and purged after the retention period, and can be restored until then. Owner and Admin only. Idempotent by end state: answers 200 with the document in state "deleted" and its purge time, and deleting an already deleted document answers the same. Takes no body.'
   }),
   restoreDocument: route({
     method: "POST",
@@ -712,9 +716,9 @@ var PLAYBOOK_ROUTES = Object.freeze({
     internal: false,
     roles: PLAYBOOK_WRITE_ROLES,
     success: [200],
-    errors: ["document.not_found", "document.not_deleted", "document.not_restorable"],
+    errors: ["document.not_found", "document.not_restorable"],
     commonErrors: ["request.invalid"],
-    description: 'Restores a soft-deleted document within the retention period; it is re-ingested from the kept file and shows as "processing". Owner and Admin only. A document that was never deleted is document.not_deleted; one already purged is document.not_restorable (410), distinct from document.not_found. Takes no body.'
+    description: 'Restores a soft-deleted document within the retention period; it is re-ingested from the kept file and shows as "processing". Owner and Admin only. Idempotent by end state: a document that is no longer deleted (restored by an earlier call, or never deleted) answers 200 with the document as it is. One already purged is document.not_restorable (410), distinct from document.not_found. Takes no body.'
   }),
   removeOrganizationDocuments: route({
     method: "POST",
@@ -787,7 +791,9 @@ export {
   documentMediaTypeSchema,
   documentParamsSchema,
   documentSchema,
+  documentSizeCheckSchema,
   documentStateSchema,
+  documentTypeCheckSchema,
   documentUploadedPayloadSchema,
   emailSchema,
   encodeCursor,
@@ -832,6 +838,7 @@ export {
   memberParamsSchema,
   memberSchema,
   membershipIdSchema,
+  normaliseMediaType,
   organizationIdSchema,
   organizationNameSchema,
   organizationSchema,

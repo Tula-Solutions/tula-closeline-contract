@@ -1,5 +1,4 @@
 import { z } from 'zod'
-import { timestampSchema } from '../core/values'
 import { documentIdSchema } from '../ids'
 
 /*
@@ -31,13 +30,16 @@ export const DOCUMENT_UPLOADED_MESSAGE = {
 } as const
 
 /**
- * The payload of {@link DOCUMENT_DELETED_MESSAGE}: the document and the time of the deletion this
- * cleanup was queued for, so the job does nothing if the document was restored (or deleted again
- * later) since.
+ * The payload of {@link DOCUMENT_DELETED_MESSAGE}: the document and its `deletionSeq`, a positive
+ * safe integer the service increases in the same write as each delete. The cleanup applies only
+ * when the document is still `deleted` and its stored sequence equals this one, so a restore, or
+ * a later delete, makes an older message do nothing. A timestamp is not the guard: Postgres keeps
+ * microseconds, a JSON timestamp does not, and two deletions can share a clock tick. The sequence
+ * is not on the public document schema.
  */
 export const documentDeletedPayloadSchema = z.strictObject({
   documentId: documentIdSchema,
-  deletedAt: timestampSchema,
+  deletionSeq: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER),
 })
 
 /** The payload of {@link DOCUMENT_DELETED_MESSAGE}. */
