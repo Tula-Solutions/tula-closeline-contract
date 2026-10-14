@@ -116,7 +116,7 @@ describe('searchMomentsResponseSchema', () => {
 
   test('the Deals counted cover the Deals of the items', () => {
     expect(parse({ items: [item], evidence: { moments: 3, deals: 0 } }).success).toBe(false)
-    const other = { ...item, dealRecordId: id('deal') }
+    const other = { ...item, dealRecordId: id('deal', 2) }
     expect(parse({ items: [item, other], evidence: { moments: 3, deals: 1 } }).success).toBe(false)
     expect(parse({ items: [item, other], evidence: { moments: 3, deals: 2 } }).success).toBe(true)
     expect(parse({ items: [item, item], evidence: { moments: 3, deals: 1 } }).success).toBe(true)
