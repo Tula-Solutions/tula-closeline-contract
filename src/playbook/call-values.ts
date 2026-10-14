@@ -179,6 +179,61 @@ export const speakerLabelSchema = z
       .refine((label) => !hasStrippableCharacter(label), 'No control characters')
   )
 
+/** The most Unicode code points of a speaker excerpt, the ellipsis included. */
+export const MAX_SPEAKER_EXCERPT_LENGTH = 240
+
+/** Whitespace, plus the C1 line break U+0085 (which `\s` misses and the label cleaner would otherwise glue words over). */
+const SPACES = new RegExp(`[\\s${String.fromCharCode(0x85)}]+`, 'g')
+
+const ELLIPSIS = String.fromCodePoint(0x2026)
+
+function isLoneSurrogate(char: string): boolean {
+  const code = char.codePointAt(0) ?? 0
+  return char.length === 1 && code >= 0xd800 && code <= 0xdfff
+}
+
+/**
+ * Builds the excerpt that helps a person pick the Rep: the speaker's first turns joined with a
+ * space, whitespace collapsed, control and bidirectional characters removed, and at most
+ * `MAX_SPEAKER_EXCERPT_LENGTH` code points. A longer text is cut at a word boundary and ends with
+ * an ellipsis (a single word longer than the cap is cut hard); the cut never splits a code point.
+ * The result is tenant Transcript text: never log it.
+ */
+export function speakerExcerpt(turns: readonly string[]): string {
+  const collapse = (text: string) => text.replace(SPACES, ' ')
+  const text = collapse(normaliseSpeakerLabel(collapse(turns.join(' '))))
+  const chars = Array.from(text).filter((char) => !isLoneSurrogate(char))
+  if (chars.length <= MAX_SPEAKER_EXCERPT_LENGTH) {
+    return chars.join('')
+  }
+  const room = MAX_SPEAKER_EXCERPT_LENGTH - 1
+  let end = room
+  if (chars[room] !== ' ') {
+    const space = chars.slice(0, room).lastIndexOf(' ')
+    end = space > 0 ? space : room
+  }
+  return chars.slice(0, end).join('').trimEnd() + ELLIPSIS
+}
+
+/**
+ * One speaker of a Call with a short excerpt of what they said, so a person can tell who is the
+ * Rep. The label is untrusted text from the file and the excerpt is tenant Transcript text: both
+ * are returned only to the owning Organization's Owner and Admin and are never logged.
+ */
+export const speakerExcerptSchema = z.strictObject({
+  label: speakerLabelSchema,
+  excerpt: z
+    .string()
+    .min(1)
+    .max(MAX_SPEAKER_EXCERPT_LENGTH * 2)
+    .refine((text) => Array.from(text).length <= MAX_SPEAKER_EXCERPT_LENGTH, 'Within the cap')
+    .refine(isWellFormedText, 'Well-formed text only')
+    .refine((text) => !hasStrippableCharacter(text), 'No control characters'),
+})
+
+/** One speaker of a Call with a short excerpt. */
+export type SpeakerExcerpt = z.infer<typeof speakerExcerptSchema>
+
 /** The channels of a per-side Recording: the left one or the right one. */
 export const CALL_CHANNELS = ['left', 'right'] as const
 

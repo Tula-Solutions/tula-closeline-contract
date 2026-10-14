@@ -312,40 +312,45 @@ export function parseOutcomeCell(cell: string): CellResult<Outcome> {
   return result.success ? { ok: true, value: result.data } : INVALID_CELL
 }
 
+/** Whether `text` is a real calendar date written `YYYY-MM-DD` (so 2026-02-30 is not). */
+function isCalendarDate(text: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text)
+  if (!match) {
+    return false
+  }
+  const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])]
+  const parsed = new Date(Date.UTC(year, month - 1, day))
+  return (
+    parsed.getUTCFullYear() === year &&
+    parsed.getUTCMonth() === month - 1 &&
+    parsed.getUTCDate() === day
+  )
+}
+
+/** Whether `text` is a real `YYYY-MM-DD` day with a year from 1970 to 2100, the range a Deal's closing date may have. */
+function isDealCalendarDate(text: string): boolean {
+  const year = Number(text.slice(0, 4))
+  return isCalendarDate(text) && year >= DEAL_CLOSED_AT_MIN_YEAR && year <= DEAL_CLOSED_AT_MAX_YEAR
+}
+
+/** A calendar date as `YYYY-MM-DD`, with no time and no time zone, a real day (2026-02-30 is refused) in the years 1970 to 2100, as the CSV `closed_at` accepts. Used for a Deal's `closedAt`. */
+export const calendarDateSchema = z.iso
+  .date()
+  .refine(isDealCalendarDate, 'A real calendar date from 1970 to 2100')
+
 /**
  * Reads the `closed_at` cell. Blank is none (`null`); `won` and `lost` do not require it, and an
- * `open` Deal may carry an expected close date. Otherwise it is a calendar date `YYYY-MM-DD`, read
- * as that day at 00:00 UTC, or an ISO 8601 timestamp with an offset (`Z` or `+02:00`). The value is
- * always the UTC ISO timestamp with milliseconds. The year, in UTC, must be from
- * `DEAL_CLOSED_AT_MIN_YEAR` (1970) to `DEAL_CLOSED_AT_MAX_YEAR` (2100) inclusive, else it is not valid.
+ * `open` Deal may carry an expected close date. Otherwise it is a plain calendar date `YYYY-MM-DD`
+ * (a real day), kept exactly as written: a value with a time or an offset is not valid (it would
+ * name a different day in another time zone). The year must be from `DEAL_CLOSED_AT_MIN_YEAR`
+ * (1970) to `DEAL_CLOSED_AT_MAX_YEAR` (2100) inclusive, else it is not valid.
  */
 export function parseClosedAtCell(cell: string): CellResult<string | null> {
   const text = cell.trim()
   if (text === '') {
     return { ok: true, value: null }
   }
-  const date = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text)
-  if (date) {
-    const [year, month, day] = [Number(date[1]), Number(date[2]), Number(date[3])]
-    const parsed = new Date(Date.UTC(year, month - 1, day))
-    const real =
-      parsed.getUTCFullYear() === year &&
-      parsed.getUTCMonth() === month - 1 &&
-      parsed.getUTCDate() === day
-    return real && year >= DEAL_CLOSED_AT_MIN_YEAR && year <= DEAL_CLOSED_AT_MAX_YEAR
-      ? { ok: true, value: `${text}T00:00:00.000Z` }
-      : INVALID_CELL
-  }
-  if (!z.iso.datetime({ offset: true }).max(64).safeParse(text).success) {
-    return INVALID_CELL
-  }
-  const time = new Date(text)
-  const year = time.getUTCFullYear()
-  return Number.isNaN(time.getTime()) ||
-    year < DEAL_CLOSED_AT_MIN_YEAR ||
-    year > DEAL_CLOSED_AT_MAX_YEAR
-    ? INVALID_CELL
-    : { ok: true, value: time.toISOString() }
+  return isDealCalendarDate(text) ? { ok: true, value: text } : INVALID_CELL
 }
 
 /** Reads the `amount` cell: blank is none; otherwise a non-negative decimal as {@link dealAmountSchema} describes (at most 999999999999999.99). */

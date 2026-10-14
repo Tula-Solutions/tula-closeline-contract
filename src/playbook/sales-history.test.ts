@@ -603,7 +603,7 @@ describe('Deals', () => {
     dealId: 'D-100',
     name: null,
     outcome: 'won',
-    closedAt: NOW,
+    closedAt: '2026-10-12',
     amount: '1250.50',
     currency: 'EUR',
     callCount: 2,
@@ -641,15 +641,15 @@ describe('Deals', () => {
 
   test('setting an Outcome', () => {
     expect(setDealOutcomeRequestSchema.safeParse({ outcome: 'won' }).success).toBe(true)
-    expect(setDealOutcomeRequestSchema.safeParse({ outcome: 'lost', closedAt: NOW }).success).toBe(
-      true
-    )
+    expect(
+      setDealOutcomeRequestSchema.safeParse({ outcome: 'lost', closedAt: '2026-10-12' }).success
+    ).toBe(true)
     expect(setDealOutcomeRequestSchema.safeParse({ outcome: 'open', closedAt: null }).success).toBe(
       true
     )
-    expect(setDealOutcomeRequestSchema.safeParse({ outcome: 'open', closedAt: NOW }).success).toBe(
-      true
-    )
+    expect(
+      setDealOutcomeRequestSchema.safeParse({ outcome: 'open', closedAt: '2026-10-12' }).success
+    ).toBe(true)
     expect(setDealOutcomeRequestSchema.safeParse({ outcome: 'maybe' }).success).toBe(false)
     expect(setDealOutcomeRequestSchema.safeParse({}).success).toBe(false)
     expect(setDealOutcomeRequestSchema.safeParse({ outcome: 'won', amount: '1' }).success).toBe(
@@ -1247,9 +1247,9 @@ describe('dealSchema amount and currency', () => {
       true
     )
     // an open Deal may carry an expected close date from the CRM
-    expect(dealSchema.safeParse({ ...dealFixture, outcome: 'open', closedAt: NOW }).success).toBe(
-      true
-    )
+    expect(
+      dealSchema.safeParse({ ...dealFixture, outcome: 'open', closedAt: '2026-10-12' }).success
+    ).toBe(true)
     expect(dealSchema.safeParse({ ...dealFixture, outcome: 'won', closedAt: null }).success).toBe(
       true
     )
@@ -1294,14 +1294,15 @@ describe('CSV cells', () => {
     }
   })
 
-  test('closed_at is YYYY-MM-DD at 00:00 UTC, or an ISO timestamp with offset; blank is none', () => {
+  test('closed_at is a plain YYYY-MM-DD kept as written; blank is none', () => {
     expect(parseClosedAtCell('')).toEqual(ok(null))
     expect(parseClosedAtCell('  ')).toEqual(ok(null))
-    expect(parseClosedAtCell('2026-10-12')).toEqual(ok('2026-10-12T00:00:00.000Z'))
-    expect(parseClosedAtCell(' 2026-02-28 ')).toEqual(ok('2026-02-28T00:00:00.000Z'))
-    expect(parseClosedAtCell('2026-10-12T09:30:00Z')).toEqual(ok('2026-10-12T09:30:00.000Z'))
-    expect(parseClosedAtCell('2026-10-12T11:30:00+02:00')).toEqual(ok('2026-10-12T09:30:00.000Z'))
+    expect(parseClosedAtCell('2026-10-12')).toEqual(ok('2026-10-12'))
+    expect(parseClosedAtCell(' 2026-02-28 ')).toEqual(ok('2026-02-28'))
     for (const cell of [
+      '2026-10-12T09:30:00Z',
+      '2026-10-12T11:30:00+02:00',
+      '2026-01-31T23:00-05:00',
       '2026-02-30',
       '2026-13-01',
       '12/10/2026',
@@ -1356,7 +1357,7 @@ describe('CSV cells', () => {
         row: {
           dealId: 'D-1',
           outcome: 'won',
-          closedAt: '2026-10-12T00:00:00.000Z',
+          closedAt: '2026-10-12',
           amount: '100.00',
           currency: 'EUR',
           name: null,

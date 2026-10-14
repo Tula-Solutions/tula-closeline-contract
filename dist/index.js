@@ -833,7 +833,7 @@ var SALES_HISTORY_ROUTES = Object.freeze({
     success: [200],
     errors: [],
     commonErrors: ["request.invalid"],
-    description: "Lists the Organization's Calls, newest first (sorted by createdAt, then id, both descending), one cursor-paginated page at a time (at most 100). Owner and Admin only. Deleted Calls are left out unless state=deleted is asked for; state=awaiting_rep lists the Calls waiting for a Rep and dealRecordId (the opaque Deal id) limits the list to one Deal."
+    description: "Lists the Organization's Calls, newest first (sorted by createdAt, then id, both descending), one cursor-paginated page at a time (at most 100). Owner and Admin only. Deleted Calls are left out unless state=deleted is asked for; state=awaiting_rep lists the Calls waiting for a Rep and dealRecordId (the opaque Deal id) limits the list to one Deal. A list item never carries speakers: only the single-Call read returns speaker excerpts."
   }),
   getCall: route2({
     method: "GET",
@@ -843,7 +843,7 @@ var SALES_HISTORY_ROUTES = Object.freeze({
     success: [200],
     errors: ["call.not_found"],
     commonErrors: ["request.invalid"],
-    description: "Reads one Call and its state, with the failure reason when it failed, the speaker labels to pick a Rep from and the purge time when it was deleted. No Transcript text or audio is returned. Owner and Admin only."
+    description: "Reads one Call and its state, with the failure reason when it failed, the speaker labels to pick a Rep from and the purge time when it was deleted. For a Recording with speaker labels, above all one awaiting its Rep, it also returns speakers: a short excerpt per label (the first turns of the speaker, at most 240 characters, cut at a word boundary with an ellipsis; at most 20 speakers) so a person can tell who is the Rep. The excerpts are tenant Transcript text: returned only to the Owner and Admin of the owning Organization and never logged. No other Transcript text or audio is returned. Owner and Admin only."
   }),
   deleteCall: route2({
     method: "DELETE",
@@ -928,7 +928,7 @@ var SALES_HISTORY_ROUTES = Object.freeze({
       "deal_import.busy"
     ],
     commonErrors: [...ENVELOPE_ERRORS],
-    description: 'Uploads the fixed CSV template (columns deal_id, outcome, closed_at, amount, currency and optionally name; up to 10 MB and 50,000 rows) as multipart/form-data with one file part named "file". Owner and Admin only. The type, size and first row are checked before anything is stored: deal_import.unsupported_type (415), deal_import.too_large (413) and deal_import.header_invalid (422). An Organization with MAX_QUEUED_DEAL_IMPORTS (5) imports not yet finished (state uploaded or processing) is refused with deal_import.busy (429) and nothing is stored; the count is checked before the file is stored, so a refused upload leaves no import. The header is read with checkDealImportHeaderText (the same reader and limits as parseCsv) on the first 8192 characters of the file (a header still unfinished there is deferred to the job, not refused), and the job re-checks the header of its full parse with the same verdict. The rest of the file is parsed in the background job, never on the request path, under strict RFC 4180 quoting: a stray quote fails the file, and a cell over 1000 characters fails the whole file too (a cell up to 1000 characters is checked row by row, and a bad one is a rejected row); blank lines at the end of the file are ignored, and an interior blank line is a rejected row with the reason blank_row, so the report has no gap, and it still counts in the row numbers, and rowNumber is the record number with the header as record 1. Answers 202 with the import in state "uploaded"; it is processed in the background. Imports are not deduplicated by content: each upload is a new import, and only the Idempotency-Key makes a retry of the same request answer with the stored import. Valid rows are applied and bad rows are reported, never dropped: a deal id already won or lost, or repeated within the file, is a rejected row in the report, not an HTTP error. A file with more rows than the limit, a cell over the length limit or a quoting error ends in state "failed" with failureReason "too_many_rows" or "unreadable". Accepts an Idempotency-Key header.'
+    description: 'Uploads the fixed CSV template (columns deal_id, outcome, closed_at, amount, currency and optionally name; closed_at is a plain YYYY-MM-DD date, kept as written, and a value with a time or an offset is a rejected row with the reason invalid_closed_at; up to 10 MB and 50,000 rows) as multipart/form-data with one file part named "file". Owner and Admin only. The type, size and first row are checked before anything is stored: deal_import.unsupported_type (415), deal_import.too_large (413) and deal_import.header_invalid (422). An Organization with MAX_QUEUED_DEAL_IMPORTS (5) imports not yet finished (state uploaded or processing) is refused with deal_import.busy (429) and nothing is stored; the count is checked before the file is stored, so a refused upload leaves no import. The header is read with checkDealImportHeaderText (the same reader and limits as parseCsv) on the first 8192 characters of the file (a header still unfinished there is deferred to the job, not refused), and the job re-checks the header of its full parse with the same verdict. The rest of the file is parsed in the background job, never on the request path, under strict RFC 4180 quoting: a stray quote fails the file, and a cell over 1000 characters fails the whole file too (a cell up to 1000 characters is checked row by row, and a bad one is a rejected row); blank lines at the end of the file are ignored, and an interior blank line is a rejected row with the reason blank_row, so the report has no gap, and it still counts in the row numbers, and rowNumber is the record number with the header as record 1. Answers 202 with the import in state "uploaded"; it is processed in the background. Imports are not deduplicated by content: each upload is a new import, and only the Idempotency-Key makes a retry of the same request answer with the stored import. Valid rows are applied and bad rows are reported, never dropped: a deal id already won or lost, or repeated within the file, is a rejected row in the report, not an HTTP error. A file with more rows than the limit, a cell over the length limit or a quoting error ends in state "failed" with failureReason "too_many_rows" or "unreadable". Accepts an Idempotency-Key header.'
   }),
   listDealImports: route2({
     method: "GET",
@@ -1065,6 +1065,32 @@ function normaliseSpeakerLabel(label) {
   return normaliseFileName(label);
 }
 var speakerLabelSchema = z17.string().max(1000).transform(normaliseSpeakerLabel).pipe(z17.string().min(1).max(MAX_SPEAKER_LABEL_LENGTH).refine(isWellFormedText, "Well-formed text only").refine((label) => !hasStrippableCharacter(label), "No control characters"));
+var MAX_SPEAKER_EXCERPT_LENGTH = 240;
+var SPACES = new RegExp(`[\\s${String.fromCharCode(133)}]+`, "g");
+var ELLIPSIS = String.fromCodePoint(8230);
+function isLoneSurrogate(char) {
+  const code = char.codePointAt(0) ?? 0;
+  return char.length === 1 && code >= 55296 && code <= 57343;
+}
+function speakerExcerpt(turns) {
+  const collapse = (text) => text.replace(SPACES, " ");
+  const text = collapse(normaliseSpeakerLabel(collapse(turns.join(" "))));
+  const chars = Array.from(text).filter((char) => !isLoneSurrogate(char));
+  if (chars.length <= MAX_SPEAKER_EXCERPT_LENGTH) {
+    return chars.join("");
+  }
+  const room = MAX_SPEAKER_EXCERPT_LENGTH - 1;
+  let end = room;
+  if (chars[room] !== " ") {
+    const space = chars.slice(0, room).lastIndexOf(" ");
+    end = space > 0 ? space : room;
+  }
+  return chars.slice(0, end).join("").trimEnd() + ELLIPSIS;
+}
+var speakerExcerptSchema = z17.strictObject({
+  label: speakerLabelSchema,
+  excerpt: z17.string().min(1).max(MAX_SPEAKER_EXCERPT_LENGTH * 2).refine((text) => Array.from(text).length <= MAX_SPEAKER_EXCERPT_LENGTH, "Within the cap").refine(isWellFormedText, "Well-formed text only").refine((text) => !hasStrippableCharacter(text), "No control characters")
+});
 var CALL_CHANNELS = ["left", "right"];
 var callChannelSchema = z17.enum(CALL_CHANNELS);
 var repChoiceSchema = z17.discriminatedUnion("by", [
@@ -1228,24 +1254,26 @@ function parseOutcomeCell(cell) {
   const result = outcomeSchema.safeParse(cell.trim().toLowerCase());
   return result.success ? { ok: true, value: result.data } : INVALID_CELL;
 }
+function isCalendarDate(text) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+  if (!match) {
+    return false;
+  }
+  const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])];
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  return parsed.getUTCFullYear() === year && parsed.getUTCMonth() === month - 1 && parsed.getUTCDate() === day;
+}
+function isDealCalendarDate(text) {
+  const year = Number(text.slice(0, 4));
+  return isCalendarDate(text) && year >= DEAL_CLOSED_AT_MIN_YEAR && year <= DEAL_CLOSED_AT_MAX_YEAR;
+}
+var calendarDateSchema = z18.iso.date().refine(isDealCalendarDate, "A real calendar date from 1970 to 2100");
 function parseClosedAtCell(cell) {
   const text = cell.trim();
   if (text === "") {
     return { ok: true, value: null };
   }
-  const date = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
-  if (date) {
-    const [year, month, day] = [Number(date[1]), Number(date[2]), Number(date[3])];
-    const parsed = new Date(Date.UTC(year, month - 1, day));
-    const real = parsed.getUTCFullYear() === year && parsed.getUTCMonth() === month - 1 && parsed.getUTCDate() === day;
-    return real && year >= DEAL_CLOSED_AT_MIN_YEAR && year <= DEAL_CLOSED_AT_MAX_YEAR ? { ok: true, value: `${text}T00:00:00.000Z` } : INVALID_CELL;
-  }
-  if (!z18.iso.datetime({ offset: true }).max(64).safeParse(text).success) {
-    return INVALID_CELL;
-  }
-  const time = new Date(text);
-  const year = time.getUTCFullYear();
-  return Number.isNaN(time.getTime()) || year < DEAL_CLOSED_AT_MIN_YEAR || year > DEAL_CLOSED_AT_MAX_YEAR ? INVALID_CELL : { ok: true, value: time.toISOString() };
+  return isDealCalendarDate(text) ? { ok: true, value: text } : INVALID_CELL;
 }
 function parseAmountCell(cell) {
   const text = cell.trim();
@@ -1433,7 +1461,7 @@ function isBlankCsvRecord(record) {
 }
 
 // src/playbook/call.ts
-var callSchema = z19.object({
+var callShape = z19.object({
   id: callIdSchema,
   dealId: dealIdSchema,
   dealRecordId: dealRecordIdSchema,
@@ -1448,12 +1476,14 @@ var callSchema = z19.object({
   failureReason: callFailureReasonSchema.nullable(),
   rep: repChoiceSchema.nullable(),
   speakerLabels: z19.array(speakerLabelSchema).max(MAX_CALL_SPEAKERS),
+  speakers: z19.array(speakerExcerptSchema).max(MAX_CALL_SPEAKERS).optional(),
   deletedAt: timestampSchema.nullable(),
   purgeAt: timestampSchema.nullable(),
   uploadedByUserId: userIdSchema,
   createdAt: timestampSchema,
   updatedAt: timestampSchema
-}).superRefine((call, context) => {
+});
+function refineCall(call, context) {
   const issue = (path, message) => context.addIssue({ code: "custom", path: [path], message });
   if (call.state === "failed" !== (call.failureReason !== null)) {
     issue("failureReason", "A failure reason is set exactly when the state is failed");
@@ -1486,13 +1516,26 @@ var callSchema = z19.object({
   if (new Set(call.speakerLabels).size !== call.speakerLabels.length) {
     issue("speakerLabels", "Speaker labels are unique");
   }
+  if (call.speakers !== undefined) {
+    const labels = call.speakers.map((speaker) => speaker.label);
+    if (call.kind !== "recording" || labels.length === 0) {
+      issue("speakers", "Speaker excerpts are for a Recording and are absent when there are none");
+    }
+    if (new Set(labels).size !== labels.length) {
+      issue("speakers", "Speaker excerpt labels are unique");
+    }
+    if (!labels.every((label) => call.speakerLabels.includes(label))) {
+      issue("speakers", "Every excerpt belongs to one of the Call speakers");
+    }
+  }
   if (call.inSearch && (call.state !== "ready" || call.dealOutcome !== "won")) {
     issue("inSearch", "A Call is in search only when it is ready and its Deal is won");
   }
   if (call.state === "ready" && call.rep?.by === "speaker" && !call.speakerLabels.includes(call.rep.label)) {
     issue("rep", "A ready Call's Rep label is among its speakers");
   }
-});
+}
+var callSchema = callShape.superRefine(refineCall);
 var MAX_REP_FIELD_LENGTH = 512;
 var uploadCallFieldsSchema = z19.strictObject({
   dealId: dealIdSchema,
@@ -1515,7 +1558,8 @@ function parseRepField(text) {
 }
 var callParamsSchema = z19.strictObject({ callId: callIdSchema });
 var listCallsQuerySchema = pageQuerySchema.extend({ state: callStateSchema.optional(), dealRecordId: dealRecordIdSchema.optional() }).strict();
-var listCallsResponseSchema = pageSchema(callSchema);
+var callListItemSchema = callShape.omit({ speakers: true }).strict().superRefine(refineCall);
+var listCallsResponseSchema = pageSchema(callListItemSchema);
 var setCallRepRequestSchema = z19.strictObject({ rep: repChoiceSchema });
 var CALL_FILE_KEYS = ["fileName", "declaredMediaType", "sizeBytes"];
 var uploadCallFileSchema = z19.strictObject({
@@ -1572,7 +1616,7 @@ var dealSchema = z20.object({
   dealId: dealIdSchema,
   name: dealNameSchema.nullable(),
   outcome: outcomeSchema,
-  closedAt: timestampSchema.nullable(),
+  closedAt: calendarDateSchema.nullable(),
   amount: dealAmountSchema.nullable(),
   currency: dealCurrencySchema.nullable(),
   callCount: z20.number().int().min(0),
@@ -1591,7 +1635,7 @@ var listDealsQuerySchema = pageQuerySchema.extend({
 var listDealsResponseSchema = pageSchema(dealSchema);
 var setDealOutcomeRequestSchema = z20.strictObject({
   outcome: outcomeSchema,
-  closedAt: timestampSchema.nullable().optional()
+  closedAt: calendarDateSchema.nullable().optional()
 });
 var lookupDealRequestSchema = z20.strictObject({ dealId: dealIdSchema });
 var dealCursorSchema = z20.strictObject({
@@ -1914,6 +1958,7 @@ export {
   MAX_RIGHTS_TEXT_LENGTH,
   MAX_RIGHTS_WORDING_VERSION,
   MAX_SEQ,
+  MAX_SPEAKER_EXCERPT_LENGTH,
   MAX_SPEAKER_LABEL_BYTES,
   MAX_SPEAKER_LABEL_LENGTH,
   MAX_TRANSCRIPT_BYTES,
@@ -1937,12 +1982,14 @@ export {
   UPLOAD_CONTENT_TYPE,
   UPLOAD_FILE_FIELD,
   addTeamMemberRequestSchema,
+  calendarDateSchema,
   callChannelSchema,
   callCursorSchema,
   callDeletedPayloadSchema,
   callFailureReasonSchema,
   callIdSchema,
   callKindSchema,
+  callListItemSchema,
   callMediaTypeSchema,
   callParamsSchema,
   callRepChangedPayloadSchema,
@@ -2087,6 +2134,8 @@ export {
   roleSchema,
   setCallRepRequestSchema,
   setDealOutcomeRequestSchema,
+  speakerExcerpt,
+  speakerExcerptSchema,
   speakerLabelSchema,
   storedNameSchema,
   teamIdSchema,

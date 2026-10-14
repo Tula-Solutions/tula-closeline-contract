@@ -100,7 +100,7 @@ builds its document from these).
 
 ### Sales history (0.8.0, ADR 0018)
 
-Additive; the 0.7.0 types are unchanged (`PlaybookRoute`, `PLAYBOOK_ROUTES` and `PLAYBOOK_ERRORS` do not gain methods or codes). `SALES_HISTORY_ROUTES` (type `SalesHistoryRoute`) describes the 16 routes; for one OpenAPI document use `ALL_PLAYBOOK_ROUTES` and `ALL_PLAYBOOK_ERRORS`, which merge both areas, `SALES_HISTORY_ERRORS` holds the codes
+Additive in 0.8.0 (0.11.0 is not: it changes `closedAt`, see below); the 0.7.0 types are unchanged (`PlaybookRoute`, `PLAYBOOK_ROUTES` and `PLAYBOOK_ERRORS` do not gain methods or codes). `SALES_HISTORY_ROUTES` (type `SalesHistoryRoute`) describes the 16 routes; for one OpenAPI document use `ALL_PLAYBOOK_ROUTES` and `ALL_PLAYBOOK_ERRORS`, which merge both areas, `SALES_HISTORY_ERRORS` holds the codes
 (`call.*`, `deal.*`, `deal_import.*`, `rights.*`) and the messages are `CALL_UPLOADED_MESSAGE`,
 `CALL_TRANSCRIBED_MESSAGE`, `CALL_REP_CHANGED_MESSAGE`, `CALL_DELETED_MESSAGE`,
 `DEAL_OUTCOME_CHANGED_MESSAGE` and `DEAL_IMPORT_UPLOADED_MESSAGE`. They carry ids and sequences
@@ -136,8 +136,9 @@ Additive; the 0.7.0 types are unchanged (`PlaybookRoute`, `PLAYBOOK_ROUTES` and 
   which reads the first record with `firstCsvRecord` (same rules and limits); the job re-checks the first
   record of its parse with `checkDealImportHeader(record)`; the two give one verdict. Each record then
   goes through `checkDealImportRow(cells, hasName)`, which uses `parseOutcomeCell` (`won`/`lost`/`open`,
-  any case, trimmed), `parseClosedAtCell` (`YYYY-MM-DD` as that day 00:00 UTC, or an ISO timestamp with
-  offset; blank is none; every Outcome accepts it; the UTC year must be 1970 to 2100),
+  any case, trimmed), `parseClosedAtCell` (only a plain `YYYY-MM-DD`, a real day, kept as written; a value
+  with a time or an offset is `invalid_closed_at`; blank is none; every Outcome accepts it; the year
+  must be 1970 to 2100),
   `parseAmountCell` (non-negative decimal, at most 15 integer and 2 fraction digits, up to
   999999999999999.99, no leading zeros beyond one `0`; blank is none) and `parseCurrencyCell` (three
   letters, folded to upper case; required when an amount is present). Example: a record
@@ -151,6 +152,17 @@ Additive; the 0.7.0 types are unchanged (`PlaybookRoute`, `PLAYBOOK_ROUTES` and 
   | `too_many_speakers`, `no_turns`, `too_few_speakers`, `too_long`, `unreadable` | delete the Call and upload a corrected file | answers 200 with the failed Call unchanged |
 
   A `failed` Call with `too_many_speakers` lists no `speakerLabels`.
+- **Breaking in 0.11.0: `closedAt` is a date.** A Deal's `closedAt` (the Deal response and the
+  Outcome request) changes from a timestamp to a `YYYY-MM-DD` calendar date string
+  (`calendarDateSchema`, a real day from 1970 to 2100 as in the CSV: 2026-02-30 is refused), so a consumer that read it as an
+  instant must read it as a date; the CSV `closed_at` accepts only that form too.
+- **Speaker excerpts (0.11.0)**: a Call may carry `speakers`, `{ label, excerpt }` per speaker (at most
+  `MAX_CALL_SPEAKERS`), so the Rep pick shows who said what. Build each excerpt with
+  `speakerExcerpt(turns)`: the first turns joined, whitespace collapsed, at most
+  `MAX_SPEAKER_EXCERPT_LENGTH` (240) code points, cut at a word boundary with an ellipsis. The field
+  is optional (only for a Recording with labels, above all `awaiting_rep`; never empty). It is tenant
+  Transcript text: return it only to the owning Organization's Owner and Admin, never log it. Only
+  `getCall` returns it: a list item (`callListItemSchema`) is strict and refuses `speakers`.
 - **Search flags**: a Call carries `dealOutcome` and `inSearch` (true only when `ready` and the Deal
   is won; it may lag for a Deal that has just become won).
 - **Rights**: `rightsStatusSchema`, `confirmRightsRequestSchema`; `rights.confirmation_required` (403)
