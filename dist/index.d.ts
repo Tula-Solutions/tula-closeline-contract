@@ -2038,7 +2038,7 @@ type FirstCsvRecordResult = {
 * The first record is the header, so the **record number** is the index plus one, with the header
 * as record 1: a report's `rowNumber` is a record number, and a quoted cell spanning lines is one
 * record, so it can differ from the physical line. A blank line is a record of one empty cell
-* ({@link isBlankCsvRecord}): it is kept, so numbers match what a spreadsheet shows, and the caller
+* ({@link isBlankCsvRecord}); a run of them at the end of the file is dropped, and an interior one is kept, so numbers match what a spreadsheet shows, and the caller
 * reports it as a rejected `blank_row` row.
 */
 declare function parseCsv(text: string, options?: CsvOptions): CsvResult;
@@ -2047,7 +2047,7 @@ declare function parseCsv(text: string, options?: CsvOptions): CsvResult;
 * stops there: a later bad record does not change its answer. `record` is `undefined` for empty text, and `complete` is whether a line break ended it (false when the text ran out first).
 */
 declare function firstCsvRecord(text: string, options?: CsvOptions): FirstCsvRecordResult;
-/** Whether a CSV record is a blank line: one empty cell. A caller reports it as a rejected `blank_row` row; it counts in the record number. */
+/** Whether a CSV record is a blank line: one empty cell. A caller reports an interior one as a rejected `blank_row` row; it counts in the record number. {@link parseCsv} already drops a trailing run. */
 declare function isBlankCsvRecord(record: readonly string[]): boolean;
 import { z as z18 } from "zod";
 /**

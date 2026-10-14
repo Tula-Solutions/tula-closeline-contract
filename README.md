@@ -131,7 +131,7 @@ Additive; the 0.7.0 types are unchanged (`PlaybookRoute`, `PLAYBOOK_ROUTES` and 
   on a request path). Quoting is strict RFC 4180: a quote inside an unquoted cell or text after a
   closing quote is `bad_quote`, a quote that never closes is `unterminated_quote`. The header is record
   1 and `rowNumber` is the record number, so a quoted cell spanning lines is one record; a blank line
-  (`isBlankCsvRecord`) is a rejected row with the reason `blank_row` (no deal id), so the report has
+  (`isBlankCsvRecord`) inside the file is a rejected row with the reason `blank_row` (no deal id; a run of blank lines at the end of the file is dropped by `parseCsv`), so the report has
   no gap, and it counts in the numbers, as in a spreadsheet. The upload route checks the header early with `checkDealImportHeaderText` on the first `DEAL_IMPORT_HEADER_PREFIX_CHARS` (8192) characters of the file (a header unfinished there answers `{ ok: true, deferred: true }` and the job decides),
   which reads the first record with `firstCsvRecord` (same rules and limits); the job re-checks the first
   record of its parse with `checkDealImportHeader(record)`; the two give one verdict. Each record then

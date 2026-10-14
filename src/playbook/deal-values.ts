@@ -605,12 +605,18 @@ function readCsv(
  * The first record is the header, so the **record number** is the index plus one, with the header
  * as record 1: a report's `rowNumber` is a record number, and a quoted cell spanning lines is one
  * record, so it can differ from the physical line. A blank line is a record of one empty cell
- * ({@link isBlankCsvRecord}): it is kept, so numbers match what a spreadsheet shows, and the caller
+ * ({@link isBlankCsvRecord}); a run of them at the end of the file is dropped, and an interior one is kept, so numbers match what a spreadsheet shows, and the caller
  * reports it as a rejected `blank_row` row.
  */
 export function parseCsv(text: string, options?: CsvOptions): CsvResult {
   const result = readCsv(text, options, false)
-  return result.ok ? { ok: true, records: result.records } : result
+  if (!result.ok) return result
+  const records = result.records
+  // A run of blank lines at the end of the file (a file ending in several newlines) is not data:
+  // only an interior blank line, followed by a later non-blank record, stays a record.
+  let end = records.length
+  while (end > 1 && isBlankCsvRecord(records[end - 1] ?? [])) end--
+  return { ok: true, records: end === records.length ? records : records.slice(0, end) }
 }
 
 /**
@@ -624,7 +630,7 @@ export function firstCsvRecord(text: string, options?: CsvOptions): FirstCsvReco
     : { ok: false, failure: result.failure, recordsRead: result.recordsRead }
 }
 
-/** Whether a CSV record is a blank line: one empty cell. A caller reports it as a rejected `blank_row` row; it counts in the record number. */
+/** Whether a CSV record is a blank line: one empty cell. A caller reports an interior one as a rejected `blank_row` row; it counts in the record number. {@link parseCsv} already drops a trailing run. */
 export function isBlankCsvRecord(record: readonly string[]): boolean {
   return record.length === 1 && record[0] === ''
 }
