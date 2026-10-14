@@ -218,6 +218,23 @@ no `Rep:`/`Prospect:` labels, because chunks are embedded as plain text), not `m
 playbook, when it must also shorten the stored snippet (for example to fit an attribute limit),
 cuts by code point after `momentSnippet`, so it never leaves a lone surrogate. The request and the snippets are tenant text: never log them.
 
+### Sign in with Google (0.14.0)
+
+`src/auth/oidc.ts`: `googleStartRequestSchema` (`intent` from `googleIntentSchema`, `sign_in` or
+`sign_up`, and an optional `returnTo`), `googleStartResponseSchema` (`{ authorizationUrl }`, https,
+or http only to a loopback host, no credentials), `googleCompleteRequestSchema` (`attemptId` and
+exactly one of `organizationName` or `invitationToken`) and `googleCompleteResponseSchema`
+(`{ session }` with `browserSessionTokensSchema`: the refresh token is in the cookie, never the
+body). `returnToSchema` accepts only a same-origin path: it starts with `/` but never `//` or `/\`,
+has no backslash, control character or lone surrogate, is at most `MAX_RETURN_TO_LENGTH` (512) long,
+has no whitespace, invisible character or `.`/`..` segment, and is checked again after
+percent-decoding once (a consumer must decode exactly once). `authOptionsResponseSchema` adds `providers.google`
+(additive: an older payload parses, with Google off). `GOOGLE_ROUTES` (`start`, `callback`,
+`complete`) describes the three routes for OpenAPI. The new codes are in `AUTH_ERRORS`:
+`oidc.disabled` 404, `oidc.state_invalid` 400, `oidc.email_unverified` 403,
+`oidc.provider_unavailable` 503 (answered with a `Retry-After` header) and
+`oidc.invitation_mismatch` 403.
+
 ### Rights confirmation wording (0.9.0)
 
 The text of each wording version is in the contract: `RIGHTS_WORDINGS` (frozen, keyed by version,

@@ -24,6 +24,11 @@ const AUTH_MESSAGES = {
   'membership.unavailable': 'Organization membership is unavailable right now. Try again shortly.',
   'organization.deleted': 'This Organization has been deleted.',
   'mail.unavailable': 'The email could not be sent right now. Try again.',
+  'oidc.disabled': 'Sign in with Google is not available.',
+  'oidc.state_invalid': 'This sign-in has expired or is not valid. Start again.',
+  'oidc.email_unverified': 'Google has not verified this email address.',
+  'oidc.provider_unavailable': 'Google is not available right now. Try again later.',
+  'oidc.invitation_mismatch': 'Use the Google account that matches the invited email address.',
   'session.invalid_token': 'The refresh token is not valid.',
   'session.revoked': 'This session has ended.',
   'session.expired': 'This session has expired. Sign in again.',
@@ -52,6 +57,11 @@ describe('AUTH_ERRORS', () => {
     ['membership.unavailable', 503],
     ['organization.deleted', 410],
     ['mail.unavailable', 503],
+    ['oidc.disabled', 404],
+    ['oidc.state_invalid', 400],
+    ['oidc.email_unverified', 403],
+    ['oidc.provider_unavailable', 503],
+    ['oidc.invitation_mismatch', 403],
     ['session.invalid_token', 401],
     ['session.revoked', 401],
     ['session.expired', 401],
@@ -65,7 +75,7 @@ describe('AUTH_ERRORS', () => {
 
   test('lists exactly the codes under test', () => {
     expect(Object.keys(AUTH_ERRORS).sort()).toEqual(Object.keys(AUTH_MESSAGES).sort())
-    expect(Object.keys(AUTH_ERRORS)).toHaveLength(23)
+    expect(Object.keys(AUTH_ERRORS)).toHaveLength(28)
   })
 
   test('every message is exactly the one on the allow-list', () => {

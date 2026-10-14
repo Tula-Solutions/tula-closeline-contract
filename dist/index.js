@@ -133,6 +133,22 @@ var AUTH_ERRORS = {
   }),
   ...SIGNUP_ERRORS,
   "organization.deleted": CORE_ERRORS["organization.deleted"],
+  ...defineErrors("oidc", {
+    disabled: { status: 404, message: "Sign in with Google is not available." },
+    state_invalid: {
+      status: 400,
+      message: "This sign-in has expired or is not valid. Start again."
+    },
+    email_unverified: { status: 403, message: "Google has not verified this email address." },
+    provider_unavailable: {
+      status: 503,
+      message: "Google is not available right now. Try again later."
+    },
+    invitation_mismatch: {
+      status: 403,
+      message: "Use the Google account that matches the invited email address."
+    }
+  }),
   ...defineErrors("mail", {
     unavailable: { status: 503, message: "The email could not be sent right now. Try again." }
   }),
@@ -146,78 +162,11 @@ var AUTH_ERRORS = {
     }
   })
 };
-// src/core/internal.ts
-import { z as z6 } from "zod";
-
-// src/email.ts
-import { z as z2 } from "zod";
-var MAX_EMAIL_LENGTH = 320;
-function foldAscii(text) {
-  return text.replace(/[A-Z]/g, (letter) => String.fromCharCode(letter.charCodeAt(0) + 32));
-}
-function isPrintableAscii(text) {
-  for (let index = 0;index < text.length; index += 1) {
-    const code = text.charCodeAt(index);
-    if (code < 33 || code > 126) {
-      return false;
-    }
-  }
-  return true;
-}
-function hasOneInteriorAt(text) {
-  const first = text.indexOf("@");
-  return first > 0 && first < text.length - 1 && text.indexOf("@", first + 1) === -1;
-}
-var emailSchema = z2.string().max(MAX_EMAIL_LENGTH).transform(foldAscii).pipe(z2.string().min(3).refine(hasOneInteriorAt, "Exactly one @, neither first nor last").refine(isPrintableAscii, "Printable ASCII only"));
-
-// src/ids.ts
-import { z as z3 } from "zod";
-var PREFIX_PATTERN = /^[a-z]{2,5}$/;
-function idSchema(prefix) {
-  if (!PREFIX_PATTERN.test(prefix)) {
-    throw new Error(`Invalid id prefix: ${prefix}`);
-  }
-  return z3.string().regex(new RegExp(`^${prefix}_[0-9a-f]{32}$`)).brand();
-}
-var organizationIdSchema = idSchema("org");
-var userIdSchema = idSchema("usr");
-var membershipIdSchema = idSchema("mem");
-var teamIdSchema = idSchema("team");
-var invitationIdSchema = idSchema("inv");
-var prospectIdSchema = idSchema("prs");
-var documentIdSchema = idSchema("doc");
-var dealRecordIdSchema = idSchema("deal");
-var callIdSchema = idSchema("call");
-var dealImportIdSchema = idSchema("dimp");
-var eventIdSchema = idSchema("evt");
-var requestIdSchema = idSchema("req");
-var UUID_PATTERN = /^(?:[0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
-function formatId(prefix, uuid) {
-  if (typeof uuid !== "string" || !UUID_PATTERN.test(uuid)) {
-    throw new Error("Not a UUID: expected 32 hexadecimal characters or the 8-4-4-4-12 form");
-  }
-  const hex = uuid.replaceAll("-", "").toLowerCase();
-  return idSchema(prefix).parse(`${prefix}_${hex}`);
-}
-
-// src/tenancy.ts
+// src/auth/oidc.ts
 import { z as z4 } from "zod";
-var REGIONS = ["us", "eu"];
-var regionSchema = z4.enum(REGIONS);
-var ROLES = ["owner", "admin", "manager", "rep"];
-var roleSchema = z4.enum(ROLES);
-function roleAtLeast(role, minimum) {
-  const have = ROLES.indexOf(role);
-  const need = ROLES.indexOf(minimum);
-  return have !== -1 && need !== -1 && have <= need;
-}
-var INVITABLE_ROLES = ["admin", "manager", "rep"];
-var invitableRoleSchema = z4.enum(INVITABLE_ROLES);
-var ORGANIZATION_STATUSES = ["active", "suspended", "deleted"];
-var organizationStatusSchema = z4.enum(ORGANIZATION_STATUSES);
 
 // src/core/values.ts
-import { z as z5 } from "zod";
+import { z as z2 } from "zod";
 var MAX_NAME_LENGTH = 200;
 function hasControlCharacter(text) {
   for (let index = 0;index < text.length; index += 1) {
@@ -245,20 +194,228 @@ function isWellFormed(text) {
 }
 var MAX_RAW_NAME_LENGTH = 1000;
 function boundedName(maxLength) {
-  return z5.string().max(MAX_RAW_NAME_LENGTH).trim().pipe(z5.string().min(1).max(maxLength).refine(isWellFormed, "Well-formed text only").refine((text) => !hasControlCharacter(text), "No control characters"));
+  return z2.string().max(MAX_RAW_NAME_LENGTH).trim().pipe(z2.string().min(1).max(maxLength).refine(isWellFormed, "Well-formed text only").refine((text) => !hasControlCharacter(text), "No control characters"));
 }
 var nameSchema = boundedName(MAX_NAME_LENGTH);
 var organizationNameSchema = nameSchema;
 var teamNameSchema = nameSchema;
 var MAX_PERSON_NAME_LENGTH = 201;
 var personNameSchema = boundedName(MAX_PERSON_NAME_LENGTH);
-var storedNameSchema = z5.string().min(1).max(1000);
+var storedNameSchema = z2.string().min(1).max(1000);
 var INVITATION_STATES = ["pending", "accepted", "revoked"];
-var invitationStateSchema = z5.enum(INVITATION_STATES);
-var timestampSchema = z5.iso.datetime({ offset: true }).max(64);
-var invitationTokenSchema = z5.string().min(22).max(256).regex(/^[A-Za-z0-9_-]+$/);
+var invitationStateSchema = z2.enum(INVITATION_STATES);
+var timestampSchema = z2.iso.datetime({ offset: true }).max(64);
+var invitationTokenSchema = z2.string().min(22).max(256).regex(/^[A-Za-z0-9_-]+$/);
 var IDEMPOTENCY_KEY_HEADER = "Idempotency-Key";
-var idempotencyKeySchema = z5.string().min(16).max(128).regex(/^[A-Za-z0-9_.:-]+$/);
+var idempotencyKeySchema = z2.string().min(16).max(128).regex(/^[A-Za-z0-9_.:-]+$/);
+
+// src/tenancy.ts
+import { z as z3 } from "zod";
+var REGIONS = ["us", "eu"];
+var regionSchema = z3.enum(REGIONS);
+var ROLES = ["owner", "admin", "manager", "rep"];
+var roleSchema = z3.enum(ROLES);
+function roleAtLeast(role, minimum) {
+  const have = ROLES.indexOf(role);
+  const need = ROLES.indexOf(minimum);
+  return have !== -1 && need !== -1 && have <= need;
+}
+var INVITABLE_ROLES = ["admin", "manager", "rep"];
+var invitableRoleSchema = z3.enum(INVITABLE_ROLES);
+var ORGANIZATION_STATUSES = ["active", "suspended", "deleted"];
+var organizationStatusSchema = z3.enum(ORGANIZATION_STATUSES);
+
+// src/auth/oidc.ts
+var MAX_RETURN_TO_LENGTH = 512;
+var MAX_AUTHORIZATION_URL_LENGTH = 2048;
+function hasUnsafeCharacter(text) {
+  for (let index = 0;index < text.length; index += 1) {
+    const code = text.charCodeAt(index);
+    if (code <= 31 || code >= 127 && code <= 159 || code === 1564 || code === 8206 || code === 8207 || code >= 8234 && code <= 8238 || code >= 8294 && code <= 8297) {
+      return true;
+    }
+    if (code >= 55296 && code <= 56319) {
+      const next = text.charCodeAt(index + 1);
+      if (!(next >= 56320 && next <= 57343)) {
+        return true;
+      }
+      index += 1;
+    } else if (code >= 56320 && code <= 57343) {
+      return true;
+    }
+  }
+  return false;
+}
+var DOT_SEGMENTS = new Set([".", ".."]);
+function isLocalPath(path, raw) {
+  if (!path.startsWith("/") || path.startsWith("//") || path.startsWith("/\\") || path.includes("\\") || hasUnsafeCharacter(path)) {
+    return false;
+  }
+  if (raw && /[\s\p{Cf}]/u.test(path)) {
+    return false;
+  }
+  return !path.split(/[?#]/)[0]?.split("/").some((segment) => DOT_SEGMENTS.has(segment));
+}
+var returnToSchema = z4.string().max(MAX_RETURN_TO_LENGTH).refine((path) => isLocalPath(path, true), "A path on this site").refine((path) => {
+  try {
+    return isLocalPath(decodeURIComponent(path), false);
+  } catch {
+    return false;
+  }
+}, "A path on this site");
+var googleIntentSchema = z4.enum(["sign_in", "sign_up"]);
+var googleStartRequestSchema = z4.strictObject({
+  intent: googleIntentSchema,
+  returnTo: returnToSchema.optional()
+});
+function isLoopbackHost(hostname) {
+  if (hostname === "localhost" || hostname === "[::1]") {
+    return true;
+  }
+  const octets = /^127\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(hostname);
+  return octets !== null && octets.slice(1).every((octet) => Number(octet) <= 255);
+}
+function isAuthorizationUrl(text) {
+  if (hasUnsafeCharacter(text)) {
+    return false;
+  }
+  let url;
+  try {
+    url = new URL(text);
+  } catch {
+    return false;
+  }
+  if (url.username !== "" || url.password !== "") {
+    return false;
+  }
+  return url.protocol === "https:" || url.protocol === "http:" && isLoopbackHost(url.hostname);
+}
+var authorizationUrlSchema = z4.string().max(MAX_AUTHORIZATION_URL_LENGTH).refine(isAuthorizationUrl, "An https URL, or http to a loopback host");
+var googleStartResponseSchema = z4.strictObject({
+  authorizationUrl: authorizationUrlSchema
+});
+var storable = (text) => !text.includes(String.fromCharCode(0)) && !hasUnsafeCharacter(text);
+var googleCompleteRequestSchema = z4.strictObject({
+  attemptId: z4.string().regex(/^[A-Za-z0-9_-]{1,128}$/),
+  organizationName: z4.string().trim().min(1).max(120).refine(storable, "Storable text").optional(),
+  invitationToken: z4.string().min(1).max(512).refine(storable, "Storable text").optional()
+}).refine((body) => body.organizationName === undefined !== (body.invitationToken === undefined), {
+  message: "Send exactly one of organizationName and invitationToken.",
+  path: ["organizationName"]
+});
+var browserSessionTokensSchema = z4.strictObject({
+  sessionId: z4.string().min(1).max(128),
+  accessToken: z4.string().min(1).max(4096),
+  accessTokenExpiresAt: timestampSchema,
+  organization: z4.strictObject({ id: z4.string().min(1).max(128), role: roleSchema })
+});
+var googleCompleteResponseSchema = z4.strictObject({
+  session: browserSessionTokensSchema
+});
+var authProvidersSchema = z4.object({ google: z4.boolean().default(false) });
+var AUTH_OPTIONS_PATH = "/v1/client/auth-options";
+var authOptionsResponseSchema = z4.object({
+  providers: authProvidersSchema.default({ google: false })
+});
+var route = (definition) => Object.freeze(definition);
+var GOOGLE_ROUTES = Object.freeze({
+  start: route({
+    method: "POST",
+    path: "/v1/client/google/start",
+    success: [200],
+    errors: ["oidc.disabled", "oidc.provider_unavailable"],
+    commonErrors: ["request.invalid", "rate.limited", "server.unavailable"],
+    description: "Starts a Sign in with Google with an intent (sign_in or sign_up) and an optional same-origin returnTo path. It runs the OpenID Connect authorization-code flow with PKCE (S256), a state and a nonce, keeps them in an attempt that lives 10 minutes, sets a short-lived __Secure-tula_oidc cookie that holds the attempt secret, and answers the authorizationUrl to send the browser to (https, or http to a loopback host in local development). It asks for openid, email and profile only, with no offline access. The returnTo is checked against the portal route allow-list and kept in the attempt; it is never read from the callback. oidc.disabled (404) when Google is not set up; oidc.provider_unavailable (503) with a Retry-After header when Google cannot be reached."
+  }),
+  callback: route({
+    method: "GET",
+    path: "/v1/client/google/callback",
+    success: [302],
+    errors: [
+      "oidc.disabled",
+      "oidc.state_invalid",
+      "oidc.email_unverified",
+      "oidc.provider_unavailable",
+      "auth.user_banned",
+      "auth.no_organization",
+      "organization.deleted",
+      "membership.unavailable"
+    ],
+    commonErrors: ["request.invalid", "rate.limited", "server.unavailable"],
+    description: "Where Google sends the browser back, with a code and a state. The state must match the attempt cookie and the attempt is single-use; a replayed, expired or mismatched state is oidc.state_invalid (400). The code is exchanged once, with the PKCE verifier, and the ID token is verified (RS256 only, issuer, audience, expiry, nonce, a present sub and email, and a verified email). A Google account that is already known, by its sub and never by its email, is signed in with the same checks as a password sign-in, and the answer is a 302 to the portal with the refresh cookie on it. No token appears in a URL. A new Google user is created by nothing here: the 302 goes to the sign-up step with the attempt id, and the person finishes with complete. An existing password account with the same email is linked only when Google verified the email, else oidc.email_unverified (403). It answers every outcome with a 302: an error redirects the browser to the portal error screen with its code, and the status in parentheses above is the catalogue status of that code, shown on the screen, not the HTTP status of this response. Codes, tokens and Authorization headers are never logged. oidc.provider_unavailable (503) with a Retry-After header when Google cannot be reached."
+  }),
+  complete: route({
+    method: "POST",
+    path: "/v1/client/google/complete",
+    success: [200],
+    errors: [
+      "oidc.disabled",
+      "oidc.state_invalid",
+      "oidc.invitation_mismatch",
+      "oidc.provider_unavailable",
+      "signup.invitation_invalid",
+      "signup.organization_name_invalid",
+      "auth.no_organization",
+      "organization.deleted",
+      "membership.unavailable"
+    ],
+    commonErrors: ["request.invalid", "rate.limited", "server.unavailable"],
+    description: "Finishes the sign-up of a new Google user: it takes the attempt id (the secret is in the cookie) and exactly one of an organizationName or an invitationToken. It creates the Organization or joins the invited one through the same sign-up path as an email sign-up, with no emailed code because Google verified the email, and stores the user and a google identity with no password. For an invitation the Google email must equal the invited address, else oidc.invitation_mismatch (403). An attempt that is missing, used or expired is oidc.state_invalid (400). An attempt is single-use. A repeat is refused with oidc.state_invalid (400) and nothing is created twice. Answers the browser session; the refresh token is in the cookie, never in the body. The attempt secret, tokens and the email are never logged."
+  })
+});
+// src/core/internal.ts
+import { z as z7 } from "zod";
+
+// src/email.ts
+import { z as z5 } from "zod";
+var MAX_EMAIL_LENGTH = 320;
+function foldAscii(text) {
+  return text.replace(/[A-Z]/g, (letter) => String.fromCharCode(letter.charCodeAt(0) + 32));
+}
+function isPrintableAscii(text) {
+  for (let index = 0;index < text.length; index += 1) {
+    const code = text.charCodeAt(index);
+    if (code < 33 || code > 126) {
+      return false;
+    }
+  }
+  return true;
+}
+function hasOneInteriorAt(text) {
+  const first = text.indexOf("@");
+  return first > 0 && first < text.length - 1 && text.indexOf("@", first + 1) === -1;
+}
+var emailSchema = z5.string().max(MAX_EMAIL_LENGTH).transform(foldAscii).pipe(z5.string().min(3).refine(hasOneInteriorAt, "Exactly one @, neither first nor last").refine(isPrintableAscii, "Printable ASCII only"));
+
+// src/ids.ts
+import { z as z6 } from "zod";
+var PREFIX_PATTERN = /^[a-z]{2,5}$/;
+function idSchema(prefix) {
+  if (!PREFIX_PATTERN.test(prefix)) {
+    throw new Error(`Invalid id prefix: ${prefix}`);
+  }
+  return z6.string().regex(new RegExp(`^${prefix}_[0-9a-f]{32}$`)).brand();
+}
+var organizationIdSchema = idSchema("org");
+var userIdSchema = idSchema("usr");
+var membershipIdSchema = idSchema("mem");
+var teamIdSchema = idSchema("team");
+var invitationIdSchema = idSchema("inv");
+var prospectIdSchema = idSchema("prs");
+var documentIdSchema = idSchema("doc");
+var dealRecordIdSchema = idSchema("deal");
+var callIdSchema = idSchema("call");
+var dealImportIdSchema = idSchema("dimp");
+var eventIdSchema = idSchema("evt");
+var requestIdSchema = idSchema("req");
+var UUID_PATTERN = /^(?:[0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+function formatId(prefix, uuid) {
+  if (typeof uuid !== "string" || !UUID_PATTERN.test(uuid)) {
+    throw new Error("Not a UUID: expected 32 hexadecimal characters or the 8-4-4-4-12 form");
+  }
+  const hex = uuid.replaceAll("-", "").toLowerCase();
+  return idSchema(prefix).parse(`${prefix}_${hex}`);
+}
 
 // src/core/internal.ts
 var INTERNAL_CALL_ERRORS = Object.freeze({
@@ -268,79 +425,79 @@ var INTERNAL_CALL_ERRORS = Object.freeze({
   updateMemberProfile: Object.freeze(["member.not_found"]),
   abandonOrganization: Object.freeze(["organization.not_abandonable"])
 });
-var internalCreateOrganizationRequestSchema = z6.strictObject({
+var internalCreateOrganizationRequestSchema = z7.strictObject({
   userId: userIdSchema,
   organizationName: organizationNameSchema,
   email: emailSchema.optional(),
   name: personNameSchema.nullable().optional()
 });
-var internalCreateOrganizationResponseSchema = z6.object({
+var internalCreateOrganizationResponseSchema = z7.object({
   organizationId: organizationIdSchema,
-  role: z6.literal("owner")
+  role: z7.literal("owner")
 });
-var internalAcceptInvitationRequestSchema = z6.strictObject({
+var internalAcceptInvitationRequestSchema = z7.strictObject({
   userId: userIdSchema,
   email: emailSchema,
   name: personNameSchema.nullable().optional(),
   invitationToken: invitationTokenSchema
 });
-var internalAcceptInvitationResponseSchema = z6.object({
+var internalAcceptInvitationResponseSchema = z7.object({
   organizationId: organizationIdSchema,
   role: invitableRoleSchema
 });
-var internalMembershipRequestSchema = z6.strictObject({
+var internalMembershipRequestSchema = z7.strictObject({
   userId: userIdSchema
 });
-var internalMembershipResponseSchema = z6.discriminatedUnion("found", [
-  z6.object({
-    found: z6.literal(true),
+var internalMembershipResponseSchema = z7.discriminatedUnion("found", [
+  z7.object({
+    found: z7.literal(true),
     organizationId: organizationIdSchema,
     role: roleSchema,
     organizationStatus: organizationStatusSchema
   }),
-  z6.object({ found: z6.literal(false) })
+  z7.object({ found: z7.literal(false) })
 ]);
-var internalUpdateMemberProfileParamsSchema = z6.strictObject({
+var internalUpdateMemberProfileParamsSchema = z7.strictObject({
   userId: userIdSchema
 });
-var internalUpdateMemberProfileRequestSchema = z6.strictObject({
+var internalUpdateMemberProfileRequestSchema = z7.strictObject({
   email: emailSchema.optional(),
   name: personNameSchema.nullable().optional()
 }).refine((body) => body.email !== undefined || body.name !== undefined, {
   message: "Send an email, a name or both"
 });
-var internalUpdateMemberProfileResponseSchema = z6.object({
+var internalUpdateMemberProfileResponseSchema = z7.object({
   userId: userIdSchema,
   email: emailSchema,
   name: storedNameSchema.nullable()
 });
 var ABANDON_MAX_AGE_HOURS = 24;
-var internalAbandonOrganizationParamsSchema = z6.strictObject({
+var internalAbandonOrganizationParamsSchema = z7.strictObject({
   organizationId: organizationIdSchema
 });
-var internalAbandonOrganizationRequestSchema = z6.strictObject({
+var internalAbandonOrganizationRequestSchema = z7.strictObject({
   userId: userIdSchema
 });
-var internalAbandonOrganizationResponseSchema = z6.object({
+var internalAbandonOrganizationResponseSchema = z7.object({
   organizationId: organizationIdSchema,
-  status: z6.literal("deleted")
+  status: z7.literal("deleted")
 });
 // src/core/invitation.ts
-import { z as z8 } from "zod";
+import { z as z9 } from "zod";
 
 // src/pagination.ts
-import { z as z7 } from "zod";
+import { z as z8 } from "zod";
 var MAX_PAGE_SIZE = 100;
 var DEFAULT_PAGE_SIZE = 25;
 var MAX_CURSOR_LENGTH = 512;
-var cursorTextSchema = z7.string().min(1).max(MAX_CURSOR_LENGTH);
-var pageQuerySchema = z7.object({
+var cursorTextSchema = z8.string().min(1).max(MAX_CURSOR_LENGTH);
+var pageQuerySchema = z8.object({
   cursor: cursorTextSchema.optional(),
-  limit: z7.union([z7.number(), z7.string().regex(/^\d{1,3}$/)]).transform((value) => Number(value)).pipe(z7.number().int().min(1).max(MAX_PAGE_SIZE)).default(DEFAULT_PAGE_SIZE)
+  limit: z8.union([z8.number(), z8.string().regex(/^\d{1,3}$/)]).transform((value) => Number(value)).pipe(z8.number().int().min(1).max(MAX_PAGE_SIZE)).default(DEFAULT_PAGE_SIZE)
 });
 function pageSchema(itemSchema) {
-  return z7.object({
-    items: z7.array(itemSchema).max(MAX_PAGE_SIZE),
+  return z8.object({
+    items: z8.array(itemSchema).max(MAX_PAGE_SIZE),
     nextCursor: cursorTextSchema.nullable()
   });
 }
@@ -373,7 +530,7 @@ function decodeCursor(text, schema) {
 }
 
 // src/core/invitation.ts
-var invitationSchema = z8.object({
+var invitationSchema = z9.object({
   id: invitationIdSchema,
   email: emailSchema,
   role: invitableRoleSchema,
@@ -383,19 +540,19 @@ var invitationSchema = z8.object({
   expiresAt: timestampSchema,
   createdAt: timestampSchema
 });
-var createInvitationRequestSchema = z8.strictObject({
+var createInvitationRequestSchema = z9.strictObject({
   email: emailSchema,
   role: invitableRoleSchema,
   teamId: teamIdSchema.optional()
 });
 var listInvitationsQuerySchema = pageQuerySchema.extend({ state: invitationStateSchema.default("pending") }).strict();
 var listInvitationsResponseSchema = pageSchema(invitationSchema);
-var invitationParamsSchema = z8.strictObject({
+var invitationParamsSchema = z9.strictObject({
   invitationId: invitationIdSchema
 });
 // src/core/member.ts
-import { z as z9 } from "zod";
-var memberSchema = z9.object({
+import { z as z10 } from "zod";
+var memberSchema = z10.object({
   id: membershipIdSchema,
   userId: userIdSchema,
   email: emailSchema,
@@ -406,15 +563,15 @@ var memberSchema = z9.object({
 });
 var listMembersQuerySchema = pageQuerySchema.strict();
 var listMembersResponseSchema = pageSchema(memberSchema);
-var memberParamsSchema = z9.strictObject({
+var memberParamsSchema = z10.strictObject({
   membershipId: membershipIdSchema
 });
-var changeMemberRoleRequestSchema = z9.strictObject({
+var changeMemberRoleRequestSchema = z10.strictObject({
   role: roleSchema
 });
 // src/core/organization.ts
-import { z as z10 } from "zod";
-var organizationSchema = z10.object({
+import { z as z11 } from "zod";
+var organizationSchema = z11.object({
   id: organizationIdSchema,
   name: storedNameSchema,
   region: regionSchema,
@@ -422,45 +579,45 @@ var organizationSchema = z10.object({
   createdAt: timestampSchema,
   updatedAt: timestampSchema
 });
-var renameOrganizationRequestSchema = z10.strictObject({
+var renameOrganizationRequestSchema = z11.strictObject({
   name: organizationNameSchema
 });
 // src/core/team.ts
-import { z as z11 } from "zod";
-var teamSchema = z11.object({
+import { z as z12 } from "zod";
+var teamSchema = z12.object({
   id: teamIdSchema,
   name: storedNameSchema,
   createdAt: timestampSchema,
   updatedAt: timestampSchema
 });
-var createTeamRequestSchema = z11.strictObject({
+var createTeamRequestSchema = z12.strictObject({
   name: teamNameSchema
 });
-var renameTeamRequestSchema = z11.strictObject({
+var renameTeamRequestSchema = z12.strictObject({
   name: teamNameSchema
 });
 var listTeamsQuerySchema = pageQuerySchema.strict();
 var listTeamsResponseSchema = pageSchema(teamSchema);
-var teamParamsSchema = z11.strictObject({
+var teamParamsSchema = z12.strictObject({
   teamId: teamIdSchema
 });
-var addTeamMemberRequestSchema = z11.strictObject({
+var addTeamMemberRequestSchema = z12.strictObject({
   membershipId: membershipIdSchema
 });
-var teamMemberSchema = z11.object({
+var teamMemberSchema = z12.object({
   teamId: teamIdSchema,
   membershipId: membershipIdSchema,
   createdAt: timestampSchema
 });
-var teamMemberParamsSchema = z11.strictObject({
+var teamMemberParamsSchema = z12.strictObject({
   teamId: teamIdSchema,
   membershipId: membershipIdSchema
 });
 // src/events.ts
-import { z as z12 } from "zod";
+import { z as z13 } from "zod";
 var eventTypeSchema = errorCodeSchema;
-var versionSchema = z12.number().int().positive();
-var occurredAtSchema = z12.iso.datetime({ offset: true }).max(64);
+var versionSchema = z13.number().int().positive();
+var occurredAtSchema = z13.iso.datetime({ offset: true }).max(64);
 var envelopeShape = {
   id: eventIdSchema,
   type: eventTypeSchema,
@@ -470,13 +627,13 @@ var envelopeShape = {
   region: regionSchema
 };
 function eventEnvelopeSchema(dataSchema) {
-  return z12.object({ ...envelopeShape, data: dataSchema });
+  return z13.object({ ...envelopeShape, data: dataSchema });
 }
 function defineEvent(type, version, dataSchema) {
-  const schema = z12.object({
+  const schema = z13.object({
     ...envelopeShape,
-    type: z12.literal(eventTypeSchema.parse(type)),
-    version: z12.literal(versionSchema.parse(version)),
+    type: z13.literal(eventTypeSchema.parse(type)),
+    version: z13.literal(versionSchema.parse(version)),
     data: dataSchema
   });
   return {
@@ -512,9 +669,9 @@ var PLAYBOOK_READ_ROLES = [
   "manager",
   "rep"
 ];
-var route = (definition) => Object.freeze(definition);
+var route2 = (definition) => Object.freeze(definition);
 var PLAYBOOK_ROUTES = Object.freeze({
-  uploadDocument: route({
+  uploadDocument: route2({
     method: "POST",
     path: "/playbook/documents",
     internal: false,
@@ -530,7 +687,7 @@ var PLAYBOOK_ROUTES = Object.freeze({
     ],
     description: `Uploads one file (multipart/form-data, one part named "file") to the Organization's Playbook. Owner and Admin only; Managers and Reps get auth.forbidden. The type and size of the file part are checked before anything is stored: document.unsupported_type (415) and document.too_large (413); a malformed name or an empty file is request.invalid. The common request.too_large and request.unsupported_media_type apply to the whole request instead: a body over the envelope limit, or a body that is not multipart. Answers 201 with the new document in state "uploaded". If the content matches a document the Organization already has, answers 200 with that stored document, with its stored fileName (not the new upload's name), so a duplicate is an answer, not an error: a match on a "deleted" document restores it (state "processing"), and a match on a "failed" document re-queues it for processing and answers with state "uploaded". The page limit is not checked here: a document over it ends in state "failed" with failureReason "too_many_pages". Accepts an Idempotency-Key header.`
   }),
-  listDocuments: route({
+  listDocuments: route2({
     method: "GET",
     path: "/playbook/documents",
     internal: false,
@@ -540,7 +697,7 @@ var PLAYBOOK_ROUTES = Object.freeze({
     commonErrors: ["request.invalid"],
     description: "Lists the Organization's documents, newest first (sorted by createdAt, then id, both descending), one cursor-paginated page at a time (at most 100). Owner, Admin, Manager and Rep may read. Soft-deleted documents are left out unless state=deleted is asked for."
   }),
-  getDocument: route({
+  getDocument: route2({
     method: "GET",
     path: "/playbook/documents/{documentId}",
     internal: false,
@@ -550,7 +707,7 @@ var PLAYBOOK_ROUTES = Object.freeze({
     commonErrors: ["request.invalid"],
     description: "Reads one document and its state, with the failure reason when it failed and the purge time when it was deleted. Owner, Admin, Manager and Rep may read."
   }),
-  deleteDocument: route({
+  deleteDocument: route2({
     method: "DELETE",
     path: "/playbook/documents/{documentId}",
     internal: false,
@@ -560,7 +717,7 @@ var PLAYBOOK_ROUTES = Object.freeze({
     commonErrors: ["request.invalid"],
     description: 'Soft-deletes a document: it is hidden at once and purged after the retention period, and can be restored until then. Owner and Admin only. Idempotent by end state: answers 200 with the document in state "deleted" and its purge time, and deleting an already deleted document answers the same. Takes no body.'
   }),
-  restoreDocument: route({
+  restoreDocument: route2({
     method: "POST",
     path: "/playbook/documents/{documentId}/restore",
     internal: false,
@@ -570,7 +727,7 @@ var PLAYBOOK_ROUTES = Object.freeze({
     commonErrors: ["request.invalid"],
     description: 'Restores a soft-deleted document within the retention period; it is re-ingested from the kept file and shows as "processing". Owner and Admin only. Idempotent by end state: a document that is no longer deleted (restored by an earlier call, or never deleted) answers 200 with the document as it is. A deleted document whose purge time has passed but which the purge has not yet removed is document.not_restorable (410); once purged the record is gone and the answer is document.not_found (404). Takes no body.'
   }),
-  removeOrganizationDocuments: route({
+  removeOrganizationDocuments: route2({
     method: "POST",
     path: "/internal/playbook/organizations/{organizationId}/remove-all",
     internal: true,
@@ -588,18 +745,18 @@ var PLAYBOOK_ROUTES = Object.freeze({
 });
 
 // src/playbook/sales-history-errors.ts
-import { z as z16 } from "zod";
+import { z as z17 } from "zod";
 
 // src/playbook/rights.ts
-import { z as z15 } from "zod";
+import { z as z16 } from "zod";
 
 // src/playbook/rights-wording.ts
-import { z as z14 } from "zod";
+import { z as z15 } from "zod";
 
 // src/playbook/values.ts
-import { z as z13 } from "zod";
+import { z as z14 } from "zod";
 var DOCUMENT_STATES = ["uploaded", "processing", "ready", "failed", "deleted"];
-var documentStateSchema = z13.enum(DOCUMENT_STATES);
+var documentStateSchema = z14.enum(DOCUMENT_STATES);
 var DOCUMENT_FAILURE_REASONS = [
   "too_many_pages",
   "unreadable",
@@ -607,7 +764,7 @@ var DOCUMENT_FAILURE_REASONS = [
   "no_text",
   "processing_failed"
 ];
-var documentFailureReasonSchema = z13.enum(DOCUMENT_FAILURE_REASONS);
+var documentFailureReasonSchema = z14.enum(DOCUMENT_FAILURE_REASONS);
 var ACCEPTED_DOCUMENT_EXTENSIONS = [".pdf", ".docx", ".pptx", ".txt", ".md"];
 var ACCEPTED_DOCUMENT_MEDIA_TYPES = [
   "application/pdf",
@@ -616,7 +773,7 @@ var ACCEPTED_DOCUMENT_MEDIA_TYPES = [
   "text/plain",
   "text/markdown"
 ];
-var documentMediaTypeSchema = z13.enum(ACCEPTED_DOCUMENT_MEDIA_TYPES);
+var documentMediaTypeSchema = z14.enum(ACCEPTED_DOCUMENT_MEDIA_TYPES);
 var MEDIA_TYPE_BY_EXTENSION = Object.freeze({
   ".pdf": "application/pdf",
   ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -673,9 +830,9 @@ function hasStem(name) {
   const stem = dot === -1 ? name : name.slice(0, dot);
   return !INVISIBLE_STEM.test(stem);
 }
-var documentFileNameSchema = z13.string().max(MAX_RAW_FILE_NAME_LENGTH).transform(normaliseFileName).pipe(z13.string().min(1).max(MAX_DOCUMENT_FILE_NAME_LENGTH).refine(isWellFormed2, "Well-formed text only").refine((name) => !/[/\\]/.test(name), "No path separators").refine(hasStem, "A name before the extension"));
-var documentTypeCheckSchema = z13.string().transform(normaliseFileName).pipe(z13.string().refine((name) => documentExtension(name) !== undefined, "An accepted file type only"));
-var documentSizeCheckSchema = z13.number().max(MAX_DOCUMENT_BYTES);
+var documentFileNameSchema = z14.string().max(MAX_RAW_FILE_NAME_LENGTH).transform(normaliseFileName).pipe(z14.string().min(1).max(MAX_DOCUMENT_FILE_NAME_LENGTH).refine(isWellFormed2, "Well-formed text only").refine((name) => !/[/\\]/.test(name), "No path separators").refine(hasStem, "A name before the extension"));
+var documentTypeCheckSchema = z14.string().transform(normaliseFileName).pipe(z14.string().refine((name) => documentExtension(name) !== undefined, "An accepted file type only"));
+var documentSizeCheckSchema = z14.number().max(MAX_DOCUMENT_BYTES);
 function normaliseMediaType(mediaType) {
   return (mediaType.split(";")[0] ?? "").trim().toLowerCase();
 }
@@ -695,12 +852,12 @@ function isWellFormedText(text) {
 var MAX_RIGHTS_HEADING_LENGTH = 200;
 var MAX_RIGHTS_PARAGRAPHS = 10;
 var MAX_RIGHTS_TEXT_LENGTH = 2000;
-var textSchema = (max) => z14.string().min(1).max(max).refine(isWellFormedText, "Well-formed text only").refine((text) => !hasStrippableCharacter(text), "No control or direction characters").refine((text) => text.trim() === text, "No surrounding spaces");
-var rightsWordingSchema = z14.strictObject({
+var textSchema = (max) => z15.string().min(1).max(max).refine(isWellFormedText, "Well-formed text only").refine((text) => !hasStrippableCharacter(text), "No control or direction characters").refine((text) => text.trim() === text, "No surrounding spaces");
+var rightsWordingSchema = z15.strictObject({
   heading: textSchema(MAX_RIGHTS_HEADING_LENGTH),
-  paragraphs: z14.array(textSchema(MAX_RIGHTS_TEXT_LENGTH)).min(1).max(MAX_RIGHTS_PARAGRAPHS),
+  paragraphs: z15.array(textSchema(MAX_RIGHTS_TEXT_LENGTH)).min(1).max(MAX_RIGHTS_PARAGRAPHS),
   checkbox: textSchema(MAX_RIGHTS_TEXT_LENGTH),
-  draft: z14.literal(true).optional()
+  draft: z15.literal(true).optional()
 });
 function freeze(wording) {
   return Object.freeze({
@@ -726,19 +883,19 @@ function rightsWordingFor(version) {
 
 // src/playbook/rights.ts
 var MAX_RIGHTS_WORDING_VERSION = 1e6;
-var rightsWordingVersionSchema = z15.number().int().min(1).max(MAX_RIGHTS_WORDING_VERSION);
-var rightsConfirmationSchema = z15.object({
+var rightsWordingVersionSchema = z16.number().int().min(1).max(MAX_RIGHTS_WORDING_VERSION);
+var rightsConfirmationSchema = z16.object({
   wordingVersion: rightsWordingVersionSchema,
   confirmedByUserId: userIdSchema,
   confirmedAt: timestampSchema
 });
-var rightsStatusSchema = z15.object({
+var rightsStatusSchema = z16.object({
   currentWordingVersion: rightsWordingVersionSchema,
   confirmation: rightsConfirmationSchema.nullable(),
-  confirmed: z15.boolean(),
+  confirmed: z16.boolean(),
   currentWording: rightsWordingSchema.optional()
 }).refine((status) => status.confirmed === (status.confirmation !== null && status.confirmation.wordingVersion === status.currentWordingVersion), { message: "Confirmed exactly when the stored version is the current one", path: ["confirmed"] });
-var confirmRightsRequestSchema = z15.strictObject({
+var confirmRightsRequestSchema = z16.strictObject({
   wordingVersion: rightsWordingVersionSchema
 });
 
@@ -793,13 +950,13 @@ var SALES_HISTORY_ERRORS = {
     }
   })
 };
-var rightsRequiredDetailsSchema = z16.strictObject({
-  wordingVersion: z16.number().int().min(1).max(MAX_RIGHTS_WORDING_VERSION)
+var rightsRequiredDetailsSchema = z17.strictObject({
+  wordingVersion: z17.number().int().min(1).max(MAX_RIGHTS_WORDING_VERSION)
 });
 
 // src/playbook/sales-history-routes.ts
 var SALES_HISTORY_READ_ROLES = PLAYBOOK_WRITE_ROLES;
-var route2 = (definition) => Object.freeze(definition);
+var route3 = (definition) => Object.freeze(definition);
 var ENVELOPE_ERRORS = [
   "request.invalid",
   "request.too_large",
@@ -808,7 +965,7 @@ var ENVELOPE_ERRORS = [
   "request.idempotency_in_progress"
 ];
 var SALES_HISTORY_ROUTES = Object.freeze({
-  uploadCall: route2({
+  uploadCall: route3({
     method: "POST",
     path: "/playbook/calls",
     internal: false,
@@ -825,7 +982,7 @@ var SALES_HISTORY_ROUTES = Object.freeze({
     commonErrors: [...ENVELOPE_ERRORS],
     description: 'Uploads one Call as a Transcript (txt, vtt, srt or json, up to 5 MB) or a Recording (mp3, m4a, wav, ogg, webm or flac, up to 500 MB, streamed to storage and never held whole), as multipart/form-data with one file part named "file" and the text fields "dealId" and "rep". Owner and Admin only; Managers and Reps get auth.forbidden. A Transcript needs "rep", the JSON {"by":"speaker","label":...}; a per-side Recording takes {"by":"channel","channel":"left"|"right"}; a Recording with no "rep" waits in state "awaiting_rep" after transcription until an Owner or Admin picks one. A Deal that does not exist yet is created "open". Refused with rights.confirmation_required (403, its details name the wording version to show) until the Organization has a current rights confirmation. The type and size of the file part are checked before anything is stored: call.unsupported_type (415) and call.too_large (413); a malformed name, an empty file or a bad field is request.invalid, and a Rep choice that does not suit the kind is call.rep_invalid. The common request.too_large and request.unsupported_media_type apply to the whole request instead. Answers 201 with the new Call in state "uploaded". If the content matches a Call the Organization already has under the same Deal, answers 200 with that stored Call: a match on a "deleted" Call restores it (state "processing") and a match on a "failed" Call under the same Deal whose failureReason is transcription_failed, transcription_timed_out or processing_failed (reasons that can be transient) re-queues it for processing (state "uploaded"); a match on a failed Call with any other reason answers 200 with the failed Call unchanged, because the same file would fail the same way: rep_label_not_found and not_per_side are fixed by changing the Rep, and too_many_speakers, no_turns, too_few_speakers, too_long and unreadable by choosing to delete the Call and upload a corrected file; any other match returns the Call as it is. The same content under another deal id is call.content_in_other_deal. A recording over 3 hours, a Transcript with no turns or fewer than two speakers, or a Rep label not in the file is not checked here: the Call ends in state "failed" with a failureReason. Accepts an Idempotency-Key header.'
   }),
-  listCalls: route2({
+  listCalls: route3({
     method: "GET",
     path: "/playbook/calls",
     internal: false,
@@ -835,7 +992,7 @@ var SALES_HISTORY_ROUTES = Object.freeze({
     commonErrors: ["request.invalid"],
     description: "Lists the Organization's Calls, newest first (sorted by createdAt, then id, both descending), one cursor-paginated page at a time (at most 100). Owner and Admin only. Deleted Calls are left out unless state=deleted is asked for; state=awaiting_rep lists the Calls waiting for a Rep and dealRecordId (the opaque Deal id) limits the list to one Deal. A list item never carries speakers: only the single-Call read returns speaker excerpts."
   }),
-  getCall: route2({
+  getCall: route3({
     method: "GET",
     path: "/playbook/calls/{callId}",
     internal: false,
@@ -845,7 +1002,7 @@ var SALES_HISTORY_ROUTES = Object.freeze({
     commonErrors: ["request.invalid"],
     description: "Reads one Call and its state, with the failure reason when it failed, the speaker labels to pick a Rep from and the purge time when it was deleted. For a Recording with speaker labels, above all one awaiting its Rep, it also returns speakers: a short excerpt per label (the first turns of the speaker, at most 240 characters, cut at a word boundary with an ellipsis; at most 20 speakers) so a person can tell who is the Rep. The excerpts are tenant Transcript text: returned only to the Owner and Admin of the owning Organization and never logged. No other Transcript text or audio is returned. Owner and Admin only."
   }),
-  deleteCall: route2({
+  deleteCall: route3({
     method: "DELETE",
     path: "/playbook/calls/{callId}",
     internal: false,
@@ -855,7 +1012,7 @@ var SALES_HISTORY_ROUTES = Object.freeze({
     commonErrors: ["request.invalid"],
     description: 'Soft-deletes a Call: it and its Moments are hidden from search at once and purged after 30 days, and it can be restored until then. Owner and Admin only. Idempotent by end state: answers 200 with the Call in state "deleted" and its purge time, and deleting an already deleted Call answers the same. Takes no body.'
   }),
-  restoreCall: route2({
+  restoreCall: route3({
     method: "POST",
     path: "/playbook/calls/{callId}/restore",
     internal: false,
@@ -865,7 +1022,7 @@ var SALES_HISTORY_ROUTES = Object.freeze({
     commonErrors: ["request.invalid"],
     description: 'Restores a soft-deleted Call within the retention period; it is processed again from the kept Transcript (a Recording is never transcribed twice) and shows as "processing". Owner and Admin only. Idempotent by end state: a Call that is no longer deleted answers 200 with the Call as it is. A deleted Call whose purge time has passed but which the purge has not yet removed is call.not_restorable (410); once purged the record is gone and the answer is call.not_found (404). Takes no body.'
   }),
-  setCallRep: route2({
+  setCallRep: route3({
     method: "PUT",
     path: "/playbook/calls/{callId}/rep",
     internal: false,
@@ -875,7 +1032,7 @@ var SALES_HISTORY_ROUTES = Object.freeze({
     commonErrors: ["request.invalid"],
     description: 'Picks the Rep of a Call waiting in "awaiting_rep", or changes the Rep of a "ready" Call or a "failed" Call whose failureReason is rep_label_not_found or not_per_side, with {"rep":{"by":"speaker","label":...}} or {"rep":{"by":"channel","channel":...}}. Owner and Admin only, and any of them may pick, not only the uploader. A choice that does not suit the Call, or a label that is not among its speakers, is call.rep_invalid; a Call in any other state or with any other failure reason is call.rep_not_changeable. A different Rep answers 200 with the Call in state "processing": its Moments are rebuilt by a queued job and the Call is out of search until it finishes. Idempotent by end state: choosing the Rep the Call already has changes nothing and answers 200 with the Call as it is.'
   }),
-  listDeals: route2({
+  listDeals: route3({
     method: "GET",
     path: "/playbook/deals",
     internal: false,
@@ -885,7 +1042,7 @@ var SALES_HISTORY_ROUTES = Object.freeze({
     commonErrors: ["request.invalid"],
     description: "Lists the Organization's Deals, newest first (sorted by createdAt, then id, the opaque Deal id, both descending), one cursor-paginated page at a time (at most 100). Owner and Admin only. outcome limits the list to one Outcome and appearedInImport=false lists the Deals that have Calls but never appeared in a CSV, so a mistyped deal id is visible."
   }),
-  getDeal: route2({
+  getDeal: route3({
     method: "GET",
     path: "/playbook/deals/{dealRecordId}",
     internal: false,
@@ -895,7 +1052,7 @@ var SALES_HISTORY_ROUTES = Object.freeze({
     commonErrors: ["request.invalid"],
     description: "Reads one Deal by its opaque id (the deal_ id from a list or a lookup, never the customer deal id, which is found with the lookup route). Owner and Admin only. A Deal cannot be deleted on its own."
   }),
-  lookupDeal: route2({
+  lookupDeal: route3({
     method: "POST",
     path: "/playbook/deals/lookup",
     internal: false,
@@ -905,7 +1062,7 @@ var SALES_HISTORY_ROUTES = Object.freeze({
     commonErrors: ["request.invalid"],
     description: 'Finds a Deal by the customer deal id, sent in the JSON body {"dealId":...} so it never appears in a URL, a query string or a cursor (trimmed, otherwise exact and case-sensitive). Answers 200 with the Deal, whose opaque id is then used in every path, or deal.not_found. Owner and Admin only. It changes nothing.'
   }),
-  setDealOutcome: route2({
+  setDealOutcome: route3({
     method: "PUT",
     path: "/playbook/deals/{dealRecordId}/outcome",
     internal: false,
@@ -915,7 +1072,7 @@ var SALES_HISTORY_ROUTES = Object.freeze({
     commonErrors: ["request.invalid"],
     description: "Sets or corrects a Deal's Outcome (won, lost or open), even a decided one. Owner and Admin only. Idempotent by end state. A change bumps the Deal's Outcome sequence and queues the re-tag of its Moments; search follows the database at once for a lost Deal and may lag for a Deal that has just become won."
   }),
-  uploadDealImport: route2({
+  uploadDealImport: route3({
     method: "POST",
     path: "/playbook/deal-imports",
     internal: false,
@@ -930,7 +1087,7 @@ var SALES_HISTORY_ROUTES = Object.freeze({
     commonErrors: [...ENVELOPE_ERRORS],
     description: 'Uploads the fixed CSV template (columns deal_id, outcome, closed_at, amount, currency and optionally name; closed_at is a plain YYYY-MM-DD date, kept as written, and a value with a time or an offset is a rejected row with the reason invalid_closed_at; up to 10 MB and 50,000 rows) as multipart/form-data with one file part named "file". Owner and Admin only. The type, size and first row are checked before anything is stored: deal_import.unsupported_type (415), deal_import.too_large (413) and deal_import.header_invalid (422). An Organization with MAX_QUEUED_DEAL_IMPORTS (5) imports not yet finished (state uploaded or processing) is refused with deal_import.busy (429) and nothing is stored; the count is checked before the file is stored, so a refused upload leaves no import. The header is read with checkDealImportHeaderText (the same reader and limits as parseCsv) on the first 8192 characters of the file (a header still unfinished there is deferred to the job, not refused), and the job re-checks the header of its full parse with the same verdict. The rest of the file is parsed in the background job, never on the request path, under strict RFC 4180 quoting: a stray quote fails the file, and a cell over 1000 characters fails the whole file too (a cell up to 1000 characters is checked row by row, and a bad one is a rejected row); blank lines at the end of the file are ignored, and an interior blank line is a rejected row with the reason blank_row, so the report has no gap, and it still counts in the row numbers, and rowNumber is the record number with the header as record 1. Answers 202 with the import in state "uploaded"; it is processed in the background. Imports are not deduplicated by content: each upload is a new import, and only the Idempotency-Key makes a retry of the same request answer with the stored import. Valid rows are applied and bad rows are reported, never dropped: a deal id already won or lost, or repeated within the file, is a rejected row in the report, not an HTTP error. A file with more rows than the limit, a cell over the length limit or a quoting error ends in state "failed" with failureReason "too_many_rows" or "unreadable". Accepts an Idempotency-Key header.'
   }),
-  listDealImports: route2({
+  listDealImports: route3({
     method: "GET",
     path: "/playbook/deal-imports",
     internal: false,
@@ -940,7 +1097,7 @@ var SALES_HISTORY_ROUTES = Object.freeze({
     commonErrors: ["request.invalid"],
     description: "Lists the Organization's Deal imports, newest first (sorted by createdAt, then id, both descending), one cursor-paginated page at a time (at most 100). Owner and Admin only."
   }),
-  getDealImport: route2({
+  getDealImport: route3({
     method: "GET",
     path: "/playbook/deal-imports/{importId}",
     internal: false,
@@ -950,7 +1107,7 @@ var SALES_HISTORY_ROUTES = Object.freeze({
     commonErrors: ["request.invalid"],
     description: "Reads one import: its state, failure reason and the counts of rows, applied rows and rejected rows. Owner and Admin only."
   }),
-  listDealImportRows: route2({
+  listDealImportRows: route3({
     method: "GET",
     path: "/playbook/deal-imports/{importId}/rows",
     internal: false,
@@ -960,7 +1117,7 @@ var SALES_HISTORY_ROUTES = Object.freeze({
     commonErrors: ["request.invalid"],
     description: "Reads the report of an import, in CSV order, one cursor-paginated page at a time (at most 100); result=rejected lists only the rows that need fixing. Each row has its row number (the header is row 1), the deal id when it was valid, the result and a reason code. No other cell is returned. Owner and Admin only."
   }),
-  getRightsConfirmation: route2({
+  getRightsConfirmation: route3({
     method: "GET",
     path: "/playbook/rights-confirmation",
     internal: false,
@@ -970,7 +1127,7 @@ var SALES_HISTORY_ROUTES = Object.freeze({
     commonErrors: [],
     description: "Reads the Organization's recorded confirmation that it may share Recordings and Transcripts, with who confirmed and when, the version of the wording they saw, the current wording version, optionally the text of that version (also in RIGHTS_WORDINGS) and whether the stored one is current. Owner and Admin only. Without a current confirmation, uploads of Calls are refused; existing Calls are kept and stay searchable."
   }),
-  confirmRights: route2({
+  confirmRights: route3({
     method: "PUT",
     path: "/playbook/rights-confirmation",
     internal: false,
@@ -983,10 +1140,10 @@ var SALES_HISTORY_ROUTES = Object.freeze({
 });
 
 // src/playbook/search.ts
-import { z as z18 } from "zod";
+import { z as z19 } from "zod";
 
 // src/playbook/call-values.ts
-import { z as z17 } from "zod";
+import { z as z18 } from "zod";
 var CALL_STATES = [
   "uploaded",
   "transcribing",
@@ -996,7 +1153,7 @@ var CALL_STATES = [
   "failed",
   "deleted"
 ];
-var callStateSchema = z17.enum(CALL_STATES);
+var callStateSchema = z18.enum(CALL_STATES);
 var CALL_FAILURE_REASONS = [
   "no_turns",
   "too_few_speakers",
@@ -1009,9 +1166,9 @@ var CALL_FAILURE_REASONS = [
   "unreadable",
   "processing_failed"
 ];
-var callFailureReasonSchema = z17.enum(CALL_FAILURE_REASONS);
+var callFailureReasonSchema = z18.enum(CALL_FAILURE_REASONS);
 var CALL_KINDS = ["transcript", "recording"];
-var callKindSchema = z17.enum(CALL_KINDS);
+var callKindSchema = z18.enum(CALL_KINDS);
 var ACCEPTED_TRANSCRIPT_EXTENSIONS = [".txt", ".vtt", ".srt", ".json"];
 var ACCEPTED_RECORDING_EXTENSIONS = [
   ".mp3",
@@ -1033,7 +1190,7 @@ var CALL_MEDIA_TYPES = [
   "audio/webm",
   "audio/flac"
 ];
-var callMediaTypeSchema = z17.enum(CALL_MEDIA_TYPES);
+var callMediaTypeSchema = z18.enum(CALL_MEDIA_TYPES);
 var MEDIA_TYPE_BY_CALL_EXTENSION = Object.freeze({
   ".txt": "text/plain",
   ".vtt": "text/vtt",
@@ -1061,7 +1218,7 @@ var MAX_SPEAKER_LABEL_BYTES = MAX_SPEAKER_LABEL_LENGTH * MAX_UTF8_BYTES_PER_CODE
 function normaliseSpeakerLabel(label) {
   return normaliseFileName(label);
 }
-var speakerLabelSchema = z17.string().max(1000).transform(normaliseSpeakerLabel).pipe(z17.string().min(1).max(MAX_SPEAKER_LABEL_LENGTH).refine(isWellFormedText, "Well-formed text only").refine((label) => !hasStrippableCharacter(label), "No control characters"));
+var speakerLabelSchema = z18.string().max(1000).transform(normaliseSpeakerLabel).pipe(z18.string().min(1).max(MAX_SPEAKER_LABEL_LENGTH).refine(isWellFormedText, "Well-formed text only").refine((label) => !hasStrippableCharacter(label), "No control characters"));
 var MAX_SPEAKER_EXCERPT_LENGTH = 240;
 var SPACES = new RegExp(`[\\s${String.fromCharCode(133)}]+`, "g");
 var ELLIPSIS = String.fromCodePoint(8230);
@@ -1087,15 +1244,15 @@ function excerptText(text, max) {
 function speakerExcerpt(turns) {
   return excerptText(turns.join(" "), MAX_SPEAKER_EXCERPT_LENGTH);
 }
-var speakerExcerptSchema = z17.strictObject({
+var speakerExcerptSchema = z18.strictObject({
   label: speakerLabelSchema,
-  excerpt: z17.string().min(1).max(MAX_SPEAKER_EXCERPT_LENGTH * 2).refine((text) => Array.from(text).length <= MAX_SPEAKER_EXCERPT_LENGTH, "Within the cap").refine(isWellFormedText, "Well-formed text only").refine((text) => !hasStrippableCharacter(text), "No control characters")
+  excerpt: z18.string().min(1).max(MAX_SPEAKER_EXCERPT_LENGTH * 2).refine((text) => Array.from(text).length <= MAX_SPEAKER_EXCERPT_LENGTH, "Within the cap").refine(isWellFormedText, "Well-formed text only").refine((text) => !hasStrippableCharacter(text), "No control characters")
 });
 var CALL_CHANNELS = ["left", "right"];
-var callChannelSchema = z17.enum(CALL_CHANNELS);
-var repChoiceSchema = z17.discriminatedUnion("by", [
-  z17.strictObject({ by: z17.literal("speaker"), label: speakerLabelSchema }),
-  z17.strictObject({ by: z17.literal("channel"), channel: callChannelSchema })
+var callChannelSchema = z18.enum(CALL_CHANNELS);
+var repChoiceSchema = z18.discriminatedUnion("by", [
+  z18.strictObject({ by: z18.literal("speaker"), label: speakerLabelSchema }),
+  z18.strictObject({ by: z18.literal("channel"), channel: callChannelSchema })
 ]);
 function repChoiceSuits(kind, rep, when) {
   if (rep === null || rep === undefined) {
@@ -1136,13 +1293,13 @@ var MAX_SEARCH_TEXT_CHARACTERS = 2000;
 var MAX_MOMENT_SNIPPET_CHARACTERS = 512;
 var MAX_SEARCH_CANDIDATES = 100;
 var codePointCount = (text) => Array.from(text).length;
-var searchTurnSchema = z18.strictObject({
-  role: z18.enum(["rep", "prospect"]),
-  text: z18.string().min(1).max(MAX_SEARCH_TEXT_CHARACTERS * 2).refine(isWellFormedText, "Well-formed text only").refine((text) => text.trim().length > 0, "Not only whitespace")
+var searchTurnSchema = z19.strictObject({
+  role: z19.enum(["rep", "prospect"]),
+  text: z19.string().min(1).max(MAX_SEARCH_TEXT_CHARACTERS * 2).refine(isWellFormedText, "Well-formed text only").refine((text) => text.trim().length > 0, "Not only whitespace")
 });
-var searchMomentsRequestSchema = z18.strictObject({
-  turns: z18.array(searchTurnSchema).min(1).max(MAX_SEARCH_TURNS),
-  limit: z18.number().int().min(1).max(MAX_SEARCH_LIMIT).default(DEFAULT_SEARCH_LIMIT)
+var searchMomentsRequestSchema = z19.strictObject({
+  turns: z19.array(searchTurnSchema).min(1).max(MAX_SEARCH_TURNS),
+  limit: z19.number().int().min(1).max(MAX_SEARCH_LIMIT).default(DEFAULT_SEARCH_LIMIT)
 }).superRefine((request, context) => {
   const total = request.turns.reduce((sum, turn) => sum + codePointCount(turn.text), 0);
   if (total > MAX_SEARCH_TEXT_CHARACTERS) {
@@ -1153,23 +1310,23 @@ var searchMomentsRequestSchema = z18.strictObject({
     });
   }
 });
-var momentSnippetSchema = z18.string().max(MAX_MOMENT_SNIPPET_CHARACTERS * 2).refine((text) => codePointCount(text) <= MAX_MOMENT_SNIPPET_CHARACTERS, "Within the snippet cap").refine(isWellFormedText, "Well-formed text only").refine((text) => !hasStrippableCharacter(text), "No control characters");
+var momentSnippetSchema = z19.string().max(MAX_MOMENT_SNIPPET_CHARACTERS * 2).refine((text) => codePointCount(text) <= MAX_MOMENT_SNIPPET_CHARACTERS, "Within the snippet cap").refine(isWellFormedText, "Well-formed text only").refine((text) => !hasStrippableCharacter(text), "No control characters");
 function momentSnippet(text) {
   return excerptText(text, MAX_MOMENT_SNIPPET_CHARACTERS);
 }
-var momentMatchSchema = z18.object({
+var momentMatchSchema = z19.object({
   callId: callIdSchema,
   dealRecordId: dealRecordIdSchema,
-  score: z18.number().finite(),
+  score: z19.number().finite(),
   prospect: momentSnippetSchema,
   repNext: momentSnippetSchema
 });
-var searchEvidenceSchema = z18.object({
-  moments: z18.number().int().min(0).max(MAX_SEARCH_CANDIDATES),
-  deals: z18.number().int().min(0).max(MAX_SEARCH_CANDIDATES)
+var searchEvidenceSchema = z19.object({
+  moments: z19.number().int().min(0).max(MAX_SEARCH_CANDIDATES),
+  deals: z19.number().int().min(0).max(MAX_SEARCH_CANDIDATES)
 });
-var searchMomentsResponseSchema = z18.object({
-  items: z18.array(momentMatchSchema).max(MAX_SEARCH_LIMIT),
+var searchMomentsResponseSchema = z19.object({
+  items: z19.array(momentMatchSchema).max(MAX_SEARCH_LIMIT),
   evidence: searchEvidenceSchema
 }).superRefine((response, context) => {
   const itemDeals = new Set(response.items.map((match) => match.dealRecordId)).size;
@@ -1186,25 +1343,25 @@ function momentQueryText(turns) {
   return turns.map((turn) => `${ROLE_LABELS[turn.role]}: ${turn.text.trim()}`).join(`
 `);
 }
-var route3 = (definition) => Object.freeze(definition);
+var route4 = (definition) => Object.freeze(definition);
 var searchDocumentsRequestSchema = searchMomentsRequestSchema;
 function documentQueryText(turns) {
   return turns.map((turn) => turn.text.trim()).join(`
 `);
 }
-var documentMatchSchema = z18.object({
+var documentMatchSchema = z19.object({
   documentId: documentIdSchema,
   fileName: documentFileNameSchema,
-  page: z18.number().int().min(1).max(MAX_DOCUMENT_PAGES).nullable(),
-  score: z18.number().finite(),
+  page: z19.number().int().min(1).max(MAX_DOCUMENT_PAGES).nullable(),
+  score: z19.number().finite(),
   snippet: momentSnippetSchema
 });
-var documentSearchEvidenceSchema = z18.object({
-  chunks: z18.number().int().min(0).max(MAX_SEARCH_CANDIDATES),
-  documents: z18.number().int().min(0).max(MAX_SEARCH_CANDIDATES)
+var documentSearchEvidenceSchema = z19.object({
+  chunks: z19.number().int().min(0).max(MAX_SEARCH_CANDIDATES),
+  documents: z19.number().int().min(0).max(MAX_SEARCH_CANDIDATES)
 });
-var searchDocumentsResponseSchema = z18.object({
-  items: z18.array(documentMatchSchema).max(MAX_SEARCH_LIMIT),
+var searchDocumentsResponseSchema = z19.object({
+  items: z19.array(documentMatchSchema).max(MAX_SEARCH_LIMIT),
   evidence: documentSearchEvidenceSchema
 }).superRefine((response, context) => {
   const itemDocuments = new Set(response.items.map((match) => match.documentId)).size;
@@ -1217,7 +1374,7 @@ var searchDocumentsResponseSchema = z18.object({
   }
 });
 var SEARCH_ROUTES = Object.freeze({
-  searchMoments: route3({
+  searchMoments: route4({
     method: "POST",
     path: "/playbook/search/moments",
     internal: false,
@@ -1227,7 +1384,7 @@ var SEARCH_ROUTES = Object.freeze({
     commonErrors: ["request.invalid", "server.timeout", "server.unavailable"],
     description: "Finds Moments in the Organization's won Deals that resemble the conversation so far, so the Copilot can show what worked. The body is the latest turns (1 to 6, each a role of rep or prospect and its text, at most 2000 characters in all) and an optional limit (1 to 20, default 5). It answers the best matches, best first, at most 20, each with the opaque callId and dealRecordId, a score and two snippets of at most 512 characters (what the Prospect said and what the Rep said next), and evidence: the number of candidate Moments and the distinct won Deals among them. The evidence counts only the over-fetched candidate window (the best min(100, limit x 5) Moments by similarity, after the eligibility checks), not every won Deal in the Organization. There is no cursor: the result is a bounded top-k. Only Moments of Calls whose Deal is won and whose Call is in search are returned, and only from the caller's Organization. It never returns the customer's dealId, name or amount. The request and the snippets are tenant conversation text and are never logged. It only reads, so it takes no Idempotency-Key and a repeat is harmless. request.invalid (400) for a body outside the bounds; server.timeout (504) when it takes too long; server.unavailable (503) with a Retry-After header when the embedding model or the vector store cannot answer. Owner and Admin only, as for all sales history (the owner's decision of 2026-10-13); a Manager or a Rep gets auth.forbidden, because a Rep sees only their own conversations. The phase-2 Copilot calls this service-to-service, not with a Rep's token."
   }),
-  searchDocuments: route3({
+  searchDocuments: route4({
     method: "POST",
     path: "/playbook/search/documents",
     internal: false,
@@ -1243,12 +1400,12 @@ var SEARCH_ROUTES = Object.freeze({
 var ALL_PLAYBOOK_ROUTES = Object.freeze({ ...PLAYBOOK_ROUTES, ...SALES_HISTORY_ROUTES, ...SEARCH_ROUTES });
 var ALL_PLAYBOOK_ERRORS = Object.freeze({ ...PLAYBOOK_ERRORS, ...SALES_HISTORY_ERRORS });
 // src/playbook/call.ts
-import { z as z20 } from "zod";
+import { z as z21 } from "zod";
 
 // src/playbook/deal-values.ts
-import { z as z19 } from "zod";
+import { z as z20 } from "zod";
 var OUTCOMES = ["won", "lost", "open"];
-var outcomeSchema = z19.enum(OUTCOMES);
+var outcomeSchema = z20.enum(OUTCOMES);
 var MAX_DEAL_ID_LENGTH = 128;
 var MAX_RAW_DEAL_ID_LENGTH = 1000;
 var MAX_DEAL_ID_BYTES = MAX_DEAL_ID_LENGTH * MAX_UTF8_BYTES_PER_CODE_POINT;
@@ -1270,12 +1427,12 @@ function hasInvisibleCharacter(text) {
 function normaliseDealId(dealId) {
   return dealId.trim();
 }
-var dealIdSchema = z19.string().max(MAX_RAW_DEAL_ID_LENGTH).transform(normaliseDealId).pipe(z19.string().min(1).max(MAX_DEAL_ID_LENGTH).refine(isWellFormedText, "Well-formed text only").refine((id) => !hasStrippableCharacter(id), "No control or direction characters").refine((id) => !hasInvisibleCharacter(id), "No invisible characters"));
+var dealIdSchema = z20.string().max(MAX_RAW_DEAL_ID_LENGTH).transform(normaliseDealId).pipe(z20.string().min(1).max(MAX_DEAL_ID_LENGTH).refine(isWellFormedText, "Well-formed text only").refine((id) => !hasStrippableCharacter(id), "No control or direction characters").refine((id) => !hasInvisibleCharacter(id), "No invisible characters"));
 var MAX_DEAL_NAME_LENGTH = 200;
 var MAX_DEAL_NAME_BYTES = MAX_DEAL_NAME_LENGTH * MAX_UTF8_BYTES_PER_CODE_POINT;
-var dealNameSchema = z19.string().max(1000).trim().pipe(z19.string().min(1).max(MAX_DEAL_NAME_LENGTH).refine(isWellFormedText, "Well-formed text only").refine((name) => !hasStrippableCharacter(name), "No control or direction characters"));
-var dealAmountSchema = z19.string().regex(/^(0|[1-9]\d{0,14})(\.\d{1,2})?$/);
-var dealCurrencySchema = z19.string().regex(/^[A-Z]{3}$/);
+var dealNameSchema = z20.string().max(1000).trim().pipe(z20.string().min(1).max(MAX_DEAL_NAME_LENGTH).refine(isWellFormedText, "Well-formed text only").refine((name) => !hasStrippableCharacter(name), "No control or direction characters"));
+var dealAmountSchema = z20.string().regex(/^(0|[1-9]\d{0,14})(\.\d{1,2})?$/);
+var dealCurrencySchema = z20.string().regex(/^[A-Z]{3}$/);
 var MAX_DEAL_IMPORT_BYTES = 10 * 1024 * 1024;
 var MAX_DEAL_IMPORT_ROWS = 50000;
 var MAX_QUEUED_DEAL_IMPORTS = 5;
@@ -1341,15 +1498,15 @@ function checkDealImportHeaderText(text) {
   return checkDealImportHeader(first.record ?? []);
 }
 var DEAL_IMPORT_STATES = ["uploaded", "processing", "completed", "failed"];
-var dealImportStateSchema = z19.enum(DEAL_IMPORT_STATES);
+var dealImportStateSchema = z20.enum(DEAL_IMPORT_STATES);
 var DEAL_IMPORT_FAILURE_REASONS = [
   "too_many_rows",
   "unreadable",
   "processing_failed"
 ];
-var dealImportFailureReasonSchema = z19.enum(DEAL_IMPORT_FAILURE_REASONS);
+var dealImportFailureReasonSchema = z20.enum(DEAL_IMPORT_FAILURE_REASONS);
 var DEAL_IMPORT_ROW_RESULTS = ["applied", "rejected"];
-var dealImportRowResultSchema = z19.enum(DEAL_IMPORT_ROW_RESULTS);
+var dealImportRowResultSchema = z20.enum(DEAL_IMPORT_ROW_RESULTS);
 var DEAL_IMPORT_ROW_REASONS = [
   "wrong_column_count",
   "invalid_deal_id",
@@ -1363,7 +1520,7 @@ var DEAL_IMPORT_ROW_REASONS = [
   "deal_limit_reached",
   "blank_row"
 ];
-var dealImportRowReasonSchema = z19.enum(DEAL_IMPORT_ROW_REASONS);
+var dealImportRowReasonSchema = z20.enum(DEAL_IMPORT_ROW_REASONS);
 var INVALID_CELL = { ok: false };
 var DEAL_CLOSED_AT_MIN_YEAR = 1970;
 var DEAL_CLOSED_AT_MAX_YEAR = 2100;
@@ -1384,7 +1541,7 @@ function isDealCalendarDate(text) {
   const year = Number(text.slice(0, 4));
   return isCalendarDate(text) && year >= DEAL_CLOSED_AT_MIN_YEAR && year <= DEAL_CLOSED_AT_MAX_YEAR;
 }
-var calendarDateSchema = z19.iso.date().refine(isDealCalendarDate, "A real calendar date from 1970 to 2100");
+var calendarDateSchema = z20.iso.date().refine(isDealCalendarDate, "A real calendar date from 1970 to 2100");
 function parseClosedAtCell(cell) {
   const text = cell.trim();
   if (text === "") {
@@ -1578,22 +1735,22 @@ function isBlankCsvRecord(record) {
 }
 
 // src/playbook/call.ts
-var callShape = z20.object({
+var callShape = z21.object({
   id: callIdSchema,
   dealId: dealIdSchema,
   dealRecordId: dealRecordIdSchema,
   dealOutcome: outcomeSchema,
-  inSearch: z20.boolean(),
+  inSearch: z21.boolean(),
   kind: callKindSchema,
   fileName: documentFileNameSchema,
   mediaType: callMediaTypeSchema,
-  sizeBytes: z20.number().int().min(1).max(MAX_RECORDING_BYTES),
-  durationSeconds: z20.number().int().min(1).max(MAX_RECORDING_SECONDS).nullable(),
+  sizeBytes: z21.number().int().min(1).max(MAX_RECORDING_BYTES),
+  durationSeconds: z21.number().int().min(1).max(MAX_RECORDING_SECONDS).nullable(),
   state: callStateSchema,
   failureReason: callFailureReasonSchema.nullable(),
   rep: repChoiceSchema.nullable(),
-  speakerLabels: z20.array(speakerLabelSchema).max(MAX_CALL_SPEAKERS),
-  speakers: z20.array(speakerExcerptSchema).max(MAX_CALL_SPEAKERS).optional(),
+  speakerLabels: z21.array(speakerLabelSchema).max(MAX_CALL_SPEAKERS),
+  speakers: z21.array(speakerExcerptSchema).max(MAX_CALL_SPEAKERS).optional(),
   deletedAt: timestampSchema.nullable(),
   purgeAt: timestampSchema.nullable(),
   uploadedByUserId: userIdSchema,
@@ -1654,9 +1811,9 @@ function refineCall(call, context) {
 }
 var callSchema = callShape.superRefine(refineCall);
 var MAX_REP_FIELD_LENGTH = 512;
-var uploadCallFieldsSchema = z20.strictObject({
+var uploadCallFieldsSchema = z21.strictObject({
   dealId: dealIdSchema,
-  rep: z20.string().max(MAX_REP_FIELD_LENGTH).optional()
+  rep: z21.string().max(MAX_REP_FIELD_LENGTH).optional()
 });
 function parseRepField(text) {
   if (text === undefined) {
@@ -1673,16 +1830,16 @@ function parseRepField(text) {
     return invalid;
   }
 }
-var callParamsSchema = z20.strictObject({ callId: callIdSchema });
+var callParamsSchema = z21.strictObject({ callId: callIdSchema });
 var listCallsQuerySchema = pageQuerySchema.extend({ state: callStateSchema.optional(), dealRecordId: dealRecordIdSchema.optional() }).strict();
 var callListItemSchema = callShape.omit({ speakers: true }).strict().superRefine(refineCall);
 var listCallsResponseSchema = pageSchema(callListItemSchema);
-var setCallRepRequestSchema = z20.strictObject({ rep: repChoiceSchema });
+var setCallRepRequestSchema = z21.strictObject({ rep: repChoiceSchema });
 var CALL_FILE_KEYS = ["fileName", "declaredMediaType", "sizeBytes"];
-var uploadCallFileSchema = z20.strictObject({
+var uploadCallFileSchema = z21.strictObject({
   fileName: documentFileNameSchema,
-  declaredMediaType: z20.string().max(255).nullable(),
-  sizeBytes: z20.number().int().min(1)
+  declaredMediaType: z21.string().max(255).nullable(),
+  sizeBytes: z21.number().int().min(1)
 });
 function callKindOf(fileName) {
   const lower = fileName.toLowerCase();
@@ -1725,10 +1882,10 @@ function checkCallFile(input) {
   const parsed = uploadCallFileSchema.safeParse(copy);
   return parsed.success ? { ok: true, kind, file: parsed.data } : invalid;
 }
-var callCursorSchema = z20.strictObject({ createdAt: timestampSchema, id: callIdSchema });
+var callCursorSchema = z21.strictObject({ createdAt: timestampSchema, id: callIdSchema });
 // src/playbook/deal.ts
-import { z as z21 } from "zod";
-var dealSchema = z21.object({
+import { z as z22 } from "zod";
+var dealSchema = z22.object({
   id: dealRecordIdSchema,
   dealId: dealIdSchema,
   name: dealNameSchema.nullable(),
@@ -1736,42 +1893,42 @@ var dealSchema = z21.object({
   closedAt: calendarDateSchema.nullable(),
   amount: dealAmountSchema.nullable(),
   currency: dealCurrencySchema.nullable(),
-  callCount: z21.number().int().min(0),
-  appearedInImport: z21.boolean(),
+  callCount: z22.number().int().min(0),
+  appearedInImport: z22.boolean(),
   createdAt: timestampSchema,
   updatedAt: timestampSchema
 }).refine((deal) => deal.amount === null || deal.currency !== null, {
   message: "An amount comes with a currency",
   path: ["currency"]
 });
-var dealParamsSchema = z21.strictObject({ dealRecordId: dealRecordIdSchema });
+var dealParamsSchema = z22.strictObject({ dealRecordId: dealRecordIdSchema });
 var listDealsQuerySchema = pageQuerySchema.extend({
   outcome: outcomeSchema.optional(),
-  appearedInImport: z21.enum(["true", "false"]).transform((value) => value === "true").optional()
+  appearedInImport: z22.enum(["true", "false"]).transform((value) => value === "true").optional()
 }).strict();
 var listDealsResponseSchema = pageSchema(dealSchema);
-var setDealOutcomeRequestSchema = z21.strictObject({
+var setDealOutcomeRequestSchema = z22.strictObject({
   outcome: outcomeSchema,
   closedAt: calendarDateSchema.nullable().optional()
 });
-var lookupDealRequestSchema = z21.strictObject({ dealId: dealIdSchema });
-var dealCursorSchema = z21.strictObject({
+var lookupDealRequestSchema = z22.strictObject({ dealId: dealIdSchema });
+var dealCursorSchema = z22.strictObject({
   createdAt: timestampSchema,
   id: dealRecordIdSchema
 });
-var dealImportCursorSchema = z21.strictObject({
+var dealImportCursorSchema = z22.strictObject({
   createdAt: timestampSchema,
   id: dealImportIdSchema
 });
-var dealImportRowCursorSchema = z21.strictObject({ rowNumber: z21.number().int().min(2) });
+var dealImportRowCursorSchema = z22.strictObject({ rowNumber: z22.number().int().min(2) });
 var DEAL_IMPORT_FILE_FIELD = "file";
-var dealImportSchema = z21.object({
+var dealImportSchema = z22.object({
   id: dealImportIdSchema,
   state: dealImportStateSchema,
   failureReason: dealImportFailureReasonSchema.nullable(),
-  rowCount: z21.number().int().min(0).max(MAX_DEAL_IMPORT_ROWS).nullable(),
-  appliedCount: z21.number().int().min(0).max(MAX_DEAL_IMPORT_ROWS).nullable(),
-  rejectedCount: z21.number().int().min(0).max(MAX_DEAL_IMPORT_ROWS).nullable(),
+  rowCount: z22.number().int().min(0).max(MAX_DEAL_IMPORT_ROWS).nullable(),
+  appliedCount: z22.number().int().min(0).max(MAX_DEAL_IMPORT_ROWS).nullable(),
+  rejectedCount: z22.number().int().min(0).max(MAX_DEAL_IMPORT_ROWS).nullable(),
   uploadedByUserId: userIdSchema,
   createdAt: timestampSchema,
   updatedAt: timestampSchema
@@ -1800,11 +1957,11 @@ var dealImportSchema = z21.object({
     });
   }
 });
-var dealImportParamsSchema = z21.strictObject({ importId: dealImportIdSchema });
+var dealImportParamsSchema = z22.strictObject({ importId: dealImportIdSchema });
 var listDealImportsQuerySchema = pageQuerySchema.strict();
 var listDealImportsResponseSchema = pageSchema(dealImportSchema);
-var dealImportRowSchema = z21.object({
-  rowNumber: z21.number().int().min(2).max(MAX_DEAL_IMPORT_ROWS + 1),
+var dealImportRowSchema = z22.object({
+  rowNumber: z22.number().int().min(2).max(MAX_DEAL_IMPORT_ROWS + 1),
   dealId: dealIdSchema.nullable(),
   result: dealImportRowResultSchema,
   reason: dealImportRowReasonSchema.nullable()
@@ -1834,13 +1991,13 @@ var dealImportRowSchema = z21.object({
 var listDealImportRowsQuerySchema = pageQuerySchema.extend({ result: dealImportRowResultSchema.optional() }).strict();
 var listDealImportRowsResponseSchema = pageSchema(dealImportRowSchema);
 // src/playbook/document.ts
-import { z as z22 } from "zod";
-var documentSchema = z22.object({
+import { z as z23 } from "zod";
+var documentSchema = z23.object({
   id: documentIdSchema,
   fileName: documentFileNameSchema,
   mediaType: documentMediaTypeSchema,
-  sizeBytes: z22.number().int().min(1).max(MAX_DOCUMENT_BYTES),
-  pageCount: z22.number().int().min(1).max(MAX_DOCUMENT_PAGES).nullable(),
+  sizeBytes: z23.number().int().min(1).max(MAX_DOCUMENT_BYTES),
+  pageCount: z23.number().int().min(1).max(MAX_DOCUMENT_PAGES).nullable(),
   state: documentStateSchema,
   failureReason: documentFailureReasonSchema.nullable(),
   deletedAt: timestampSchema.nullable(),
@@ -1867,23 +2024,23 @@ var documentSchema = z22.object({
 });
 var UPLOAD_FILE_FIELD = "file";
 var UPLOAD_CONTENT_TYPE = "multipart/form-data";
-var uploadDocumentFileSchema = z22.strictObject({
+var uploadDocumentFileSchema = z23.strictObject({
   fileName: documentFileNameSchema,
-  declaredMediaType: z22.string().max(255).nullable(),
-  sizeBytes: z22.number().int().min(1)
+  declaredMediaType: z23.string().max(255).nullable(),
+  sizeBytes: z23.number().int().min(1)
 });
-var documentParamsSchema = z22.strictObject({
+var documentParamsSchema = z23.strictObject({
   documentId: documentIdSchema
 });
 var listDocumentsQuerySchema = pageQuerySchema.extend({ state: documentStateSchema.optional() }).strict();
 var listDocumentsResponseSchema = pageSchema(documentSchema);
-var internalRemoveOrganizationDocumentsParamsSchema = z22.strictObject({
+var internalRemoveOrganizationDocumentsParamsSchema = z23.strictObject({
   organizationId: organizationIdSchema
 });
-var internalRemoveOrganizationDocumentsRequestSchema = z22.strictObject({});
-var internalRemoveOrganizationDocumentsResponseSchema = z22.object({
+var internalRemoveOrganizationDocumentsRequestSchema = z23.strictObject({});
+var internalRemoveOrganizationDocumentsResponseSchema = z23.object({
   organizationId: organizationIdSchema,
-  status: z22.literal("removed")
+  status: z23.literal("removed")
 });
 var UPLOAD_FILE_KEYS = ["fileName", "declaredMediaType", "sizeBytes"];
 function checkUploadFile(input) {
@@ -1915,8 +2072,8 @@ function checkUploadFile(input) {
   return parsed.success ? { ok: true, file: parsed.data } : invalid;
 }
 // src/playbook/messages.ts
-import { z as z23 } from "zod";
-var documentUploadedPayloadSchema = z23.strictObject({
+import { z as z24 } from "zod";
+var documentUploadedPayloadSchema = z24.strictObject({
   documentId: documentIdSchema
 });
 var DOCUMENT_UPLOADED_MESSAGE = {
@@ -1926,9 +2083,9 @@ var DOCUMENT_UPLOADED_MESSAGE = {
   payload: documentUploadedPayloadSchema
 };
 var MAX_DELETION_SEQ = 2147483647;
-var documentDeletedPayloadSchema = z23.strictObject({
+var documentDeletedPayloadSchema = z24.strictObject({
   documentId: documentIdSchema,
-  deletionSeq: z23.number().int().min(1).max(MAX_DELETION_SEQ)
+  deletionSeq: z24.number().int().min(1).max(MAX_DELETION_SEQ)
 });
 var DOCUMENT_DELETED_MESSAGE = {
   type: "playbook.document_deleted",
@@ -1937,24 +2094,24 @@ var DOCUMENT_DELETED_MESSAGE = {
   payload: documentDeletedPayloadSchema
 };
 // src/playbook/sales-history-messages.ts
-import { z as z24 } from "zod";
+import { z as z25 } from "zod";
 var MAX_SEQ = MAX_DELETION_SEQ;
-var seqSchema = z24.number().int().min(1).max(MAX_SEQ);
-var callUploadedPayloadSchema = z24.strictObject({ callId: callIdSchema });
+var seqSchema = z25.number().int().min(1).max(MAX_SEQ);
+var callUploadedPayloadSchema = z25.strictObject({ callId: callIdSchema });
 var CALL_UPLOADED_MESSAGE = {
   type: "playbook.call_uploaded",
   version: 1,
   scope: "organization",
   payload: callUploadedPayloadSchema
 };
-var callTranscribedPayloadSchema = z24.strictObject({ callId: callIdSchema });
+var callTranscribedPayloadSchema = z25.strictObject({ callId: callIdSchema });
 var CALL_TRANSCRIBED_MESSAGE = {
   type: "playbook.call_transcribed",
   version: 1,
   scope: "organization",
   payload: callTranscribedPayloadSchema
 };
-var callRepChangedPayloadSchema = z24.strictObject({
+var callRepChangedPayloadSchema = z25.strictObject({
   callId: callIdSchema,
   repSeq: seqSchema
 });
@@ -1964,7 +2121,7 @@ var CALL_REP_CHANGED_MESSAGE = {
   scope: "organization",
   payload: callRepChangedPayloadSchema
 };
-var callDeletedPayloadSchema = z24.strictObject({
+var callDeletedPayloadSchema = z25.strictObject({
   callId: callIdSchema,
   deletionSeq: seqSchema
 });
@@ -1974,7 +2131,7 @@ var CALL_DELETED_MESSAGE = {
   scope: "organization",
   payload: callDeletedPayloadSchema
 };
-var dealOutcomeChangedPayloadSchema = z24.strictObject({
+var dealOutcomeChangedPayloadSchema = z25.strictObject({
   dealRecordId: dealRecordIdSchema,
   outcomeSeq: seqSchema
 });
@@ -1984,7 +2141,7 @@ var DEAL_OUTCOME_CHANGED_MESSAGE = {
   scope: "organization",
   payload: dealOutcomeChangedPayloadSchema
 };
-var dealImportUploadedPayloadSchema = z24.strictObject({ importId: dealImportIdSchema });
+var dealImportUploadedPayloadSchema = z25.strictObject({ importId: dealImportIdSchema });
 var DEAL_IMPORT_UPLOADED_MESSAGE = {
   type: "playbook.deal_import_uploaded",
   version: 1,
@@ -2002,6 +2159,7 @@ export {
   ALL_PLAYBOOK_ERRORS,
   ALL_PLAYBOOK_ROUTES,
   AUTH_ERRORS,
+  AUTH_OPTIONS_PATH,
   CALL_CHANNELS,
   CALL_DELETED_MESSAGE,
   CALL_FAILURE_FIXES,
@@ -2041,11 +2199,13 @@ export {
   DOCUMENT_STATES,
   DOCUMENT_UPLOADED_MESSAGE,
   ERRORS,
+  GOOGLE_ROUTES,
   IDEMPOTENCY_KEY_HEADER,
   INCOMPLETE_UPLOAD_PARTS_TTL_HOURS,
   INTERNAL_CALL_ERRORS,
   INVITABLE_ROLES,
   INVITATION_STATES,
+  MAX_AUTHORIZATION_URL_LENGTH,
   MAX_CALL_SPEAKERS,
   MAX_CURSOR_LENGTH,
   MAX_DEAL_ID_BYTES,
@@ -2072,6 +2232,7 @@ export {
   MAX_REP_FIELD_LENGTH,
   MAX_REP_FOLLOWING_CHARACTERS,
   MAX_REP_FOLLOWING_TURNS,
+  MAX_RETURN_TO_LENGTH,
   MAX_RIGHTS_HEADING_LENGTH,
   MAX_RIGHTS_PARAGRAPHS,
   MAX_RIGHTS_TEXT_LENGTH,
@@ -2106,6 +2267,10 @@ export {
   UPLOAD_CONTENT_TYPE,
   UPLOAD_FILE_FIELD,
   addTeamMemberRequestSchema,
+  authOptionsResponseSchema,
+  authProvidersSchema,
+  authorizationUrlSchema,
+  browserSessionTokensSchema,
   calendarDateSchema,
   callChannelSchema,
   callCursorSchema,
@@ -2180,6 +2345,11 @@ export {
   firstCsvRecord,
   foldAscii,
   formatId,
+  googleCompleteRequestSchema,
+  googleCompleteResponseSchema,
+  googleIntentSchema,
+  googleStartRequestSchema,
+  googleStartResponseSchema,
   hasStrippableCharacter,
   idSchema,
   idempotencyKeySchema,
@@ -2256,6 +2426,7 @@ export {
   repChoiceSchema,
   repChoiceSuits,
   requestIdSchema,
+  returnToSchema,
   rightsConfirmationSchema,
   rightsRequiredDetailsSchema,
   rightsStatusSchema,

@@ -3,7 +3,8 @@ import { defineErrors } from '../errors'
 
 /**
  * Every `area.reason` code the auth service answers with, beyond the common ones in `ERRORS`:
- * sign-in, sign-up verification, passwords and sessions. The sign-up codes and core's
+ * sign-in, sign-up verification, passwords, sessions and Sign in with Google (`oidc.*`; the 503
+ * `oidc.provider_unavailable` is answered with a `Retry-After` header). The sign-up codes and core's
  * `organization.deleted` (returned by sign-in and refresh when the user's Organization was deleted)
  * are the same entries as in `SIGNUP_ERRORS` and `CORE_ERRORS`, not copies. A missing or
  * invalid access token is one of the common `auth.*` token codes in `ERRORS`; a refresh token that
@@ -38,6 +39,22 @@ export const AUTH_ERRORS = {
   }),
   ...SIGNUP_ERRORS,
   'organization.deleted': CORE_ERRORS['organization.deleted'],
+  ...defineErrors('oidc', {
+    disabled: { status: 404, message: 'Sign in with Google is not available.' },
+    state_invalid: {
+      status: 400,
+      message: 'This sign-in has expired or is not valid. Start again.',
+    },
+    email_unverified: { status: 403, message: 'Google has not verified this email address.' },
+    provider_unavailable: {
+      status: 503,
+      message: 'Google is not available right now. Try again later.',
+    },
+    invitation_mismatch: {
+      status: 403,
+      message: 'Use the Google account that matches the invited email address.',
+    },
+  }),
   ...defineErrors('mail', {
     unavailable: { status: 503, message: 'The email could not be sent right now. Try again.' },
   }),
