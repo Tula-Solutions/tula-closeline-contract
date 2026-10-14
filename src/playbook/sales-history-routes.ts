@@ -104,7 +104,7 @@ export const SALES_HISTORY_ROUTES: Readonly<Record<SalesHistoryRouteName, SalesH
       errors: ['call.not_found'],
       commonErrors: ['request.invalid'],
       description:
-        'Reads one Call and its state, with the failure reason when it failed, the speaker labels to pick a Rep from and the purge time when it was deleted. No Transcript text or audio is returned. Owner and Admin only.',
+        'Reads one Call and its state, with the failure reason when it failed, the speaker labels to pick a Rep from and the purge time when it was deleted. For a Recording with speaker labels, above all one awaiting its Rep, it also returns speakers: a short excerpt per label (the first turns of the speaker, at most 240 characters, cut at a word boundary with an ellipsis; at most 20 speakers) so a person can tell who is the Rep. The excerpts are tenant Transcript text: returned only to the Owner and Admin of the owning Organization and never logged. No other Transcript text or audio is returned. Owner and Admin only.',
     }),
     deleteCall: route({
       method: 'DELETE',

@@ -16,6 +16,7 @@ import {
   MAX_TRANSCRIPT_BYTES,
   type RepChoice,
   repChoiceSchema,
+  speakerExcerptSchema,
   speakerLabelSchema,
 } from './call-values'
 import { dealIdSchema, outcomeSchema } from './deal-values'
@@ -23,7 +24,7 @@ import { documentFileNameSchema, normaliseFileName } from './values'
 
 /**
  * A Call as the service returns it. It names the file and the Deal but never carries a Transcript,
- * audio or any turn. `kind` is what it was uploaded as. `rep` is the chosen Rep and is `null`
+ * audio or any turn (only the short `speakers` excerpts below). `kind` is what it was uploaded as. `rep` is the chosen Rep and is `null`
  * exactly while the state is `awaiting_rep` (and for a Recording not yet transcribed or failed
  * before a choice); a `ready` Call always has one. `speakerLabels` are the labels the Call's
  * speakers carry (those of the file, or `A`, `B` from the transcriber), at most
@@ -40,6 +41,12 @@ import { documentFileNameSchema, normaliseFileName } from './values'
  * finishes (the database decides, the index may lag). `dealId` is the customer's text and is never
  * logged. The service must send the output of
  * `callSchema.parse(row)`, never the row.
+ *
+ * `speakers` is optional: a short excerpt per speaker label ({@link speakerExcerpt}, 1 to
+ * `MAX_SPEAKER_EXCERPT_LENGTH` code points) so a person can tell who is the Rep. It is present
+ * only for a Recording with labels (above all one in `awaiting_rep`), is never empty, repeats no
+ * label and names only labels in `speakerLabels`; a speaker with no text is left out. It is tenant
+ * Transcript text, returned only to the owning Organization's Owner and Admin, and never logged.
  */
 export const callSchema = z
   .object({
@@ -57,6 +64,7 @@ export const callSchema = z
     failureReason: callFailureReasonSchema.nullable(),
     rep: repChoiceSchema.nullable(),
     speakerLabels: z.array(speakerLabelSchema).max(MAX_CALL_SPEAKERS),
+    speakers: z.array(speakerExcerptSchema).max(MAX_CALL_SPEAKERS).optional(),
     deletedAt: timestampSchema.nullable(),
     purgeAt: timestampSchema.nullable(),
     uploadedByUserId: userIdSchema,
@@ -103,6 +111,18 @@ export const callSchema = z
     }
     if (new Set(call.speakerLabels).size !== call.speakerLabels.length) {
       issue('speakerLabels', 'Speaker labels are unique')
+    }
+    if (call.speakers !== undefined) {
+      const labels = call.speakers.map((speaker) => speaker.label)
+      if (call.kind !== 'recording' || labels.length === 0) {
+        issue('speakers', 'Speaker excerpts are for a Recording and are absent when there are none')
+      }
+      if (new Set(labels).size !== labels.length) {
+        issue('speakers', 'Speaker excerpt labels are unique')
+      }
+      if (!labels.every((label) => call.speakerLabels.includes(label))) {
+        issue('speakers', 'Every excerpt belongs to one of the Call speakers')
+      }
     }
     if (call.inSearch && (call.state !== 'ready' || call.dealOutcome !== 'won')) {
       issue('inSearch', 'A Call is in search only when it is ready and its Deal is won')

@@ -843,7 +843,7 @@ var SALES_HISTORY_ROUTES = Object.freeze({
     success: [200],
     errors: ["call.not_found"],
     commonErrors: ["request.invalid"],
-    description: "Reads one Call and its state, with the failure reason when it failed, the speaker labels to pick a Rep from and the purge time when it was deleted. No Transcript text or audio is returned. Owner and Admin only."
+    description: "Reads one Call and its state, with the failure reason when it failed, the speaker labels to pick a Rep from and the purge time when it was deleted. For a Recording with speaker labels, above all one awaiting its Rep, it also returns speakers: a short excerpt per label (the first turns of the speaker, at most 240 characters, cut at a word boundary with an ellipsis; at most 20 speakers) so a person can tell who is the Rep. The excerpts are tenant Transcript text: returned only to the Owner and Admin of the owning Organization and never logged. No other Transcript text or audio is returned. Owner and Admin only."
   }),
   deleteCall: route2({
     method: "DELETE",
@@ -1065,6 +1065,32 @@ function normaliseSpeakerLabel(label) {
   return normaliseFileName(label);
 }
 var speakerLabelSchema = z17.string().max(1000).transform(normaliseSpeakerLabel).pipe(z17.string().min(1).max(MAX_SPEAKER_LABEL_LENGTH).refine(isWellFormedText, "Well-formed text only").refine((label) => !hasStrippableCharacter(label), "No control characters"));
+var MAX_SPEAKER_EXCERPT_LENGTH = 240;
+var SPACES = new RegExp(`[\\s${String.fromCharCode(133)}]+`, "g");
+var ELLIPSIS = String.fromCodePoint(8230);
+function isLoneSurrogate(char) {
+  const code = char.codePointAt(0) ?? 0;
+  return char.length === 1 && code >= 55296 && code <= 57343;
+}
+function speakerExcerpt(turns) {
+  const collapse = (text) => text.replace(SPACES, " ");
+  const text = collapse(normaliseSpeakerLabel(collapse(turns.join(" "))));
+  const chars = Array.from(text).filter((char) => !isLoneSurrogate(char));
+  if (chars.length <= MAX_SPEAKER_EXCERPT_LENGTH) {
+    return chars.join("");
+  }
+  const room = MAX_SPEAKER_EXCERPT_LENGTH - 1;
+  let end = room;
+  if (chars[room] !== " ") {
+    const space = chars.slice(0, room).lastIndexOf(" ");
+    end = space > 0 ? space : room;
+  }
+  return chars.slice(0, end).join("").trimEnd() + ELLIPSIS;
+}
+var speakerExcerptSchema = z17.strictObject({
+  label: speakerLabelSchema,
+  excerpt: z17.string().min(1).max(MAX_SPEAKER_EXCERPT_LENGTH * 2).refine((text) => Array.from(text).length <= MAX_SPEAKER_EXCERPT_LENGTH, "Within the cap").refine(isWellFormedText, "Well-formed text only").refine((text) => !hasStrippableCharacter(text), "No control characters")
+});
 var CALL_CHANNELS = ["left", "right"];
 var callChannelSchema = z17.enum(CALL_CHANNELS);
 var repChoiceSchema = z17.discriminatedUnion("by", [
@@ -1448,6 +1474,7 @@ var callSchema = z19.object({
   failureReason: callFailureReasonSchema.nullable(),
   rep: repChoiceSchema.nullable(),
   speakerLabels: z19.array(speakerLabelSchema).max(MAX_CALL_SPEAKERS),
+  speakers: z19.array(speakerExcerptSchema).max(MAX_CALL_SPEAKERS).optional(),
   deletedAt: timestampSchema.nullable(),
   purgeAt: timestampSchema.nullable(),
   uploadedByUserId: userIdSchema,
@@ -1485,6 +1512,18 @@ var callSchema = z19.object({
   }
   if (new Set(call.speakerLabels).size !== call.speakerLabels.length) {
     issue("speakerLabels", "Speaker labels are unique");
+  }
+  if (call.speakers !== undefined) {
+    const labels = call.speakers.map((speaker) => speaker.label);
+    if (call.kind !== "recording" || labels.length === 0) {
+      issue("speakers", "Speaker excerpts are for a Recording and are absent when there are none");
+    }
+    if (new Set(labels).size !== labels.length) {
+      issue("speakers", "Speaker excerpt labels are unique");
+    }
+    if (!labels.every((label) => call.speakerLabels.includes(label))) {
+      issue("speakers", "Every excerpt belongs to one of the Call speakers");
+    }
   }
   if (call.inSearch && (call.state !== "ready" || call.dealOutcome !== "won")) {
     issue("inSearch", "A Call is in search only when it is ready and its Deal is won");
@@ -1914,6 +1953,7 @@ export {
   MAX_RIGHTS_TEXT_LENGTH,
   MAX_RIGHTS_WORDING_VERSION,
   MAX_SEQ,
+  MAX_SPEAKER_EXCERPT_LENGTH,
   MAX_SPEAKER_LABEL_BYTES,
   MAX_SPEAKER_LABEL_LENGTH,
   MAX_TRANSCRIPT_BYTES,
@@ -2087,6 +2127,8 @@ export {
   roleSchema,
   setCallRepRequestSchema,
   setDealOutcomeRequestSchema,
+  speakerExcerpt,
+  speakerExcerptSchema,
   speakerLabelSchema,
   storedNameSchema,
   teamIdSchema,

@@ -151,6 +151,12 @@ Additive; the 0.7.0 types are unchanged (`PlaybookRoute`, `PLAYBOOK_ROUTES` and 
   | `too_many_speakers`, `no_turns`, `too_few_speakers`, `too_long`, `unreadable` | delete the Call and upload a corrected file | answers 200 with the failed Call unchanged |
 
   A `failed` Call with `too_many_speakers` lists no `speakerLabels`.
+- **Speaker excerpts (0.11.0)**: a Call may carry `speakers`, `{ label, excerpt }` per speaker (at most
+  `MAX_CALL_SPEAKERS`), so the Rep pick shows who said what. Build each excerpt with
+  `speakerExcerpt(turns)`: the first turns joined, whitespace collapsed, at most
+  `MAX_SPEAKER_EXCERPT_LENGTH` (240) code points, cut at a word boundary with an ellipsis. The field
+  is optional (only for a Recording with labels, above all `awaiting_rep`; never empty). It is tenant
+  Transcript text: return it only to the owning Organization's Owner and Admin, never log it.
 - **Search flags**: a Call carries `dealOutcome` and `inSearch` (true only when `ready` and the Deal
   is won; it may lag for a Deal that has just become won).
 - **Rights**: `rightsStatusSchema`, `confirmRightsRequestSchema`; `rights.confirmation_required` (403)
