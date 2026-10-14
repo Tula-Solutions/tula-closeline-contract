@@ -672,7 +672,11 @@ describe('0.7.0 types are not widened (code written against them still compiles)
 
   test('the merged route map covers every route of both tables, and the merged registry every code', () => {
     expect(Object.keys(ALL_PLAYBOOK_ROUTES).sort()).toEqual(
-      [...Object.keys(PLAYBOOK_ROUTES), ...Object.keys(SALES_HISTORY_ROUTES)].sort()
+      [
+        ...Object.keys(PLAYBOOK_ROUTES),
+        ...Object.keys(SALES_HISTORY_ROUTES),
+        'searchMoments',
+      ].sort()
     )
     expect(Object.keys(ALL_PLAYBOOK_ERRORS).sort()).toEqual(
       [...Object.keys(PLAYBOOK_ERRORS), ...Object.keys(SALES_HISTORY_ERRORS)].sort()

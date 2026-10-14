@@ -193,26 +193,35 @@ function isLoneSurrogate(char: string): boolean {
 }
 
 /**
- * Builds the excerpt that helps a person pick the Rep: the speaker's first turns joined with a
- * space, whitespace collapsed, control and bidirectional characters removed, and at most
- * `MAX_SPEAKER_EXCERPT_LENGTH` code points. A longer text is cut at a word boundary and ends with
- * an ellipsis (a single word longer than the cap is cut hard); the cut never splits a code point.
- * The result is tenant Transcript text: never log it.
+ * Cleans text for a short excerpt or snippet and cuts it to `max` code points: whitespace
+ * (newlines and tabs included) collapsed to one space, control and bidirectional characters and
+ * lone surrogates removed, then, when still too long, cut at a word boundary with an ellipsis (a
+ * single word longer than `max` is cut hard); the cut never splits a code point. What it returns
+ * always passes the excerpt and snippet schemas. The result is tenant text: never log it.
  */
-export function speakerExcerpt(turns: readonly string[]): string {
-  const collapse = (text: string) => text.replace(SPACES, ' ')
-  const text = collapse(normaliseSpeakerLabel(collapse(turns.join(' '))))
-  const chars = Array.from(text).filter((char) => !isLoneSurrogate(char))
-  if (chars.length <= MAX_SPEAKER_EXCERPT_LENGTH) {
+export function excerptText(text: string, max: number): string {
+  const collapse = (value: string) => value.replace(SPACES, ' ')
+  const clean = collapse(normaliseSpeakerLabel(collapse(text)))
+  const chars = Array.from(clean).filter((char) => !isLoneSurrogate(char))
+  if (chars.length <= max) {
     return chars.join('')
   }
-  const room = MAX_SPEAKER_EXCERPT_LENGTH - 1
+  const room = max - 1
   let end = room
   if (chars[room] !== ' ') {
     const space = chars.slice(0, room).lastIndexOf(' ')
     end = space > 0 ? space : room
   }
   return chars.slice(0, end).join('').trimEnd() + ELLIPSIS
+}
+
+/**
+ * Builds the excerpt that helps a person pick the Rep: the speaker's first turns joined with a
+ * space and cleaned and cut by {@link excerptText} to at most `MAX_SPEAKER_EXCERPT_LENGTH` code
+ * points. The result is tenant Transcript text: never log it.
+ */
+export function speakerExcerpt(turns: readonly string[]): string {
+  return excerptText(turns.join(' '), MAX_SPEAKER_EXCERPT_LENGTH)
 }
 
 /**
