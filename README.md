@@ -201,6 +201,19 @@ a turn cut at a cap can end on a space, which `momentQueryText` trims. `evidence
 (`min(100, limit x 5)` after eligibility), not every won Deal in the Organization. All of it is
 tenant conversation text: never log it. The merged map `ALL_PLAYBOOK_ROUTES` includes the route.
 
+### Search over Playbook documents (0.13.0)
+
+`SEARCH_ROUTES.searchDocuments` is `POST /playbook/search/documents` (all four reading roles: Owner,
+Admin, Manager and Rep, because the text is the Organization's own sales material; no
+Idempotency-Key; the same error codes as the Moments search). `searchDocumentsRequestSchema` is the
+Moments request (same turns, limit and bounds). `searchDocumentsResponseSchema` is
+`{ items: documentMatchSchema[], evidence: { chunks, documents } }`: one item per chunk, with
+`documentId`, `name` (the Organization's own file name), `page` (1 to `MAX_DOCUMENT_PAGES`, or
+`null`), `score` and a `snippet` made with `momentSnippet` (at most 512 code points). The evidence
+counts only the over-fetched candidate window after the staleness check, not every document, and
+follows the Moments rules (documents and items within chunks, documents cover the items). There is
+no cursor. The request and the snippets are tenant text: never log them.
+
 ### Rights confirmation wording (0.9.0)
 
 The text of each wording version is in the contract: `RIGHTS_WORDINGS` (frozen, keyed by version,
