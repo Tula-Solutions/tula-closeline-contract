@@ -56,6 +56,10 @@ export const SALES_HISTORY_ERRORS = {
       status: 422,
       message: 'The first row does not match the template.',
     },
+    busy: {
+      status: 429,
+      message: 'Too many imports are waiting. Try again when some have finished.',
+    },
   }),
   ...defineErrors('rights', {
     confirmation_required: {

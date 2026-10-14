@@ -580,9 +580,10 @@ var PLAYBOOK_ROUTES = Object.freeze({
     commonErrors: [
       "request.invalid",
       "request.idempotency_key_reused",
-      "request.idempotency_in_progress"
+      "request.idempotency_in_progress",
+      "server.unavailable"
     ],
-    description: "Internal, for offboarding and erasure; no caller yet. Removes every document, file, chunk and vector an Organization has, and, since ADR 0018, its Calls, Recordings, Transcripts, Moments, Deals and Deal imports (and the copy the transcription vendor holds of a Recording), soft-deleted ones included, without waiting for retention. Idempotent by end state: it answers 200 whenever nothing remains. Served on the internal network only; takes the Organization from the path."
+    description: "Internal, for offboarding and erasure; no caller yet. Removes every document, file, chunk and vector an Organization has, and, since ADR 0018, its Calls, Recordings, Transcripts, Moments, Deals and Deal imports (and the copy the transcription vendor holds of a Recording), soft-deleted ones included, without waiting for retention. Idempotent by end state: it answers 200 whenever nothing remains, and never answers 200 while data remains. A transient failure (the store, the vector index or the vendor is briefly unreachable) answers 503 server.unavailable with a Retry-After header, and a repeat with the same Idempotency-Key or without reaches 200 once the removal finishes; a failure that will not go away stays an error. Served on the internal network only; takes the Organization from the path."
   })
 });
 
@@ -775,6 +776,10 @@ var SALES_HISTORY_ERRORS = {
     header_invalid: {
       status: 422,
       message: "The first row does not match the template."
+    },
+    busy: {
+      status: 429,
+      message: "Too many imports are waiting. Try again when some have finished."
     }
   }),
   ...defineErrors("rights", {
@@ -919,10 +924,11 @@ var SALES_HISTORY_ROUTES = Object.freeze({
     errors: [
       "deal_import.unsupported_type",
       "deal_import.too_large",
-      "deal_import.header_invalid"
+      "deal_import.header_invalid",
+      "deal_import.busy"
     ],
     commonErrors: [...ENVELOPE_ERRORS],
-    description: 'Uploads the fixed CSV template (columns deal_id, outcome, closed_at, amount, currency and optionally name; up to 10 MB and 50,000 rows) as multipart/form-data with one file part named "file". Owner and Admin only. The type, size and first row are checked before anything is stored: deal_import.unsupported_type (415), deal_import.too_large (413) and deal_import.header_invalid (422). The header is read with checkDealImportHeaderText (the same reader and limits as parseCsv) on the first 8192 characters of the file (a header still unfinished there is deferred to the job, not refused), and the job re-checks the header of its full parse with the same verdict. The rest of the file is parsed in the background job, never on the request path, under strict RFC 4180 quoting: a stray quote fails the file, and a cell over 1000 characters fails the whole file too (a cell up to 1000 characters is checked row by row, and a bad one is a rejected row); a blank line is skipped and not reported but still counts in the row numbers, and rowNumber is the record number with the header as record 1. Answers 202 with the import in state "uploaded"; it is processed in the background. Imports are not deduplicated by content: each upload is a new import, and only the Idempotency-Key makes a retry of the same request answer with the stored import. Valid rows are applied and bad rows are reported, never dropped: a deal id already won or lost, or repeated within the file, is a rejected row in the report, not an HTTP error. A file with more rows than the limit, a cell over the length limit or a quoting error ends in state "failed" with failureReason "too_many_rows" or "unreadable". Accepts an Idempotency-Key header.'
+    description: 'Uploads the fixed CSV template (columns deal_id, outcome, closed_at, amount, currency and optionally name; up to 10 MB and 50,000 rows) as multipart/form-data with one file part named "file". Owner and Admin only. The type, size and first row are checked before anything is stored: deal_import.unsupported_type (415), deal_import.too_large (413) and deal_import.header_invalid (422). An Organization with MAX_QUEUED_DEAL_IMPORTS (5) imports not yet finished (state uploaded or processing) is refused with deal_import.busy (429) and nothing is stored; the count is checked before the file is stored, so a refused upload leaves no import. The header is read with checkDealImportHeaderText (the same reader and limits as parseCsv) on the first 8192 characters of the file (a header still unfinished there is deferred to the job, not refused), and the job re-checks the header of its full parse with the same verdict. The rest of the file is parsed in the background job, never on the request path, under strict RFC 4180 quoting: a stray quote fails the file, and a cell over 1000 characters fails the whole file too (a cell up to 1000 characters is checked row by row, and a bad one is a rejected row); an interior blank line is a rejected row with the reason blank_row, so the report has no gap, and it still counts in the row numbers, and rowNumber is the record number with the header as record 1. Answers 202 with the import in state "uploaded"; it is processed in the background. Imports are not deduplicated by content: each upload is a new import, and only the Idempotency-Key makes a retry of the same request answer with the stored import. Valid rows are applied and bad rows are reported, never dropped: a deal id already won or lost, or repeated within the file, is a rejected row in the report, not an HTTP error. A file with more rows than the limit, a cell over the length limit or a quoting error ends in state "failed" with failureReason "too_many_rows" or "unreadable". Accepts an Idempotency-Key header.'
   }),
   listDealImports: route2({
     method: "GET",
@@ -1129,6 +1135,7 @@ var dealAmountSchema = z18.string().regex(/^(0|[1-9]\d{0,14})(\.\d{1,2})?$/);
 var dealCurrencySchema = z18.string().regex(/^[A-Z]{3}$/);
 var MAX_DEAL_IMPORT_BYTES = 10 * 1024 * 1024;
 var MAX_DEAL_IMPORT_ROWS = 50000;
+var MAX_QUEUED_DEAL_IMPORTS = 5;
 var DEAL_IMPORT_REQUIRED_COLUMNS = [
   "deal_id",
   "outcome",
@@ -1210,7 +1217,8 @@ var DEAL_IMPORT_ROW_REASONS = [
   "invalid_currency",
   "invalid_name",
   "outcome_already_decided",
-  "deal_limit_reached"
+  "deal_limit_reached",
+  "blank_row"
 ];
 var dealImportRowReasonSchema = z18.enum(DEAL_IMPORT_ROW_REASONS);
 var INVALID_CELL = { ok: false };
@@ -1632,6 +1640,13 @@ var dealImportRowSchema = z20.object({
   result: dealImportRowResultSchema,
   reason: dealImportRowReasonSchema.nullable()
 }).superRefine((row, context) => {
+  if (row.reason === "blank_row" && row.dealId !== null) {
+    context.addIssue({
+      code: "custom",
+      path: ["dealId"],
+      message: "A blank row has no deal id"
+    });
+  }
   if (row.result === "rejected" !== (row.reason !== null)) {
     context.addIssue({
       code: "custom",
@@ -1639,7 +1654,7 @@ var dealImportRowSchema = z20.object({
       message: "A reason is set exactly when the row is rejected"
     });
   }
-  if (row.dealId === null && row.reason !== "invalid_deal_id" && row.reason !== "wrong_column_count") {
+  if (row.dealId === null && row.reason !== "invalid_deal_id" && row.reason !== "wrong_column_count" && row.reason !== "blank_row") {
     context.addIssue({
       code: "custom",
       path: ["dealId"],
@@ -1880,6 +1895,7 @@ export {
   MAX_NAME_LENGTH,
   MAX_PAGE_SIZE,
   MAX_PERSON_NAME_LENGTH,
+  MAX_QUEUED_DEAL_IMPORTS,
   MAX_RECORDING_BYTES,
   MAX_RECORDING_SECONDS,
   MAX_REP_FIELD_LENGTH,

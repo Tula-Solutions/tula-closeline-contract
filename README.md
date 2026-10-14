@@ -131,8 +131,8 @@ Additive; the 0.7.0 types are unchanged (`PlaybookRoute`, `PLAYBOOK_ROUTES` and 
   on a request path). Quoting is strict RFC 4180: a quote inside an unquoted cell or text after a
   closing quote is `bad_quote`, a quote that never closes is `unterminated_quote`. The header is record
   1 and `rowNumber` is the record number, so a quoted cell spanning lines is one record; a blank line
-  (`isBlankCsvRecord`) is skipped and not reported but still counts in the numbers, as in a
-  spreadsheet. The upload route checks the header early with `checkDealImportHeaderText` on the first `DEAL_IMPORT_HEADER_PREFIX_CHARS` (8192) characters of the file (a header unfinished there answers `{ ok: true, deferred: true }` and the job decides),
+  (`isBlankCsvRecord`) is a rejected row with the reason `blank_row` (no deal id), so the report has
+  no gap, and it counts in the numbers, as in a spreadsheet. The upload route checks the header early with `checkDealImportHeaderText` on the first `DEAL_IMPORT_HEADER_PREFIX_CHARS` (8192) characters of the file (a header unfinished there answers `{ ok: true, deferred: true }` and the job decides),
   which reads the first record with `firstCsvRecord` (same rules and limits); the job re-checks the first
   record of its parse with `checkDealImportHeader(record)`; the two give one verdict. Each record then
   goes through `checkDealImportRow(cells, hasName)`, which uses `parseOutcomeCell` (`won`/`lost`/`open`,
@@ -157,8 +157,16 @@ Additive; the 0.7.0 types are unchanged (`PlaybookRoute`, `PLAYBOOK_ROUTES` and 
   carries `rightsRequiredDetailsSchema` in `details` with the wording version to show.
 - **Limits and defaults** are exported constants, each saying whether it is the owner's or a default:
   `MAX_TRANSCRIPT_BYTES`, `MAX_RECORDING_BYTES`, `MAX_RECORDING_SECONDS`, `MAX_DEAL_IMPORT_BYTES`,
-  `MAX_DEAL_IMPORT_ROWS`, `MAX_DEAL_ID_LENGTH`, `MAX_REP_FOLLOWING_TURNS`, `MAX_REP_FOLLOWING_CHARACTERS`,
+  `MAX_DEAL_IMPORT_ROWS`, `MAX_QUEUED_DEAL_IMPORTS` (5 imports not yet finished per Organization, then `deal_import.busy`, 429), `MAX_DEAL_ID_LENGTH`, `MAX_REP_FOLLOWING_TURNS`, `MAX_REP_FOLLOWING_CHARACTERS`,
   `INCOMPLETE_UPLOAD_PARTS_TTL_HOURS`, `DEFAULT_MAX_CALLS`, `DEFAULT_MAX_RECORDING_BYTES_TOTAL`, `DEFAULT_MAX_DEALS`.
+
+### Deal import follow-ups (0.10.0)
+
+`blank_row` is a new `DealImportRowReason` (an interior blank line, no deal id), which widens the
+list: handle it wherever the reasons are matched exhaustively. `deal_import.busy` (429) and
+`MAX_QUEUED_DEAL_IMPORTS` (5) cap imports not yet finished per Organization on the upload route.
+The remove-all route now documents `server.unavailable` (503 with `Retry-After`) for a transient
+failure; it never answers 200 while data remains.
 
 ### Rights confirmation wording (0.9.0)
 

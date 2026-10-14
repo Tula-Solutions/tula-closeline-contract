@@ -116,6 +116,9 @@ export const MAX_DEAL_IMPORT_BYTES = 10 * 1024 * 1024
 /** The lead's default (ADR 0018, refinements; not the owner's): the most data rows in one CSV. */
 export const MAX_DEAL_IMPORT_ROWS = 50_000
 
+/** The most Deal imports one Organization may have not yet finished (state `uploaded` or `processing`); a further upload is refused with `deal_import.busy` (429). */
+export const MAX_QUEUED_DEAL_IMPORTS = 5
+
 /** The required columns of the CSV template, in order. */
 export const DEAL_IMPORT_REQUIRED_COLUMNS = [
   'deal_id',
@@ -269,7 +272,8 @@ export type DealImportRowResult = z.infer<typeof dealImportRowResultSchema>
 /**
  * Why a row was rejected: a closed list, never a cell. A row is rejected, not silently dropped,
  * and never an HTTP error. `outcome_already_decided` is a row for a Deal already `won` or `lost`
- * (ADR 0018, choice 5); `duplicate_in_file` is a deal id repeated after its first row.
+ * (ADR 0018, choice 5); `duplicate_in_file` is a deal id repeated after its first row; `blank_row`
+ * is an interior blank line, reported so the report has no gap in its row numbers.
  */
 export const DEAL_IMPORT_ROW_REASONS = [
   'wrong_column_count',
@@ -282,6 +286,7 @@ export const DEAL_IMPORT_ROW_REASONS = [
   'invalid_name',
   'outcome_already_decided',
   'deal_limit_reached',
+  'blank_row',
 ] as const
 
 /** Why a row was rejected. */
@@ -601,7 +606,7 @@ function readCsv(
  * as record 1: a report's `rowNumber` is a record number, and a quoted cell spanning lines is one
  * record, so it can differ from the physical line. A blank line is a record of one empty cell
  * ({@link isBlankCsvRecord}): it is kept, so numbers match what a spreadsheet shows, and the caller
- * skips it without reporting it.
+ * reports it as a rejected `blank_row` row.
  */
 export function parseCsv(text: string, options?: CsvOptions): CsvResult {
   const result = readCsv(text, options, false)
@@ -619,7 +624,7 @@ export function firstCsvRecord(text: string, options?: CsvOptions): FirstCsvReco
     : { ok: false, failure: result.failure, recordsRead: result.recordsRead }
 }
 
-/** Whether a CSV record is a blank line: one empty cell. A caller skips it without reporting it, but it still counts in the record number. */
+/** Whether a CSV record is a blank line: one empty cell. A caller reports it as a rejected `blank_row` row; it counts in the record number. */
 export function isBlankCsvRecord(record: readonly string[]): boolean {
   return record.length === 1 && record[0] === ''
 }

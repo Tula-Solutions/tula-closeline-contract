@@ -218,6 +218,13 @@ export const dealImportRowSchema = z
     reason: dealImportRowReasonSchema.nullable(),
   })
   .superRefine((row, context) => {
+    if (row.reason === 'blank_row' && row.dealId !== null) {
+      context.addIssue({
+        code: 'custom',
+        path: ['dealId'],
+        message: 'A blank row has no deal id',
+      })
+    }
     if ((row.result === 'rejected') !== (row.reason !== null)) {
       context.addIssue({
         code: 'custom',
@@ -228,7 +235,8 @@ export const dealImportRowSchema = z
     if (
       row.dealId === null &&
       row.reason !== 'invalid_deal_id' &&
-      row.reason !== 'wrong_column_count'
+      row.reason !== 'wrong_column_count' &&
+      row.reason !== 'blank_row'
     ) {
       context.addIssue({
         code: 'custom',
