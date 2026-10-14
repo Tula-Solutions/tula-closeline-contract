@@ -18,6 +18,7 @@ declare const AUTH_ERRORS: {
 	readonly "flow.not_found": ErrorDefinition_8gwh45<"flow.not_found">;
 	readonly "mail.unavailable": ErrorDefinition_8gwh45<"mail.unavailable">;
 	readonly "membership.unavailable": ErrorDefinition_8gwh45<"membership.unavailable">;
+	readonly "oidc.access_denied": ErrorDefinition_8gwh45<"oidc.access_denied">;
 	readonly "oidc.disabled": ErrorDefinition_8gwh45<"oidc.disabled">;
 	readonly "oidc.email_unverified": ErrorDefinition_8gwh45<"oidc.email_unverified">;
 	readonly "oidc.invitation_mismatch": ErrorDefinition_8gwh45<"oidc.invitation_mismatch">;
@@ -41,6 +42,44 @@ declare const AUTH_ERRORS: {
 /** A code from the {@link AUTH_ERRORS} registry. */
 type AuthErrorCode = keyof typeof AUTH_ERRORS;
 import { z as z2 } from "zod";
+import { ErrorDefinition as ErrorDefinition_8gwh452 } from "..";
+/**
+* The errors core returns, as `area.reason` codes. None says whether an email address or a user
+* exists in another Organization: `invitation.invalid` covers an unknown, used, revoked and expired
+* token alike, and `membership.already_member` is only ever about the user making the call. A role
+* that is not allowed is the common `auth.forbidden`. `organization.not_abandonable` is the one
+* answer when the abandon guard refuses, whichever of its conditions failed. Which internal call
+* returns which code is `INTERNAL_CALL_ERRORS`.
+*/
+declare const CORE_ERRORS: {
+	readonly "invitation.already_pending": ErrorDefinition_8gwh452<"invitation.already_pending">;
+	readonly "invitation.invalid": ErrorDefinition_8gwh452<"invitation.invalid">;
+	readonly "invitation.not_found": ErrorDefinition_8gwh452<"invitation.not_found">;
+	readonly "member.last_owner": ErrorDefinition_8gwh452<"member.last_owner">;
+	readonly "member.not_found": ErrorDefinition_8gwh452<"member.not_found">;
+	readonly "membership.already_member": ErrorDefinition_8gwh452<"membership.already_member">;
+	readonly "organization.deleted": ErrorDefinition_8gwh452<"organization.deleted">;
+	readonly "organization.not_abandonable": ErrorDefinition_8gwh452<"organization.not_abandonable">;
+	readonly "organization.not_found": ErrorDefinition_8gwh452<"organization.not_found">;
+	readonly "organization.suspended": ErrorDefinition_8gwh452<"organization.suspended">;
+	readonly "team.name_taken": ErrorDefinition_8gwh452<"team.name_taken">;
+	readonly "team.not_found": ErrorDefinition_8gwh452<"team.not_found">;
+};
+/** A code from the {@link CORE_ERRORS} registry. */
+type CoreErrorCode = keyof typeof CORE_ERRORS;
+/**
+* The errors the auth service returns about sign-up and Organization membership. They are named
+* for what the person signing up sees; auth turns core's `invitation.invalid` into
+* `signup.invitation_invalid` and an unreachable core into `membership.unavailable`.
+*/
+declare const SIGNUP_ERRORS: {
+	readonly "auth.no_organization": ErrorDefinition_8gwh452<"auth.no_organization">;
+	readonly "membership.unavailable": ErrorDefinition_8gwh452<"membership.unavailable">;
+	readonly "signup.invitation_invalid": ErrorDefinition_8gwh452<"signup.invitation_invalid">;
+	readonly "signup.organization_name_invalid": ErrorDefinition_8gwh452<"signup.organization_name_invalid">;
+};
+/** A code from the {@link SIGNUP_ERRORS} registry. */
+type SignupErrorCode = keyof typeof SIGNUP_ERRORS;
 import { z } from "zod";
 /** An error code in `area.reason` form, such as `request.invalid`. */
 declare const errorCodeSchema: z.ZodString;
@@ -87,7 +126,8 @@ declare const MAX_AUTHORIZATION_URL_LENGTH = 2048;
 * collapse to `//host` when resolved), and is at most `MAX_RETURN_TO_LENGTH` long. A
 * percent-encoded form is checked after decoding once too, so a consumer must decode exactly once; so `/%2F/evil` and `/%5Cevil` are refused, and so is a malformed escape. The
 * service also checks it against the portal's route allow-list and keeps it in the attempt; it is
-* never read from the callback.
+* never read from the callback. The value has already been decoded once by the query or JSON
+* parser: a consumer must not decode it again.
 */
 declare const returnToSchema: z2.ZodString;
 /** Why the person is using Google: to `sign_in` to an account or to `sign_up` for one. */
@@ -107,7 +147,12 @@ declare const googleStartRequestSchema: z2.ZodObject<{
 }, z2.core.$strict>;
 /** The body that starts a Sign in with Google. */
 type GoogleStartRequest = z2.infer<typeof googleStartRequestSchema>;
-/** The URL the browser is sent to: `https`, or `http` only to a loopback host (for local development), with no credentials. */
+/**
+* The URL the browser is sent to: `https`, or `http` only to a loopback host (for local
+* development), with no credentials and no leading or trailing whitespace. The contract cannot
+* pin the host, so a consumer must also check it against an allow-list (the portal checks
+* `accounts.google.com` plus the local fake issuer).
+*/
 declare const authorizationUrlSchema: z2.ZodString;
 /** The answer to a start: where to send the browser. It carries nothing else; the attempt secret is in a cookie. */
 declare const googleStartResponseSchema: z2.ZodObject<{
@@ -115,6 +160,28 @@ declare const googleStartResponseSchema: z2.ZodObject<{
 }, z2.core.$strict>;
 /** The answer to a start. */
 type GoogleStartResponse = z2.infer<typeof googleStartResponseSchema>;
+/** An attempt id as the portal receives it in the sign-up step's query and sends it to complete: 1 to 128 letters, digits, `_` or `-`. */
+declare const attemptIdSchema: z2.ZodString;
+/** The portal path of the step where a new Google user names an Organization or accepts an invitation. */
+declare const GOOGLE_SIGN_UP_PATH = "/sign-up/google";
+/** The query parameter of {@link GOOGLE_SIGN_UP_PATH} that holds the attempt id. */
+declare const GOOGLE_SIGN_UP_ATTEMPT_PARAM = "attempt";
+/** The portal path the callback redirects to when it fails. */
+declare const GOOGLE_ERROR_PATH = "/sign-in";
+/** The query parameter of {@link GOOGLE_ERROR_PATH} that holds the error code (an `area.reason` code). */
+declare const GOOGLE_ERROR_PARAM = "error";
+/** The base name of the attempt cookie. Auth adds {@link OIDC_COOKIE_SECURE_PREFIX} outside `local` only, because Safari refuses a `__Secure-` cookie over http even on loopback. */
+declare const OIDC_COOKIE_BASE_NAME = "tula_oidc";
+/** The prefix of the attempt cookie's name outside `local`. */
+declare const OIDC_COOKIE_SECURE_PREFIX = "__Secure-";
+/** The query of the portal's sign-up step after a Google sign-in: the attempt id. Unknown keys are rejected. */
+declare const googleSignUpQuerySchema: z2.ZodObject<{
+	attempt: z2.ZodString;
+}, z2.core.$strict>;
+/** The query of the portal's sign-in page after a failed Google sign-in: one error code. Unknown keys are rejected. */
+declare const googleErrorQuerySchema: z2.ZodObject<{
+	error: z2.ZodString;
+}, z2.core.$strict>;
 /**
 * The body that finishes a Sign in with Google for a new user: the `attemptId` from the redirect
 * (the secret is in the cookie) and exactly one way to get an Organization, an `organizationName`
@@ -145,8 +212,22 @@ declare const browserSessionTokensSchema: z2.ZodObject<{
 }, z2.core.$strict>;
 /** The tokens of a signed-in session for the `browser` client. */
 type BrowserSessionTokens = z2.infer<typeof browserSessionTokensSchema>;
-/** The answer to a complete: the new session, for the `browser` client. */
+/**
+* The answer to a complete, shaped like the auth service's browser flow response so the portal has
+* one completion path: the attempt `id`, its `kind`, `expiresAt`, a `complete` step and the
+* `session` (for the `browser` client: the refresh token is in the cookie, never in the body).
+* Fields it does not know, such as an attempt secret, are dropped. A secret: never log it.
+*/
 declare const googleCompleteResponseSchema: z2.ZodObject<{
+	id: z2.ZodString;
+	kind: z2.ZodEnum<{
+		sign_in: "sign_in";
+		sign_up: "sign_up";
+	}>;
+	expiresAt: z2.ZodISODateTime;
+	step: z2.ZodObject<{
+		status: z2.ZodLiteral<"complete">;
+	}, z2.core.$strip>;
 	session: z2.ZodObject<{
 		sessionId: z2.ZodString;
 		accessToken: z2.ZodString;
@@ -161,7 +242,7 @@ declare const googleCompleteResponseSchema: z2.ZodObject<{
 			}>;
 		}, z2.core.$strict>;
 	}, z2.core.$strict>;
-}, z2.core.$strict>;
+}, z2.core.$strip>;
 /** The answer to a complete. */
 type GoogleCompleteResponse = z2.infer<typeof googleCompleteResponseSchema>;
 /** Which sign-in providers are on, so the portal hides a button that would only fail. */
@@ -173,9 +254,10 @@ type AuthProviders = z2.infer<typeof authProvidersSchema>;
 /** The path of the auth options route. */
 declare const AUTH_OPTIONS_PATH = "/v1/client/auth-options";
 /**
-* The answer to the auth options route, as far as the providers go. `providers` is additive: an
-* older payload without it still parses, with every provider off, and fields this schema does not
-* know are dropped.
+* The answer to the auth options route, `GET /v1/client/auth-options`, which the auth service
+* owns (a new route): `providers` says which sign-in providers are on, so the portal hides a button
+* that would only fail. A payload without `providers`, such as `{}`, parses with every provider
+* off, and fields this schema does not know are dropped.
 */
 declare const authOptionsResponseSchema: z2.ZodObject<{
 	providers: z2.ZodDefault<z2.ZodObject<{
@@ -191,55 +273,24 @@ type AuthRoute = {
 	/** The success statuses, the first being the usual one. */
 	readonly success: readonly number[];
 	/** The domain codes the route may return, beyond the common ones. */
-	readonly errors: readonly AuthErrorCode[];
+	readonly errors: readonly (AuthErrorCode | CoreErrorCode)[];
+	/** Codes the route never answers as an HTTP status: they reach the browser as the `error` query parameter of a redirect. */
+	readonly redirectErrors: readonly (AuthErrorCode | CoreErrorCode)[];
 	/** The common codes the route may return, beyond those every route may. */
 	readonly commonErrors: readonly CommonErrorCode[];
 	/** The description for the OpenAPI document. */
 	readonly description: string;
 };
+/** The auth options route, owned by the auth service (a new route): which sign-in providers are on. */
+declare const AUTH_OPTIONS_ROUTE: AuthRoute;
 /**
 * The Sign in with Google routes, by name: the description a service puts in its OpenAPI document,
-* the success statuses and every error code each route may answer with. None needs a session.
+* the success statuses and every error code each route may answer with. None needs a session. The
+* callback answers every outcome but `oidc.disabled` with a 302, so its other codes are in
+* `redirectErrors`: they reach the browser as the `error` query parameter of the redirect to
+* `GOOGLE_ERROR_PATH`, not as an HTTP status.
 */
 declare const GOOGLE_ROUTES: Readonly<Record<"start" | "callback" | "complete", AuthRoute>>;
-import { ErrorDefinition as ErrorDefinition_8gwh452 } from "..";
-/**
-* The errors core returns, as `area.reason` codes. None says whether an email address or a user
-* exists in another Organization: `invitation.invalid` covers an unknown, used, revoked and expired
-* token alike, and `membership.already_member` is only ever about the user making the call. A role
-* that is not allowed is the common `auth.forbidden`. `organization.not_abandonable` is the one
-* answer when the abandon guard refuses, whichever of its conditions failed. Which internal call
-* returns which code is `INTERNAL_CALL_ERRORS`.
-*/
-declare const CORE_ERRORS: {
-	readonly "invitation.already_pending": ErrorDefinition_8gwh452<"invitation.already_pending">;
-	readonly "invitation.invalid": ErrorDefinition_8gwh452<"invitation.invalid">;
-	readonly "invitation.not_found": ErrorDefinition_8gwh452<"invitation.not_found">;
-	readonly "member.last_owner": ErrorDefinition_8gwh452<"member.last_owner">;
-	readonly "member.not_found": ErrorDefinition_8gwh452<"member.not_found">;
-	readonly "membership.already_member": ErrorDefinition_8gwh452<"membership.already_member">;
-	readonly "organization.deleted": ErrorDefinition_8gwh452<"organization.deleted">;
-	readonly "organization.not_abandonable": ErrorDefinition_8gwh452<"organization.not_abandonable">;
-	readonly "organization.not_found": ErrorDefinition_8gwh452<"organization.not_found">;
-	readonly "organization.suspended": ErrorDefinition_8gwh452<"organization.suspended">;
-	readonly "team.name_taken": ErrorDefinition_8gwh452<"team.name_taken">;
-	readonly "team.not_found": ErrorDefinition_8gwh452<"team.not_found">;
-};
-/** A code from the {@link CORE_ERRORS} registry. */
-type CoreErrorCode = keyof typeof CORE_ERRORS;
-/**
-* The errors the auth service returns about sign-up and Organization membership. They are named
-* for what the person signing up sees; auth turns core's `invitation.invalid` into
-* `signup.invitation_invalid` and an unreachable core into `membership.unavailable`.
-*/
-declare const SIGNUP_ERRORS: {
-	readonly "auth.no_organization": ErrorDefinition_8gwh452<"auth.no_organization">;
-	readonly "membership.unavailable": ErrorDefinition_8gwh452<"membership.unavailable">;
-	readonly "signup.invitation_invalid": ErrorDefinition_8gwh452<"signup.invitation_invalid">;
-	readonly "signup.organization_name_invalid": ErrorDefinition_8gwh452<"signup.organization_name_invalid">;
-};
-/** A code from the {@link SIGNUP_ERRORS} registry. */
-type SignupErrorCode = keyof typeof SIGNUP_ERRORS;
 import { z as z3 } from "zod";
 /** The internal calls, by name. */
 type InternalCallName = "createOrganization" | "acceptInvitation" | "membership" | "updateMemberProfile" | "abandonOrganization";
@@ -3004,4 +3055,4 @@ declare function hasStrippableCharacter(text: string): boolean;
 declare function isWellFormedText(text: string): boolean;
 /** This library's package name, so a consumer can report which shared libraries it resolved. */
 declare const PACKAGE = "tula-closeline-contract";
-export { ABANDON_MAX_AGE_HOURS, ACCEPTED_DOCUMENT_EXTENSIONS, ACCEPTED_DOCUMENT_MEDIA_TYPES, ACCEPTED_RECORDING_EXTENSIONS, ACCEPTED_TRANSCRIPT_EXTENSIONS, ALL_PLAYBOOK_ERRORS, ALL_PLAYBOOK_ROUTES, AUTH_ERRORS, AUTH_OPTIONS_PATH, AcceptedCallExtension, AcceptedDocumentExtension, AddTeamMemberRequest, AllPlaybookRouteName, AuthErrorCode, AuthOptionsResponse, AuthProviders, AuthRoute, BrowserSessionTokens, CALL_CHANNELS, CALL_DELETED_MESSAGE, CALL_FAILURE_FIXES, CALL_FAILURE_REASONS, CALL_KINDS, CALL_MEDIA_TYPES, CALL_REP_CHANGED_MESSAGE, CALL_STATES, CALL_TRANSCRIBED_MESSAGE, CALL_UPLOADED_MESSAGE, CORE_ERRORS, CSV_FAILURES, CURRENT_RIGHTS_WORDING_VERSION, Call, CallCursor, CallDeletedPayload, CallFailureFix, CallFailureReason, CallId, CallKind, CallMediaType, CallParams, CallRepChangedPayload, CallState, CallTranscribedPayload, CallUploadedPayload, CellResult, ChangeMemberRoleRequest, CheckCallFileResult, CheckDealImportHeaderResult, CheckDealImportHeaderTextResult, CheckDealImportRowResult, CheckUploadFileResult, CommonErrorCode, ConfirmRightsRequest, CoreErrorCode, CreateInvitationRequest, CreateTeamRequest, CsvFailure, CsvOptions, CsvResult, DEAL_CLOSED_AT_MAX_YEAR, DEAL_CLOSED_AT_MIN_YEAR, DEAL_IMPORT_FAILURE_REASONS, DEAL_IMPORT_FILE_FIELD, DEAL_IMPORT_HEADER_PREFIX_CHARS, DEAL_IMPORT_HEADER_PROBLEMS, DEAL_IMPORT_OPTIONAL_COLUMN, DEAL_IMPORT_REQUIRED_COLUMNS, DEAL_IMPORT_ROW_REASONS, DEAL_IMPORT_ROW_RESULTS, DEAL_IMPORT_STATES, DEAL_IMPORT_UPLOADED_MESSAGE, DEAL_OUTCOME_CHANGED_MESSAGE, DEFAULT_MAX_CALLS, DEFAULT_MAX_DEALS, DEFAULT_MAX_DOCUMENTS, DEFAULT_MAX_DOCUMENT_BYTES_TOTAL, DEFAULT_MAX_RECORDING_BYTES_TOTAL, DEFAULT_PAGE_SIZE, DEFAULT_SEARCH_LIMIT, DOCUMENT_DELETED_MESSAGE, DOCUMENT_FAILURE_REASONS, DOCUMENT_RETENTION_DAYS, DOCUMENT_STATES, DOCUMENT_UPLOADED_MESSAGE, Deal, DealCursor, DealId, DealImport, DealImportCursor, DealImportFailureReason, DealImportHeaderProblem, DealImportId, DealImportParams, DealImportRow, DealImportRowCursor, DealImportRowReason, DealImportRowResult, DealImportState, DealImportUploadedPayload, DealOutcomeChangedPayload, DealParams, DealRecordId, DocumentDeletedPayload, DocumentFailureReason, DocumentFileName, DocumentId, DocumentMatch, DocumentMediaType, DocumentParams, DocumentSearchEvidence, DocumentState, DocumentUploadedPayload, ERRORS, Email, ErrorBody, ErrorDefinition, ErrorInput, EventId, EventType, FirstCsvRecordResult, GOOGLE_ROUTES, GoogleCompleteRequest, GoogleCompleteResponse, GoogleIntent, GoogleStartRequest, GoogleStartResponse, IDEMPOTENCY_KEY_HEADER, INCOMPLETE_UPLOAD_PARTS_TTL_HOURS, INTERNAL_CALL_ERRORS, INVITABLE_ROLES, INVITATION_STATES, Id, IdempotencyKey, InternalAbandonOrganizationParams, InternalAbandonOrganizationRequest, InternalAbandonOrganizationResponse, InternalAcceptInvitationRequest, InternalAcceptInvitationResponse, InternalCallName, InternalCreateOrganizationRequest, InternalCreateOrganizationResponse, InternalMembershipRequest, InternalMembershipResponse, InternalRemoveOrganizationDocumentsParams, InternalRemoveOrganizationDocumentsRequest, InternalRemoveOrganizationDocumentsResponse, InternalUpdateMemberProfileParams, InternalUpdateMemberProfileRequest, InternalUpdateMemberProfileResponse, InvitableRole, Invitation, InvitationId, InvitationParams, InvitationState, ListCallsQuery, ListCallsResponse, ListDealImportRowsQuery, ListDealImportRowsResponse, ListDealImportsQuery, ListDealImportsResponse, ListDealsQuery, ListDealsResponse, ListDocumentsQuery, ListDocumentsResponse, ListInvitationsQuery, ListInvitationsResponse, ListMembersQuery, ListMembersResponse, ListTeamsQuery, ListTeamsResponse, LookupDealRequest, MAX_AUTHORIZATION_URL_LENGTH, MAX_CALL_SPEAKERS, MAX_CURSOR_LENGTH, MAX_DEAL_ID_BYTES, MAX_DEAL_ID_LENGTH, MAX_DEAL_IMPORT_BYTES, MAX_DEAL_IMPORT_CELL_LENGTH, MAX_DEAL_IMPORT_HEADER_LENGTH, MAX_DEAL_IMPORT_ROWS, MAX_DEAL_NAME_BYTES, MAX_DEAL_NAME_LENGTH, MAX_DELETION_SEQ, MAX_DOCUMENT_BYTES, MAX_DOCUMENT_FILE_NAME_BYTES, MAX_DOCUMENT_FILE_NAME_LENGTH, MAX_DOCUMENT_PAGES, MAX_EMAIL_LENGTH, MAX_MOMENT_SNIPPET_CHARACTERS, MAX_NAME_LENGTH, MAX_PAGE_SIZE, MAX_PERSON_NAME_LENGTH, MAX_QUEUED_DEAL_IMPORTS, MAX_RECORDING_BYTES, MAX_RECORDING_SECONDS, MAX_REP_FIELD_LENGTH, MAX_REP_FOLLOWING_CHARACTERS, MAX_REP_FOLLOWING_TURNS, MAX_RETURN_TO_LENGTH, MAX_RIGHTS_HEADING_LENGTH, MAX_RIGHTS_PARAGRAPHS, MAX_RIGHTS_TEXT_LENGTH, MAX_RIGHTS_WORDING_VERSION, MAX_SEARCH_CANDIDATES, MAX_SEARCH_LIMIT, MAX_SEARCH_TEXT_CHARACTERS, MAX_SEARCH_TURNS, MAX_SEQ, MAX_SPEAKER_EXCERPT_LENGTH, MAX_SPEAKER_LABEL_BYTES, MAX_SPEAKER_LABEL_LENGTH, MAX_TRANSCRIPT_BYTES, MAX_UTF8_BYTES_PER_CODE_POINT, MEDIA_TYPE_BY_CALL_EXTENSION, MEDIA_TYPE_BY_EXTENSION, Member, MemberParams, MembershipId, MomentMatch, ORGANIZATION_STATUSES, OUTCOMES, Organization, OrganizationId, OrganizationStatus, Outcome, PACKAGE, PLAYBOOK_ERRORS, PLAYBOOK_READ_ROLES, PLAYBOOK_ROUTES, PLAYBOOK_WRITE_ROLES, Page, PageQuery, ParseRepFieldResult, ParsedDealImportRow, PlaybookDocument, PlaybookErrorCode, PlaybookRoute, PlaybookRouteName, ProspectId, REGIONS, RIGHTS_WORDINGS, ROLES, Region, RenameOrganizationRequest, RenameTeamRequest, RepChoice, RequestId, RightsConfirmation, RightsRequiredDetails, RightsStatus, RightsWording, Role, SALES_HISTORY_ERRORS, SALES_HISTORY_READ_ROLES, SALES_HISTORY_ROUTES, SEARCH_ROUTES, SIGNUP_ERRORS, SalesHistoryErrorCode, SalesHistoryRoute, SalesHistoryRouteName, SearchDocumentsRequest, SearchDocumentsResponse, SearchEvidence, SearchMomentsRequest, SearchMomentsResponse, SearchRouteName, SearchTurn, SetCallRepRequest, SetDealOutcomeRequest, SignupErrorCode, SpeakerExcerpt, Team, TeamId, TeamMember, TeamMemberParams, TeamParams, UPLOAD_CONTENT_TYPE, UPLOAD_FILE_FIELD, UploadCallFields, UploadDocumentFile, UserId, addTeamMemberRequestSchema, authOptionsResponseSchema, authProvidersSchema, authorizationUrlSchema, browserSessionTokensSchema, calendarDateSchema, callChannelSchema, callCursorSchema, callDeletedPayloadSchema, callFailureReasonSchema, callIdSchema, callKindSchema, callListItemSchema, callMediaTypeSchema, callParamsSchema, callRepChangedPayloadSchema, callReuploadRequeues, callSchema, callStateSchema, callTranscribedPayloadSchema, callUploadedPayloadSchema, changeMemberRoleRequestSchema, checkCallFile, checkDealImportHeader, checkDealImportHeaderText, checkDealImportRow, checkUploadFile, confirmRightsRequestSchema, createInvitationRequestSchema, createTeamRequestSchema, dealAmountSchema, dealCurrencySchema, dealCursorSchema, dealIdSchema, dealImportCursorSchema, dealImportFailureReasonSchema, dealImportIdSchema, dealImportParamsSchema, dealImportRowCursorSchema, dealImportRowReasonSchema, dealImportRowResultSchema, dealImportRowSchema, dealImportSchema, dealImportStateSchema, dealImportUploadedPayloadSchema, dealNameSchema, dealOutcomeChangedPayloadSchema, dealParamsSchema, dealRecordIdSchema, dealSchema, decodeCursor, defineErrors, defineEvent, documentDeletedPayloadSchema, documentExtension, documentFailureReasonSchema, documentFileNameSchema, documentIdSchema, documentMatchSchema, documentMediaTypeSchema, documentParamsSchema, documentQueryText, documentSchema, documentSearchEvidenceSchema, documentSizeCheckSchema, documentStateSchema, documentTypeCheckSchema, documentUploadedPayloadSchema, emailSchema, encodeCursor, errorBodySchema, errorCodeSchema, eventEnvelopeSchema, eventIdSchema, eventTypeSchema, excerptText, firstCsvRecord, foldAscii, formatId, googleCompleteRequestSchema, googleCompleteResponseSchema, googleIntentSchema, googleStartRequestSchema, googleStartResponseSchema, hasStrippableCharacter, idSchema, idempotencyKeySchema, internalAbandonOrganizationParamsSchema, internalAbandonOrganizationRequestSchema, internalAbandonOrganizationResponseSchema, internalAcceptInvitationRequestSchema, internalAcceptInvitationResponseSchema, internalCreateOrganizationRequestSchema, internalCreateOrganizationResponseSchema, internalMembershipRequestSchema, internalMembershipResponseSchema, internalRemoveOrganizationDocumentsParamsSchema, internalRemoveOrganizationDocumentsRequestSchema, internalRemoveOrganizationDocumentsResponseSchema, internalUpdateMemberProfileParamsSchema, internalUpdateMemberProfileRequestSchema, internalUpdateMemberProfileResponseSchema, invitableRoleSchema, invitationIdSchema, invitationParamsSchema, invitationSchema, invitationStateSchema, invitationTokenSchema, isBlankCsvRecord, isWellFormedText, listCallsQuerySchema, listCallsResponseSchema, listDealImportRowsQuerySchema, listDealImportRowsResponseSchema, listDealImportsQuerySchema, listDealImportsResponseSchema, listDealsQuerySchema, listDealsResponseSchema, listDocumentsQuerySchema, listDocumentsResponseSchema, listInvitationsQuerySchema, listInvitationsResponseSchema, listMembersQuerySchema, listMembersResponseSchema, listTeamsQuerySchema, listTeamsResponseSchema, lookupDealRequestSchema, memberParamsSchema, memberSchema, membershipIdSchema, momentMatchSchema, momentQueryText, momentSnippet, momentSnippetSchema, normaliseDealId, normaliseFileName, normaliseMediaType, normaliseSpeakerLabel, organizationIdSchema, organizationNameSchema, organizationSchema, organizationStatusSchema, outcomeSchema, pageQuerySchema, pageSchema, parseAmountCell, parseClosedAtCell, parseCsv, parseCurrencyCell, parseOutcomeCell, parseRepField, personNameSchema, prospectIdSchema, regionSchema, renameOrganizationRequestSchema, renameTeamRequestSchema, repChangeAllowed, repChoiceSchema, repChoiceSuits, requestIdSchema, returnToSchema, rightsConfirmationSchema, rightsRequiredDetailsSchema, rightsStatusSchema, rightsWordingFor, rightsWordingSchema, rightsWordingVersionSchema, roleAtLeast, roleSchema, searchDocumentsRequestSchema, searchDocumentsResponseSchema, searchEvidenceSchema, searchMomentsRequestSchema, searchMomentsResponseSchema, searchTurnSchema, setCallRepRequestSchema, setDealOutcomeRequestSchema, speakerExcerpt, speakerExcerptSchema, speakerLabelSchema, storedNameSchema, teamIdSchema, teamMemberParamsSchema, teamMemberSchema, teamNameSchema, teamParamsSchema, teamSchema, timestampSchema, uploadCallFieldsSchema, uploadCallFileSchema, uploadDocumentFileSchema, userIdSchema };
+export { ABANDON_MAX_AGE_HOURS, ACCEPTED_DOCUMENT_EXTENSIONS, ACCEPTED_DOCUMENT_MEDIA_TYPES, ACCEPTED_RECORDING_EXTENSIONS, ACCEPTED_TRANSCRIPT_EXTENSIONS, ALL_PLAYBOOK_ERRORS, ALL_PLAYBOOK_ROUTES, AUTH_ERRORS, AUTH_OPTIONS_PATH, AUTH_OPTIONS_ROUTE, AcceptedCallExtension, AcceptedDocumentExtension, AddTeamMemberRequest, AllPlaybookRouteName, AuthErrorCode, AuthOptionsResponse, AuthProviders, AuthRoute, BrowserSessionTokens, CALL_CHANNELS, CALL_DELETED_MESSAGE, CALL_FAILURE_FIXES, CALL_FAILURE_REASONS, CALL_KINDS, CALL_MEDIA_TYPES, CALL_REP_CHANGED_MESSAGE, CALL_STATES, CALL_TRANSCRIBED_MESSAGE, CALL_UPLOADED_MESSAGE, CORE_ERRORS, CSV_FAILURES, CURRENT_RIGHTS_WORDING_VERSION, Call, CallCursor, CallDeletedPayload, CallFailureFix, CallFailureReason, CallId, CallKind, CallMediaType, CallParams, CallRepChangedPayload, CallState, CallTranscribedPayload, CallUploadedPayload, CellResult, ChangeMemberRoleRequest, CheckCallFileResult, CheckDealImportHeaderResult, CheckDealImportHeaderTextResult, CheckDealImportRowResult, CheckUploadFileResult, CommonErrorCode, ConfirmRightsRequest, CoreErrorCode, CreateInvitationRequest, CreateTeamRequest, CsvFailure, CsvOptions, CsvResult, DEAL_CLOSED_AT_MAX_YEAR, DEAL_CLOSED_AT_MIN_YEAR, DEAL_IMPORT_FAILURE_REASONS, DEAL_IMPORT_FILE_FIELD, DEAL_IMPORT_HEADER_PREFIX_CHARS, DEAL_IMPORT_HEADER_PROBLEMS, DEAL_IMPORT_OPTIONAL_COLUMN, DEAL_IMPORT_REQUIRED_COLUMNS, DEAL_IMPORT_ROW_REASONS, DEAL_IMPORT_ROW_RESULTS, DEAL_IMPORT_STATES, DEAL_IMPORT_UPLOADED_MESSAGE, DEAL_OUTCOME_CHANGED_MESSAGE, DEFAULT_MAX_CALLS, DEFAULT_MAX_DEALS, DEFAULT_MAX_DOCUMENTS, DEFAULT_MAX_DOCUMENT_BYTES_TOTAL, DEFAULT_MAX_RECORDING_BYTES_TOTAL, DEFAULT_PAGE_SIZE, DEFAULT_SEARCH_LIMIT, DOCUMENT_DELETED_MESSAGE, DOCUMENT_FAILURE_REASONS, DOCUMENT_RETENTION_DAYS, DOCUMENT_STATES, DOCUMENT_UPLOADED_MESSAGE, Deal, DealCursor, DealId, DealImport, DealImportCursor, DealImportFailureReason, DealImportHeaderProblem, DealImportId, DealImportParams, DealImportRow, DealImportRowCursor, DealImportRowReason, DealImportRowResult, DealImportState, DealImportUploadedPayload, DealOutcomeChangedPayload, DealParams, DealRecordId, DocumentDeletedPayload, DocumentFailureReason, DocumentFileName, DocumentId, DocumentMatch, DocumentMediaType, DocumentParams, DocumentSearchEvidence, DocumentState, DocumentUploadedPayload, ERRORS, Email, ErrorBody, ErrorDefinition, ErrorInput, EventId, EventType, FirstCsvRecordResult, GOOGLE_ERROR_PARAM, GOOGLE_ERROR_PATH, GOOGLE_ROUTES, GOOGLE_SIGN_UP_ATTEMPT_PARAM, GOOGLE_SIGN_UP_PATH, GoogleCompleteRequest, GoogleCompleteResponse, GoogleIntent, GoogleStartRequest, GoogleStartResponse, IDEMPOTENCY_KEY_HEADER, INCOMPLETE_UPLOAD_PARTS_TTL_HOURS, INTERNAL_CALL_ERRORS, INVITABLE_ROLES, INVITATION_STATES, Id, IdempotencyKey, InternalAbandonOrganizationParams, InternalAbandonOrganizationRequest, InternalAbandonOrganizationResponse, InternalAcceptInvitationRequest, InternalAcceptInvitationResponse, InternalCallName, InternalCreateOrganizationRequest, InternalCreateOrganizationResponse, InternalMembershipRequest, InternalMembershipResponse, InternalRemoveOrganizationDocumentsParams, InternalRemoveOrganizationDocumentsRequest, InternalRemoveOrganizationDocumentsResponse, InternalUpdateMemberProfileParams, InternalUpdateMemberProfileRequest, InternalUpdateMemberProfileResponse, InvitableRole, Invitation, InvitationId, InvitationParams, InvitationState, ListCallsQuery, ListCallsResponse, ListDealImportRowsQuery, ListDealImportRowsResponse, ListDealImportsQuery, ListDealImportsResponse, ListDealsQuery, ListDealsResponse, ListDocumentsQuery, ListDocumentsResponse, ListInvitationsQuery, ListInvitationsResponse, ListMembersQuery, ListMembersResponse, ListTeamsQuery, ListTeamsResponse, LookupDealRequest, MAX_AUTHORIZATION_URL_LENGTH, MAX_CALL_SPEAKERS, MAX_CURSOR_LENGTH, MAX_DEAL_ID_BYTES, MAX_DEAL_ID_LENGTH, MAX_DEAL_IMPORT_BYTES, MAX_DEAL_IMPORT_CELL_LENGTH, MAX_DEAL_IMPORT_HEADER_LENGTH, MAX_DEAL_IMPORT_ROWS, MAX_DEAL_NAME_BYTES, MAX_DEAL_NAME_LENGTH, MAX_DELETION_SEQ, MAX_DOCUMENT_BYTES, MAX_DOCUMENT_FILE_NAME_BYTES, MAX_DOCUMENT_FILE_NAME_LENGTH, MAX_DOCUMENT_PAGES, MAX_EMAIL_LENGTH, MAX_MOMENT_SNIPPET_CHARACTERS, MAX_NAME_LENGTH, MAX_PAGE_SIZE, MAX_PERSON_NAME_LENGTH, MAX_QUEUED_DEAL_IMPORTS, MAX_RECORDING_BYTES, MAX_RECORDING_SECONDS, MAX_REP_FIELD_LENGTH, MAX_REP_FOLLOWING_CHARACTERS, MAX_REP_FOLLOWING_TURNS, MAX_RETURN_TO_LENGTH, MAX_RIGHTS_HEADING_LENGTH, MAX_RIGHTS_PARAGRAPHS, MAX_RIGHTS_TEXT_LENGTH, MAX_RIGHTS_WORDING_VERSION, MAX_SEARCH_CANDIDATES, MAX_SEARCH_LIMIT, MAX_SEARCH_TEXT_CHARACTERS, MAX_SEARCH_TURNS, MAX_SEQ, MAX_SPEAKER_EXCERPT_LENGTH, MAX_SPEAKER_LABEL_BYTES, MAX_SPEAKER_LABEL_LENGTH, MAX_TRANSCRIPT_BYTES, MAX_UTF8_BYTES_PER_CODE_POINT, MEDIA_TYPE_BY_CALL_EXTENSION, MEDIA_TYPE_BY_EXTENSION, Member, MemberParams, MembershipId, MomentMatch, OIDC_COOKIE_BASE_NAME, OIDC_COOKIE_SECURE_PREFIX, ORGANIZATION_STATUSES, OUTCOMES, Organization, OrganizationId, OrganizationStatus, Outcome, PACKAGE, PLAYBOOK_ERRORS, PLAYBOOK_READ_ROLES, PLAYBOOK_ROUTES, PLAYBOOK_WRITE_ROLES, Page, PageQuery, ParseRepFieldResult, ParsedDealImportRow, PlaybookDocument, PlaybookErrorCode, PlaybookRoute, PlaybookRouteName, ProspectId, REGIONS, RIGHTS_WORDINGS, ROLES, Region, RenameOrganizationRequest, RenameTeamRequest, RepChoice, RequestId, RightsConfirmation, RightsRequiredDetails, RightsStatus, RightsWording, Role, SALES_HISTORY_ERRORS, SALES_HISTORY_READ_ROLES, SALES_HISTORY_ROUTES, SEARCH_ROUTES, SIGNUP_ERRORS, SalesHistoryErrorCode, SalesHistoryRoute, SalesHistoryRouteName, SearchDocumentsRequest, SearchDocumentsResponse, SearchEvidence, SearchMomentsRequest, SearchMomentsResponse, SearchRouteName, SearchTurn, SetCallRepRequest, SetDealOutcomeRequest, SignupErrorCode, SpeakerExcerpt, Team, TeamId, TeamMember, TeamMemberParams, TeamParams, UPLOAD_CONTENT_TYPE, UPLOAD_FILE_FIELD, UploadCallFields, UploadDocumentFile, UserId, addTeamMemberRequestSchema, attemptIdSchema, authOptionsResponseSchema, authProvidersSchema, authorizationUrlSchema, browserSessionTokensSchema, calendarDateSchema, callChannelSchema, callCursorSchema, callDeletedPayloadSchema, callFailureReasonSchema, callIdSchema, callKindSchema, callListItemSchema, callMediaTypeSchema, callParamsSchema, callRepChangedPayloadSchema, callReuploadRequeues, callSchema, callStateSchema, callTranscribedPayloadSchema, callUploadedPayloadSchema, changeMemberRoleRequestSchema, checkCallFile, checkDealImportHeader, checkDealImportHeaderText, checkDealImportRow, checkUploadFile, confirmRightsRequestSchema, createInvitationRequestSchema, createTeamRequestSchema, dealAmountSchema, dealCurrencySchema, dealCursorSchema, dealIdSchema, dealImportCursorSchema, dealImportFailureReasonSchema, dealImportIdSchema, dealImportParamsSchema, dealImportRowCursorSchema, dealImportRowReasonSchema, dealImportRowResultSchema, dealImportRowSchema, dealImportSchema, dealImportStateSchema, dealImportUploadedPayloadSchema, dealNameSchema, dealOutcomeChangedPayloadSchema, dealParamsSchema, dealRecordIdSchema, dealSchema, decodeCursor, defineErrors, defineEvent, documentDeletedPayloadSchema, documentExtension, documentFailureReasonSchema, documentFileNameSchema, documentIdSchema, documentMatchSchema, documentMediaTypeSchema, documentParamsSchema, documentQueryText, documentSchema, documentSearchEvidenceSchema, documentSizeCheckSchema, documentStateSchema, documentTypeCheckSchema, documentUploadedPayloadSchema, emailSchema, encodeCursor, errorBodySchema, errorCodeSchema, eventEnvelopeSchema, eventIdSchema, eventTypeSchema, excerptText, firstCsvRecord, foldAscii, formatId, googleCompleteRequestSchema, googleCompleteResponseSchema, googleErrorQuerySchema, googleIntentSchema, googleSignUpQuerySchema, googleStartRequestSchema, googleStartResponseSchema, hasStrippableCharacter, idSchema, idempotencyKeySchema, internalAbandonOrganizationParamsSchema, internalAbandonOrganizationRequestSchema, internalAbandonOrganizationResponseSchema, internalAcceptInvitationRequestSchema, internalAcceptInvitationResponseSchema, internalCreateOrganizationRequestSchema, internalCreateOrganizationResponseSchema, internalMembershipRequestSchema, internalMembershipResponseSchema, internalRemoveOrganizationDocumentsParamsSchema, internalRemoveOrganizationDocumentsRequestSchema, internalRemoveOrganizationDocumentsResponseSchema, internalUpdateMemberProfileParamsSchema, internalUpdateMemberProfileRequestSchema, internalUpdateMemberProfileResponseSchema, invitableRoleSchema, invitationIdSchema, invitationParamsSchema, invitationSchema, invitationStateSchema, invitationTokenSchema, isBlankCsvRecord, isWellFormedText, listCallsQuerySchema, listCallsResponseSchema, listDealImportRowsQuerySchema, listDealImportRowsResponseSchema, listDealImportsQuerySchema, listDealImportsResponseSchema, listDealsQuerySchema, listDealsResponseSchema, listDocumentsQuerySchema, listDocumentsResponseSchema, listInvitationsQuerySchema, listInvitationsResponseSchema, listMembersQuerySchema, listMembersResponseSchema, listTeamsQuerySchema, listTeamsResponseSchema, lookupDealRequestSchema, memberParamsSchema, memberSchema, membershipIdSchema, momentMatchSchema, momentQueryText, momentSnippet, momentSnippetSchema, normaliseDealId, normaliseFileName, normaliseMediaType, normaliseSpeakerLabel, organizationIdSchema, organizationNameSchema, organizationSchema, organizationStatusSchema, outcomeSchema, pageQuerySchema, pageSchema, parseAmountCell, parseClosedAtCell, parseCsv, parseCurrencyCell, parseOutcomeCell, parseRepField, personNameSchema, prospectIdSchema, regionSchema, renameOrganizationRequestSchema, renameTeamRequestSchema, repChangeAllowed, repChoiceSchema, repChoiceSuits, requestIdSchema, returnToSchema, rightsConfirmationSchema, rightsRequiredDetailsSchema, rightsStatusSchema, rightsWordingFor, rightsWordingSchema, rightsWordingVersionSchema, roleAtLeast, roleSchema, searchDocumentsRequestSchema, searchDocumentsResponseSchema, searchEvidenceSchema, searchMomentsRequestSchema, searchMomentsResponseSchema, searchTurnSchema, setCallRepRequestSchema, setDealOutcomeRequestSchema, speakerExcerpt, speakerExcerptSchema, speakerLabelSchema, storedNameSchema, teamIdSchema, teamMemberParamsSchema, teamMemberSchema, teamNameSchema, teamParamsSchema, teamSchema, timestampSchema, uploadCallFieldsSchema, uploadCallFileSchema, uploadDocumentFileSchema, userIdSchema };

@@ -27,6 +27,7 @@ const AUTH_MESSAGES = {
   'oidc.disabled': 'Sign in with Google is not available.',
   'oidc.state_invalid': 'This sign-in has expired or is not valid. Start again.',
   'oidc.email_unverified': 'Google has not verified this email address.',
+  'oidc.access_denied': 'Sign in with Google was cancelled.',
   'oidc.provider_unavailable': 'Google is not available right now. Try again later.',
   'oidc.invitation_mismatch': 'Use the Google account that matches the invited email address.',
   'session.invalid_token': 'The refresh token is not valid.',
@@ -60,6 +61,7 @@ describe('AUTH_ERRORS', () => {
     ['oidc.disabled', 404],
     ['oidc.state_invalid', 400],
     ['oidc.email_unverified', 403],
+    ['oidc.access_denied', 400],
     ['oidc.provider_unavailable', 503],
     ['oidc.invitation_mismatch', 403],
     ['session.invalid_token', 401],
@@ -75,7 +77,7 @@ describe('AUTH_ERRORS', () => {
 
   test('lists exactly the codes under test', () => {
     expect(Object.keys(AUTH_ERRORS).sort()).toEqual(Object.keys(AUTH_MESSAGES).sort())
-    expect(Object.keys(AUTH_ERRORS)).toHaveLength(28)
+    expect(Object.keys(AUTH_ERRORS)).toHaveLength(29)
   })
 
   test('every message is exactly the one on the allow-list', () => {

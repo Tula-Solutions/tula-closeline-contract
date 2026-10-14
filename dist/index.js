@@ -140,6 +140,7 @@ var AUTH_ERRORS = {
       message: "This sign-in has expired or is not valid. Start again."
     },
     email_unverified: { status: 403, message: "Google has not verified this email address." },
+    access_denied: { status: 400, message: "Sign in with Google was cancelled." },
     provider_unavailable: {
       status: 503,
       message: "Google is not available right now. Try again later."
@@ -256,7 +257,7 @@ function isLocalPath(path, raw) {
   }
   return !path.split(/[?#]/)[0]?.split("/").some((segment) => DOT_SEGMENTS.has(segment));
 }
-var returnToSchema = z4.string().max(MAX_RETURN_TO_LENGTH).refine((path) => isLocalPath(path, true), "A path on this site").refine((path) => {
+var returnToSchema = z4.string().refine((path) => path.length <= MAX_RETURN_TO_LENGTH, "Within the length limit").refine((path) => isLocalPath(path, true), "A path on this site").refine((path) => {
   try {
     return isLocalPath(decodeURIComponent(path), false);
   } catch {
@@ -276,7 +277,7 @@ function isLoopbackHost(hostname) {
   return octets !== null && octets.slice(1).every((octet) => Number(octet) <= 255);
 }
 function isAuthorizationUrl(text) {
-  if (hasUnsafeCharacter(text)) {
+  if (hasUnsafeCharacter(text) || text !== text.trim()) {
     return false;
   }
   let url;
@@ -294,9 +295,22 @@ var authorizationUrlSchema = z4.string().max(MAX_AUTHORIZATION_URL_LENGTH).refin
 var googleStartResponseSchema = z4.strictObject({
   authorizationUrl: authorizationUrlSchema
 });
+var attemptIdSchema = z4.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
+var GOOGLE_SIGN_UP_PATH = "/sign-up/google";
+var GOOGLE_SIGN_UP_ATTEMPT_PARAM = "attempt";
+var GOOGLE_ERROR_PATH = "/sign-in";
+var GOOGLE_ERROR_PARAM = "error";
+var OIDC_COOKIE_BASE_NAME = "tula_oidc";
+var OIDC_COOKIE_SECURE_PREFIX = "__Secure-";
+var googleSignUpQuerySchema = z4.strictObject({
+  [GOOGLE_SIGN_UP_ATTEMPT_PARAM]: attemptIdSchema
+});
+var googleErrorQuerySchema = z4.strictObject({
+  [GOOGLE_ERROR_PARAM]: errorCodeSchema
+});
 var storable = (text) => !text.includes(String.fromCharCode(0)) && !hasUnsafeCharacter(text);
 var googleCompleteRequestSchema = z4.strictObject({
-  attemptId: z4.string().regex(/^[A-Za-z0-9_-]{1,128}$/),
+  attemptId: attemptIdSchema,
   organizationName: z4.string().trim().min(1).max(120).refine(storable, "Storable text").optional(),
   invitationToken: z4.string().min(1).max(512).refine(storable, "Storable text").optional()
 }).refine((body) => body.organizationName === undefined !== (body.invitationToken === undefined), {
@@ -309,7 +323,11 @@ var browserSessionTokensSchema = z4.strictObject({
   accessTokenExpiresAt: timestampSchema,
   organization: z4.strictObject({ id: z4.string().min(1).max(128), role: roleSchema })
 });
-var googleCompleteResponseSchema = z4.strictObject({
+var googleCompleteResponseSchema = z4.object({
+  id: z4.string().min(1).max(128),
+  kind: z4.enum(["sign_in", "sign_up"]),
+  expiresAt: timestampSchema,
+  step: z4.object({ status: z4.literal("complete") }),
   session: browserSessionTokensSchema
 });
 var authProvidersSchema = z4.object({ google: z4.boolean().default(false) });
@@ -318,31 +336,42 @@ var authOptionsResponseSchema = z4.object({
   providers: authProvidersSchema.default({ google: false })
 });
 var route = (definition) => Object.freeze(definition);
+var AUTH_OPTIONS_ROUTE = route({
+  method: "GET",
+  path: AUTH_OPTIONS_PATH,
+  success: [200],
+  errors: [],
+  redirectErrors: [],
+  commonErrors: ["rate.limited", "server.unavailable"],
+  description: "Tells a client which sign-in providers are on, so the portal can hide the Continue with Google button when Google is not set up. The auth service owns this route; it is a new route, not a change to an existing one. It needs no session and returns nothing about any account."
+});
 var GOOGLE_ROUTES = Object.freeze({
   start: route({
     method: "POST",
     path: "/v1/client/google/start",
     success: [200],
     errors: ["oidc.disabled", "oidc.provider_unavailable"],
+    redirectErrors: [],
     commonErrors: ["request.invalid", "rate.limited", "server.unavailable"],
-    description: "Starts a Sign in with Google with an intent (sign_in or sign_up) and an optional same-origin returnTo path. It runs the OpenID Connect authorization-code flow with PKCE (S256), a state and a nonce, keeps them in an attempt that lives 10 minutes, sets a short-lived __Secure-tula_oidc cookie that holds the attempt secret, and answers the authorizationUrl to send the browser to (https, or http to a loopback host in local development). It asks for openid, email and profile only, with no offline access. The returnTo is checked against the portal route allow-list and kept in the attempt; it is never read from the callback. oidc.disabled (404) when Google is not set up; oidc.provider_unavailable (503) with a Retry-After header when Google cannot be reached."
+    description: "Starts a Sign in with Google with an intent (sign_in or sign_up) and an optional same-origin returnTo path. It runs the OpenID Connect authorization-code flow with PKCE (S256), a state and a nonce, keeps them in an attempt that lives 10 minutes, sets a short-lived attempt cookie (named tula_oidc, with the __Secure- prefix outside local only, because Safari refuses a __Secure- cookie over http even on loopback) that holds the attempt secret, and answers the authorizationUrl to send the browser to (https, or http to a loopback host in local development; a consumer also checks its host against an allow-list). It asks for openid, email and profile only, with no offline access. The returnTo is checked against the portal route allow-list and kept in the attempt; it is never read from the callback. oidc.disabled (404) when Google is not set up; oidc.provider_unavailable (503) with a Retry-After header when Google cannot be reached."
   }),
   callback: route({
     method: "GET",
     path: "/v1/client/google/callback",
     success: [302],
-    errors: [
-      "oidc.disabled",
+    errors: ["oidc.disabled"],
+    redirectErrors: [
       "oidc.state_invalid",
       "oidc.email_unverified",
+      "oidc.access_denied",
       "oidc.provider_unavailable",
       "auth.user_banned",
       "auth.no_organization",
       "organization.deleted",
       "membership.unavailable"
     ],
-    commonErrors: ["request.invalid", "rate.limited", "server.unavailable"],
-    description: "Where Google sends the browser back, with a code and a state. The state must match the attempt cookie and the attempt is single-use; a replayed, expired or mismatched state is oidc.state_invalid (400). The code is exchanged once, with the PKCE verifier, and the ID token is verified (RS256 only, issuer, audience, expiry, nonce, a present sub and email, and a verified email). A Google account that is already known, by its sub and never by its email, is signed in with the same checks as a password sign-in, and the answer is a 302 to the portal with the refresh cookie on it. No token appears in a URL. A new Google user is created by nothing here: the 302 goes to the sign-up step with the attempt id, and the person finishes with complete. An existing password account with the same email is linked only when Google verified the email, else oidc.email_unverified (403). It answers every outcome with a 302: an error redirects the browser to the portal error screen with its code, and the status in parentheses above is the catalogue status of that code, shown on the screen, not the HTTP status of this response. Codes, tokens and Authorization headers are never logged. oidc.provider_unavailable (503) with a Retry-After header when Google cannot be reached."
+    commonErrors: ["rate.limited", "server.unavailable"],
+    description: "Where Google sends the browser back, with a code and a state (or an error). The state must match the attempt cookie and the attempt is single-use; a replayed, expired or mismatched state is oidc.state_invalid. If the person cancels at Google (error=access_denied) the code is oidc.access_denied, and any other error from Google is oidc.provider_unavailable. The code is exchanged once, with the PKCE verifier, and the ID token is verified (RS256 only, issuer, audience, expiry, nonce, a present sub and email, and a verified email). A Google account that is already known, by its sub and never by its email, is signed in with the same checks as a password sign-in, and the answer is a 302 to the portal with the refresh cookie on it. No token appears in a URL. A new Google user is created by nothing here: the 302 goes to /sign-up/google?attempt=<id> and the person finishes with complete. An existing password account with the same email is linked only when Google verified the email, else oidc.email_unverified. It answers every outcome with a 302 except oidc.disabled (404): a failure redirects the browser to /sign-in?error=<code>, so oidc.state_invalid, oidc.email_unverified, oidc.access_denied, oidc.provider_unavailable (whose catalogue status is 503, with a Retry-After header only where it is a real response), auth.user_banned, auth.no_organization, organization.deleted and membership.unavailable come back as the error parameter of that redirect, and the catalogue status of a code is not the HTTP status of this response. Codes, tokens and Authorization headers are never logged."
   }),
   complete: route({
     method: "POST",
@@ -355,12 +384,14 @@ var GOOGLE_ROUTES = Object.freeze({
       "oidc.provider_unavailable",
       "signup.invitation_invalid",
       "signup.organization_name_invalid",
+      "membership.already_member",
       "auth.no_organization",
       "organization.deleted",
       "membership.unavailable"
     ],
+    redirectErrors: [],
     commonErrors: ["request.invalid", "rate.limited", "server.unavailable"],
-    description: "Finishes the sign-up of a new Google user: it takes the attempt id (the secret is in the cookie) and exactly one of an organizationName or an invitationToken. It creates the Organization or joins the invited one through the same sign-up path as an email sign-up, with no emailed code because Google verified the email, and stores the user and a google identity with no password. For an invitation the Google email must equal the invited address, else oidc.invitation_mismatch (403). An attempt that is missing, used or expired is oidc.state_invalid (400). An attempt is single-use. A repeat is refused with oidc.state_invalid (400) and nothing is created twice. Answers the browser session; the refresh token is in the cookie, never in the body. The attempt secret, tokens and the email are never logged."
+    description: "Finishes the sign-up of a new Google user: it takes the attempt id (the secret is in the cookie) and exactly one of an organizationName or an invitationToken. It creates the Organization or joins the invited one through the same sign-up path as an email sign-up, with no emailed code because Google verified the email, and stores the user and a google identity with no password. For an invitation the Google email must equal the invited address, else oidc.invitation_mismatch (403); a user who already belongs to an Organization gets membership.already_member (409). An attempt that is missing, used or expired is oidc.state_invalid (400). An attempt is single-use. A repeat is refused with oidc.state_invalid (400) and nothing is created twice. Answers the browser flow response (id, kind, expiresAt, a complete step and the session); the refresh token is in the cookie, never in the body. The attempt secret, tokens and the email are never logged."
   })
 });
 // src/core/internal.ts
@@ -2160,6 +2191,7 @@ export {
   ALL_PLAYBOOK_ROUTES,
   AUTH_ERRORS,
   AUTH_OPTIONS_PATH,
+  AUTH_OPTIONS_ROUTE,
   CALL_CHANNELS,
   CALL_DELETED_MESSAGE,
   CALL_FAILURE_FIXES,
@@ -2199,7 +2231,11 @@ export {
   DOCUMENT_STATES,
   DOCUMENT_UPLOADED_MESSAGE,
   ERRORS,
+  GOOGLE_ERROR_PARAM,
+  GOOGLE_ERROR_PATH,
   GOOGLE_ROUTES,
+  GOOGLE_SIGN_UP_ATTEMPT_PARAM,
+  GOOGLE_SIGN_UP_PATH,
   IDEMPOTENCY_KEY_HEADER,
   INCOMPLETE_UPLOAD_PARTS_TTL_HOURS,
   INTERNAL_CALL_ERRORS,
@@ -2249,6 +2285,8 @@ export {
   MAX_UTF8_BYTES_PER_CODE_POINT,
   MEDIA_TYPE_BY_CALL_EXTENSION,
   MEDIA_TYPE_BY_EXTENSION,
+  OIDC_COOKIE_BASE_NAME,
+  OIDC_COOKIE_SECURE_PREFIX,
   ORGANIZATION_STATUSES,
   OUTCOMES,
   PACKAGE,
@@ -2267,6 +2305,7 @@ export {
   UPLOAD_CONTENT_TYPE,
   UPLOAD_FILE_FIELD,
   addTeamMemberRequestSchema,
+  attemptIdSchema,
   authOptionsResponseSchema,
   authProvidersSchema,
   authorizationUrlSchema,
@@ -2347,7 +2386,9 @@ export {
   formatId,
   googleCompleteRequestSchema,
   googleCompleteResponseSchema,
+  googleErrorQuerySchema,
   googleIntentSchema,
+  googleSignUpQuerySchema,
   googleStartRequestSchema,
   googleStartResponseSchema,
   hasStrippableCharacter,

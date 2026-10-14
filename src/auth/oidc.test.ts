@@ -1,15 +1,26 @@
 import { describe, expect, test } from 'bun:test'
+import { CORE_ERRORS } from '../core/errors'
+import { errorCodeSchema } from '../errors'
 import { AUTH_ERRORS } from './errors'
 import {
   AUTH_OPTIONS_PATH,
+  AUTH_OPTIONS_ROUTE,
   authOptionsResponseSchema,
+  GOOGLE_ERROR_PARAM,
+  GOOGLE_ERROR_PATH,
   GOOGLE_ROUTES,
+  GOOGLE_SIGN_UP_ATTEMPT_PARAM,
+  GOOGLE_SIGN_UP_PATH,
   googleCompleteRequestSchema,
   googleCompleteResponseSchema,
+  googleErrorQuerySchema,
   googleIntentSchema,
+  googleSignUpQuerySchema,
   googleStartRequestSchema,
   googleStartResponseSchema,
   MAX_RETURN_TO_LENGTH,
+  OIDC_COOKIE_BASE_NAME,
+  OIDC_COOKIE_SECURE_PREFIX,
   returnToSchema,
 } from './index'
 
@@ -66,6 +77,12 @@ describe('returnToSchema', () => {
     ['a bidi override', `/a${ch(0x202e)}b`],
   ])('refuses %s', (_name, value) => {
     expect(ok(value)).toBe(false)
+  })
+
+  test('is bounded in UTF-16 code units: an emoji counts as two', () => {
+    const emoji = String.fromCodePoint(0x1f600)
+    expect(ok(`/${emoji.repeat(255)}`)).toBe(true)
+    expect(ok(`/${emoji.repeat(256)}`)).toBe(false)
   })
 
   test('is bounded in length', () => {
@@ -130,6 +147,9 @@ describe('googleStartResponseSchema', () => {
     ['a URL with credentials', 'https://user:pass@accounts.google.com/a'],
     ['an ftp URL', 'ftp://accounts.google.com/a'],
     ['an empty string', ''],
+    ['leading whitespace', ' https://accounts.google.com/a'],
+    ['trailing whitespace', 'https://accounts.google.com/a '],
+    ['a leading no-break space', `${ch(0xa0)}https://accounts.google.com/a`],
     ['not a URL', 'not a url'],
     ['a URL with a newline', 'https://accounts.google.com/a\nb'],
   ])('refuses %s', (_name, url) => {
@@ -186,17 +206,45 @@ describe('googleCompleteResponseSchema', () => {
     accessTokenExpiresAt: '2026-10-12T09:30:00.000Z',
     organization: { id: 'org_1', role: 'owner' },
   }
+  const flow = {
+    id: 'att_1',
+    kind: 'sign_up',
+    expiresAt: '2026-10-12T09:40:00.000Z',
+    step: { status: 'complete' },
+    session,
+  }
+  const parse = (value: unknown) => googleCompleteResponseSchema.safeParse(value)
 
-  test('carries the browser session and never a refresh token', () => {
-    expect(googleCompleteResponseSchema.safeParse({ session }).success).toBe(true)
-    expect(
-      googleCompleteResponseSchema.safeParse({ session: { ...session, refreshToken: 'r' } }).success
-    ).toBe(false)
+  test('is the browser flow response: id, kind, expiresAt, a complete step and the session', () => {
+    expect(parse(flow).success).toBe(true)
+    expect(parse({ ...flow, kind: 'sign_in' }).success).toBe(true)
+  })
+
+  test('the step must be complete and the session is required', () => {
+    expect(parse({ ...flow, step: { status: 'needs_password' } }).success).toBe(false)
+    expect(parse({ ...flow, session: undefined }).success).toBe(false)
+    expect(parse({ ...flow, id: undefined }).success).toBe(false)
+  })
+
+  test('never carries a refresh token, and drops fields it does not know', () => {
+    expect(parse({ ...flow, session: { ...session, refreshToken: 'r' } }).success).toBe(false)
+    const parsed = googleCompleteResponseSchema.parse({ ...flow, attemptSecret: 'tula_at_x' })
+    expect('attemptSecret' in parsed).toBe(false)
+  })
+})
+
+describe('AUTH_OPTIONS_ROUTE', () => {
+  test('is a new route that the auth service owns', () => {
+    expect(AUTH_OPTIONS_ROUTE.method).toBe('GET')
+    expect(AUTH_OPTIONS_ROUTE.path).toBe(AUTH_OPTIONS_PATH)
+    expect(AUTH_OPTIONS_ROUTE.description).toContain('The auth service owns this route')
+    expect(AUTH_OPTIONS_ROUTE.description).toContain('new route')
+    expect(AUTH_OPTIONS_ROUTE.description.toLowerCase()).not.toContain('backward')
   })
 })
 
 describe('authOptionsResponseSchema', () => {
-  test('an old payload without providers still parses, with Google off', () => {
+  test('a payload without providers parses, with Google off', () => {
     expect(authOptionsResponseSchema.parse({})).toEqual({ providers: { google: false } })
     expect(authOptionsResponseSchema.parse({ passwordPolicy: { minLength: 12 } })).toEqual({
       providers: { google: false },
@@ -235,15 +283,65 @@ describe('GOOGLE_ROUTES', () => {
     expect(AUTH_OPTIONS_PATH).toBe('/v1/client/auth-options')
     for (const route of Object.values(GOOGLE_ROUTES)) {
       expect(route.errors).toContain('oidc.disabled')
-      expect(route.errors).toContain('oidc.provider_unavailable')
-      for (const code of route.errors) {
-        expect(code in AUTH_ERRORS).toBe(true)
+      for (const code of [...route.errors, ...route.redirectErrors]) {
+        expect(code in AUTH_ERRORS || code in CORE_ERRORS).toBe(true)
       }
     }
-    expect(GOOGLE_ROUTES.callback.errors).toEqual(
-      expect.arrayContaining(['oidc.state_invalid', 'oidc.email_unverified'])
-    )
+    expect(GOOGLE_ROUTES.start.errors).toContain('oidc.provider_unavailable')
+    expect(GOOGLE_ROUTES.complete.errors).toContain('oidc.provider_unavailable')
     expect(GOOGLE_ROUTES.complete.errors).toContain('oidc.invitation_mismatch')
+    expect(GOOGLE_ROUTES.complete.errors).toContain('membership.already_member')
+  })
+
+  test('the callback answers 302 for everything but oidc.disabled; its other codes ride in the redirect', () => {
+    expect(GOOGLE_ROUTES.callback.errors).toEqual(['oidc.disabled'])
+    expect(GOOGLE_ROUTES.callback.redirectErrors).toEqual(
+      expect.arrayContaining([
+        'oidc.state_invalid',
+        'oidc.email_unverified',
+        'oidc.access_denied',
+        'oidc.provider_unavailable',
+        'auth.user_banned',
+        'auth.no_organization',
+        'organization.deleted',
+        'membership.unavailable',
+      ])
+    )
+    expect(GOOGLE_ROUTES.start.redirectErrors).toEqual([])
+    expect(GOOGLE_ROUTES.complete.redirectErrors).toEqual([])
+    expect(GOOGLE_ROUTES.callback.description).toContain('error parameter')
+    expect(GOOGLE_ROUTES.callback.description).toContain('access_denied')
+    expect(GOOGLE_ROUTES.callback.description).toContain('any other error from Google')
+  })
+
+  test('the redirect constants', () => {
+    expect(GOOGLE_SIGN_UP_PATH).toBe('/sign-up/google')
+    expect(GOOGLE_SIGN_UP_ATTEMPT_PARAM).toBe('attempt')
+    expect(GOOGLE_ERROR_PATH).toBe('/sign-in')
+    expect(GOOGLE_ERROR_PARAM).toBe('error')
+    expect(OIDC_COOKIE_BASE_NAME).toBe('tula_oidc')
+    expect(OIDC_COOKIE_SECURE_PREFIX).toBe('__Secure-')
+  })
+
+  test('the error query holds a code that parses with errorCodeSchema, and nothing else', () => {
+    for (const code of GOOGLE_ROUTES.callback.redirectErrors) {
+      expect(errorCodeSchema.safeParse(code).success).toBe(true)
+      expect(googleErrorQuerySchema.safeParse({ [GOOGLE_ERROR_PARAM]: code }).success).toBe(true)
+    }
+    expect(googleErrorQuerySchema.safeParse({ error: 'Not A Code' }).success).toBe(false)
+    expect(googleErrorQuerySchema.safeParse({}).success).toBe(false)
+    expect(googleErrorQuerySchema.safeParse({ error: 'oidc.disabled', x: '1' }).success).toBe(false)
+    expect(googleSignUpQuerySchema.safeParse({ attempt: 'att_123' }).success).toBe(true)
+    expect(googleSignUpQuerySchema.safeParse({ attempt: 'a b' }).success).toBe(false)
+  })
+
+  test('the descriptions say how the cookie is named and who owns auth-options', () => {
+    const all = Object.values(GOOGLE_ROUTES)
+      .map((route) => route.description)
+      .join(' ')
+    expect(all).toContain('tula_oidc')
+    expect(all).toContain('__Secure-')
+    expect(all).toContain('outside local')
   })
 
   test('the descriptions state the security rules', () => {

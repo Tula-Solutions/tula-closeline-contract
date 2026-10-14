@@ -46,6 +46,7 @@ export const AUTH_ERRORS = {
       message: 'This sign-in has expired or is not valid. Start again.',
     },
     email_unverified: { status: 403, message: 'Google has not verified this email address.' },
+    access_denied: { status: 400, message: 'Sign in with Google was cancelled.' },
     provider_unavailable: {
       status: 503,
       message: 'Google is not available right now. Try again later.',

@@ -221,18 +221,32 @@ cuts by code point after `momentSnippet`, so it never leaves a lone surrogate. T
 ### Sign in with Google (0.14.0)
 
 `src/auth/oidc.ts`: `googleStartRequestSchema` (`intent` from `googleIntentSchema`, `sign_in` or
-`sign_up`, and an optional `returnTo`), `googleStartResponseSchema` (`{ authorizationUrl }`, https,
-or http only to a loopback host, no credentials), `googleCompleteRequestSchema` (`attemptId` and
-exactly one of `organizationName` or `invitationToken`) and `googleCompleteResponseSchema`
-(`{ session }` with `browserSessionTokensSchema`: the refresh token is in the cookie, never the
-body). `returnToSchema` accepts only a same-origin path: it starts with `/` but never `//` or `/\`,
-has no backslash, control character or lone surrogate, is at most `MAX_RETURN_TO_LENGTH` (512) long,
-has no whitespace, invisible character or `.`/`..` segment, and is checked again after
-percent-decoding once (a consumer must decode exactly once). `authOptionsResponseSchema` adds `providers.google`
-(additive: an older payload parses, with Google off). `GOOGLE_ROUTES` (`start`, `callback`,
-`complete`) describes the three routes for OpenAPI. The new codes are in `AUTH_ERRORS`:
-`oidc.disabled` 404, `oidc.state_invalid` 400, `oidc.email_unverified` 403,
-`oidc.provider_unavailable` 503 (answered with a `Retry-After` header) and
+`sign_up`, and an optional `returnTo`), `googleStartResponseSchema` (`{ authorizationUrl }`: https,
+or http only to a loopback host, no credentials, no surrounding whitespace; a consumer must also
+check the host against an allow-list), `googleCompleteRequestSchema` (`attemptId` and exactly one of
+`organizationName` or `invitationToken`) and `googleCompleteResponseSchema`, shaped like the auth
+service's browser flow response (`{ id, kind, expiresAt, step: { status: 'complete' }, session }`,
+with `browserSessionTokensSchema`: the refresh token is in the cookie, never the body).
+`returnToSchema` accepts only a same-origin path: it starts with `/` but never `//` or `/\`, has no
+backslash, control character, lone surrogate, whitespace, invisible character or `.`/`..` segment,
+is at most `MAX_RETURN_TO_LENGTH` (512) UTF-16 code units, and is checked again after
+percent-decoding once. The value has already been decoded once by the query or JSON parser: a
+consumer must not decode it again.
+
+The callback answers every outcome but `oidc.disabled` (404) with a 302, so its other codes come
+back as the `error` query parameter of the redirect (`GOOGLE_ERROR_PATH` `/sign-in`,
+`GOOGLE_ERROR_PARAM` `error`, checked by `googleErrorQuerySchema`), listed in
+`GOOGLE_ROUTES.callback.redirectErrors`; a new Google user goes to `GOOGLE_SIGN_UP_PATH`
+(`/sign-up/google`) with `GOOGLE_SIGN_UP_ATTEMPT_PARAM` (`attempt`; `googleSignUpQuerySchema`). The
+attempt cookie's base name is `OIDC_COOKIE_BASE_NAME` (`tula_oidc`); auth adds
+`OIDC_COOKIE_SECURE_PREFIX` (`__Secure-`) outside `local` only, because Safari refuses a
+`__Secure-` cookie over http even on loopback. The auth service owns the new route
+`GET /v1/client/auth-options` (`AUTH_OPTIONS_ROUTE`); `authOptionsResponseSchema` carries
+`providers.google` and parses `{}` as Google off. `GOOGLE_ROUTES` (`start`, `callback`, `complete`)
+describes the three routes for OpenAPI. The new codes are in `AUTH_ERRORS`: `oidc.disabled` 404,
+`oidc.state_invalid` 400, `oidc.email_unverified` 403, `oidc.access_denied` 400 (the person
+cancelled at Google; any other `error=` from Google is `oidc.provider_unavailable`),
+`oidc.provider_unavailable` 503 (with `Retry-After` where it is a real response) and
 `oidc.invitation_mismatch` 403.
 
 ### Rights confirmation wording (0.9.0)
