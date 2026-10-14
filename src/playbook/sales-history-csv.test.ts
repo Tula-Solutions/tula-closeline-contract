@@ -515,7 +515,9 @@ describe('slicing cells keeps the escaped-quote path correct (F18b)', () => {
 describe('trailing blank records (hub #72)', () => {
   const blankIndexes = (text: string) => {
     const result = parseCsv(text)
-    if (!result.ok) throw new Error('unreadable')
+    if (!result.ok) {
+      throw new Error('unreadable')
+    }
     return result.records.flatMap((record, index) => (isBlankCsvRecord(record) ? [index + 1] : []))
   }
 

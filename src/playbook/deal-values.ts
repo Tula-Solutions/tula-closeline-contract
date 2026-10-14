@@ -610,12 +610,16 @@ function readCsv(
  */
 export function parseCsv(text: string, options?: CsvOptions): CsvResult {
   const result = readCsv(text, options, false)
-  if (!result.ok) return result
+  if (!result.ok) {
+    return result
+  }
   const records = result.records
   // A run of blank lines at the end of the file (a file ending in several newlines) is not data:
   // only an interior blank line, followed by a later non-blank record, stays a record.
   let end = records.length
-  while (end > 1 && isBlankCsvRecord(records[end - 1] ?? [])) end--
+  while (end > 1 && isBlankCsvRecord(records[end - 1] ?? [])) {
+    end--
+  }
   return { ok: true, records: end === records.length ? records : records.slice(0, end) }
 }
 

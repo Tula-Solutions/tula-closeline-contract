@@ -1414,12 +1414,14 @@ function readCsv(text, options, firstOnly) {
 }
 function parseCsv(text, options) {
   const result = readCsv(text, options, false);
-  if (!result.ok)
+  if (!result.ok) {
     return result;
+  }
   const records = result.records;
   let end = records.length;
-  while (end > 1 && isBlankCsvRecord(records[end - 1] ?? []))
+  while (end > 1 && isBlankCsvRecord(records[end - 1] ?? [])) {
     end--;
+  }
   return { ok: true, records: end === records.length ? records : records.slice(0, end) };
 }
 function firstCsvRecord(text, options) {
