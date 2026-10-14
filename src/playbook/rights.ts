@@ -1,11 +1,12 @@
 import { z } from 'zod'
 import { timestampSchema } from '../core/values'
 import { userIdSchema } from '../ids'
+import { rightsWordingSchema } from './rights-wording'
 
-/** The largest wording version number; versions are positive integers the service raises when a lawyer changes the wording. */
+/** The largest wording version number; versions are positive integers, one for each entry of `RIGHTS_WORDINGS`. */
 export const MAX_RIGHTS_WORDING_VERSION = 1_000_000
 
-/** The version of the rights-confirmation wording: a positive integer. The wording itself lives in the portal, checked by a lawyer, and is not in this library. */
+/** The version of the rights-confirmation wording: a positive integer. The text of each version is in `RIGHTS_WORDINGS`. */
 export const rightsWordingVersionSchema = z.number().int().min(1).max(MAX_RIGHTS_WORDING_VERSION)
 
 /**
@@ -25,7 +26,9 @@ export type RightsConfirmation = z.infer<typeof rightsConfirmationSchema>
 /**
  * The answer to reading the confirmation: the `currentWordingVersion` the portal must show,
  * the stored `confirmation` (`null` if none) and `confirmed`, true only when the stored version
- * is the current one. Uploads of Calls are refused with `rights.confirmation_required` unless
+ * is the current one. `currentWording` is the text of the current version, optional so a service
+ * built before the wording moved into the contract still parses and a consumer reads the text from
+ * `RIGHTS_WORDINGS` when it is absent. Uploads of Calls are refused with `rights.confirmation_required` unless
  * `confirmed`; existing Calls stay and stay searchable.
  */
 export const rightsStatusSchema = z
@@ -33,6 +36,7 @@ export const rightsStatusSchema = z
     currentWordingVersion: rightsWordingVersionSchema,
     confirmation: rightsConfirmationSchema.nullable(),
     confirmed: z.boolean(),
+    currentWording: rightsWordingSchema.optional(),
   })
   .refine(
     (status) =>

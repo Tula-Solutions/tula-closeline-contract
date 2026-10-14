@@ -2271,9 +2271,9 @@ declare const DOCUMENT_DELETED_MESSAGE: {
 	}, z19.core.$strict>;
 };
 import { z as z20 } from "zod";
-/** The largest wording version number; versions are positive integers the service raises when a lawyer changes the wording. */
+/** The largest wording version number; versions are positive integers, one for each entry of `RIGHTS_WORDINGS`. */
 declare const MAX_RIGHTS_WORDING_VERSION = 1e6;
-/** The version of the rights-confirmation wording: a positive integer. The wording itself lives in the portal, checked by a lawyer, and is not in this library. */
+/** The version of the rights-confirmation wording: a positive integer. The text of each version is in `RIGHTS_WORDINGS`. */
 declare const rightsWordingVersionSchema: z20.ZodNumber;
 /**
 * The recorded confirmation (ADR 0018, choice 12): that an Owner or Admin confirmed the
@@ -2290,7 +2290,9 @@ type RightsConfirmation = z20.infer<typeof rightsConfirmationSchema>;
 /**
 * The answer to reading the confirmation: the `currentWordingVersion` the portal must show,
 * the stored `confirmation` (`null` if none) and `confirmed`, true only when the stored version
-* is the current one. Uploads of Calls are refused with `rights.confirmation_required` unless
+* is the current one. `currentWording` is the text of the current version, optional so a service
+* built before the wording moved into the contract still parses and a consumer reads the text from
+* `RIGHTS_WORDINGS` when it is absent. Uploads of Calls are refused with `rights.confirmation_required` unless
 * `confirmed`; existing Calls stay and stay searchable.
 */
 declare const rightsStatusSchema: z20.ZodObject<{
@@ -2301,6 +2303,12 @@ declare const rightsStatusSchema: z20.ZodObject<{
 		confirmedAt: z20.ZodISODateTime;
 	}, z20.core.$strip>>;
 	confirmed: z20.ZodBoolean;
+	currentWording: z20.ZodOptional<z20.ZodObject<{
+		heading: z20.ZodString;
+		paragraphs: z20.ZodArray<z20.ZodString>;
+		checkbox: z20.ZodString;
+		draft: z20.ZodOptional<z20.ZodLiteral<true>>;
+	}, z20.core.$strict>>;
 }, z20.core.$strip>;
 /** The answer to reading the confirmation. */
 type RightsStatus = z20.infer<typeof rightsStatusSchema>;
@@ -2315,105 +2323,141 @@ declare const confirmRightsRequestSchema: z20.ZodObject<{
 /** The body of the request that records the confirmation. */
 type ConfirmRightsRequest = z20.infer<typeof confirmRightsRequestSchema>;
 import { z as z21 } from "zod";
+/** The longest heading of a wording, in Unicode code points. */
+declare const MAX_RIGHTS_HEADING_LENGTH = 200;
+/** The most paragraphs a wording may have. */
+declare const MAX_RIGHTS_PARAGRAPHS = 10;
+/** The longest paragraph or confirmation sentence of a wording, in Unicode code points. */
+declare const MAX_RIGHTS_TEXT_LENGTH = 2e3;
+/**
+* The text of one version of the rights confirmation: a `heading`, up to ten `paragraphs` and the
+* `checkbox` sentence the member agrees to. It is plain text (no markup) and is shown exactly as
+* written, never interpolated with a name or a value. `draft` is true while a lawyer has not
+* checked the text; the screen says so.
+*/
+declare const rightsWordingSchema: z21.ZodObject<{
+	heading: z21.ZodString;
+	paragraphs: z21.ZodArray<z21.ZodString>;
+	checkbox: z21.ZodString;
+	draft: z21.ZodOptional<z21.ZodLiteral<true>>;
+}, z21.core.$strict>;
+/** The text of one version of the rights confirmation. */
+type RightsWording = z21.infer<typeof rightsWordingSchema>;
+/**
+* The text of every version of the rights confirmation (ADR 0018, choice 12), keyed by version,
+* frozen. A version is published once and never edited: a change to the text is a new version here
+* and therefore a contract release, and the current version below follows from it.
+*
+* PENDING A LAWYER'S CHECK: version 1 is a draft (the owner decision of 2026-10-14 put the wording
+* in the contract; ADR 0018 requires a lawyer to check it before real customers use it). Remove
+* `draft` only in a new version, once it has been checked. It is taken verbatim from the portal's
+* draft.
+*/
+declare const RIGHTS_WORDINGS: Readonly<Record<number, RightsWording>>;
+/** The current version of the rights wording: the highest key of {@link RIGHTS_WORDINGS}. A service reads it instead of a setting. */
+declare const CURRENT_RIGHTS_WORDING_VERSION: number;
+/** The text of a version, or undefined when the contract has none; a version without text cannot be confirmed. */
+declare function rightsWordingFor(version: number): RightsWording | undefined;
+import { z as z22 } from "zod";
 /** The largest Outcome or Rep sequence: the db column is a Postgres `integer`, like {@link MAX_DELETION_SEQ}. */
 declare const MAX_SEQ = 2147483647;
 /** The payload of {@link CALL_UPLOADED_MESSAGE}. */
-declare const callUploadedPayloadSchema: z21.ZodObject<{
-	callId: z21.core.$ZodBranded<z21.ZodString, "call", "out">;
-}, z21.core.$strict>;
+declare const callUploadedPayloadSchema: z22.ZodObject<{
+	callId: z22.core.$ZodBranded<z22.ZodString, "call", "out">;
+}, z22.core.$strict>;
 /** The payload of {@link CALL_UPLOADED_MESSAGE}. */
-type CallUploadedPayload = z21.infer<typeof callUploadedPayloadSchema>;
+type CallUploadedPayload = z22.infer<typeof callUploadedPayloadSchema>;
 /** Starts ingestion of a Call: transcription of a Recording, or parsing of a Transcript. Published after the upload is stored and again on restore (the kept Transcript is reused, never transcribed twice). */
 declare const CALL_UPLOADED_MESSAGE: {
 	readonly type: "playbook.call_uploaded";
 	readonly version: 1;
 	readonly scope: "organization";
-	readonly payload: z21.ZodObject<{
-		callId: z21.core.$ZodBranded<z21.ZodString, "call", "out">;
-	}, z21.core.$strict>;
+	readonly payload: z22.ZodObject<{
+		callId: z22.core.$ZodBranded<z22.ZodString, "call", "out">;
+	}, z22.core.$strict>;
 };
 /** The payload of {@link CALL_TRANSCRIBED_MESSAGE}. */
-declare const callTranscribedPayloadSchema: z21.ZodObject<{
-	callId: z21.core.$ZodBranded<z21.ZodString, "call", "out">;
-}, z21.core.$strict>;
+declare const callTranscribedPayloadSchema: z22.ZodObject<{
+	callId: z22.core.$ZodBranded<z22.ZodString, "call", "out">;
+}, z22.core.$strict>;
 /** The payload of {@link CALL_TRANSCRIBED_MESSAGE}. */
-type CallTranscribedPayload = z21.infer<typeof callTranscribedPayloadSchema>;
+type CallTranscribedPayload = z22.infer<typeof callTranscribedPayloadSchema>;
 /** Moves a Recording from transcription to building Moments, published when the Transcript is stored and the Rep is known (a per-side Recording, or one whose Rep was picked). A Call with no Rep waits in `awaiting_rep` and publishes `playbook.call_rep_changed` when it is picked. */
 declare const CALL_TRANSCRIBED_MESSAGE: {
 	readonly type: "playbook.call_transcribed";
 	readonly version: 1;
 	readonly scope: "organization";
-	readonly payload: z21.ZodObject<{
-		callId: z21.core.$ZodBranded<z21.ZodString, "call", "out">;
-	}, z21.core.$strict>;
+	readonly payload: z22.ZodObject<{
+		callId: z22.core.$ZodBranded<z22.ZodString, "call", "out">;
+	}, z22.core.$strict>;
 };
 /** The payload of {@link CALL_REP_CHANGED_MESSAGE}: the Call and its `repSeq`. */
-declare const callRepChangedPayloadSchema: z21.ZodObject<{
-	callId: z21.core.$ZodBranded<z21.ZodString, "call", "out">;
-	repSeq: z21.ZodNumber;
-}, z21.core.$strict>;
+declare const callRepChangedPayloadSchema: z22.ZodObject<{
+	callId: z22.core.$ZodBranded<z22.ZodString, "call", "out">;
+	repSeq: z22.ZodNumber;
+}, z22.core.$strict>;
 /** The payload of {@link CALL_REP_CHANGED_MESSAGE}. */
-type CallRepChangedPayload = z21.infer<typeof callRepChangedPayloadSchema>;
+type CallRepChangedPayload = z22.infer<typeof callRepChangedPayloadSchema>;
 /** Rebuilds a Call's Moments after its Rep is picked or changed. The service bumps `repSeq` in the same write as the change; the job applies only when the Call's stored sequence equals this one, and the Call is out of search until it finishes. */
 declare const CALL_REP_CHANGED_MESSAGE: {
 	readonly type: "playbook.call_rep_changed";
 	readonly version: 1;
 	readonly scope: "organization";
-	readonly payload: z21.ZodObject<{
-		callId: z21.core.$ZodBranded<z21.ZodString, "call", "out">;
-		repSeq: z21.ZodNumber;
-	}, z21.core.$strict>;
+	readonly payload: z22.ZodObject<{
+		callId: z22.core.$ZodBranded<z22.ZodString, "call", "out">;
+		repSeq: z22.ZodNumber;
+	}, z22.core.$strict>;
 };
 /** The payload of {@link CALL_DELETED_MESSAGE}: the Call and its `deletionSeq`. */
-declare const callDeletedPayloadSchema: z21.ZodObject<{
-	callId: z21.core.$ZodBranded<z21.ZodString, "call", "out">;
-	deletionSeq: z21.ZodNumber;
-}, z21.core.$strict>;
+declare const callDeletedPayloadSchema: z22.ZodObject<{
+	callId: z22.core.$ZodBranded<z22.ZodString, "call", "out">;
+	deletionSeq: z22.ZodNumber;
+}, z22.core.$strict>;
 /** The payload of {@link CALL_DELETED_MESSAGE}. */
-type CallDeletedPayload = z21.infer<typeof callDeletedPayloadSchema>;
+type CallDeletedPayload = z22.infer<typeof callDeletedPayloadSchema>;
 /** Queues the removal of a deleted Call's Moments and vectors, as `playbook.document_deleted` does for a document: it applies only if the Call is still deleted and its stored `deletionSeq` equals this one. Only a delete that changes the state bumps it or publishes. Search hides a deleted Call by its state, never by this job. */
 declare const CALL_DELETED_MESSAGE: {
 	readonly type: "playbook.call_deleted";
 	readonly version: 1;
 	readonly scope: "organization";
-	readonly payload: z21.ZodObject<{
-		callId: z21.core.$ZodBranded<z21.ZodString, "call", "out">;
-		deletionSeq: z21.ZodNumber;
-	}, z21.core.$strict>;
+	readonly payload: z22.ZodObject<{
+		callId: z22.core.$ZodBranded<z22.ZodString, "call", "out">;
+		deletionSeq: z22.ZodNumber;
+	}, z22.core.$strict>;
 };
 /** The payload of {@link DEAL_OUTCOME_CHANGED_MESSAGE}: the Deal's opaque id (never the customer's text) and its `outcomeSeq`. */
-declare const dealOutcomeChangedPayloadSchema: z21.ZodObject<{
-	dealRecordId: z21.core.$ZodBranded<z21.ZodString, "deal", "out">;
-	outcomeSeq: z21.ZodNumber;
-}, z21.core.$strict>;
+declare const dealOutcomeChangedPayloadSchema: z22.ZodObject<{
+	dealRecordId: z22.core.$ZodBranded<z22.ZodString, "deal", "out">;
+	outcomeSeq: z22.ZodNumber;
+}, z22.core.$strict>;
 /** The payload of {@link DEAL_OUTCOME_CHANGED_MESSAGE}. */
-type DealOutcomeChangedPayload = z21.infer<typeof dealOutcomeChangedPayloadSchema>;
+type DealOutcomeChangedPayload = z22.infer<typeof dealOutcomeChangedPayloadSchema>;
 /** Re-tags a Deal's Moments in the index after its Outcome changes. The job reads the current Outcome from the database and applies only when the Deal's stored `outcomeSeq` equals this one, so two changes cannot finish in the wrong order. */
 declare const DEAL_OUTCOME_CHANGED_MESSAGE: {
 	readonly type: "playbook.deal_outcome_changed";
 	readonly version: 1;
 	readonly scope: "organization";
-	readonly payload: z21.ZodObject<{
-		dealRecordId: z21.core.$ZodBranded<z21.ZodString, "deal", "out">;
-		outcomeSeq: z21.ZodNumber;
-	}, z21.core.$strict>;
+	readonly payload: z22.ZodObject<{
+		dealRecordId: z22.core.$ZodBranded<z22.ZodString, "deal", "out">;
+		outcomeSeq: z22.ZodNumber;
+	}, z22.core.$strict>;
 };
 /** The payload of {@link DEAL_IMPORT_UPLOADED_MESSAGE}. */
-declare const dealImportUploadedPayloadSchema: z21.ZodObject<{
-	importId: z21.core.$ZodBranded<z21.ZodString, "dimp", "out">;
-}, z21.core.$strict>;
+declare const dealImportUploadedPayloadSchema: z22.ZodObject<{
+	importId: z22.core.$ZodBranded<z22.ZodString, "dimp", "out">;
+}, z22.core.$strict>;
 /** The payload of {@link DEAL_IMPORT_UPLOADED_MESSAGE}. */
-type DealImportUploadedPayload = z21.infer<typeof dealImportUploadedPayloadSchema>;
+type DealImportUploadedPayload = z22.infer<typeof dealImportUploadedPayloadSchema>;
 /** Starts the processing of an uploaded CSV. The job is idempotent and resumable, keyed on the import. */
 declare const DEAL_IMPORT_UPLOADED_MESSAGE: {
 	readonly type: "playbook.deal_import_uploaded";
 	readonly version: 1;
 	readonly scope: "organization";
-	readonly payload: z21.ZodObject<{
-		importId: z21.core.$ZodBranded<z21.ZodString, "dimp", "out">;
-	}, z21.core.$strict>;
+	readonly payload: z22.ZodObject<{
+		importId: z22.core.$ZodBranded<z22.ZodString, "dimp", "out">;
+	}, z22.core.$strict>;
 };
-import { z as z22 } from "zod";
+import { z as z23 } from "zod";
 /**
 * The states a Playbook document is in, in the order a document passes through them (ADR 0016).
 * `deleted` means soft-deleted and awaiting purge. The db library builds its column from this
@@ -2421,7 +2465,7 @@ import { z as z22 } from "zod";
 */
 declare const DOCUMENT_STATES: readonly ["uploaded", "processing", "ready", "failed", "deleted"];
 /** The state of a Playbook document. */
-declare const documentStateSchema: z22.ZodEnum<{
+declare const documentStateSchema: z23.ZodEnum<{
 	deleted: "deleted";
 	failed: "failed";
 	processing: "processing";
@@ -2429,7 +2473,7 @@ declare const documentStateSchema: z22.ZodEnum<{
 	uploaded: "uploaded";
 }>;
 /** The state of a Playbook document. */
-type DocumentState = z22.infer<typeof documentStateSchema>;
+type DocumentState = z23.infer<typeof documentStateSchema>;
 /**
 * Why a document ended in `failed`: a closed list the portal maps to its own wording. Never free
 * text, so a reason cannot carry the content or name of a file. This list is the lead's reading
@@ -2437,7 +2481,7 @@ type DocumentState = z22.infer<typeof documentStateSchema>;
 */
 declare const DOCUMENT_FAILURE_REASONS: readonly ["too_many_pages", "unreadable", "password_protected", "no_text", "processing_failed"];
 /** Why a document ended in `failed`. */
-declare const documentFailureReasonSchema: z22.ZodEnum<{
+declare const documentFailureReasonSchema: z23.ZodEnum<{
 	no_text: "no_text";
 	password_protected: "password_protected";
 	processing_failed: "processing_failed";
@@ -2445,7 +2489,7 @@ declare const documentFailureReasonSchema: z22.ZodEnum<{
 	unreadable: "unreadable";
 }>;
 /** Why a document ended in `failed`. */
-type DocumentFailureReason = z22.infer<typeof documentFailureReasonSchema>;
+type DocumentFailureReason = z23.infer<typeof documentFailureReasonSchema>;
 /** Owner's choice (ADR 0016, choice 2): the file extensions phase 1 accepts, lower case with the dot. */
 declare const ACCEPTED_DOCUMENT_EXTENSIONS: readonly [".pdf", ".docx", ".pptx", ".txt", ".md"];
 /** An accepted file extension. */
@@ -2453,7 +2497,7 @@ type AcceptedDocumentExtension = (typeof ACCEPTED_DOCUMENT_EXTENSIONS)[number];
 /** Owner's choice (ADR 0016, choice 2): the media types phase 1 accepts, one for each accepted extension. */
 declare const ACCEPTED_DOCUMENT_MEDIA_TYPES: readonly ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/vnd.openxmlformats-officedocument.presentationml.presentation", "text/plain", "text/markdown"];
 /** The media type of a stored document, as the service detected it from the content. */
-declare const documentMediaTypeSchema: z22.ZodEnum<{
+declare const documentMediaTypeSchema: z23.ZodEnum<{
 	"application/pdf": "application/pdf";
 	"application/vnd.openxmlformats-officedocument.presentationml.presentation": "application/vnd.openxmlformats-officedocument.presentationml.presentation";
 	"application/vnd.openxmlformats-officedocument.wordprocessingml.document": "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -2461,7 +2505,7 @@ declare const documentMediaTypeSchema: z22.ZodEnum<{
 	"text/plain": "text/plain";
 }>;
 /** The media type of a stored document. */
-type DocumentMediaType = z22.infer<typeof documentMediaTypeSchema>;
+type DocumentMediaType = z23.infer<typeof documentMediaTypeSchema>;
 /** The media type each accepted extension stands for. */
 declare const MEDIA_TYPE_BY_EXTENSION: Readonly<Record<AcceptedDocumentExtension, DocumentMediaType>>;
 /** Owner's choice (ADR 0016, choice 2): the largest file accepted, 25 MB counted as 25 * 1024 * 1024 bytes. */
@@ -2503,22 +2547,22 @@ declare function documentExtension(fileName: string): AcceptedDocumentExtension 
 * no extension to disguise. Zero-width characters other than in the stem are allowed, so display
 * code must still treat a name as untrusted text. A name is never part of an error body.
 */
-declare const documentFileNameSchema: z22.ZodPipe<z22.ZodPipe<z22.ZodString, z22.ZodTransform<string, string>>, z22.ZodString>;
+declare const documentFileNameSchema: z23.ZodPipe<z23.ZodPipe<z23.ZodString, z23.ZodTransform<string, string>>, z23.ZodString>;
 /** The name of an uploaded file. */
-type DocumentFileName = z22.infer<typeof documentFileNameSchema>;
+type DocumentFileName = z23.infer<typeof documentFileNameSchema>;
 /**
 * The type check of an upload, on the file name in its stored form (control and bidirectional
 * characters stripped, then trimmed): it must end in an accepted extension. A failure is
 * `document.unsupported_type` (415). Services call `checkUploadFile`, not this. The service also inspects the content, because the name
 * and the declared type are untrusted.
 */
-declare const documentTypeCheckSchema: z22.ZodPipe<z22.ZodPipe<z22.ZodString, z22.ZodTransform<string, string>>, z22.ZodString>;
+declare const documentTypeCheckSchema: z23.ZodPipe<z23.ZodPipe<z23.ZodString, z23.ZodTransform<string, string>>, z23.ZodString>;
 /**
 * The size check of an upload, on the byte count: at most {@link MAX_DOCUMENT_BYTES}. A failure
 * is `document.too_large` (413). Services call `checkUploadFile`, not this. Emptiness is not checked here: an empty file fails the upload
 * schema as `request.invalid`.
 */
-declare const documentSizeCheckSchema: z22.ZodNumber;
+declare const documentSizeCheckSchema: z23.ZodNumber;
 /** Lower-cases a media type and drops its parameters, so `Text/Plain; charset=utf-8` becomes `text/plain`. */
 declare function normaliseMediaType(mediaType: string): string;
 /** Whether text holds a control or bidirectional character (the ones a file name has stripped), so an identifier can refuse it. */
@@ -2527,4 +2571,4 @@ declare function hasStrippableCharacter(text: string): boolean;
 declare function isWellFormedText(text: string): boolean;
 /** This library's package name, so a consumer can report which shared libraries it resolved. */
 declare const PACKAGE = "tula-closeline-contract";
-export { ABANDON_MAX_AGE_HOURS, ACCEPTED_DOCUMENT_EXTENSIONS, ACCEPTED_DOCUMENT_MEDIA_TYPES, ACCEPTED_RECORDING_EXTENSIONS, ACCEPTED_TRANSCRIPT_EXTENSIONS, ALL_PLAYBOOK_ERRORS, ALL_PLAYBOOK_ROUTES, AUTH_ERRORS, AcceptedCallExtension, AcceptedDocumentExtension, AddTeamMemberRequest, AllPlaybookRouteName, AuthErrorCode, CALL_CHANNELS, CALL_DELETED_MESSAGE, CALL_FAILURE_FIXES, CALL_FAILURE_REASONS, CALL_KINDS, CALL_MEDIA_TYPES, CALL_REP_CHANGED_MESSAGE, CALL_STATES, CALL_TRANSCRIBED_MESSAGE, CALL_UPLOADED_MESSAGE, CORE_ERRORS, CSV_FAILURES, Call, CallCursor, CallDeletedPayload, CallFailureFix, CallFailureReason, CallId, CallKind, CallMediaType, CallParams, CallRepChangedPayload, CallState, CallTranscribedPayload, CallUploadedPayload, CellResult, ChangeMemberRoleRequest, CheckCallFileResult, CheckDealImportHeaderResult, CheckDealImportHeaderTextResult, CheckDealImportRowResult, CheckUploadFileResult, CommonErrorCode, ConfirmRightsRequest, CoreErrorCode, CreateInvitationRequest, CreateTeamRequest, CsvFailure, CsvOptions, CsvResult, DEAL_CLOSED_AT_MAX_YEAR, DEAL_CLOSED_AT_MIN_YEAR, DEAL_IMPORT_FAILURE_REASONS, DEAL_IMPORT_FILE_FIELD, DEAL_IMPORT_HEADER_PREFIX_CHARS, DEAL_IMPORT_HEADER_PROBLEMS, DEAL_IMPORT_OPTIONAL_COLUMN, DEAL_IMPORT_REQUIRED_COLUMNS, DEAL_IMPORT_ROW_REASONS, DEAL_IMPORT_ROW_RESULTS, DEAL_IMPORT_STATES, DEAL_IMPORT_UPLOADED_MESSAGE, DEAL_OUTCOME_CHANGED_MESSAGE, DEFAULT_MAX_CALLS, DEFAULT_MAX_DEALS, DEFAULT_MAX_DOCUMENTS, DEFAULT_MAX_DOCUMENT_BYTES_TOTAL, DEFAULT_MAX_RECORDING_BYTES_TOTAL, DEFAULT_PAGE_SIZE, DOCUMENT_DELETED_MESSAGE, DOCUMENT_FAILURE_REASONS, DOCUMENT_RETENTION_DAYS, DOCUMENT_STATES, DOCUMENT_UPLOADED_MESSAGE, Deal, DealCursor, DealId, DealImport, DealImportCursor, DealImportFailureReason, DealImportHeaderProblem, DealImportId, DealImportParams, DealImportRow, DealImportRowCursor, DealImportRowReason, DealImportRowResult, DealImportState, DealImportUploadedPayload, DealOutcomeChangedPayload, DealParams, DealRecordId, DocumentDeletedPayload, DocumentFailureReason, DocumentFileName, DocumentId, DocumentMediaType, DocumentParams, DocumentState, DocumentUploadedPayload, ERRORS, Email, ErrorBody, ErrorDefinition, ErrorInput, EventId, EventType, FirstCsvRecordResult, IDEMPOTENCY_KEY_HEADER, INCOMPLETE_UPLOAD_PARTS_TTL_HOURS, INTERNAL_CALL_ERRORS, INVITABLE_ROLES, INVITATION_STATES, Id, IdempotencyKey, InternalAbandonOrganizationParams, InternalAbandonOrganizationRequest, InternalAbandonOrganizationResponse, InternalAcceptInvitationRequest, InternalAcceptInvitationResponse, InternalCallName, InternalCreateOrganizationRequest, InternalCreateOrganizationResponse, InternalMembershipRequest, InternalMembershipResponse, InternalRemoveOrganizationDocumentsParams, InternalRemoveOrganizationDocumentsRequest, InternalRemoveOrganizationDocumentsResponse, InternalUpdateMemberProfileParams, InternalUpdateMemberProfileRequest, InternalUpdateMemberProfileResponse, InvitableRole, Invitation, InvitationId, InvitationParams, InvitationState, ListCallsQuery, ListCallsResponse, ListDealImportRowsQuery, ListDealImportRowsResponse, ListDealImportsQuery, ListDealImportsResponse, ListDealsQuery, ListDealsResponse, ListDocumentsQuery, ListDocumentsResponse, ListInvitationsQuery, ListInvitationsResponse, ListMembersQuery, ListMembersResponse, ListTeamsQuery, ListTeamsResponse, LookupDealRequest, MAX_CALL_SPEAKERS, MAX_CURSOR_LENGTH, MAX_DEAL_ID_BYTES, MAX_DEAL_ID_LENGTH, MAX_DEAL_IMPORT_BYTES, MAX_DEAL_IMPORT_CELL_LENGTH, MAX_DEAL_IMPORT_HEADER_LENGTH, MAX_DEAL_IMPORT_ROWS, MAX_DEAL_NAME_BYTES, MAX_DEAL_NAME_LENGTH, MAX_DELETION_SEQ, MAX_DOCUMENT_BYTES, MAX_DOCUMENT_FILE_NAME_BYTES, MAX_DOCUMENT_FILE_NAME_LENGTH, MAX_DOCUMENT_PAGES, MAX_EMAIL_LENGTH, MAX_NAME_LENGTH, MAX_PAGE_SIZE, MAX_PERSON_NAME_LENGTH, MAX_RECORDING_BYTES, MAX_RECORDING_SECONDS, MAX_REP_FIELD_LENGTH, MAX_REP_FOLLOWING_CHARACTERS, MAX_REP_FOLLOWING_TURNS, MAX_RIGHTS_WORDING_VERSION, MAX_SEQ, MAX_SPEAKER_LABEL_BYTES, MAX_SPEAKER_LABEL_LENGTH, MAX_TRANSCRIPT_BYTES, MAX_UTF8_BYTES_PER_CODE_POINT, MEDIA_TYPE_BY_CALL_EXTENSION, MEDIA_TYPE_BY_EXTENSION, Member, MemberParams, MembershipId, ORGANIZATION_STATUSES, OUTCOMES, Organization, OrganizationId, OrganizationStatus, Outcome, PACKAGE, PLAYBOOK_ERRORS, PLAYBOOK_READ_ROLES, PLAYBOOK_ROUTES, PLAYBOOK_WRITE_ROLES, Page, PageQuery, ParseRepFieldResult, ParsedDealImportRow, PlaybookDocument, PlaybookErrorCode, PlaybookRoute, PlaybookRouteName, ProspectId, REGIONS, ROLES, Region, RenameOrganizationRequest, RenameTeamRequest, RepChoice, RequestId, RightsConfirmation, RightsRequiredDetails, RightsStatus, Role, SALES_HISTORY_ERRORS, SALES_HISTORY_READ_ROLES, SALES_HISTORY_ROUTES, SIGNUP_ERRORS, SalesHistoryErrorCode, SalesHistoryRoute, SalesHistoryRouteName, SetCallRepRequest, SetDealOutcomeRequest, SignupErrorCode, Team, TeamId, TeamMember, TeamMemberParams, TeamParams, UPLOAD_CONTENT_TYPE, UPLOAD_FILE_FIELD, UploadCallFields, UploadDocumentFile, UserId, addTeamMemberRequestSchema, callChannelSchema, callCursorSchema, callDeletedPayloadSchema, callFailureReasonSchema, callIdSchema, callKindSchema, callMediaTypeSchema, callParamsSchema, callRepChangedPayloadSchema, callReuploadRequeues, callSchema, callStateSchema, callTranscribedPayloadSchema, callUploadedPayloadSchema, changeMemberRoleRequestSchema, checkCallFile, checkDealImportHeader, checkDealImportHeaderText, checkDealImportRow, checkUploadFile, confirmRightsRequestSchema, createInvitationRequestSchema, createTeamRequestSchema, dealAmountSchema, dealCurrencySchema, dealCursorSchema, dealIdSchema, dealImportCursorSchema, dealImportFailureReasonSchema, dealImportIdSchema, dealImportParamsSchema, dealImportRowCursorSchema, dealImportRowReasonSchema, dealImportRowResultSchema, dealImportRowSchema, dealImportSchema, dealImportStateSchema, dealImportUploadedPayloadSchema, dealNameSchema, dealOutcomeChangedPayloadSchema, dealParamsSchema, dealRecordIdSchema, dealSchema, decodeCursor, defineErrors, defineEvent, documentDeletedPayloadSchema, documentExtension, documentFailureReasonSchema, documentFileNameSchema, documentIdSchema, documentMediaTypeSchema, documentParamsSchema, documentSchema, documentSizeCheckSchema, documentStateSchema, documentTypeCheckSchema, documentUploadedPayloadSchema, emailSchema, encodeCursor, errorBodySchema, errorCodeSchema, eventEnvelopeSchema, eventIdSchema, eventTypeSchema, firstCsvRecord, foldAscii, formatId, hasStrippableCharacter, idSchema, idempotencyKeySchema, internalAbandonOrganizationParamsSchema, internalAbandonOrganizationRequestSchema, internalAbandonOrganizationResponseSchema, internalAcceptInvitationRequestSchema, internalAcceptInvitationResponseSchema, internalCreateOrganizationRequestSchema, internalCreateOrganizationResponseSchema, internalMembershipRequestSchema, internalMembershipResponseSchema, internalRemoveOrganizationDocumentsParamsSchema, internalRemoveOrganizationDocumentsRequestSchema, internalRemoveOrganizationDocumentsResponseSchema, internalUpdateMemberProfileParamsSchema, internalUpdateMemberProfileRequestSchema, internalUpdateMemberProfileResponseSchema, invitableRoleSchema, invitationIdSchema, invitationParamsSchema, invitationSchema, invitationStateSchema, invitationTokenSchema, isBlankCsvRecord, isWellFormedText, listCallsQuerySchema, listCallsResponseSchema, listDealImportRowsQuerySchema, listDealImportRowsResponseSchema, listDealImportsQuerySchema, listDealImportsResponseSchema, listDealsQuerySchema, listDealsResponseSchema, listDocumentsQuerySchema, listDocumentsResponseSchema, listInvitationsQuerySchema, listInvitationsResponseSchema, listMembersQuerySchema, listMembersResponseSchema, listTeamsQuerySchema, listTeamsResponseSchema, lookupDealRequestSchema, memberParamsSchema, memberSchema, membershipIdSchema, normaliseDealId, normaliseFileName, normaliseMediaType, normaliseSpeakerLabel, organizationIdSchema, organizationNameSchema, organizationSchema, organizationStatusSchema, outcomeSchema, pageQuerySchema, pageSchema, parseAmountCell, parseClosedAtCell, parseCsv, parseCurrencyCell, parseOutcomeCell, parseRepField, personNameSchema, prospectIdSchema, regionSchema, renameOrganizationRequestSchema, renameTeamRequestSchema, repChangeAllowed, repChoiceSchema, repChoiceSuits, requestIdSchema, rightsConfirmationSchema, rightsRequiredDetailsSchema, rightsStatusSchema, rightsWordingVersionSchema, roleAtLeast, roleSchema, setCallRepRequestSchema, setDealOutcomeRequestSchema, speakerLabelSchema, storedNameSchema, teamIdSchema, teamMemberParamsSchema, teamMemberSchema, teamNameSchema, teamParamsSchema, teamSchema, timestampSchema, uploadCallFieldsSchema, uploadCallFileSchema, uploadDocumentFileSchema, userIdSchema };
+export { ABANDON_MAX_AGE_HOURS, ACCEPTED_DOCUMENT_EXTENSIONS, ACCEPTED_DOCUMENT_MEDIA_TYPES, ACCEPTED_RECORDING_EXTENSIONS, ACCEPTED_TRANSCRIPT_EXTENSIONS, ALL_PLAYBOOK_ERRORS, ALL_PLAYBOOK_ROUTES, AUTH_ERRORS, AcceptedCallExtension, AcceptedDocumentExtension, AddTeamMemberRequest, AllPlaybookRouteName, AuthErrorCode, CALL_CHANNELS, CALL_DELETED_MESSAGE, CALL_FAILURE_FIXES, CALL_FAILURE_REASONS, CALL_KINDS, CALL_MEDIA_TYPES, CALL_REP_CHANGED_MESSAGE, CALL_STATES, CALL_TRANSCRIBED_MESSAGE, CALL_UPLOADED_MESSAGE, CORE_ERRORS, CSV_FAILURES, CURRENT_RIGHTS_WORDING_VERSION, Call, CallCursor, CallDeletedPayload, CallFailureFix, CallFailureReason, CallId, CallKind, CallMediaType, CallParams, CallRepChangedPayload, CallState, CallTranscribedPayload, CallUploadedPayload, CellResult, ChangeMemberRoleRequest, CheckCallFileResult, CheckDealImportHeaderResult, CheckDealImportHeaderTextResult, CheckDealImportRowResult, CheckUploadFileResult, CommonErrorCode, ConfirmRightsRequest, CoreErrorCode, CreateInvitationRequest, CreateTeamRequest, CsvFailure, CsvOptions, CsvResult, DEAL_CLOSED_AT_MAX_YEAR, DEAL_CLOSED_AT_MIN_YEAR, DEAL_IMPORT_FAILURE_REASONS, DEAL_IMPORT_FILE_FIELD, DEAL_IMPORT_HEADER_PREFIX_CHARS, DEAL_IMPORT_HEADER_PROBLEMS, DEAL_IMPORT_OPTIONAL_COLUMN, DEAL_IMPORT_REQUIRED_COLUMNS, DEAL_IMPORT_ROW_REASONS, DEAL_IMPORT_ROW_RESULTS, DEAL_IMPORT_STATES, DEAL_IMPORT_UPLOADED_MESSAGE, DEAL_OUTCOME_CHANGED_MESSAGE, DEFAULT_MAX_CALLS, DEFAULT_MAX_DEALS, DEFAULT_MAX_DOCUMENTS, DEFAULT_MAX_DOCUMENT_BYTES_TOTAL, DEFAULT_MAX_RECORDING_BYTES_TOTAL, DEFAULT_PAGE_SIZE, DOCUMENT_DELETED_MESSAGE, DOCUMENT_FAILURE_REASONS, DOCUMENT_RETENTION_DAYS, DOCUMENT_STATES, DOCUMENT_UPLOADED_MESSAGE, Deal, DealCursor, DealId, DealImport, DealImportCursor, DealImportFailureReason, DealImportHeaderProblem, DealImportId, DealImportParams, DealImportRow, DealImportRowCursor, DealImportRowReason, DealImportRowResult, DealImportState, DealImportUploadedPayload, DealOutcomeChangedPayload, DealParams, DealRecordId, DocumentDeletedPayload, DocumentFailureReason, DocumentFileName, DocumentId, DocumentMediaType, DocumentParams, DocumentState, DocumentUploadedPayload, ERRORS, Email, ErrorBody, ErrorDefinition, ErrorInput, EventId, EventType, FirstCsvRecordResult, IDEMPOTENCY_KEY_HEADER, INCOMPLETE_UPLOAD_PARTS_TTL_HOURS, INTERNAL_CALL_ERRORS, INVITABLE_ROLES, INVITATION_STATES, Id, IdempotencyKey, InternalAbandonOrganizationParams, InternalAbandonOrganizationRequest, InternalAbandonOrganizationResponse, InternalAcceptInvitationRequest, InternalAcceptInvitationResponse, InternalCallName, InternalCreateOrganizationRequest, InternalCreateOrganizationResponse, InternalMembershipRequest, InternalMembershipResponse, InternalRemoveOrganizationDocumentsParams, InternalRemoveOrganizationDocumentsRequest, InternalRemoveOrganizationDocumentsResponse, InternalUpdateMemberProfileParams, InternalUpdateMemberProfileRequest, InternalUpdateMemberProfileResponse, InvitableRole, Invitation, InvitationId, InvitationParams, InvitationState, ListCallsQuery, ListCallsResponse, ListDealImportRowsQuery, ListDealImportRowsResponse, ListDealImportsQuery, ListDealImportsResponse, ListDealsQuery, ListDealsResponse, ListDocumentsQuery, ListDocumentsResponse, ListInvitationsQuery, ListInvitationsResponse, ListMembersQuery, ListMembersResponse, ListTeamsQuery, ListTeamsResponse, LookupDealRequest, MAX_CALL_SPEAKERS, MAX_CURSOR_LENGTH, MAX_DEAL_ID_BYTES, MAX_DEAL_ID_LENGTH, MAX_DEAL_IMPORT_BYTES, MAX_DEAL_IMPORT_CELL_LENGTH, MAX_DEAL_IMPORT_HEADER_LENGTH, MAX_DEAL_IMPORT_ROWS, MAX_DEAL_NAME_BYTES, MAX_DEAL_NAME_LENGTH, MAX_DELETION_SEQ, MAX_DOCUMENT_BYTES, MAX_DOCUMENT_FILE_NAME_BYTES, MAX_DOCUMENT_FILE_NAME_LENGTH, MAX_DOCUMENT_PAGES, MAX_EMAIL_LENGTH, MAX_NAME_LENGTH, MAX_PAGE_SIZE, MAX_PERSON_NAME_LENGTH, MAX_RECORDING_BYTES, MAX_RECORDING_SECONDS, MAX_REP_FIELD_LENGTH, MAX_REP_FOLLOWING_CHARACTERS, MAX_REP_FOLLOWING_TURNS, MAX_RIGHTS_HEADING_LENGTH, MAX_RIGHTS_PARAGRAPHS, MAX_RIGHTS_TEXT_LENGTH, MAX_RIGHTS_WORDING_VERSION, MAX_SEQ, MAX_SPEAKER_LABEL_BYTES, MAX_SPEAKER_LABEL_LENGTH, MAX_TRANSCRIPT_BYTES, MAX_UTF8_BYTES_PER_CODE_POINT, MEDIA_TYPE_BY_CALL_EXTENSION, MEDIA_TYPE_BY_EXTENSION, Member, MemberParams, MembershipId, ORGANIZATION_STATUSES, OUTCOMES, Organization, OrganizationId, OrganizationStatus, Outcome, PACKAGE, PLAYBOOK_ERRORS, PLAYBOOK_READ_ROLES, PLAYBOOK_ROUTES, PLAYBOOK_WRITE_ROLES, Page, PageQuery, ParseRepFieldResult, ParsedDealImportRow, PlaybookDocument, PlaybookErrorCode, PlaybookRoute, PlaybookRouteName, ProspectId, REGIONS, RIGHTS_WORDINGS, ROLES, Region, RenameOrganizationRequest, RenameTeamRequest, RepChoice, RequestId, RightsConfirmation, RightsRequiredDetails, RightsStatus, RightsWording, Role, SALES_HISTORY_ERRORS, SALES_HISTORY_READ_ROLES, SALES_HISTORY_ROUTES, SIGNUP_ERRORS, SalesHistoryErrorCode, SalesHistoryRoute, SalesHistoryRouteName, SetCallRepRequest, SetDealOutcomeRequest, SignupErrorCode, Team, TeamId, TeamMember, TeamMemberParams, TeamParams, UPLOAD_CONTENT_TYPE, UPLOAD_FILE_FIELD, UploadCallFields, UploadDocumentFile, UserId, addTeamMemberRequestSchema, callChannelSchema, callCursorSchema, callDeletedPayloadSchema, callFailureReasonSchema, callIdSchema, callKindSchema, callMediaTypeSchema, callParamsSchema, callRepChangedPayloadSchema, callReuploadRequeues, callSchema, callStateSchema, callTranscribedPayloadSchema, callUploadedPayloadSchema, changeMemberRoleRequestSchema, checkCallFile, checkDealImportHeader, checkDealImportHeaderText, checkDealImportRow, checkUploadFile, confirmRightsRequestSchema, createInvitationRequestSchema, createTeamRequestSchema, dealAmountSchema, dealCurrencySchema, dealCursorSchema, dealIdSchema, dealImportCursorSchema, dealImportFailureReasonSchema, dealImportIdSchema, dealImportParamsSchema, dealImportRowCursorSchema, dealImportRowReasonSchema, dealImportRowResultSchema, dealImportRowSchema, dealImportSchema, dealImportStateSchema, dealImportUploadedPayloadSchema, dealNameSchema, dealOutcomeChangedPayloadSchema, dealParamsSchema, dealRecordIdSchema, dealSchema, decodeCursor, defineErrors, defineEvent, documentDeletedPayloadSchema, documentExtension, documentFailureReasonSchema, documentFileNameSchema, documentIdSchema, documentMediaTypeSchema, documentParamsSchema, documentSchema, documentSizeCheckSchema, documentStateSchema, documentTypeCheckSchema, documentUploadedPayloadSchema, emailSchema, encodeCursor, errorBodySchema, errorCodeSchema, eventEnvelopeSchema, eventIdSchema, eventTypeSchema, firstCsvRecord, foldAscii, formatId, hasStrippableCharacter, idSchema, idempotencyKeySchema, internalAbandonOrganizationParamsSchema, internalAbandonOrganizationRequestSchema, internalAbandonOrganizationResponseSchema, internalAcceptInvitationRequestSchema, internalAcceptInvitationResponseSchema, internalCreateOrganizationRequestSchema, internalCreateOrganizationResponseSchema, internalMembershipRequestSchema, internalMembershipResponseSchema, internalRemoveOrganizationDocumentsParamsSchema, internalRemoveOrganizationDocumentsRequestSchema, internalRemoveOrganizationDocumentsResponseSchema, internalUpdateMemberProfileParamsSchema, internalUpdateMemberProfileRequestSchema, internalUpdateMemberProfileResponseSchema, invitableRoleSchema, invitationIdSchema, invitationParamsSchema, invitationSchema, invitationStateSchema, invitationTokenSchema, isBlankCsvRecord, isWellFormedText, listCallsQuerySchema, listCallsResponseSchema, listDealImportRowsQuerySchema, listDealImportRowsResponseSchema, listDealImportsQuerySchema, listDealImportsResponseSchema, listDealsQuerySchema, listDealsResponseSchema, listDocumentsQuerySchema, listDocumentsResponseSchema, listInvitationsQuerySchema, listInvitationsResponseSchema, listMembersQuerySchema, listMembersResponseSchema, listTeamsQuerySchema, listTeamsResponseSchema, lookupDealRequestSchema, memberParamsSchema, memberSchema, membershipIdSchema, normaliseDealId, normaliseFileName, normaliseMediaType, normaliseSpeakerLabel, organizationIdSchema, organizationNameSchema, organizationSchema, organizationStatusSchema, outcomeSchema, pageQuerySchema, pageSchema, parseAmountCell, parseClosedAtCell, parseCsv, parseCurrencyCell, parseOutcomeCell, parseRepField, personNameSchema, prospectIdSchema, regionSchema, renameOrganizationRequestSchema, renameTeamRequestSchema, repChangeAllowed, repChoiceSchema, repChoiceSuits, requestIdSchema, rightsConfirmationSchema, rightsRequiredDetailsSchema, rightsStatusSchema, rightsWordingFor, rightsWordingSchema, rightsWordingVersionSchema, roleAtLeast, roleSchema, setCallRepRequestSchema, setDealOutcomeRequestSchema, speakerLabelSchema, storedNameSchema, teamIdSchema, teamMemberParamsSchema, teamMemberSchema, teamNameSchema, teamParamsSchema, teamSchema, timestampSchema, uploadCallFieldsSchema, uploadCallFileSchema, uploadDocumentFileSchema, userIdSchema };

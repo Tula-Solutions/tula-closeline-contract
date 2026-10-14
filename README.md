@@ -159,3 +159,13 @@ Additive; the 0.7.0 types are unchanged (`PlaybookRoute`, `PLAYBOOK_ROUTES` and 
   `MAX_TRANSCRIPT_BYTES`, `MAX_RECORDING_BYTES`, `MAX_RECORDING_SECONDS`, `MAX_DEAL_IMPORT_BYTES`,
   `MAX_DEAL_IMPORT_ROWS`, `MAX_DEAL_ID_LENGTH`, `MAX_REP_FOLLOWING_TURNS`, `MAX_REP_FOLLOWING_CHARACTERS`,
   `INCOMPLETE_UPLOAD_PARTS_TTL_HOURS`, `DEFAULT_MAX_CALLS`, `DEFAULT_MAX_RECORDING_BYTES_TOTAL`, `DEFAULT_MAX_DEALS`.
+
+### Rights confirmation wording (0.9.0)
+
+The text of each wording version is in the contract: `RIGHTS_WORDINGS` (frozen, keyed by version,
+plain text, bounded, shown exactly as written and never interpolated), `CURRENT_RIGHTS_WORDING_VERSION`
+(the highest key; a service reads it instead of a setting) and `rightsWordingFor(version)` (undefined
+for a version without text, which cannot be confirmed). Version 1 is the portal's draft, **pending a
+lawyer's check**; a wording change is a new version and so a contract release. The rights read
+response (`rightsStatusSchema`) has an optional `currentWording` with the text of the current version;
+a consumer that does not get it reads `RIGHTS_WORDINGS[currentWordingVersion]`.
