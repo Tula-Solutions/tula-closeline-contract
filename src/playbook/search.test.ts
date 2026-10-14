@@ -9,7 +9,9 @@ import {
   MAX_SEARCH_TEXT_CHARACTERS,
   MAX_SEARCH_TURNS,
   momentQueryText,
-  PLAYBOOK_READ_ROLES,
+  momentSnippet,
+  momentSnippetSchema,
+  SALES_HISTORY_READ_ROLES,
   SEARCH_ROUTES,
   searchMomentsRequestSchema,
   searchMomentsResponseSchema,
@@ -141,11 +143,14 @@ describe('searchMomentsResponseSchema', () => {
 describe('the searchMoments route', () => {
   const route = SEARCH_ROUTES.searchMoments
 
-  test('is a read-only POST for every role that reads the Playbook, in the merged map', () => {
+  test('is a read-only POST for Owner and Admin only, in the merged map', () => {
     expect(route.method).toBe('POST')
     expect(route.path).toBe('/playbook/search/moments')
     expect(route.internal).toBe(false)
-    expect(route.roles).toEqual([...PLAYBOOK_READ_ROLES])
+    expect(route.roles).toEqual([...SALES_HISTORY_READ_ROLES])
+    expect(route.roles).toEqual(['owner', 'admin'])
+    expect(route.roles).not.toContain('manager')
+    expect(route.roles).not.toContain('rep')
     expect(route.success).toEqual([200])
     expect(ALL_PLAYBOOK_ROUTES.searchMoments).toBe(route)
   })
@@ -163,13 +168,88 @@ describe('the searchMoments route', () => {
       'won',
       'at most 20',
       'no cursor',
+      'service-to-service',
+      'Owner and Admin only',
+      'over-fetched candidate window',
+      'min(100, limit x 5)',
+      'not every won Deal',
     ]) {
       expect(route.description.toLowerCase()).toContain(phrase.toLowerCase())
     }
   })
 })
 
+describe('snippets', () => {
+  const bad = (code: number) => `a${String.fromCharCode(code)}b`
+  const classes: [string, string][] = [
+    ['NUL', bad(0)],
+    ['a C0 control', bad(0x07)],
+    ['a newline', bad(0x0a)],
+    ['a tab', bad(0x09)],
+    ['DEL', bad(0x7f)],
+    ['a C1 control', bad(0x85)],
+    ['a bidi override', bad(0x202e)],
+    ['a bidi isolate', bad(0x2066)],
+    ['a bidi mark', bad(0x200f)],
+    ['a lone surrogate', bad(0xd800)],
+  ]
+
+  test.each(classes)('the schema refuses %s, as speakerExcerpt does', (_name, text) => {
+    expect(momentSnippetSchema.safeParse(text).success).toBe(false)
+  })
+
+  test('the schema accepts clean text, the empty text and 512 code points, not 513', () => {
+    expect(momentSnippetSchema.safeParse('Price is a worry.').success).toBe(true)
+    expect(momentSnippetSchema.safeParse('').success).toBe(true)
+    expect(momentSnippetSchema.safeParse('a'.repeat(512)).success).toBe(true)
+    expect(momentSnippetSchema.safeParse('a'.repeat(513)).success).toBe(false)
+  })
+
+  test('momentSnippet output always parses: cleaned, collapsed and cut to 512 code points', () => {
+    const emoji = String.fromCodePoint(0x1f600)
+    const inputs = [
+      ...classes.map(([, text]) => text),
+      'line one\nline two\t\ttabbed',
+      'word '.repeat(300),
+      emoji.repeat(700),
+      'x'.repeat(5000),
+      '',
+      '   ',
+    ]
+    for (const input of inputs) {
+      const out = momentSnippet(input)
+      expect(momentSnippetSchema.safeParse(out).success).toBe(true)
+      expect(Array.from(out).length).toBeLessThanOrEqual(MAX_MOMENT_SNIPPET_CHARACTERS)
+    }
+    expect(momentSnippet('line one\nline two')).toBe('line one line two')
+    expect(momentSnippet(`a${String.fromCharCode(0)}b`)).toBe('ab')
+  })
+
+  test('a long snippet is cut at a word boundary with an ellipsis', () => {
+    const out = momentSnippet('word '.repeat(300))
+    expect(out.endsWith(String.fromCodePoint(0x2026))).toBe(true)
+    expect(Array.from(out).length).toBeLessThanOrEqual(MAX_MOMENT_SNIPPET_CHARACTERS)
+    expect(out.slice(0, -1).endsWith('word')).toBe(true)
+  })
+})
+
+describe('whitespace in turns', () => {
+  const parse = (value: unknown) => searchMomentsRequestSchema.safeParse(value)
+
+  test('a turn of whitespace only is refused', () => {
+    expect(parse({ turns: [turn('prospect', '   \n\t ')] }).success).toBe(false)
+    expect(parse({ turns: [turn('prospect', 'ok'), turn('rep', '  ')] }).success).toBe(false)
+    expect(parse({ turns: [turn('prospect', ' ok ')] }).success).toBe(true)
+  })
+})
+
 describe('momentQueryText', () => {
+  test('trims each turn, so indexing and querying embed the same text', () => {
+    expect(momentQueryText([turn('rep', '  Hello \n'), turn('prospect', '\tHi there  ')])).toBe(
+      'Rep: Hello\nProspect: Hi there'
+    )
+  })
+
   test('pins the playbook format: one "Rep: " or "Prospect: " line per turn, joined by a newline', () => {
     // Copied from the playbook's moments.test.ts (the Moment `text`).
     expect(momentQueryText([turn('rep', 'Hello'), turn('prospect', 'Hi, I have a question')])).toBe(

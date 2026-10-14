@@ -1,7 +1,9 @@
 import { z } from 'zod'
 import { callIdSchema, dealRecordIdSchema } from '../ids'
-import { PLAYBOOK_READ_ROLES, type PlaybookRoute } from './routes'
-import { isWellFormedText } from './values'
+import { excerptText } from './call-values'
+import type { PlaybookRoute } from './routes'
+import { SALES_HISTORY_READ_ROLES } from './sales-history-routes'
+import { hasStrippableCharacter, isWellFormedText } from './values'
 
 /** The most Moments a search returns (the `limit` ceiling). */
 export const MAX_SEARCH_LIMIT = 20
@@ -30,7 +32,8 @@ export const searchTurnSchema = z.strictObject({
     .string()
     .min(1)
     .max(MAX_SEARCH_TEXT_CHARACTERS * 2)
-    .refine(isWellFormedText, 'Well-formed text only'),
+    .refine(isWellFormedText, 'Well-formed text only')
+    .refine((text) => text.trim().length > 0, 'Not only whitespace'),
 })
 
 /** One turn of the live conversation. */
@@ -61,12 +64,26 @@ export const searchMomentsRequestSchema = z
 /** The body of a search over won Deals, with the default limit applied. */
 export type SearchMomentsRequest = z.infer<typeof searchMomentsRequestSchema>
 
-/** A short piece of a Moment's text: at most `MAX_MOMENT_SNIPPET_CHARACTERS` code points, possibly empty. Tenant Transcript text. */
+/**
+ * A short piece of a Moment's text: at most `MAX_MOMENT_SNIPPET_CHARACTERS` code points, possibly
+ * empty, well-formed and with no control or bidirectional character (newlines and tabs included),
+ * the same rule as a speaker excerpt. Build one with {@link momentSnippet}. Tenant Transcript text.
+ */
 export const momentSnippetSchema = z
   .string()
   .max(MAX_MOMENT_SNIPPET_CHARACTERS * 2)
   .refine((text) => codePointCount(text) <= MAX_MOMENT_SNIPPET_CHARACTERS, 'Within the snippet cap')
   .refine(isWellFormedText, 'Well-formed text only')
+  .refine((text) => !hasStrippableCharacter(text), 'No control characters')
+
+/**
+ * Makes a snippet from stored Transcript text: whitespace collapsed, control and bidirectional
+ * characters removed and the text cut to `MAX_MOMENT_SNIPPET_CHARACTERS` code points at a word
+ * boundary with an ellipsis. It always passes {@link momentSnippetSchema}. Never log the result.
+ */
+export function momentSnippet(text: string): string {
+  return excerptText(text, MAX_MOMENT_SNIPPET_CHARACTERS)
+}
 
 /**
  * One similar Moment from a won Deal: the Call and Deal it comes from (opaque ids), its similarity
@@ -128,11 +145,12 @@ const ROLE_LABELS = { rep: 'Rep', prospect: 'Prospect' } as const
 /**
  * The text that is embedded for a window of turns: one `Rep: ` or `Prospect: ` line per turn,
  * joined by a newline. The indexer (a Moment's text) and the search (the query) both call this, so
- * what is stored and what is asked cannot drift. It adds no speaker label and no Rep reply. The
+ * what is stored and what is asked cannot drift, so the indexer must use this function too. Each
+ * turn's text is trimmed. It adds no speaker label and no Rep reply. The
  * result is tenant conversation text: never log it.
  */
 export function momentQueryText(turns: readonly SearchTurn[]): string {
-  return turns.map((turn) => `${ROLE_LABELS[turn.role]}: ${turn.text}`).join('\n')
+  return turns.map((turn) => `${ROLE_LABELS[turn.role]}: ${turn.text.trim()}`).join('\n')
 }
 
 const route = (definition: PlaybookRoute): PlaybookRoute => Object.freeze(definition)
@@ -141,19 +159,19 @@ const route = (definition: PlaybookRoute): PlaybookRoute => Object.freeze(defini
 export type SearchRouteName = 'searchMoments'
 
 /**
- * The search route: a read-only `POST` (the body is conversation text) for every role that reads
- * the Playbook. It uses existing codes only, so it has no domain code of its own.
+ * The search route: a read-only `POST` (the body is conversation text) for Owner and Admin only
+ * (the roles that read sales history). It uses existing codes only, so it has no domain code of its own.
  */
 export const SEARCH_ROUTES: Readonly<Record<SearchRouteName, PlaybookRoute>> = Object.freeze({
   searchMoments: route({
     method: 'POST',
     path: '/playbook/search/moments',
     internal: false,
-    roles: PLAYBOOK_READ_ROLES,
+    roles: SALES_HISTORY_READ_ROLES,
     success: [200],
     errors: [],
     commonErrors: ['request.invalid', 'server.timeout', 'server.unavailable'],
     description:
-      "Finds Moments in the Organization's won Deals that resemble the conversation so far, so the Copilot can show what worked. The body is the latest turns (1 to 6, each a role of rep or prospect and its text, at most 2000 characters in all) and an optional limit (1 to 20, default 5). It answers the best matches, best first, at most 20, each with the opaque callId and dealRecordId, a score and two snippets of at most 512 characters (what the Prospect said and what the Rep said next), and evidence: the number of candidate Moments and the distinct won Deals among them. There is no cursor: the result is a bounded top-k. Only Moments of Calls whose Deal is won and whose Call is in search are returned, and only from the caller's Organization. It never returns the customer's dealId, name or amount. The request and the snippets are tenant conversation text and are never logged. It only reads, so it takes no Idempotency-Key and a repeat is harmless. request.invalid (400) for a body outside the bounds; server.timeout (504) when it takes too long; server.unavailable (503) with a Retry-After header when the embedding model or the vector store cannot answer. Every role that reads the Playbook (Owner, Admin, Manager and Rep) may call it; any other is auth.forbidden.",
+      "Finds Moments in the Organization's won Deals that resemble the conversation so far, so the Copilot can show what worked. The body is the latest turns (1 to 6, each a role of rep or prospect and its text, at most 2000 characters in all) and an optional limit (1 to 20, default 5). It answers the best matches, best first, at most 20, each with the opaque callId and dealRecordId, a score and two snippets of at most 512 characters (what the Prospect said and what the Rep said next), and evidence: the number of candidate Moments and the distinct won Deals among them. The evidence counts only the over-fetched candidate window (the best min(100, limit x 5) Moments by similarity, after the eligibility checks), not every won Deal in the Organization. There is no cursor: the result is a bounded top-k. Only Moments of Calls whose Deal is won and whose Call is in search are returned, and only from the caller's Organization. It never returns the customer's dealId, name or amount. The request and the snippets are tenant conversation text and are never logged. It only reads, so it takes no Idempotency-Key and a repeat is harmless. request.invalid (400) for a body outside the bounds; server.timeout (504) when it takes too long; server.unavailable (503) with a Retry-After header when the embedding model or the vector store cannot answer. Owner and Admin only, as for all sales history (the owner's decision of 2026-10-13); a Manager or a Rep gets auth.forbidden, because a Rep sees only their own conversations. The phase-2 Copilot calls this service-to-service, not with a Rep's token.",
   }),
 })

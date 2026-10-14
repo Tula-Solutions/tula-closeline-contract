@@ -983,83 +983,10 @@ var SALES_HISTORY_ROUTES = Object.freeze({
 });
 
 // src/playbook/search.ts
-import { z as z17 } from "zod";
-var MAX_SEARCH_LIMIT = 20;
-var DEFAULT_SEARCH_LIMIT = 5;
-var MAX_SEARCH_TURNS = 6;
-var MAX_SEARCH_TEXT_CHARACTERS = 2000;
-var MAX_MOMENT_SNIPPET_CHARACTERS = 512;
-var MAX_SEARCH_CANDIDATES = 100;
-var codePointCount = (text) => Array.from(text).length;
-var searchTurnSchema = z17.strictObject({
-  role: z17.enum(["rep", "prospect"]),
-  text: z17.string().min(1).max(MAX_SEARCH_TEXT_CHARACTERS * 2).refine(isWellFormedText, "Well-formed text only")
-});
-var searchMomentsRequestSchema = z17.strictObject({
-  turns: z17.array(searchTurnSchema).min(1).max(MAX_SEARCH_TURNS),
-  limit: z17.number().int().min(1).max(MAX_SEARCH_LIMIT).default(DEFAULT_SEARCH_LIMIT)
-}).superRefine((request, context) => {
-  const total = request.turns.reduce((sum, turn) => sum + codePointCount(turn.text), 0);
-  if (total > MAX_SEARCH_TEXT_CHARACTERS) {
-    context.addIssue({
-      code: "custom",
-      path: ["turns"],
-      message: "The turns together are within the character limit"
-    });
-  }
-});
-var momentSnippetSchema = z17.string().max(MAX_MOMENT_SNIPPET_CHARACTERS * 2).refine((text) => codePointCount(text) <= MAX_MOMENT_SNIPPET_CHARACTERS, "Within the snippet cap").refine(isWellFormedText, "Well-formed text only");
-var momentMatchSchema = z17.object({
-  callId: callIdSchema,
-  dealRecordId: dealRecordIdSchema,
-  score: z17.number().finite(),
-  prospect: momentSnippetSchema,
-  repNext: momentSnippetSchema
-});
-var searchEvidenceSchema = z17.object({
-  moments: z17.number().int().min(0).max(MAX_SEARCH_CANDIDATES),
-  deals: z17.number().int().min(0).max(MAX_SEARCH_CANDIDATES)
-});
-var searchMomentsResponseSchema = z17.object({
-  items: z17.array(momentMatchSchema).max(MAX_SEARCH_LIMIT),
-  evidence: searchEvidenceSchema
-}).superRefine((response, context) => {
-  const itemDeals = new Set(response.items.map((match) => match.dealRecordId)).size;
-  if (response.evidence.deals > response.evidence.moments || response.items.length > response.evidence.moments || response.evidence.deals < itemDeals) {
-    context.addIssue({
-      code: "custom",
-      path: ["evidence"],
-      message: "The items and Deals fit within the candidate Moments, and the Deals cover the items"
-    });
-  }
-});
-var ROLE_LABELS = { rep: "Rep", prospect: "Prospect" };
-function momentQueryText(turns) {
-  return turns.map((turn) => `${ROLE_LABELS[turn.role]}: ${turn.text}`).join(`
-`);
-}
-var route3 = (definition) => Object.freeze(definition);
-var SEARCH_ROUTES = Object.freeze({
-  searchMoments: route3({
-    method: "POST",
-    path: "/playbook/search/moments",
-    internal: false,
-    roles: PLAYBOOK_READ_ROLES,
-    success: [200],
-    errors: [],
-    commonErrors: ["request.invalid", "server.timeout", "server.unavailable"],
-    description: "Finds Moments in the Organization's won Deals that resemble the conversation so far, so the Copilot can show what worked. The body is the latest turns (1 to 6, each a role of rep or prospect and its text, at most 2000 characters in all) and an optional limit (1 to 20, default 5). It answers the best matches, best first, at most 20, each with the opaque callId and dealRecordId, a score and two snippets of at most 512 characters (what the Prospect said and what the Rep said next), and evidence: the number of candidate Moments and the distinct won Deals among them. There is no cursor: the result is a bounded top-k. Only Moments of Calls whose Deal is won and whose Call is in search are returned, and only from the caller's Organization. It never returns the customer's dealId, name or amount. The request and the snippets are tenant conversation text and are never logged. It only reads, so it takes no Idempotency-Key and a repeat is harmless. request.invalid (400) for a body outside the bounds; server.timeout (504) when it takes too long; server.unavailable (503) with a Retry-After header when the embedding model or the vector store cannot answer. Every role that reads the Playbook (Owner, Admin, Manager and Rep) may call it; any other is auth.forbidden."
-  })
-});
-
-// src/playbook/all.ts
-var ALL_PLAYBOOK_ROUTES = Object.freeze({ ...PLAYBOOK_ROUTES, ...SALES_HISTORY_ROUTES, ...SEARCH_ROUTES });
-var ALL_PLAYBOOK_ERRORS = Object.freeze({ ...PLAYBOOK_ERRORS, ...SALES_HISTORY_ERRORS });
-// src/playbook/call.ts
-import { z as z20 } from "zod";
+import { z as z18 } from "zod";
 
 // src/playbook/call-values.ts
-import { z as z18 } from "zod";
+import { z as z17 } from "zod";
 var CALL_STATES = [
   "uploaded",
   "transcribing",
@@ -1069,7 +996,7 @@ var CALL_STATES = [
   "failed",
   "deleted"
 ];
-var callStateSchema = z18.enum(CALL_STATES);
+var callStateSchema = z17.enum(CALL_STATES);
 var CALL_FAILURE_REASONS = [
   "no_turns",
   "too_few_speakers",
@@ -1082,9 +1009,9 @@ var CALL_FAILURE_REASONS = [
   "unreadable",
   "processing_failed"
 ];
-var callFailureReasonSchema = z18.enum(CALL_FAILURE_REASONS);
+var callFailureReasonSchema = z17.enum(CALL_FAILURE_REASONS);
 var CALL_KINDS = ["transcript", "recording"];
-var callKindSchema = z18.enum(CALL_KINDS);
+var callKindSchema = z17.enum(CALL_KINDS);
 var ACCEPTED_TRANSCRIPT_EXTENSIONS = [".txt", ".vtt", ".srt", ".json"];
 var ACCEPTED_RECORDING_EXTENSIONS = [
   ".mp3",
@@ -1106,7 +1033,7 @@ var CALL_MEDIA_TYPES = [
   "audio/webm",
   "audio/flac"
 ];
-var callMediaTypeSchema = z18.enum(CALL_MEDIA_TYPES);
+var callMediaTypeSchema = z17.enum(CALL_MEDIA_TYPES);
 var MEDIA_TYPE_BY_CALL_EXTENSION = Object.freeze({
   ".txt": "text/plain",
   ".vtt": "text/vtt",
@@ -1134,7 +1061,7 @@ var MAX_SPEAKER_LABEL_BYTES = MAX_SPEAKER_LABEL_LENGTH * MAX_UTF8_BYTES_PER_CODE
 function normaliseSpeakerLabel(label) {
   return normaliseFileName(label);
 }
-var speakerLabelSchema = z18.string().max(1000).transform(normaliseSpeakerLabel).pipe(z18.string().min(1).max(MAX_SPEAKER_LABEL_LENGTH).refine(isWellFormedText, "Well-formed text only").refine((label) => !hasStrippableCharacter(label), "No control characters"));
+var speakerLabelSchema = z17.string().max(1000).transform(normaliseSpeakerLabel).pipe(z17.string().min(1).max(MAX_SPEAKER_LABEL_LENGTH).refine(isWellFormedText, "Well-formed text only").refine((label) => !hasStrippableCharacter(label), "No control characters"));
 var MAX_SPEAKER_EXCERPT_LENGTH = 240;
 var SPACES = new RegExp(`[\\s${String.fromCharCode(133)}]+`, "g");
 var ELLIPSIS = String.fromCodePoint(8230);
@@ -1142,14 +1069,14 @@ function isLoneSurrogate(char) {
   const code = char.codePointAt(0) ?? 0;
   return char.length === 1 && code >= 55296 && code <= 57343;
 }
-function speakerExcerpt(turns) {
-  const collapse = (text) => text.replace(SPACES, " ");
-  const text = collapse(normaliseSpeakerLabel(collapse(turns.join(" "))));
-  const chars = Array.from(text).filter((char) => !isLoneSurrogate(char));
-  if (chars.length <= MAX_SPEAKER_EXCERPT_LENGTH) {
+function excerptText(text, max) {
+  const collapse = (value) => value.replace(SPACES, " ");
+  const clean = collapse(normaliseSpeakerLabel(collapse(text)));
+  const chars = Array.from(clean).filter((char) => !isLoneSurrogate(char));
+  if (chars.length <= max) {
     return chars.join("");
   }
-  const room = MAX_SPEAKER_EXCERPT_LENGTH - 1;
+  const room = max - 1;
   let end = room;
   if (chars[room] !== " ") {
     const space = chars.slice(0, room).lastIndexOf(" ");
@@ -1157,15 +1084,18 @@ function speakerExcerpt(turns) {
   }
   return chars.slice(0, end).join("").trimEnd() + ELLIPSIS;
 }
-var speakerExcerptSchema = z18.strictObject({
+function speakerExcerpt(turns) {
+  return excerptText(turns.join(" "), MAX_SPEAKER_EXCERPT_LENGTH);
+}
+var speakerExcerptSchema = z17.strictObject({
   label: speakerLabelSchema,
-  excerpt: z18.string().min(1).max(MAX_SPEAKER_EXCERPT_LENGTH * 2).refine((text) => Array.from(text).length <= MAX_SPEAKER_EXCERPT_LENGTH, "Within the cap").refine(isWellFormedText, "Well-formed text only").refine((text) => !hasStrippableCharacter(text), "No control characters")
+  excerpt: z17.string().min(1).max(MAX_SPEAKER_EXCERPT_LENGTH * 2).refine((text) => Array.from(text).length <= MAX_SPEAKER_EXCERPT_LENGTH, "Within the cap").refine(isWellFormedText, "Well-formed text only").refine((text) => !hasStrippableCharacter(text), "No control characters")
 });
 var CALL_CHANNELS = ["left", "right"];
-var callChannelSchema = z18.enum(CALL_CHANNELS);
-var repChoiceSchema = z18.discriminatedUnion("by", [
-  z18.strictObject({ by: z18.literal("speaker"), label: speakerLabelSchema }),
-  z18.strictObject({ by: z18.literal("channel"), channel: callChannelSchema })
+var callChannelSchema = z17.enum(CALL_CHANNELS);
+var repChoiceSchema = z17.discriminatedUnion("by", [
+  z17.strictObject({ by: z17.literal("speaker"), label: speakerLabelSchema }),
+  z17.strictObject({ by: z17.literal("channel"), channel: callChannelSchema })
 ]);
 function repChoiceSuits(kind, rep, when) {
   if (rep === null || rep === undefined) {
@@ -1197,6 +1127,84 @@ function repChangeAllowed(state, failureReason) {
   }
   return state === "failed" && (failureReason === "rep_label_not_found" || failureReason === "not_per_side");
 }
+
+// src/playbook/search.ts
+var MAX_SEARCH_LIMIT = 20;
+var DEFAULT_SEARCH_LIMIT = 5;
+var MAX_SEARCH_TURNS = 6;
+var MAX_SEARCH_TEXT_CHARACTERS = 2000;
+var MAX_MOMENT_SNIPPET_CHARACTERS = 512;
+var MAX_SEARCH_CANDIDATES = 100;
+var codePointCount = (text) => Array.from(text).length;
+var searchTurnSchema = z18.strictObject({
+  role: z18.enum(["rep", "prospect"]),
+  text: z18.string().min(1).max(MAX_SEARCH_TEXT_CHARACTERS * 2).refine(isWellFormedText, "Well-formed text only").refine((text) => text.trim().length > 0, "Not only whitespace")
+});
+var searchMomentsRequestSchema = z18.strictObject({
+  turns: z18.array(searchTurnSchema).min(1).max(MAX_SEARCH_TURNS),
+  limit: z18.number().int().min(1).max(MAX_SEARCH_LIMIT).default(DEFAULT_SEARCH_LIMIT)
+}).superRefine((request, context) => {
+  const total = request.turns.reduce((sum, turn) => sum + codePointCount(turn.text), 0);
+  if (total > MAX_SEARCH_TEXT_CHARACTERS) {
+    context.addIssue({
+      code: "custom",
+      path: ["turns"],
+      message: "The turns together are within the character limit"
+    });
+  }
+});
+var momentSnippetSchema = z18.string().max(MAX_MOMENT_SNIPPET_CHARACTERS * 2).refine((text) => codePointCount(text) <= MAX_MOMENT_SNIPPET_CHARACTERS, "Within the snippet cap").refine(isWellFormedText, "Well-formed text only").refine((text) => !hasStrippableCharacter(text), "No control characters");
+function momentSnippet(text) {
+  return excerptText(text, MAX_MOMENT_SNIPPET_CHARACTERS);
+}
+var momentMatchSchema = z18.object({
+  callId: callIdSchema,
+  dealRecordId: dealRecordIdSchema,
+  score: z18.number().finite(),
+  prospect: momentSnippetSchema,
+  repNext: momentSnippetSchema
+});
+var searchEvidenceSchema = z18.object({
+  moments: z18.number().int().min(0).max(MAX_SEARCH_CANDIDATES),
+  deals: z18.number().int().min(0).max(MAX_SEARCH_CANDIDATES)
+});
+var searchMomentsResponseSchema = z18.object({
+  items: z18.array(momentMatchSchema).max(MAX_SEARCH_LIMIT),
+  evidence: searchEvidenceSchema
+}).superRefine((response, context) => {
+  const itemDeals = new Set(response.items.map((match) => match.dealRecordId)).size;
+  if (response.evidence.deals > response.evidence.moments || response.items.length > response.evidence.moments || response.evidence.deals < itemDeals) {
+    context.addIssue({
+      code: "custom",
+      path: ["evidence"],
+      message: "The items and Deals fit within the candidate Moments, and the Deals cover the items"
+    });
+  }
+});
+var ROLE_LABELS = { rep: "Rep", prospect: "Prospect" };
+function momentQueryText(turns) {
+  return turns.map((turn) => `${ROLE_LABELS[turn.role]}: ${turn.text.trim()}`).join(`
+`);
+}
+var route3 = (definition) => Object.freeze(definition);
+var SEARCH_ROUTES = Object.freeze({
+  searchMoments: route3({
+    method: "POST",
+    path: "/playbook/search/moments",
+    internal: false,
+    roles: SALES_HISTORY_READ_ROLES,
+    success: [200],
+    errors: [],
+    commonErrors: ["request.invalid", "server.timeout", "server.unavailable"],
+    description: "Finds Moments in the Organization's won Deals that resemble the conversation so far, so the Copilot can show what worked. The body is the latest turns (1 to 6, each a role of rep or prospect and its text, at most 2000 characters in all) and an optional limit (1 to 20, default 5). It answers the best matches, best first, at most 20, each with the opaque callId and dealRecordId, a score and two snippets of at most 512 characters (what the Prospect said and what the Rep said next), and evidence: the number of candidate Moments and the distinct won Deals among them. The evidence counts only the over-fetched candidate window (the best min(100, limit x 5) Moments by similarity, after the eligibility checks), not every won Deal in the Organization. There is no cursor: the result is a bounded top-k. Only Moments of Calls whose Deal is won and whose Call is in search are returned, and only from the caller's Organization. It never returns the customer's dealId, name or amount. The request and the snippets are tenant conversation text and are never logged. It only reads, so it takes no Idempotency-Key and a repeat is harmless. request.invalid (400) for a body outside the bounds; server.timeout (504) when it takes too long; server.unavailable (503) with a Retry-After header when the embedding model or the vector store cannot answer. Owner and Admin only, as for all sales history (the owner's decision of 2026-10-13); a Manager or a Rep gets auth.forbidden, because a Rep sees only their own conversations. The phase-2 Copilot calls this service-to-service, not with a Rep's token."
+  })
+});
+
+// src/playbook/all.ts
+var ALL_PLAYBOOK_ROUTES = Object.freeze({ ...PLAYBOOK_ROUTES, ...SALES_HISTORY_ROUTES, ...SEARCH_ROUTES });
+var ALL_PLAYBOOK_ERRORS = Object.freeze({ ...PLAYBOOK_ERRORS, ...SALES_HISTORY_ERRORS });
+// src/playbook/call.ts
+import { z as z20 } from "zod";
 
 // src/playbook/deal-values.ts
 import { z as z19 } from "zod";
@@ -2126,6 +2134,7 @@ export {
   eventEnvelopeSchema,
   eventIdSchema,
   eventTypeSchema,
+  excerptText,
   firstCsvRecord,
   foldAscii,
   formatId,
@@ -2177,6 +2186,7 @@ export {
   membershipIdSchema,
   momentMatchSchema,
   momentQueryText,
+  momentSnippet,
   momentSnippetSchema,
   normaliseDealId,
   normaliseFileName,
