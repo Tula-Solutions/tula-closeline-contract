@@ -208,11 +208,15 @@ Admin, Manager and Rep, because the text is the Organization's own sales materia
 Idempotency-Key; the same error codes as the Moments search). `searchDocumentsRequestSchema` is the
 Moments request (same turns, limit and bounds). `searchDocumentsResponseSchema` is
 `{ items: documentMatchSchema[], evidence: { chunks, documents } }`: one item per chunk, with
-`documentId`, `name` (the Organization's own file name), `page` (1 to `MAX_DOCUMENT_PAGES`, or
-`null`), `score` and a `snippet` made with `momentSnippet` (at most 512 code points). The evidence
+`documentId`, `fileName` (the Organization's own file name), `page` (the 1-based page of a
+paginated format such as PDF, up to `MAX_DOCUMENT_PAGES`; `null` for TXT, MD, DOCX and anything the
+parser reads as one page; the service decides by media type), `score` and a `snippet` made with `momentSnippet` (at most 512 code points). The evidence
 counts only the over-fetched candidate window after the staleness check, not every document, and
 follows the Moments rules (documents and items within chunks, documents cover the items). There is
-no cursor. The request and the snippets are tenant text: never log them.
+no cursor. The query is embedded with `documentQueryText(turns)` (each turn trimmed, joined by `\n`,
+no `Rep:`/`Prospect:` labels, because chunks are embedded as plain text), not `momentQueryText`. The
+playbook, when it must also shorten the stored snippet (for example to fit an attribute limit),
+cuts by code point after `momentSnippet`, so it never leaves a lone surrogate. The request and the snippets are tenant text: never log them.
 
 ### Rights confirmation wording (0.9.0)
 

@@ -2,7 +2,9 @@ import { describe, expect, test } from 'bun:test'
 import { id } from '../core/fixtures'
 import {
   ALL_PLAYBOOK_ROUTES,
+  documentQueryText,
   MAX_DOCUMENT_PAGES,
+  momentQueryText,
   PLAYBOOK_READ_ROLES,
   SEARCH_ROUTES,
   searchDocumentsRequestSchema,
@@ -12,7 +14,7 @@ import {
 
 const item = {
   documentId: id('doc'),
-  name: 'Pricing guide.pdf',
+  fileName: 'Pricing guide.pdf',
   page: 3,
   score: 0.8,
   snippet: 'Our standard discount is ten percent.',
@@ -37,11 +39,11 @@ describe('searchDocumentsResponseSchema', () => {
     expect(parse({ items: [], evidence: { chunks: 0, documents: 0 } }).success).toBe(true)
   })
 
-  test('a document id is a doc_ id, a name is a file name, a page is 1 to the page cap or null', () => {
+  test('a document id is a doc_ id, a file name is a file name, a page is 1 to the page cap or null', () => {
     const at = (patch: object) => parse({ items: [{ ...item, ...patch }], evidence }).success
     expect(at({ documentId: id('call') })).toBe(false)
     expect(at({ documentId: 'doc_1' })).toBe(false)
-    expect(at({ name: '' })).toBe(false)
+    expect(at({ fileName: '' })).toBe(false)
     expect(at({ page: null })).toBe(true)
     expect(at({ page: 1 })).toBe(true)
     expect(at({ page: MAX_DOCUMENT_PAGES })).toBe(true)
@@ -50,13 +52,13 @@ describe('searchDocumentsResponseSchema', () => {
     expect(at({ page: 1.5 })).toBe(false)
   })
 
-  test('a name has no control characters after cleaning, like every file name', () => {
+  test('a fileName has no control characters after cleaning, like every file name', () => {
     const bad = parse({
-      items: [{ ...item, name: `a${String.fromCharCode(0x202e)}b.pdf` }],
+      items: [{ ...item, fileName: `a${String.fromCharCode(0x202e)}b.pdf` }],
       evidence,
     })
     expect(bad.success).toBe(true)
-    expect(bad.success && bad.data.items[0]?.name).toBe('ab.pdf')
+    expect(bad.success && bad.data.items[0]?.fileName).toBe('ab.pdf')
   })
 
   test('has at most 20 items', () => {
@@ -99,7 +101,7 @@ describe('searchDocumentsResponseSchema', () => {
       evidence,
     })
     expect(Object.keys(parsed.items[0] ?? {}).sort()).toEqual(
-      ['documentId', 'name', 'page', 'score', 'snippet'].sort()
+      ['documentId', 'fileName', 'page', 'score', 'snippet'].sort()
     )
     expect(parse({ items: [{ ...item, score: Number.NaN }], evidence }).success).toBe(false)
   })
@@ -134,6 +136,10 @@ describe('the searchDocuments route', () => {
       'candidate window',
       'not every document',
       'own file name',
+      'documentQueryText',
+      '1-based',
+      'PDF',
+      'TXT',
     ]) {
       expect(route.description.toLowerCase()).toContain(phrase.toLowerCase())
     }
@@ -141,5 +147,25 @@ describe('the searchDocuments route', () => {
 
   test('the two search routes have distinct paths', () => {
     expect(route.path).not.toBe(SEARCH_ROUTES.searchMoments.path)
+  })
+})
+
+describe('documentQueryText', () => {
+  const turns = [
+    { role: 'rep', text: '  Hello \n' },
+    { role: 'prospect', text: '\tWhat is the discount?  ' },
+  ] as const
+
+  test('is the turns trimmed and joined by a newline, with no role labels', () => {
+    expect(documentQueryText(turns)).toBe('Hello\nWhat is the discount?')
+    expect(documentQueryText([])).toBe('')
+  })
+
+  test('is the Moments text without the labels', () => {
+    expect(momentQueryText(turns).replace(/^(Rep|Prospect): /gm, '')).toBe(documentQueryText(turns))
+  })
+
+  test('keeps inner newlines and has no trailing newline', () => {
+    expect(documentQueryText([{ role: 'prospect', text: 'a\nb' }])).toBe('a\nb')
   })
 })

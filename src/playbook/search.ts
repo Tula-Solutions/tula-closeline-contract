@@ -163,19 +163,31 @@ const route = (definition: PlaybookRoute): PlaybookRoute => Object.freeze(defini
 /** The body of a search over Playbook documents: the same turns and limit as {@link searchMomentsRequestSchema}, with the same bounds. Tenant conversation text: never logged. */
 export const searchDocumentsRequestSchema = searchMomentsRequestSchema
 
+/**
+ * The text that is embedded to search Playbook documents: each turn's text trimmed and joined by a
+ * newline, with no role labels, because document chunks are embedded as plain text and a label
+ * would skew the similarity. The Moments search uses {@link momentQueryText} instead. The result
+ * is tenant conversation text: never log it.
+ */
+export function documentQueryText(turns: readonly SearchTurn[]): string {
+  return turns.map((turn) => turn.text.trim()).join('\n')
+}
+
 /** The body of a search over Playbook documents. */
 export type SearchDocumentsRequest = SearchMomentsRequest
 
 /**
- * One matching passage of a Playbook document: the document (`documentId`, and its `name`, the
- * Organization's own file name), the `page` it is on (`null` when the document has no pages), its
+ * One matching passage of a Playbook document: the document (`documentId`, and its `fileName`, the
+ * Organization's own file name, the same as the document's `fileName`), the `page` it is on, its
  * similarity `score` (higher is closer) and a `snippet` of the passage, cleaned and cut with
- * {@link momentSnippet}. One item per chunk. Unknown fields are dropped. The snippet is the
+ * {@link momentSnippet}. `page` is the 1-based page for a paginated format (PDF) and `null` for a
+ * format without pages (TXT, MD, DOCX, and anything else the parser reads as one page); the service
+ * decides by media type. One item per chunk. Unknown fields are dropped. The snippet is the
  * Organization's own sales material: never log it.
  */
 export const documentMatchSchema = z.object({
   documentId: documentIdSchema,
-  name: documentFileNameSchema,
+  fileName: documentFileNameSchema,
   page: z.number().int().min(1).max(MAX_DOCUMENT_PAGES).nullable(),
   score: z.number().finite(),
   snippet: momentSnippetSchema,
@@ -252,6 +264,6 @@ export const SEARCH_ROUTES: Readonly<Record<SearchRouteName, PlaybookRoute>> = O
     errors: [],
     commonErrors: ['request.invalid', 'server.timeout', 'server.unavailable'],
     description:
-      "Finds passages in the Organization's Playbook documents that resemble the conversation so far, so a Rep can see what the company's own material says. The body is the same as for the Moments search: the latest turns (1 to 6, each a role of rep or prospect and its text, at most 2000 characters in all) and an optional limit (1 to 20, default 5). It answers the best passages, best first, at most 20, one item per chunk, each with the documentId, the document's name (the Organization's own file name), the page (null when the document has no pages), a score and a snippet of at most 512 characters, and evidence: the number of candidate chunks that survive the staleness check and the distinct documents among them. The evidence counts only the over-fetched candidate window (the best min(100, limit x 5) chunks by similarity, after the staleness check), not every document in the Organization. There is no cursor: the result is a bounded top-k. Only chunks of documents that are ready and not replaced are returned, and only from the caller's Organization. The request and the snippets are the Organization's own conversation and sales text and are never logged. It only reads, so it takes no Idempotency-Key and a repeat is harmless. request.invalid (400) for a body outside the bounds; server.timeout (504) when it takes too long; server.unavailable (503) with a Retry-After header when the embedding model or the vector store cannot answer. Every role that reads the Playbook (Owner, Admin, Manager and Rep) may call it, because the text is the Organization's own sales material; any other is auth.forbidden.",
+      "Finds passages in the Organization's Playbook documents that resemble the conversation so far, so a Rep can see what the company's own material says. The body is the same as for the Moments search: the latest turns (1 to 6, each a role of rep or prospect and its text, at most 2000 characters in all) and an optional limit (1 to 20, default 5). It answers the best passages, best first, at most 20, one item per chunk, each with the documentId, the document's fileName (the Organization's own file name), the page (the 1-based page for a paginated format such as PDF, null for a format without pages such as TXT, MD or DOCX and anything else the parser reads as one page; the service decides by media type), a score and a snippet of at most 512 characters, and evidence: the number of candidate chunks that survive the staleness check and the distinct documents among them. The evidence counts only the over-fetched candidate window (the best min(100, limit x 5) chunks by similarity, after the staleness check), not every document in the Organization. The query is embedded with documentQueryText (the turns trimmed and joined by a newline, no role labels), because document chunks are embedded as plain text. There is no cursor: the result is a bounded top-k. Only chunks of documents that are ready and not replaced are returned, and only from the caller's Organization. The request and the snippets are the Organization's own conversation and sales text and are never logged. It only reads, so it takes no Idempotency-Key and a repeat is harmless. request.invalid (400) for a body outside the bounds; server.timeout (504) when it takes too long; server.unavailable (503) with a Retry-After header when the embedding model or the vector store cannot answer. Every role that reads the Playbook (Owner, Admin, Manager and Rep) may call it, because the text is the Organization's own sales material; any other is auth.forbidden.",
   }),
 })
