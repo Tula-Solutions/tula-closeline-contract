@@ -22,6 +22,96 @@ import {
 import { dealIdSchema, outcomeSchema } from './deal-values'
 import { documentFileNameSchema, normaliseFileName } from './values'
 
+/** The fields of a Call (see {@link callSchema}); the rules that tie them together are in `refineCall`. */
+const callShape = z.object({
+  id: callIdSchema,
+  dealId: dealIdSchema,
+  dealRecordId: dealRecordIdSchema,
+  dealOutcome: outcomeSchema,
+  inSearch: z.boolean(),
+  kind: callKindSchema,
+  fileName: documentFileNameSchema,
+  mediaType: callMediaTypeSchema,
+  sizeBytes: z.number().int().min(1).max(MAX_RECORDING_BYTES),
+  durationSeconds: z.number().int().min(1).max(MAX_RECORDING_SECONDS).nullable(),
+  state: callStateSchema,
+  failureReason: callFailureReasonSchema.nullable(),
+  rep: repChoiceSchema.nullable(),
+  speakerLabels: z.array(speakerLabelSchema).max(MAX_CALL_SPEAKERS),
+  speakers: z.array(speakerExcerptSchema).max(MAX_CALL_SPEAKERS).optional(),
+  deletedAt: timestampSchema.nullable(),
+  purgeAt: timestampSchema.nullable(),
+  uploadedByUserId: userIdSchema,
+  createdAt: timestampSchema,
+  updatedAt: timestampSchema,
+})
+
+/** The rules that tie a Call's fields together, shared by a Call and a Call in a list. */
+function refineCall(call: z.infer<typeof callShape>, context: z.RefinementCtx): void {
+  const issue = (path: string, message: string) =>
+    context.addIssue({ code: 'custom', path: [path], message })
+  if ((call.state === 'failed') !== (call.failureReason !== null)) {
+    issue('failureReason', 'A failure reason is set exactly when the state is failed')
+  }
+  const deleted = call.state === 'deleted'
+  if (deleted !== (call.deletedAt !== null) || deleted !== (call.purgeAt !== null)) {
+    issue('purgeAt', 'A deletion time and a purge time are set exactly when the state is deleted')
+  }
+  if (call.state === 'awaiting_rep' && call.rep !== null) {
+    issue('rep', 'A Call awaiting its Rep has none')
+  }
+  if (call.state === 'ready' && call.rep === null) {
+    issue('rep', 'A ready Call has a Rep')
+  }
+  if (
+    call.kind === 'transcript' &&
+    (call.state === 'transcribing' || call.state === 'awaiting_rep')
+  ) {
+    issue('state', 'A Transcript is not transcribed and has its Rep at upload')
+  }
+  if (call.kind === 'transcript' && call.durationSeconds !== null) {
+    issue('durationSeconds', 'A Transcript has no duration')
+  }
+  if (call.kind === 'transcript' && call.sizeBytes > MAX_TRANSCRIPT_BYTES) {
+    issue('sizeBytes', 'A Transcript is within the Transcript size limit')
+  }
+  if (
+    call.kind === 'recording'
+      ? !call.mediaType.startsWith('audio/')
+      : call.mediaType.startsWith('audio/')
+  ) {
+    issue('mediaType', 'The kind agrees with the media type')
+  }
+  if (call.failureReason === 'too_many_speakers' && call.speakerLabels.length > 0) {
+    issue('speakerLabels', 'A Call with too many speakers lists none')
+  }
+  if (new Set(call.speakerLabels).size !== call.speakerLabels.length) {
+    issue('speakerLabels', 'Speaker labels are unique')
+  }
+  if (call.speakers !== undefined) {
+    const labels = call.speakers.map((speaker) => speaker.label)
+    if (call.kind !== 'recording' || labels.length === 0) {
+      issue('speakers', 'Speaker excerpts are for a Recording and are absent when there are none')
+    }
+    if (new Set(labels).size !== labels.length) {
+      issue('speakers', 'Speaker excerpt labels are unique')
+    }
+    if (!labels.every((label) => call.speakerLabels.includes(label))) {
+      issue('speakers', 'Every excerpt belongs to one of the Call speakers')
+    }
+  }
+  if (call.inSearch && (call.state !== 'ready' || call.dealOutcome !== 'won')) {
+    issue('inSearch', 'A Call is in search only when it is ready and its Deal is won')
+  }
+  if (
+    call.state === 'ready' &&
+    call.rep?.by === 'speaker' &&
+    !call.speakerLabels.includes(call.rep.label)
+  ) {
+    issue('rep', "A ready Call's Rep label is among its speakers")
+  }
+}
+
 /**
  * A Call as the service returns it. It names the file and the Deal but never carries a Transcript,
  * audio or any turn (only the short `speakers` excerpts below). `kind` is what it was uploaded as. `rep` is the chosen Rep and is `null`
@@ -48,93 +138,7 @@ import { documentFileNameSchema, normaliseFileName } from './values'
  * label and names only labels in `speakerLabels`; a speaker with no text is left out. It is tenant
  * Transcript text, returned only to the owning Organization's Owner and Admin, and never logged.
  */
-export const callSchema = z
-  .object({
-    id: callIdSchema,
-    dealId: dealIdSchema,
-    dealRecordId: dealRecordIdSchema,
-    dealOutcome: outcomeSchema,
-    inSearch: z.boolean(),
-    kind: callKindSchema,
-    fileName: documentFileNameSchema,
-    mediaType: callMediaTypeSchema,
-    sizeBytes: z.number().int().min(1).max(MAX_RECORDING_BYTES),
-    durationSeconds: z.number().int().min(1).max(MAX_RECORDING_SECONDS).nullable(),
-    state: callStateSchema,
-    failureReason: callFailureReasonSchema.nullable(),
-    rep: repChoiceSchema.nullable(),
-    speakerLabels: z.array(speakerLabelSchema).max(MAX_CALL_SPEAKERS),
-    speakers: z.array(speakerExcerptSchema).max(MAX_CALL_SPEAKERS).optional(),
-    deletedAt: timestampSchema.nullable(),
-    purgeAt: timestampSchema.nullable(),
-    uploadedByUserId: userIdSchema,
-    createdAt: timestampSchema,
-    updatedAt: timestampSchema,
-  })
-  .superRefine((call, context) => {
-    const issue = (path: string, message: string) =>
-      context.addIssue({ code: 'custom', path: [path], message })
-    if ((call.state === 'failed') !== (call.failureReason !== null)) {
-      issue('failureReason', 'A failure reason is set exactly when the state is failed')
-    }
-    const deleted = call.state === 'deleted'
-    if (deleted !== (call.deletedAt !== null) || deleted !== (call.purgeAt !== null)) {
-      issue('purgeAt', 'A deletion time and a purge time are set exactly when the state is deleted')
-    }
-    if (call.state === 'awaiting_rep' && call.rep !== null) {
-      issue('rep', 'A Call awaiting its Rep has none')
-    }
-    if (call.state === 'ready' && call.rep === null) {
-      issue('rep', 'A ready Call has a Rep')
-    }
-    if (
-      call.kind === 'transcript' &&
-      (call.state === 'transcribing' || call.state === 'awaiting_rep')
-    ) {
-      issue('state', 'A Transcript is not transcribed and has its Rep at upload')
-    }
-    if (call.kind === 'transcript' && call.durationSeconds !== null) {
-      issue('durationSeconds', 'A Transcript has no duration')
-    }
-    if (call.kind === 'transcript' && call.sizeBytes > MAX_TRANSCRIPT_BYTES) {
-      issue('sizeBytes', 'A Transcript is within the Transcript size limit')
-    }
-    if (
-      call.kind === 'recording'
-        ? !call.mediaType.startsWith('audio/')
-        : call.mediaType.startsWith('audio/')
-    ) {
-      issue('mediaType', 'The kind agrees with the media type')
-    }
-    if (call.failureReason === 'too_many_speakers' && call.speakerLabels.length > 0) {
-      issue('speakerLabels', 'A Call with too many speakers lists none')
-    }
-    if (new Set(call.speakerLabels).size !== call.speakerLabels.length) {
-      issue('speakerLabels', 'Speaker labels are unique')
-    }
-    if (call.speakers !== undefined) {
-      const labels = call.speakers.map((speaker) => speaker.label)
-      if (call.kind !== 'recording' || labels.length === 0) {
-        issue('speakers', 'Speaker excerpts are for a Recording and are absent when there are none')
-      }
-      if (new Set(labels).size !== labels.length) {
-        issue('speakers', 'Speaker excerpt labels are unique')
-      }
-      if (!labels.every((label) => call.speakerLabels.includes(label))) {
-        issue('speakers', 'Every excerpt belongs to one of the Call speakers')
-      }
-    }
-    if (call.inSearch && (call.state !== 'ready' || call.dealOutcome !== 'won')) {
-      issue('inSearch', 'A Call is in search only when it is ready and its Deal is won')
-    }
-    if (
-      call.state === 'ready' &&
-      call.rep?.by === 'speaker' &&
-      !call.speakerLabels.includes(call.rep.label)
-    ) {
-      issue('rep', "A ready Call's Rep label is among its speakers")
-    }
-  })
+export const callSchema = callShape.superRefine(refineCall)
 
 /** A Call as the service returns it. */
 export type Call = z.infer<typeof callSchema>
@@ -204,8 +208,18 @@ export const listCallsQuerySchema = pageQuerySchema
 /** The query parameters of a request to list Calls. */
 export type ListCallsQuery = z.infer<typeof listCallsQuerySchema>
 
-/** One page of Calls. */
-export const listCallsResponseSchema = pageSchema(callSchema)
+/**
+ * A Call in a list: a {@link callSchema} Call without `speakers`, and strict, so one that carries
+ * excerpts is refused. Only the single-Call read returns speaker excerpts, which keeps a page of up
+ * to 100 Calls from carrying up to 20 excerpts each of tenant Transcript text.
+ */
+export const callListItemSchema = callShape
+  .omit({ speakers: true })
+  .strict()
+  .superRefine(refineCall)
+
+/** One page of Calls, without speaker excerpts. */
+export const listCallsResponseSchema = pageSchema(callListItemSchema)
 
 /** One page of Calls. */
 export type ListCallsResponse = z.infer<typeof listCallsResponseSchema>

@@ -100,7 +100,7 @@ builds its document from these).
 
 ### Sales history (0.8.0, ADR 0018)
 
-Additive; the 0.7.0 types are unchanged (`PlaybookRoute`, `PLAYBOOK_ROUTES` and `PLAYBOOK_ERRORS` do not gain methods or codes). `SALES_HISTORY_ROUTES` (type `SalesHistoryRoute`) describes the 16 routes; for one OpenAPI document use `ALL_PLAYBOOK_ROUTES` and `ALL_PLAYBOOK_ERRORS`, which merge both areas, `SALES_HISTORY_ERRORS` holds the codes
+Additive in 0.8.0 (0.11.0 is not: it changes `closedAt`, see below); the 0.7.0 types are unchanged (`PlaybookRoute`, `PLAYBOOK_ROUTES` and `PLAYBOOK_ERRORS` do not gain methods or codes). `SALES_HISTORY_ROUTES` (type `SalesHistoryRoute`) describes the 16 routes; for one OpenAPI document use `ALL_PLAYBOOK_ROUTES` and `ALL_PLAYBOOK_ERRORS`, which merge both areas, `SALES_HISTORY_ERRORS` holds the codes
 (`call.*`, `deal.*`, `deal_import.*`, `rights.*`) and the messages are `CALL_UPLOADED_MESSAGE`,
 `CALL_TRANSCRIBED_MESSAGE`, `CALL_REP_CHANGED_MESSAGE`, `CALL_DELETED_MESSAGE`,
 `DEAL_OUTCOME_CHANGED_MESSAGE` and `DEAL_IMPORT_UPLOADED_MESSAGE`. They carry ids and sequences
@@ -161,7 +161,8 @@ Additive; the 0.7.0 types are unchanged (`PlaybookRoute`, `PLAYBOOK_ROUTES` and 
   `speakerExcerpt(turns)`: the first turns joined, whitespace collapsed, at most
   `MAX_SPEAKER_EXCERPT_LENGTH` (240) code points, cut at a word boundary with an ellipsis. The field
   is optional (only for a Recording with labels, above all `awaiting_rep`; never empty). It is tenant
-  Transcript text: return it only to the owning Organization's Owner and Admin, never log it.
+  Transcript text: return it only to the owning Organization's Owner and Admin, never log it. Only
+  `getCall` returns it: a list item (`callListItemSchema`) is strict and refuses `speakers`.
 - **Search flags**: a Call carries `dealOutcome` and `inSearch` (true only when `ready` and the Deal
   is won; it may lag for a Deal that has just become won).
 - **Rights**: `rightsStatusSchema`, `confirmRightsRequestSchema`; `rights.confirmation_required` (403)

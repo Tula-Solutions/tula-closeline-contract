@@ -93,7 +93,7 @@ export const SALES_HISTORY_ROUTES: Readonly<Record<SalesHistoryRouteName, SalesH
       errors: [],
       commonErrors: ['request.invalid'],
       description:
-        "Lists the Organization's Calls, newest first (sorted by createdAt, then id, both descending), one cursor-paginated page at a time (at most 100). Owner and Admin only. Deleted Calls are left out unless state=deleted is asked for; state=awaiting_rep lists the Calls waiting for a Rep and dealRecordId (the opaque Deal id) limits the list to one Deal.",
+        "Lists the Organization's Calls, newest first (sorted by createdAt, then id, both descending), one cursor-paginated page at a time (at most 100). Owner and Admin only. Deleted Calls are left out unless state=deleted is asked for; state=awaiting_rep lists the Calls waiting for a Rep and dealRecordId (the opaque Deal id) limits the list to one Deal. A list item never carries speakers: only the single-Call read returns speaker excerpts.",
     }),
     getCall: route({
       method: 'GET',

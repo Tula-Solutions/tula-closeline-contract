@@ -833,7 +833,7 @@ var SALES_HISTORY_ROUTES = Object.freeze({
     success: [200],
     errors: [],
     commonErrors: ["request.invalid"],
-    description: "Lists the Organization's Calls, newest first (sorted by createdAt, then id, both descending), one cursor-paginated page at a time (at most 100). Owner and Admin only. Deleted Calls are left out unless state=deleted is asked for; state=awaiting_rep lists the Calls waiting for a Rep and dealRecordId (the opaque Deal id) limits the list to one Deal."
+    description: "Lists the Organization's Calls, newest first (sorted by createdAt, then id, both descending), one cursor-paginated page at a time (at most 100). Owner and Admin only. Deleted Calls are left out unless state=deleted is asked for; state=awaiting_rep lists the Calls waiting for a Rep and dealRecordId (the opaque Deal id) limits the list to one Deal. A list item never carries speakers: only the single-Call read returns speaker excerpts."
   }),
   getCall: route2({
     method: "GET",
@@ -1461,7 +1461,7 @@ function isBlankCsvRecord(record) {
 }
 
 // src/playbook/call.ts
-var callSchema = z19.object({
+var callShape = z19.object({
   id: callIdSchema,
   dealId: dealIdSchema,
   dealRecordId: dealRecordIdSchema,
@@ -1482,7 +1482,8 @@ var callSchema = z19.object({
   uploadedByUserId: userIdSchema,
   createdAt: timestampSchema,
   updatedAt: timestampSchema
-}).superRefine((call, context) => {
+});
+function refineCall(call, context) {
   const issue = (path, message) => context.addIssue({ code: "custom", path: [path], message });
   if (call.state === "failed" !== (call.failureReason !== null)) {
     issue("failureReason", "A failure reason is set exactly when the state is failed");
@@ -1533,7 +1534,8 @@ var callSchema = z19.object({
   if (call.state === "ready" && call.rep?.by === "speaker" && !call.speakerLabels.includes(call.rep.label)) {
     issue("rep", "A ready Call's Rep label is among its speakers");
   }
-});
+}
+var callSchema = callShape.superRefine(refineCall);
 var MAX_REP_FIELD_LENGTH = 512;
 var uploadCallFieldsSchema = z19.strictObject({
   dealId: dealIdSchema,
@@ -1556,7 +1558,8 @@ function parseRepField(text) {
 }
 var callParamsSchema = z19.strictObject({ callId: callIdSchema });
 var listCallsQuerySchema = pageQuerySchema.extend({ state: callStateSchema.optional(), dealRecordId: dealRecordIdSchema.optional() }).strict();
-var listCallsResponseSchema = pageSchema(callSchema);
+var callListItemSchema = callShape.omit({ speakers: true }).strict().superRefine(refineCall);
+var listCallsResponseSchema = pageSchema(callListItemSchema);
 var setCallRepRequestSchema = z19.strictObject({ rep: repChoiceSchema });
 var CALL_FILE_KEYS = ["fileName", "declaredMediaType", "sizeBytes"];
 var uploadCallFileSchema = z19.strictObject({
@@ -1986,6 +1989,7 @@ export {
   callFailureReasonSchema,
   callIdSchema,
   callKindSchema,
+  callListItemSchema,
   callMediaTypeSchema,
   callParamsSchema,
   callRepChangedPayloadSchema,

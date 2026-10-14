@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { id, NOW } from '../core/fixtures'
 import {
   callSchema,
+  listCallsResponseSchema,
   MAX_CALL_SPEAKERS,
   MAX_SPEAKER_EXCERPT_LENGTH,
   SALES_HISTORY_ROUTES,
@@ -168,5 +169,32 @@ describe('Call speakers', () => {
         speakers: many.slice(0, MAX_CALL_SPEAKERS),
       }).success
     ).toBe(true)
+  })
+})
+
+describe('Call list items (hub #91 review)', () => {
+  const page = (items: unknown[]) => ({ items, nextCursor: null })
+  const speakers = [{ label: 'A', excerpt: 'Hello.' }]
+
+  test('a list item without speakers is accepted', () => {
+    expect(listCallsResponseSchema.safeParse(page([awaiting])).success).toBe(true)
+  })
+
+  test('a list item that carries speakers is refused: only getCall returns excerpts', () => {
+    expect(listCallsResponseSchema.safeParse(page([{ ...awaiting, speakers }])).success).toBe(false)
+  })
+
+  test('the list item still enforces the Call rules', () => {
+    expect(
+      listCallsResponseSchema.safeParse(
+        page([{ ...awaiting, rep: { by: 'channel', channel: 'left' } }])
+      ).success
+    ).toBe(false)
+  })
+
+  test('the route text says only getCall returns excerpts', () => {
+    expect(SALES_HISTORY_ROUTES.listCalls.description).toContain(
+      'only the single-Call read returns speaker excerpts'
+    )
   })
 })
