@@ -28,7 +28,10 @@ export type RightsConfirmation = z.infer<typeof rightsConfirmationSchema>
  * the stored `confirmation` (`null` if none) and `confirmed`, true only when the stored version
  * is the current one. `currentWording` is the text of the current version, optional so a service
  * built before the wording moved into the contract still parses and a consumer reads the text from
- * `RIGHTS_WORDINGS` when it is absent. Uploads of Calls are refused with `rights.confirmation_required` unless
+ * `RIGHTS_WORDINGS` when it is absent.
+ * The schema does not check that the text belongs to `currentWordingVersion` (a consumer on an older
+ * library has a shorter version table and must still parse a newer service's answer): a consumer
+ * shows the text for the version it sends from `rightsWordingFor`, and confirms that version only. Uploads of Calls are refused with `rights.confirmation_required` unless
  * `confirmed`; existing Calls stay and stay searchable.
  */
 export const rightsStatusSchema = z
