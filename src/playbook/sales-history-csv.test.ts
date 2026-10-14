@@ -511,3 +511,31 @@ describe('slicing cells keeps the escaped-quote path correct (F18b)', () => {
     expect(grown).toBeLessThan(120 * 1024 * 1024)
   })
 })
+
+describe('trailing blank records (hub #72)', () => {
+  const blankIndexes = (text: string) => {
+    const result = parseCsv(text)
+    if (!result.ok) {
+      throw new Error('unreadable')
+    }
+    return result.records.flatMap((record, index) => (isBlankCsvRecord(record) ? [index + 1] : []))
+  }
+
+  test('a run of blank lines at the end of the file is not a record', () => {
+    for (const eol of ['\n', '\r\n']) {
+      const text = `${HEADER}${eol}D-1,won,,,${eol}${eol}${eol}`
+      const result = parseCsv(text)
+      expect(result.ok && result.records.length).toBe(2)
+      expect(blankIndexes(text)).toEqual([])
+    }
+  })
+
+  test('an interior blank line is still a record, with its record number', () => {
+    for (const eol of ['\n', '\r\n']) {
+      const text = `${HEADER}${eol}${eol}D-1,won,,,${eol}${eol}D-2,won,,,${eol}${eol}`
+      const result = parseCsv(text)
+      expect(result.ok && result.records.length).toBe(5)
+      expect(blankIndexes(text)).toEqual([2, 4])
+    }
+  })
+})

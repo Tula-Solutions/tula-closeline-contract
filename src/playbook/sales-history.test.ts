@@ -754,6 +754,7 @@ describe('Deal imports', () => {
       'invalid_name',
       'outcome_already_decided',
       'deal_limit_reached',
+      'blank_row',
     ])
   })
 
@@ -910,6 +911,7 @@ const SALES_MESSAGES = {
   'deal_import.unsupported_type': 'This file type is not supported.',
   'deal_import.too_large': 'The file is larger than the upload limit.',
   'deal_import.header_invalid': 'The first row does not match the template.',
+  'deal_import.busy': 'Too many imports are waiting. Try again when some have finished.',
   'rights.confirmation_required':
     'Confirm that your Organization may share these Calls before uploading them.',
   'rights.version_outdated':
@@ -931,6 +933,7 @@ describe('SALES_HISTORY_ERRORS', () => {
     ['deal_import.unsupported_type', 415],
     ['deal_import.too_large', 413],
     ['deal_import.header_invalid', 422],
+    ['deal_import.busy', 429],
     ['rights.confirmation_required', 403],
     ['rights.version_outdated', 409],
   ] as const)('%s maps to status %d', (code, status) => {
