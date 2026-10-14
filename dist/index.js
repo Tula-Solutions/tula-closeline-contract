@@ -928,7 +928,7 @@ var SALES_HISTORY_ROUTES = Object.freeze({
       "deal_import.busy"
     ],
     commonErrors: [...ENVELOPE_ERRORS],
-    description: 'Uploads the fixed CSV template (columns deal_id, outcome, closed_at, amount, currency and optionally name; up to 10 MB and 50,000 rows) as multipart/form-data with one file part named "file". Owner and Admin only. The type, size and first row are checked before anything is stored: deal_import.unsupported_type (415), deal_import.too_large (413) and deal_import.header_invalid (422). An Organization with MAX_QUEUED_DEAL_IMPORTS (5) imports not yet finished (state uploaded or processing) is refused with deal_import.busy (429) and nothing is stored; the count is checked before the file is stored, so a refused upload leaves no import. The header is read with checkDealImportHeaderText (the same reader and limits as parseCsv) on the first 8192 characters of the file (a header still unfinished there is deferred to the job, not refused), and the job re-checks the header of its full parse with the same verdict. The rest of the file is parsed in the background job, never on the request path, under strict RFC 4180 quoting: a stray quote fails the file, and a cell over 1000 characters fails the whole file too (a cell up to 1000 characters is checked row by row, and a bad one is a rejected row); blank lines at the end of the file are ignored, and an interior blank line is a rejected row with the reason blank_row, so the report has no gap, and it still counts in the row numbers, and rowNumber is the record number with the header as record 1. Answers 202 with the import in state "uploaded"; it is processed in the background. Imports are not deduplicated by content: each upload is a new import, and only the Idempotency-Key makes a retry of the same request answer with the stored import. Valid rows are applied and bad rows are reported, never dropped: a deal id already won or lost, or repeated within the file, is a rejected row in the report, not an HTTP error. A file with more rows than the limit, a cell over the length limit or a quoting error ends in state "failed" with failureReason "too_many_rows" or "unreadable". Accepts an Idempotency-Key header.'
+    description: 'Uploads the fixed CSV template (columns deal_id, outcome, closed_at, amount, currency and optionally name; closed_at is a plain YYYY-MM-DD date, kept as written, and a value with a time or an offset is a rejected row with the reason invalid_closed_at; up to 10 MB and 50,000 rows) as multipart/form-data with one file part named "file". Owner and Admin only. The type, size and first row are checked before anything is stored: deal_import.unsupported_type (415), deal_import.too_large (413) and deal_import.header_invalid (422). An Organization with MAX_QUEUED_DEAL_IMPORTS (5) imports not yet finished (state uploaded or processing) is refused with deal_import.busy (429) and nothing is stored; the count is checked before the file is stored, so a refused upload leaves no import. The header is read with checkDealImportHeaderText (the same reader and limits as parseCsv) on the first 8192 characters of the file (a header still unfinished there is deferred to the job, not refused), and the job re-checks the header of its full parse with the same verdict. The rest of the file is parsed in the background job, never on the request path, under strict RFC 4180 quoting: a stray quote fails the file, and a cell over 1000 characters fails the whole file too (a cell up to 1000 characters is checked row by row, and a bad one is a rejected row); blank lines at the end of the file are ignored, and an interior blank line is a rejected row with the reason blank_row, so the report has no gap, and it still counts in the row numbers, and rowNumber is the record number with the header as record 1. Answers 202 with the import in state "uploaded"; it is processed in the background. Imports are not deduplicated by content: each upload is a new import, and only the Idempotency-Key makes a retry of the same request answer with the stored import. Valid rows are applied and bad rows are reported, never dropped: a deal id already won or lost, or repeated within the file, is a rejected row in the report, not an HTTP error. A file with more rows than the limit, a cell over the length limit or a quoting error ends in state "failed" with failureReason "too_many_rows" or "unreadable". Accepts an Idempotency-Key header.'
   }),
   listDealImports: route2({
     method: "GET",
@@ -1254,24 +1254,26 @@ function parseOutcomeCell(cell) {
   const result = outcomeSchema.safeParse(cell.trim().toLowerCase());
   return result.success ? { ok: true, value: result.data } : INVALID_CELL;
 }
+function isCalendarDate(text) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+  if (!match) {
+    return false;
+  }
+  const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])];
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  return parsed.getUTCFullYear() === year && parsed.getUTCMonth() === month - 1 && parsed.getUTCDate() === day;
+}
+function isDealCalendarDate(text) {
+  const year = Number(text.slice(0, 4));
+  return isCalendarDate(text) && year >= DEAL_CLOSED_AT_MIN_YEAR && year <= DEAL_CLOSED_AT_MAX_YEAR;
+}
+var calendarDateSchema = z18.iso.date().refine(isDealCalendarDate, "A real calendar date from 1970 to 2100");
 function parseClosedAtCell(cell) {
   const text = cell.trim();
   if (text === "") {
     return { ok: true, value: null };
   }
-  const date = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
-  if (date) {
-    const [year, month, day] = [Number(date[1]), Number(date[2]), Number(date[3])];
-    const parsed = new Date(Date.UTC(year, month - 1, day));
-    const real = parsed.getUTCFullYear() === year && parsed.getUTCMonth() === month - 1 && parsed.getUTCDate() === day;
-    return real && year >= DEAL_CLOSED_AT_MIN_YEAR && year <= DEAL_CLOSED_AT_MAX_YEAR ? { ok: true, value: `${text}T00:00:00.000Z` } : INVALID_CELL;
-  }
-  if (!z18.iso.datetime({ offset: true }).max(64).safeParse(text).success) {
-    return INVALID_CELL;
-  }
-  const time = new Date(text);
-  const year = time.getUTCFullYear();
-  return Number.isNaN(time.getTime()) || year < DEAL_CLOSED_AT_MIN_YEAR || year > DEAL_CLOSED_AT_MAX_YEAR ? INVALID_CELL : { ok: true, value: time.toISOString() };
+  return isDealCalendarDate(text) ? { ok: true, value: text } : INVALID_CELL;
 }
 function parseAmountCell(cell) {
   const text = cell.trim();
@@ -1611,7 +1613,7 @@ var dealSchema = z20.object({
   dealId: dealIdSchema,
   name: dealNameSchema.nullable(),
   outcome: outcomeSchema,
-  closedAt: timestampSchema.nullable(),
+  closedAt: calendarDateSchema.nullable(),
   amount: dealAmountSchema.nullable(),
   currency: dealCurrencySchema.nullable(),
   callCount: z20.number().int().min(0),
@@ -1630,7 +1632,7 @@ var listDealsQuerySchema = pageQuerySchema.extend({
 var listDealsResponseSchema = pageSchema(dealSchema);
 var setDealOutcomeRequestSchema = z20.strictObject({
   outcome: outcomeSchema,
-  closedAt: timestampSchema.nullable().optional()
+  closedAt: calendarDateSchema.nullable().optional()
 });
 var lookupDealRequestSchema = z20.strictObject({ dealId: dealIdSchema });
 var dealCursorSchema = z20.strictObject({
@@ -1977,6 +1979,7 @@ export {
   UPLOAD_CONTENT_TYPE,
   UPLOAD_FILE_FIELD,
   addTeamMemberRequestSchema,
+  calendarDateSchema,
   callChannelSchema,
   callCursorSchema,
   callDeletedPayloadSchema,

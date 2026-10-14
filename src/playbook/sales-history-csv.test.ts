@@ -248,19 +248,16 @@ describe('closed_at years (F15)', () => {
     ['2101-01-01', false],
     ['0001-01-01', false],
     ['9999-12-31', false],
-    ['1970-01-01T00:00:00Z', true],
-    ['2100-12-31T23:59:59Z', true],
-    ['1969-12-31T23:59:59Z', false],
-    ['2101-01-01T00:00:00Z', false],
-    ['1970-01-01T00:30:00+01:00', false],
+    ['1970-01-01T00:00:00Z', false],
+    ['2100-12-31T23:59:59Z', false],
   ])('%s is valid: %s', (cell, valid) => {
     expect(parseClosedAtCell(cell).ok).toBe(valid)
   })
 
-  test('the Outcome request accepts a closing time for an open Deal, like the CSV', () => {
-    expect(setDealOutcomeRequestSchema.safeParse({ outcome: 'open', closedAt: NOW }).success).toBe(
-      true
-    )
+  test('the Outcome request accepts a closing date for an open Deal, like the CSV', () => {
+    expect(
+      setDealOutcomeRequestSchema.safeParse({ outcome: 'open', closedAt: '2026-10-12' }).success
+    ).toBe(true)
     expect(setDealOutcomeRequestSchema.safeParse({ outcome: 'open', closedAt: null }).success).toBe(
       true
     )

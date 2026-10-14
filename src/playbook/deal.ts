@@ -3,6 +3,7 @@ import { timestampSchema } from '../core/values'
 import { dealImportIdSchema, dealRecordIdSchema, userIdSchema } from '../ids'
 import { pageQuerySchema, pageSchema } from '../pagination'
 import {
+  calendarDateSchema,
   dealAmountSchema,
   dealCurrencySchema,
   dealIdSchema,
@@ -18,7 +19,8 @@ import {
 /**
  * A Deal as the service returns it. A Deal is named by the Organization's own `dealId` (customer
  * text, never logged, never in a URL path) and addressed by its opaque `id` (`deal_…`). It is never
- * deleted on its own in phase 1. An `open` Deal may carry a `closedAt`, an expected close date from
+ * deleted on its own in phase 1. `closedAt` is a calendar date `YYYY-MM-DD`
+ * (no time, no time zone; a timestamp until 0.11.0). An `open` Deal may carry a `closedAt`, an expected close date from
  * a CRM; an `amount` always comes with a `currency`. `closedAt`, `amount`, `currency` and `name` are `null`
  * until given. `callCount` counts Calls that are not deleted. `appearedInImport` is false for a
  * Deal created by a Call upload that no CSV has named, so the portal can list likely typos. The
@@ -31,7 +33,7 @@ export const dealSchema = z
     dealId: dealIdSchema,
     name: dealNameSchema.nullable(),
     outcome: outcomeSchema,
-    closedAt: timestampSchema.nullable(),
+    closedAt: calendarDateSchema.nullable(),
     amount: dealAmountSchema.nullable(),
     currency: dealCurrencySchema.nullable(),
     callCount: z.number().int().min(0),
@@ -85,7 +87,7 @@ export type ListDealsResponse = z.infer<typeof listDealsResponseSchema>
  */
 export const setDealOutcomeRequestSchema = z.strictObject({
   outcome: outcomeSchema,
-  closedAt: timestampSchema.nullable().optional(),
+  closedAt: calendarDateSchema.nullable().optional(),
 })
 
 /** The body of the request that sets or corrects a Deal's Outcome. */
