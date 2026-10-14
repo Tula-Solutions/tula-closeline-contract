@@ -676,6 +676,7 @@ describe('0.7.0 types are not widened (code written against them still compiles)
         ...Object.keys(PLAYBOOK_ROUTES),
         ...Object.keys(SALES_HISTORY_ROUTES),
         'searchMoments',
+        'searchDocuments',
       ].sort()
     )
     expect(Object.keys(ALL_PLAYBOOK_ERRORS).sort()).toEqual(

@@ -1187,6 +1187,35 @@ function momentQueryText(turns) {
 `);
 }
 var route3 = (definition) => Object.freeze(definition);
+var searchDocumentsRequestSchema = searchMomentsRequestSchema;
+function documentQueryText(turns) {
+  return turns.map((turn) => turn.text.trim()).join(`
+`);
+}
+var documentMatchSchema = z18.object({
+  documentId: documentIdSchema,
+  fileName: documentFileNameSchema,
+  page: z18.number().int().min(1).max(MAX_DOCUMENT_PAGES).nullable(),
+  score: z18.number().finite(),
+  snippet: momentSnippetSchema
+});
+var documentSearchEvidenceSchema = z18.object({
+  chunks: z18.number().int().min(0).max(MAX_SEARCH_CANDIDATES),
+  documents: z18.number().int().min(0).max(MAX_SEARCH_CANDIDATES)
+});
+var searchDocumentsResponseSchema = z18.object({
+  items: z18.array(documentMatchSchema).max(MAX_SEARCH_LIMIT),
+  evidence: documentSearchEvidenceSchema
+}).superRefine((response, context) => {
+  const itemDocuments = new Set(response.items.map((match) => match.documentId)).size;
+  if (response.evidence.documents > response.evidence.chunks || response.items.length > response.evidence.chunks || response.evidence.documents < itemDocuments) {
+    context.addIssue({
+      code: "custom",
+      path: ["evidence"],
+      message: "The items and documents fit within the candidate chunks, and the documents cover the items"
+    });
+  }
+});
 var SEARCH_ROUTES = Object.freeze({
   searchMoments: route3({
     method: "POST",
@@ -1197,6 +1226,16 @@ var SEARCH_ROUTES = Object.freeze({
     errors: [],
     commonErrors: ["request.invalid", "server.timeout", "server.unavailable"],
     description: "Finds Moments in the Organization's won Deals that resemble the conversation so far, so the Copilot can show what worked. The body is the latest turns (1 to 6, each a role of rep or prospect and its text, at most 2000 characters in all) and an optional limit (1 to 20, default 5). It answers the best matches, best first, at most 20, each with the opaque callId and dealRecordId, a score and two snippets of at most 512 characters (what the Prospect said and what the Rep said next), and evidence: the number of candidate Moments and the distinct won Deals among them. The evidence counts only the over-fetched candidate window (the best min(100, limit x 5) Moments by similarity, after the eligibility checks), not every won Deal in the Organization. There is no cursor: the result is a bounded top-k. Only Moments of Calls whose Deal is won and whose Call is in search are returned, and only from the caller's Organization. It never returns the customer's dealId, name or amount. The request and the snippets are tenant conversation text and are never logged. It only reads, so it takes no Idempotency-Key and a repeat is harmless. request.invalid (400) for a body outside the bounds; server.timeout (504) when it takes too long; server.unavailable (503) with a Retry-After header when the embedding model or the vector store cannot answer. Owner and Admin only, as for all sales history (the owner's decision of 2026-10-13); a Manager or a Rep gets auth.forbidden, because a Rep sees only their own conversations. The phase-2 Copilot calls this service-to-service, not with a Rep's token."
+  }),
+  searchDocuments: route3({
+    method: "POST",
+    path: "/playbook/search/documents",
+    internal: false,
+    roles: PLAYBOOK_READ_ROLES,
+    success: [200],
+    errors: [],
+    commonErrors: ["request.invalid", "server.timeout", "server.unavailable"],
+    description: "Finds passages in the Organization's Playbook documents that resemble the conversation so far, so a Rep can see what the company's own material says. The body is the same as for the Moments search: the latest turns (1 to 6, each a role of rep or prospect and its text, at most 2000 characters in all) and an optional limit (1 to 20, default 5). It answers the best passages, best first, at most 20, one item per chunk, each with the documentId, the document's fileName (the Organization's own file name), the page (the 1-based page for a paginated format such as PDF, null for a format without pages such as TXT, MD or DOCX and anything else the parser reads as one page; the service decides by media type), a score and a snippet of at most 512 characters, and evidence: the number of candidate chunks that survive the staleness check and the distinct documents among them. The evidence counts only the over-fetched candidate window (the best min(100, limit x 5) chunks by similarity, after the staleness check), not every document in the Organization. The query is embedded with documentQueryText (the turns trimmed and joined by a newline, no role labels), because document chunks are embedded as plain text. There is no cursor: the result is a bounded top-k. Only chunks of documents that are ready and not replaced are returned, and only from the caller's Organization. The request and the snippets are the Organization's own conversation and sales text and are never logged. It only reads, so it takes no Idempotency-Key and a repeat is harmless. request.invalid (400) for a body outside the bounds; server.timeout (504) when it takes too long; server.unavailable (503) with a Retry-After header when the embedding model or the vector store cannot answer. Every role that reads the Playbook (Owner, Admin, Manager and Rep) may call it, because the text is the Organization's own sales material; any other is auth.forbidden."
   })
 });
 
@@ -2120,9 +2159,12 @@ export {
   documentFailureReasonSchema,
   documentFileNameSchema,
   documentIdSchema,
+  documentMatchSchema,
   documentMediaTypeSchema,
   documentParamsSchema,
+  documentQueryText,
   documentSchema,
+  documentSearchEvidenceSchema,
   documentSizeCheckSchema,
   documentStateSchema,
   documentTypeCheckSchema,
@@ -2222,6 +2264,8 @@ export {
   rightsWordingVersionSchema,
   roleAtLeast,
   roleSchema,
+  searchDocumentsRequestSchema,
+  searchDocumentsResponseSchema,
   searchEvidenceSchema,
   searchMomentsRequestSchema,
   searchMomentsResponseSchema,
