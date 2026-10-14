@@ -6,9 +6,10 @@ import {
   type SalesHistoryRoute,
   type SalesHistoryRouteName,
 } from './sales-history-routes'
+import { SEARCH_ROUTES, type SearchRouteName } from './search'
 
-/** Every Playbook route name: the document routes of 0.7.0 and the sales-history routes. */
-export type AllPlaybookRouteName = PlaybookRouteName | SalesHistoryRouteName
+/** Every Playbook route name: the document routes of 0.7.0, the sales-history routes and the search route. */
+export type AllPlaybookRouteName = PlaybookRouteName | SalesHistoryRouteName | SearchRouteName
 
 /**
  * Every Playbook route in one map, for a service that builds one OpenAPI document. `PLAYBOOK_ROUTES`
@@ -17,7 +18,7 @@ export type AllPlaybookRouteName = PlaybookRouteName | SalesHistoryRouteName
  */
 export const ALL_PLAYBOOK_ROUTES: Readonly<
   Record<AllPlaybookRouteName, PlaybookRoute | SalesHistoryRoute>
-> = Object.freeze({ ...PLAYBOOK_ROUTES, ...SALES_HISTORY_ROUTES })
+> = Object.freeze({ ...PLAYBOOK_ROUTES, ...SALES_HISTORY_ROUTES, ...SEARCH_ROUTES })
 
 /** Every Playbook error code in one registry: the document codes of 0.7.0 and the sales-history codes. */
 export const ALL_PLAYBOOK_ERRORS = Object.freeze({ ...PLAYBOOK_ERRORS, ...SALES_HISTORY_ERRORS })

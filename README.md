@@ -180,6 +180,22 @@ list: handle it wherever the reasons are matched exhaustively. `deal_import.busy
 The remove-all route now documents `server.unavailable` (503 with `Retry-After`) for a transient
 failure; it never answers 200 while data remains.
 
+### Search over won Deals (0.12.0)
+
+`SEARCH_ROUTES.searchMoments` is `POST /playbook/search/moments` (all four reading roles, no
+Idempotency-Key, existing error codes only: `request.invalid`, `server.timeout`,
+`server.unavailable` with `Retry-After`). `searchMomentsRequestSchema` takes 1 to
+`MAX_SEARCH_TURNS` (6) `{ role: 'rep' | 'prospect', text }` turns, at most
+`MAX_SEARCH_TEXT_CHARACTERS` (2000) code points in all, and a `limit` of 1 to `MAX_SEARCH_LIMIT`
+(20), default `DEFAULT_SEARCH_LIMIT` (5); unknown keys are rejected. `searchMomentsResponseSchema`
+is `{ items: momentMatchSchema[], evidence: { moments, deals } }` with snippets of at most
+`MAX_MOMENT_SNIPPET_CHARACTERS` (512) and evidence bounded by `MAX_SEARCH_CANDIDATES` (100); there
+is no cursor and no customer `dealId`, name or amount. A turn has at least one character, so a caller drops empty turns before it asks.
+`momentQueryText(turns)` is the one text
+builder (`Rep: ...` or `Prospect: ...` per line, joined by `\n`) that both the indexer and the
+search must call. All of it is tenant conversation text: never log it. The merged map
+`ALL_PLAYBOOK_ROUTES` includes the route.
+
 ### Rights confirmation wording (0.9.0)
 
 The text of each wording version is in the contract: `RIGHTS_WORDINGS` (frozen, keyed by version,
