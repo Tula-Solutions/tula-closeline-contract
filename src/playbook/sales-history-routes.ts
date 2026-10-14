@@ -240,7 +240,7 @@ export const SALES_HISTORY_ROUTES: Readonly<Record<SalesHistoryRouteName, SalesH
       errors: [],
       commonErrors: [],
       description:
-        "Reads the Organization's recorded confirmation that it may share Recordings and Transcripts, with who confirmed and when, the version of the wording they saw, the current wording version and whether the stored one is current. Owner and Admin only. Without a current confirmation, uploads of Calls are refused; existing Calls are kept and stay searchable.",
+        "Reads the Organization's recorded confirmation that it may share Recordings and Transcripts, with who confirmed and when, the version of the wording they saw, the current wording version, optionally the text of that version (also in RIGHTS_WORDINGS) and whether the stored one is current. Owner and Admin only. Without a current confirmation, uploads of Calls are refused; existing Calls are kept and stay searchable.",
     }),
     confirmRights: route({
       method: 'PUT',
