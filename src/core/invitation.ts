@@ -1,8 +1,10 @@
 import { z } from 'zod'
 import { emailSchema } from '../email'
+import type { CommonErrorCode } from '../errors'
 import { invitationIdSchema, teamIdSchema, userIdSchema } from '../ids'
 import { pageQuerySchema, pageSchema } from '../pagination'
 import { invitableRoleSchema } from '../tenancy'
+import type { CoreErrorCode } from './errors'
 import { invitationStateSchema, timestampSchema } from './values'
 
 /**
@@ -35,6 +37,32 @@ export const createInvitationRequestSchema = z.strictObject({
   role: invitableRoleSchema,
   teamId: teamIdSchema.optional(),
 })
+
+/**
+ * Every error code `POST /v1/invitations` may answer with. `invitation.already_pending` and
+ * `invitation.already_member` (409) are about the address; `invitation.pending_limit` (409, 1,000
+ * pending) and `invitation.daily_limit` (429, 2,000 in 24 hours, with `details.retryAfter` and a
+ * `Retry-After` header) are the Organization-wide limits; `rate.limited` is only the per-request
+ * rate. `team.not_found` is a `teamId` that is not a Team of this Organization.
+ */
+export const CREATE_INVITATION_ERROR_CODES = [
+  'invitation.already_pending',
+  'invitation.already_member',
+  'invitation.pending_limit',
+  'invitation.daily_limit',
+  'team.not_found',
+  'request.invalid',
+  'request.idempotency_key_reused',
+  'request.idempotency_in_progress',
+  'auth.unauthenticated',
+  'auth.token_expired',
+  'auth.token_invalid',
+  'auth.forbidden',
+  'auth.unavailable',
+  'organization.suspended',
+  'organization.deleted',
+  'rate.limited',
+] as const satisfies readonly (CoreErrorCode | CommonErrorCode)[]
 
 /** The body of a request to invite someone. */
 export type CreateInvitationRequest = z.infer<typeof createInvitationRequestSchema>

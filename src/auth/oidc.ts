@@ -2,6 +2,7 @@ import { z } from 'zod'
 import type { CoreErrorCode } from '../core/errors'
 import { timestampSchema } from '../core/values'
 import { type CommonErrorCode, errorCodeSchema } from '../errors'
+import { userIdSchema } from '../ids'
 import { roleSchema } from '../tenancy'
 import type { AuthErrorCode } from './errors'
 
@@ -210,6 +211,8 @@ export const browserSessionTokensSchema = z.strictObject({
   accessToken: z.string().min(1).max(4096),
   accessTokenExpiresAt: timestampSchema,
   organization: z.strictObject({ id: z.string().min(1).max(128), role: roleSchema }),
+  /** The signed-in user's id, so the portal can tell its own row in the members list. Optional until every auth deployment sends it; the access token names the same user. */
+  userId: userIdSchema.optional(),
 })
 
 /** The tokens of a signed-in session for the `browser` client. */

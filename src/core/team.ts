@@ -1,6 +1,9 @@
 import { z } from 'zod'
+import type { CommonErrorCode } from '../errors'
 import { membershipIdSchema, teamIdSchema } from '../ids'
 import { pageQuerySchema, pageSchema } from '../pagination'
+import type { CoreErrorCode } from './errors'
+import { memberSchema } from './member'
 import { storedNameSchema, teamNameSchema, timestampSchema } from './values'
 
 /** A Team as core returns it. */
@@ -81,3 +84,36 @@ export const teamMemberParamsSchema = z.strictObject({
 
 /** The path parameters of a request to remove a member from a Team. */
 export type TeamMemberParams = z.infer<typeof teamMemberParamsSchema>
+
+/** The query parameters of a request to list a Team's members: a cursor and a limit of at most the maximum page size. */
+export const listTeamMembersQuerySchema = pageQuerySchema.strict()
+
+/** The query parameters of a request to list a Team's members. */
+export type ListTeamMembersQuery = z.infer<typeof listTeamMembersQuerySchema>
+
+/**
+ * One page of a Team's members, for `GET /v1/teams/{teamId}/members` (path parameters
+ * `teamParamsSchema`). Each item is a member exactly as the Organization's members list returns it.
+ */
+export const listTeamMembersResponseSchema = pageSchema(memberSchema)
+
+/** One page of a Team's members. */
+export type ListTeamMembersResponse = z.infer<typeof listTeamMembersResponseSchema>
+
+/**
+ * Every error code `GET /v1/teams/{teamId}/members` may answer with. Who may call it is the same
+ * as for viewing a Team; a role that is not allowed is `auth.forbidden`. A Team in another
+ * Organization is `team.not_found`.
+ */
+export const LIST_TEAM_MEMBERS_ERROR_CODES = [
+  'team.not_found',
+  'request.invalid',
+  'auth.unauthenticated',
+  'auth.token_expired',
+  'auth.token_invalid',
+  'auth.forbidden',
+  'auth.unavailable',
+  'organization.suspended',
+  'organization.deleted',
+  'rate.limited',
+] as const satisfies readonly (CoreErrorCode | CommonErrorCode)[]

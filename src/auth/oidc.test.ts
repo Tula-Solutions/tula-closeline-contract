@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { CORE_ERRORS } from '../core/errors'
+import { id } from '../core/fixtures'
 import { errorCodeSchema } from '../errors'
 import { AUTH_ERRORS } from './errors'
 import {
@@ -218,6 +219,16 @@ describe('googleCompleteResponseSchema', () => {
   test('is the browser flow response: id, kind, expiresAt, a complete step and the session', () => {
     expect(parse(flow).success).toBe(true)
     expect(parse({ ...flow, kind: 'sign_in' }).success).toBe(true)
+  })
+
+  test('the session may name the signed-in user, and still parses without it', () => {
+    const userId = id('usr')
+    expect(parse({ ...flow, session: { ...session, userId } }).success).toBe(true)
+    expect(
+      googleCompleteResponseSchema.parse({ ...flow, session: { ...session, userId } }).session
+    ).toHaveProperty('userId', userId)
+    expect(parse(flow).success).toBe(true)
+    expect(parse({ ...flow, session: { ...session, userId: 'org_1' } }).success).toBe(false)
   })
 
   test('the step must be complete and the session is required', () => {

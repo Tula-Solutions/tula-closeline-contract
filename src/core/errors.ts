@@ -3,7 +3,12 @@ import { defineErrors } from '../errors'
 /**
  * The errors core returns, as `area.reason` codes. None says whether an email address or a user
  * exists in another Organization: `invitation.invalid` covers an unknown, used, revoked and expired
- * token alike, and `membership.already_member` is only ever about the user making the call. A role
+ * token alike, and `membership.already_member` is only ever about the user making the call (so
+ * an address that already belongs to a member of the inviting Organization is the distinct
+ * `invitation.already_member`, which only a caller allowed to invite sees). The Organization-wide
+ * invitation limits are their own codes, apart from the per-request `rate.limited`:
+ * `invitation.pending_limit` (1,000 pending) and `invitation.daily_limit` (2,000 in 24 hours,
+ * answered with `details.retryAfter` in seconds and a `Retry-After` header). A role
  * that is not allowed is the common `auth.forbidden`. `organization.not_abandonable` is the one
  * answer when the abandon guard refuses, whichever of its conditions failed. Which internal call
  * returns which code is `INTERNAL_CALL_ERRORS`.
@@ -32,6 +37,18 @@ export const CORE_ERRORS = {
     already_pending: {
       status: 409,
       message: 'A matching invitation is already pending. Revoke it to send a new one.',
+    },
+    already_member: {
+      status: 409,
+      message: 'The invitee is already a member of this Organization.',
+    },
+    pending_limit: {
+      status: 409,
+      message: 'This Organization has too many pending invitations. Revoke some to send more.',
+    },
+    daily_limit: {
+      status: 429,
+      message: 'This Organization has sent too many invitations today. Try again later.',
     },
   }),
   ...defineErrors('team', {

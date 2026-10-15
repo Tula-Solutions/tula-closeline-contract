@@ -77,6 +77,18 @@ var CORE_ERRORS = {
     already_pending: {
       status: 409,
       message: "A matching invitation is already pending. Revoke it to send a new one."
+    },
+    already_member: {
+      status: 409,
+      message: "The invitee is already a member of this Organization."
+    },
+    pending_limit: {
+      status: 409,
+      message: "This Organization has too many pending invitations. Revoke some to send more."
+    },
+    daily_limit: {
+      status: 429,
+      message: "This Organization has sent too many invitations today. Try again later."
     }
   }),
   ...defineErrors("team", {
@@ -164,7 +176,7 @@ var AUTH_ERRORS = {
   })
 };
 // src/auth/oidc.ts
-import { z as z4 } from "zod";
+import { z as z5 } from "zod";
 
 // src/core/values.ts
 import { z as z2 } from "zod";
@@ -210,21 +222,51 @@ var invitationTokenSchema = z2.string().min(22).max(256).regex(/^[A-Za-z0-9_-]+$
 var IDEMPOTENCY_KEY_HEADER = "Idempotency-Key";
 var idempotencyKeySchema = z2.string().min(16).max(128).regex(/^[A-Za-z0-9_.:-]+$/);
 
-// src/tenancy.ts
+// src/ids.ts
 import { z as z3 } from "zod";
+var PREFIX_PATTERN = /^[a-z]{2,5}$/;
+function idSchema(prefix) {
+  if (!PREFIX_PATTERN.test(prefix)) {
+    throw new Error(`Invalid id prefix: ${prefix}`);
+  }
+  return z3.string().regex(new RegExp(`^${prefix}_[0-9a-f]{32}$`)).brand();
+}
+var organizationIdSchema = idSchema("org");
+var userIdSchema = idSchema("usr");
+var membershipIdSchema = idSchema("mem");
+var teamIdSchema = idSchema("team");
+var invitationIdSchema = idSchema("inv");
+var prospectIdSchema = idSchema("prs");
+var documentIdSchema = idSchema("doc");
+var dealRecordIdSchema = idSchema("deal");
+var callIdSchema = idSchema("call");
+var dealImportIdSchema = idSchema("dimp");
+var eventIdSchema = idSchema("evt");
+var requestIdSchema = idSchema("req");
+var UUID_PATTERN = /^(?:[0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+function formatId(prefix, uuid) {
+  if (typeof uuid !== "string" || !UUID_PATTERN.test(uuid)) {
+    throw new Error("Not a UUID: expected 32 hexadecimal characters or the 8-4-4-4-12 form");
+  }
+  const hex = uuid.replaceAll("-", "").toLowerCase();
+  return idSchema(prefix).parse(`${prefix}_${hex}`);
+}
+
+// src/tenancy.ts
+import { z as z4 } from "zod";
 var REGIONS = ["us", "eu"];
-var regionSchema = z3.enum(REGIONS);
+var regionSchema = z4.enum(REGIONS);
 var ROLES = ["owner", "admin", "manager", "rep"];
-var roleSchema = z3.enum(ROLES);
+var roleSchema = z4.enum(ROLES);
 function roleAtLeast(role, minimum) {
   const have = ROLES.indexOf(role);
   const need = ROLES.indexOf(minimum);
   return have !== -1 && need !== -1 && have <= need;
 }
 var INVITABLE_ROLES = ["admin", "manager", "rep"];
-var invitableRoleSchema = z3.enum(INVITABLE_ROLES);
+var invitableRoleSchema = z4.enum(INVITABLE_ROLES);
 var ORGANIZATION_STATUSES = ["active", "suspended", "deleted"];
-var organizationStatusSchema = z3.enum(ORGANIZATION_STATUSES);
+var organizationStatusSchema = z4.enum(ORGANIZATION_STATUSES);
 
 // src/auth/oidc.ts
 var MAX_RETURN_TO_LENGTH = 512;
@@ -257,15 +299,15 @@ function isLocalPath(path, raw) {
   }
   return !path.split(/[?#]/)[0]?.split("/").some((segment) => DOT_SEGMENTS.has(segment));
 }
-var returnToSchema = z4.string().refine((path) => path.length <= MAX_RETURN_TO_LENGTH, "Within the length limit").refine((path) => isLocalPath(path, true), "A path on this site").refine((path) => {
+var returnToSchema = z5.string().refine((path) => path.length <= MAX_RETURN_TO_LENGTH, "Within the length limit").refine((path) => isLocalPath(path, true), "A path on this site").refine((path) => {
   try {
     return isLocalPath(decodeURIComponent(path), false);
   } catch {
     return false;
   }
 }, "A path on this site");
-var googleIntentSchema = z4.enum(["sign_in", "sign_up"]);
-var googleStartRequestSchema = z4.strictObject({
+var googleIntentSchema = z5.enum(["sign_in", "sign_up"]);
+var googleStartRequestSchema = z5.strictObject({
   intent: googleIntentSchema,
   returnTo: returnToSchema.optional()
 });
@@ -291,48 +333,49 @@ function isAuthorizationUrl(text) {
   }
   return url.protocol === "https:" || url.protocol === "http:" && isLoopbackHost(url.hostname);
 }
-var authorizationUrlSchema = z4.string().max(MAX_AUTHORIZATION_URL_LENGTH).refine(isAuthorizationUrl, "An https URL, or http to a loopback host");
-var googleStartResponseSchema = z4.strictObject({
+var authorizationUrlSchema = z5.string().max(MAX_AUTHORIZATION_URL_LENGTH).refine(isAuthorizationUrl, "An https URL, or http to a loopback host");
+var googleStartResponseSchema = z5.strictObject({
   authorizationUrl: authorizationUrlSchema
 });
-var attemptIdSchema = z4.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
+var attemptIdSchema = z5.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
 var GOOGLE_SIGN_UP_PATH = "/sign-up/google";
 var GOOGLE_SIGN_UP_ATTEMPT_PARAM = "attempt";
 var GOOGLE_ERROR_PATH = "/sign-in";
 var GOOGLE_ERROR_PARAM = "error";
 var OIDC_COOKIE_BASE_NAME = "tula_oidc";
 var OIDC_COOKIE_SECURE_PREFIX = "__Secure-";
-var googleSignUpQuerySchema = z4.strictObject({
+var googleSignUpQuerySchema = z5.strictObject({
   [GOOGLE_SIGN_UP_ATTEMPT_PARAM]: attemptIdSchema
 });
-var googleErrorQuerySchema = z4.strictObject({
+var googleErrorQuerySchema = z5.strictObject({
   [GOOGLE_ERROR_PARAM]: errorCodeSchema
 });
 var storable = (text) => !text.includes(String.fromCharCode(0)) && !hasUnsafeCharacter(text);
-var googleCompleteRequestSchema = z4.strictObject({
+var googleCompleteRequestSchema = z5.strictObject({
   attemptId: attemptIdSchema,
-  organizationName: z4.string().trim().min(1).max(120).refine(storable, "Storable text").optional(),
-  invitationToken: z4.string().min(1).max(512).refine(storable, "Storable text").optional()
+  organizationName: z5.string().trim().min(1).max(120).refine(storable, "Storable text").optional(),
+  invitationToken: z5.string().min(1).max(512).refine(storable, "Storable text").optional()
 }).refine((body) => body.organizationName === undefined !== (body.invitationToken === undefined), {
   message: "Send exactly one of organizationName and invitationToken.",
   path: ["organizationName"]
 });
-var browserSessionTokensSchema = z4.strictObject({
-  sessionId: z4.string().min(1).max(128),
-  accessToken: z4.string().min(1).max(4096),
+var browserSessionTokensSchema = z5.strictObject({
+  sessionId: z5.string().min(1).max(128),
+  accessToken: z5.string().min(1).max(4096),
   accessTokenExpiresAt: timestampSchema,
-  organization: z4.strictObject({ id: z4.string().min(1).max(128), role: roleSchema })
+  organization: z5.strictObject({ id: z5.string().min(1).max(128), role: roleSchema }),
+  userId: userIdSchema.optional()
 });
-var googleCompleteResponseSchema = z4.object({
-  id: z4.string().min(1).max(128),
-  kind: z4.enum(["sign_in", "sign_up"]),
+var googleCompleteResponseSchema = z5.object({
+  id: z5.string().min(1).max(128),
+  kind: z5.enum(["sign_in", "sign_up"]),
   expiresAt: timestampSchema,
-  step: z4.object({ status: z4.literal("complete") }),
+  step: z5.object({ status: z5.literal("complete") }),
   session: browserSessionTokensSchema
 });
-var authProvidersSchema = z4.object({ google: z4.boolean().default(false) });
+var authProvidersSchema = z5.object({ google: z5.boolean().default(false) });
 var AUTH_OPTIONS_PATH = "/v1/client/auth-options";
-var authOptionsResponseSchema = z4.object({
+var authOptionsResponseSchema = z5.object({
   providers: authProvidersSchema.default({ google: false })
 });
 var route = (definition) => Object.freeze(definition);
@@ -398,7 +441,7 @@ var GOOGLE_ROUTES = Object.freeze({
 import { z as z7 } from "zod";
 
 // src/email.ts
-import { z as z5 } from "zod";
+import { z as z6 } from "zod";
 var MAX_EMAIL_LENGTH = 320;
 function foldAscii(text) {
   return text.replace(/[A-Z]/g, (letter) => String.fromCharCode(letter.charCodeAt(0) + 32));
@@ -416,37 +459,7 @@ function hasOneInteriorAt(text) {
   const first = text.indexOf("@");
   return first > 0 && first < text.length - 1 && text.indexOf("@", first + 1) === -1;
 }
-var emailSchema = z5.string().max(MAX_EMAIL_LENGTH).transform(foldAscii).pipe(z5.string().min(3).refine(hasOneInteriorAt, "Exactly one @, neither first nor last").refine(isPrintableAscii, "Printable ASCII only"));
-
-// src/ids.ts
-import { z as z6 } from "zod";
-var PREFIX_PATTERN = /^[a-z]{2,5}$/;
-function idSchema(prefix) {
-  if (!PREFIX_PATTERN.test(prefix)) {
-    throw new Error(`Invalid id prefix: ${prefix}`);
-  }
-  return z6.string().regex(new RegExp(`^${prefix}_[0-9a-f]{32}$`)).brand();
-}
-var organizationIdSchema = idSchema("org");
-var userIdSchema = idSchema("usr");
-var membershipIdSchema = idSchema("mem");
-var teamIdSchema = idSchema("team");
-var invitationIdSchema = idSchema("inv");
-var prospectIdSchema = idSchema("prs");
-var documentIdSchema = idSchema("doc");
-var dealRecordIdSchema = idSchema("deal");
-var callIdSchema = idSchema("call");
-var dealImportIdSchema = idSchema("dimp");
-var eventIdSchema = idSchema("evt");
-var requestIdSchema = idSchema("req");
-var UUID_PATTERN = /^(?:[0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
-function formatId(prefix, uuid) {
-  if (typeof uuid !== "string" || !UUID_PATTERN.test(uuid)) {
-    throw new Error("Not a UUID: expected 32 hexadecimal characters or the 8-4-4-4-12 form");
-  }
-  const hex = uuid.replaceAll("-", "").toLowerCase();
-  return idSchema(prefix).parse(`${prefix}_${hex}`);
-}
+var emailSchema = z6.string().max(MAX_EMAIL_LENGTH).transform(foldAscii).pipe(z6.string().min(3).refine(hasOneInteriorAt, "Exactly one @, neither first nor last").refine(isPrintableAscii, "Printable ASCII only"));
 
 // src/core/internal.ts
 var INTERNAL_CALL_ERRORS = Object.freeze({
@@ -576,6 +589,24 @@ var createInvitationRequestSchema = z9.strictObject({
   role: invitableRoleSchema,
   teamId: teamIdSchema.optional()
 });
+var CREATE_INVITATION_ERROR_CODES = [
+  "invitation.already_pending",
+  "invitation.already_member",
+  "invitation.pending_limit",
+  "invitation.daily_limit",
+  "team.not_found",
+  "request.invalid",
+  "request.idempotency_key_reused",
+  "request.idempotency_in_progress",
+  "auth.unauthenticated",
+  "auth.token_expired",
+  "auth.token_invalid",
+  "auth.forbidden",
+  "auth.unavailable",
+  "organization.suspended",
+  "organization.deleted",
+  "rate.limited"
+];
 var listInvitationsQuerySchema = pageQuerySchema.extend({ state: invitationStateSchema.default("pending") }).strict();
 var listInvitationsResponseSchema = pageSchema(invitationSchema);
 var invitationParamsSchema = z9.strictObject({
@@ -644,6 +675,20 @@ var teamMemberParamsSchema = z12.strictObject({
   teamId: teamIdSchema,
   membershipId: membershipIdSchema
 });
+var listTeamMembersQuerySchema = pageQuerySchema.strict();
+var listTeamMembersResponseSchema = pageSchema(memberSchema);
+var LIST_TEAM_MEMBERS_ERROR_CODES = [
+  "team.not_found",
+  "request.invalid",
+  "auth.unauthenticated",
+  "auth.token_expired",
+  "auth.token_invalid",
+  "auth.forbidden",
+  "auth.unavailable",
+  "organization.suspended",
+  "organization.deleted",
+  "rate.limited"
+];
 // src/events.ts
 import { z as z13 } from "zod";
 var eventTypeSchema = errorCodeSchema;
@@ -2203,6 +2248,7 @@ export {
   CALL_TRANSCRIBED_MESSAGE,
   CALL_UPLOADED_MESSAGE,
   CORE_ERRORS,
+  CREATE_INVITATION_ERROR_CODES,
   CSV_FAILURES,
   CURRENT_RIGHTS_WORDING_VERSION,
   DEAL_CLOSED_AT_MAX_YEAR,
@@ -2241,6 +2287,7 @@ export {
   INTERNAL_CALL_ERRORS,
   INVITABLE_ROLES,
   INVITATION_STATES,
+  LIST_TEAM_MEMBERS_ERROR_CODES,
   MAX_AUTHORIZATION_URL_LENGTH,
   MAX_CALL_SPEAKERS,
   MAX_CURSOR_LENGTH,
@@ -2431,6 +2478,8 @@ export {
   listInvitationsResponseSchema,
   listMembersQuerySchema,
   listMembersResponseSchema,
+  listTeamMembersQuerySchema,
+  listTeamMembersResponseSchema,
   listTeamsQuerySchema,
   listTeamsResponseSchema,
   lookupDealRequestSchema,

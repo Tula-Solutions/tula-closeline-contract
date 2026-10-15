@@ -16,6 +16,11 @@ const CORE_MESSAGES = {
   'invitation.not_found': 'The invitation was not found.',
   'invitation.already_pending':
     'A matching invitation is already pending. Revoke it to send a new one.',
+  'invitation.already_member': 'The invitee is already a member of this Organization.',
+  'invitation.pending_limit':
+    'This Organization has too many pending invitations. Revoke some to send more.',
+  'invitation.daily_limit':
+    'This Organization has sent too many invitations today. Try again later.',
   'team.not_found': 'The Team was not found.',
   'team.name_taken': 'A Team with that name already exists.',
 } as const
@@ -39,6 +44,9 @@ describe('CORE_ERRORS', () => {
     ['invitation.invalid', 422],
     ['invitation.not_found', 404],
     ['invitation.already_pending', 409],
+    ['invitation.already_member', 409],
+    ['invitation.pending_limit', 409],
+    ['invitation.daily_limit', 429],
     ['team.not_found', 404],
     ['team.name_taken', 409],
   ] as const)('%s maps to status %d', (code, status) => {
@@ -50,6 +58,11 @@ describe('CORE_ERRORS', () => {
 
   test('lists exactly the codes under test', () => {
     expect(Object.keys(CORE_ERRORS).sort()).toEqual(Object.keys(CORE_MESSAGES).sort())
+  })
+
+  test('the Organization-wide invite limits are distinct from the per-request rate.limited', () => {
+    expect(CORE_ERRORS['invitation.pending_limit'].code).not.toBe(ERRORS['rate.limited'].code)
+    expect(CORE_ERRORS['invitation.daily_limit'].code).not.toBe(ERRORS['rate.limited'].code)
   })
 
   test('has no role code: the common auth.forbidden covers a role that is not allowed', () => {
