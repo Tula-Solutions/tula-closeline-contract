@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import { MAX_PAGE_SIZE } from '../pagination'
+import { CORE_ERRORS } from './errors'
 import { id, NOW } from './fixtures'
 import {
+  CREATE_INVITATION_ERROR_CODES,
   createInvitationRequestSchema,
   invitationParamsSchema,
   invitationSchema,
@@ -110,5 +112,37 @@ describe('invitationParamsSchema', () => {
   test('wants an Invitation id', () => {
     expect(invitationParamsSchema.safeParse({ invitationId: id('inv') }).success).toBe(true)
     expect(invitationParamsSchema.safeParse({ invitationId: id('mem') }).success).toBe(false)
+  })
+})
+
+describe('POST /v1/invitations errors', () => {
+  test('lists the three distinct limits and the member and pending conflicts', () => {
+    for (const code of [
+      'invitation.already_pending',
+      'invitation.already_member',
+      'invitation.pending_limit',
+      'invitation.daily_limit',
+      'rate.limited',
+    ]) {
+      expect(CREATE_INVITATION_ERROR_CODES).toContain(code as never)
+    }
+  })
+
+  test('every core code on the route is in the core registry or the common one', () => {
+    for (const code of CREATE_INVITATION_ERROR_CODES) {
+      if (code.startsWith('invitation.') || code.startsWith('team.')) {
+        expect(code in CORE_ERRORS).toBe(true)
+      }
+    }
+  })
+
+  test('accepts a Team to place the invitee in', () => {
+    const teamId = id('team')
+    const parsed = createInvitationRequestSchema.parse({
+      email: 'a@example.com',
+      role: 'rep',
+      teamId,
+    })
+    expect(String(parsed.teamId)).toBe(teamId)
   })
 })

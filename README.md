@@ -249,6 +249,25 @@ cancelled at Google; any other `error=` from Google is `oidc.provider_unavailabl
 `oidc.provider_unavailable` 503 (with `Retry-After` where it is a real response) and
 `oidc.invitation_mismatch` 403.
 
+### Team members and invite codes (0.15.0, hub issue 46)
+
+- `GET /v1/teams/{teamId}/members`: `teamParamsSchema`, `listTeamMembersQuerySchema` (cursor and
+  limit up to `MAX_PAGE_SIZE`), `listTeamMembersResponseSchema` (items are the same `memberSchema`
+  as the Members list). Roles: `LIST_TEAM_MEMBERS_MIN_ROLE`, which is `LIST_MEMBERS_MIN_ROLE`
+  (`manager`: Owner, Admin and Manager), the roles that list the Organization's members, since
+  items carry emails. Errors: `LIST_TEAM_MEMBERS_ERROR_CODES`.
+- `POST /v1/invitations` errors are `CREATE_INVITATION_ERROR_CODES`. New: `invitation.already_member`
+  (409, the address already belongs to a member of this Organization; `membership.already_member`
+  stays about the caller), `invitation.pending_limit` (409, 1,000 pending) and
+  `invitation.daily_limit` (429, 2,000 in 24 hours, `details` of `retryAfterDetailsSchema` and a `Retry-After`
+  header). `rate.limited` is only the per-request rate. `teamId` was already accepted.
+- `browserSessionTokensSchema` takes an optional `userId` (the signed-in user), for the browser
+  session shapes only. The portal can already read the user id from `GET /v1/client/me`. **This
+  schema is strict and is an exception to "responses strip unknown keys"**: strict is what refuses
+  a leaked `refreshToken`, so a consumer still on 0.14.0 rejects a session that carries `userId`.
+  Rollout order: the portal moves to 0.15.0 first, then auth starts sending `userId` on sign-in,
+  refresh and Google completion. A payload without it still parses.
+
 ### Rights confirmation wording (0.9.0)
 
 The text of each wording version is in the contract: `RIGHTS_WORDINGS` (frozen, keyed by version,

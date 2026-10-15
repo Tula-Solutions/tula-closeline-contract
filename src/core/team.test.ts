@@ -1,8 +1,14 @@
 import { describe, expect, test } from 'bun:test'
+import { MAX_PAGE_SIZE } from '../pagination'
 import { id, NOW } from './fixtures'
+import { LIST_MEMBERS_MIN_ROLE } from './member'
 import {
   addTeamMemberRequestSchema,
   createTeamRequestSchema,
+  LIST_TEAM_MEMBERS_ERROR_CODES,
+  LIST_TEAM_MEMBERS_MIN_ROLE,
+  listTeamMembersQuerySchema,
+  listTeamMembersResponseSchema,
   listTeamsQuerySchema,
   listTeamsResponseSchema,
   renameTeamRequestSchema,
@@ -102,4 +108,63 @@ describe('a stored name never fails a response parse', () => {
   test('a Team named with a tab still parses', () => {
     expect(teamSchema.parse({ ...team, name: 'West\tCoast' }).name).toBe('West\tCoast')
   })
+})
+
+describe('GET /v1/teams/{teamId}/members', () => {
+  const member = {
+    id: id('mem'),
+    userId: id('usr'),
+    email: 'ada@example.com',
+    name: 'Ada Lovelace',
+    role: 'rep',
+    createdAt: NOW,
+    updatedAt: NOW,
+  }
+
+  test('the query is a cursor and a limit, and nothing else', () => {
+    expect(listTeamMembersQuerySchema.parse({ cursor: 'abc', limit: '10' }).limit).toBe(10)
+    expect(listTeamMembersQuerySchema.safeParse({ limit: MAX_PAGE_SIZE + 1 }).success).toBe(false)
+    expect(listTeamMembersQuerySchema.safeParse({ role: 'rep' }).success).toBe(false)
+  })
+
+  test('a page carries the same member fields as the Members list', () => {
+    expect(listTeamMembersResponseSchema.parse({ items: [member], nextCursor: null })).toEqual({
+      items: [member],
+      nextCursor: null,
+    } as never)
+    expect(
+      listTeamMembersResponseSchema.safeParse({
+        items: [{ ...member, role: 'x' }],
+        nextCursor: null,
+      }).success
+    ).toBe(false)
+  })
+
+  test('a page holds at most the maximum page size', () => {
+    const page = (count: number) => ({
+      items: Array.from({ length: count }, () => member),
+      nextCursor: null,
+    })
+    expect(listTeamMembersResponseSchema.safeParse(page(MAX_PAGE_SIZE)).success).toBe(true)
+    expect(listTeamMembersResponseSchema.safeParse(page(MAX_PAGE_SIZE + 1)).success).toBe(false)
+  })
+
+  test('the route lists the Team not-found code and the auth codes', () => {
+    expect(LIST_TEAM_MEMBERS_ERROR_CODES).toEqual([
+      'team.not_found',
+      'request.invalid',
+      'auth.unauthenticated',
+      'auth.token_expired',
+      'auth.token_invalid',
+      'auth.forbidden',
+      'auth.unavailable',
+      'organization.suspended',
+      'organization.deleted',
+      'rate.limited',
+    ])
+  })
+})
+
+test("listing a Team's members needs exactly the role that lists the Organization's members", () => {
+  expect(LIST_TEAM_MEMBERS_MIN_ROLE).toBe(LIST_MEMBERS_MIN_ROLE)
 })

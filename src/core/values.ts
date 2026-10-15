@@ -110,6 +110,17 @@ export const invitationTokenSchema = z
   .regex(/^[A-Za-z0-9_-]+$/)
 
 /**
+ * The `details` of an error answered with a `Retry-After` header: how many whole seconds to wait,
+ * the same number as the header. Used by `invitation.daily_limit`.
+ */
+export const retryAfterDetailsSchema = z.strictObject({
+  retryAfter: z.number().int().positive(),
+})
+
+/** The `details` of an error answered with a `Retry-After` header. */
+export type RetryAfterDetails = z.infer<typeof retryAfterDetailsSchema>
+
+/**
  * The header that carries an idempotency key on a call that has effects. Every public POST accepts
  * it too: a replay returns the original result, the same key with a different body is
  * `request.idempotency_key_reused`, and the same key while the first request is still running is

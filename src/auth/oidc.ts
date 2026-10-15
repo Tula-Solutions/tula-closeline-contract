@@ -2,6 +2,7 @@ import { z } from 'zod'
 import type { CoreErrorCode } from '../core/errors'
 import { timestampSchema } from '../core/values'
 import { type CommonErrorCode, errorCodeSchema } from '../errors'
+import { userIdSchema } from '../ids'
 import { roleSchema } from '../tenancy'
 import type { AuthErrorCode } from './errors'
 
@@ -210,6 +211,17 @@ export const browserSessionTokensSchema = z.strictObject({
   accessToken: z.string().min(1).max(4096),
   accessTokenExpiresAt: timestampSchema,
   organization: z.strictObject({ id: z.string().min(1).max(128), role: roleSchema }),
+  /**
+   * The signed-in user's id, so the portal can tell its own row in the members list. It applies
+   * to the browser session shapes only. The portal can already read the user id from
+   * `GET /v1/client/me` today, so nothing depends on this field.
+   *
+   * This schema is strict on purpose (strict is what refuses a leaked `refreshToken`), so it is
+   * an exception to "responses strip unknown keys": a consumer still on 0.14.0 rejects a session
+   * that carries `userId`. Roll out in order: the portal moves to 0.15.0 first, then auth starts
+   * sending `userId`.
+   */
+  userId: userIdSchema.optional(),
 })
 
 /** The tokens of a signed-in session for the `browser` client. */
