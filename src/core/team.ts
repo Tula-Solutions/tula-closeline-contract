@@ -3,7 +3,7 @@ import type { CommonErrorCode } from '../errors'
 import { membershipIdSchema, teamIdSchema } from '../ids'
 import { pageQuerySchema, pageSchema } from '../pagination'
 import type { CoreErrorCode } from './errors'
-import { memberSchema } from './member'
+import { LIST_MEMBERS_MIN_ROLE, memberSchema } from './member'
 import { storedNameSchema, teamNameSchema, timestampSchema } from './values'
 
 /** A Team as core returns it. */
@@ -101,8 +101,15 @@ export const listTeamMembersResponseSchema = pageSchema(memberSchema)
 export type ListTeamMembersResponse = z.infer<typeof listTeamMembersResponseSchema>
 
 /**
- * Every error code `GET /v1/teams/{teamId}/members` may answer with. Who may call it is the same
- * as for viewing a Team; a role that is not allowed is `auth.forbidden`. A Team in another
+ * The least privileged role that may list a Team's members: exactly `LIST_MEMBERS_MIN_ROLE`, the
+ * role that lists the Organization's members, because each item carries the member's email and
+ * name. It is not loosened to the roles that may only view a Team.
+ */
+export const LIST_TEAM_MEMBERS_MIN_ROLE = LIST_MEMBERS_MIN_ROLE
+
+/**
+ * Every error code `GET /v1/teams/{teamId}/members` may answer with. Who may call it is
+ * `LIST_TEAM_MEMBERS_MIN_ROLE`; a role that is not allowed is `auth.forbidden`. A Team in another
  * Organization is `team.not_found`.
  */
 export const LIST_TEAM_MEMBERS_ERROR_CODES = [

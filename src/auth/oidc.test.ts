@@ -231,6 +231,11 @@ describe('googleCompleteResponseSchema', () => {
     expect(parse({ ...flow, session: { ...session, userId: 'org_1' } }).success).toBe(false)
   })
 
+  test('the session stays strict, so a leaked refreshToken is refused (and so is userId on 0.14.0)', () => {
+    expect(parse({ ...flow, session: { ...session, refreshToken: 'secret' } }).success).toBe(false)
+    expect(parse({ ...flow, session: { ...session, extra: 1 } }).success).toBe(false)
+  })
+
   test('the step must be complete and the session is required', () => {
     expect(parse({ ...flow, step: { status: 'needs_password' } }).success).toBe(false)
     expect(parse({ ...flow, session: undefined }).success).toBe(false)

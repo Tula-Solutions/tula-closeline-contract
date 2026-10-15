@@ -1,8 +1,10 @@
 import { describe, expect, test } from 'bun:test'
 import { MAX_PAGE_SIZE } from '../pagination'
+import { roleAtLeast } from '../tenancy'
 import { id, NOW } from './fixtures'
 import {
   changeMemberRoleRequestSchema,
+  LIST_MEMBERS_MIN_ROLE,
   listMembersQuerySchema,
   listMembersResponseSchema,
   memberParamsSchema,
@@ -97,5 +99,15 @@ describe('memberParamsSchema', () => {
 
   test('rejects a missing membership id', () => {
     expect(memberParamsSchema.safeParse({}).success).toBe(false)
+  })
+})
+
+describe('LIST_MEMBERS_MIN_ROLE', () => {
+  test('Owner, Admin and Manager may list members; a Rep may not', () => {
+    expect(
+      (['owner', 'admin', 'manager', 'rep'] as const).filter((role) =>
+        roleAtLeast(role, LIST_MEMBERS_MIN_ROLE)
+      )
+    ).toEqual(['owner', 'admin', 'manager'])
   })
 })

@@ -10,6 +10,7 @@ import {
   MAX_PERSON_NAME_LENGTH,
   organizationNameSchema,
   personNameSchema,
+  retryAfterDetailsSchema,
   storedNameSchema,
   teamNameSchema,
   timestampSchema,
@@ -191,5 +192,15 @@ describe('idempotencyKeySchema', () => {
 
   test('accepts 128 characters', () => {
     expect(idempotencyKeySchema.safeParse('a'.repeat(128)).success).toBe(true)
+  })
+})
+
+describe('retryAfterDetailsSchema', () => {
+  test('is a positive whole number of seconds', () => {
+    expect(retryAfterDetailsSchema.parse({ retryAfter: 30 })).toEqual({ retryAfter: 30 })
+    for (const bad of [0, -1, 1.5, '30']) {
+      expect(retryAfterDetailsSchema.safeParse({ retryAfter: bad }).success).toBe(false)
+    }
+    expect(retryAfterDetailsSchema.safeParse({}).success).toBe(false)
   })
 })

@@ -1,4 +1,5 @@
 import { defineErrors } from '../errors'
+import { retryAfterDetailsSchema } from './values'
 
 /**
  * The errors core returns, as `area.reason` codes. None says whether an email address or a user
@@ -8,7 +9,7 @@ import { defineErrors } from '../errors'
  * `invitation.already_member`, which only a caller allowed to invite sees). The Organization-wide
  * invitation limits are their own codes, apart from the per-request `rate.limited`:
  * `invitation.pending_limit` (1,000 pending) and `invitation.daily_limit` (2,000 in 24 hours,
- * answered with `details.retryAfter` in seconds and a `Retry-After` header). A role
+ * answered with `details` of `DAILY_LIMIT_DETAILS_SCHEMA` (`retryAfter` in seconds) and a `Retry-After` header). A role
  * that is not allowed is the common `auth.forbidden`. `organization.not_abandonable` is the one
  * answer when the abandon guard refuses, whichever of its conditions failed. Which internal call
  * returns which code is `INTERNAL_CALL_ERRORS`.
@@ -56,6 +57,9 @@ export const CORE_ERRORS = {
     name_taken: { status: 409, message: 'A Team with that name already exists.' },
   }),
 } as const
+
+/** The `details` shape of `invitation.daily_limit`: `retryAfter` in seconds, the same as its `Retry-After` header. */
+export const DAILY_LIMIT_DETAILS_SCHEMA = retryAfterDetailsSchema
 
 /** A code from the {@link CORE_ERRORS} registry. */
 export type CoreErrorCode = keyof typeof CORE_ERRORS

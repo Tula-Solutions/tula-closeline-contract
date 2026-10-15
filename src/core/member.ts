@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { emailSchema } from '../email'
 import { membershipIdSchema, userIdSchema } from '../ids'
 import { pageQuerySchema, pageSchema } from '../pagination'
-import { roleSchema } from '../tenancy'
+import { type Role, roleSchema } from '../tenancy'
 import { storedNameSchema, timestampSchema } from './values'
 
 /**
@@ -24,6 +24,12 @@ export const memberSchema = z.object({
 
 /** A member of an Organization. */
 export type Member = z.infer<typeof memberSchema>
+
+/**
+ * The least privileged role that may list the Organization's members (`GET /v1/members`): Owner,
+ * Admin and Manager (see `roleAtLeast`). Anyone who sees member emails needs at least this role.
+ */
+export const LIST_MEMBERS_MIN_ROLE = 'manager' as const satisfies Role
 
 /** The query parameters of a request to list members: a cursor and a limit of at most the maximum page size. */
 export const listMembersQuerySchema = pageQuerySchema.strict()

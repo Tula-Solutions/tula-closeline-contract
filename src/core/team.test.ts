@@ -1,10 +1,12 @@
 import { describe, expect, test } from 'bun:test'
 import { MAX_PAGE_SIZE } from '../pagination'
 import { id, NOW } from './fixtures'
+import { LIST_MEMBERS_MIN_ROLE } from './member'
 import {
   addTeamMemberRequestSchema,
   createTeamRequestSchema,
   LIST_TEAM_MEMBERS_ERROR_CODES,
+  LIST_TEAM_MEMBERS_MIN_ROLE,
   listTeamMembersQuerySchema,
   listTeamMembersResponseSchema,
   listTeamsQuerySchema,
@@ -161,4 +163,8 @@ describe('GET /v1/teams/{teamId}/members', () => {
       'rate.limited',
     ])
   })
+})
+
+test("listing a Team's members needs exactly the role that lists the Organization's members", () => {
+  expect(LIST_TEAM_MEMBERS_MIN_ROLE).toBe(LIST_MEMBERS_MIN_ROLE)
 })

@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { ERRORS, errorCodeSchema } from '../errors'
-import { CORE_ERRORS, SIGNUP_ERRORS } from './errors'
+import { CORE_ERRORS, DAILY_LIMIT_DETAILS_SCHEMA, SIGNUP_ERRORS } from './errors'
+import { retryAfterDetailsSchema } from './values'
 
 /** Every message, exactly: a changed word is a review decision, not an accident. */
 const CORE_MESSAGES = {
@@ -118,4 +119,8 @@ test('no message mentions another person, an email address or an account', () =>
 test('no core or sign-up code collides with a common one or with each other', () => {
   const all = [...Object.keys(CORE_ERRORS), ...Object.keys(SIGNUP_ERRORS), ...Object.keys(ERRORS)]
   expect(new Set(all).size).toBe(all.length)
+})
+
+test('invitation.daily_limit carries retryAfter details', () => {
+  expect(DAILY_LIMIT_DETAILS_SCHEMA).toBe(retryAfterDetailsSchema)
 })

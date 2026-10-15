@@ -53,6 +53,53 @@ function defineErrors(area, entries) {
   return Object.freeze(registry);
 }
 
+// src/core/values.ts
+import { z as z2 } from "zod";
+var MAX_NAME_LENGTH = 200;
+function hasControlCharacter(text) {
+  for (let index = 0;index < text.length; index += 1) {
+    const code = text.charCodeAt(index);
+    if (code < 32 || code >= 127 && code <= 159) {
+      return true;
+    }
+  }
+  return false;
+}
+function isWellFormed(text) {
+  for (let index = 0;index < text.length; index += 1) {
+    const code = text.charCodeAt(index);
+    if (code >= 55296 && code <= 56319) {
+      const next = text.charCodeAt(index + 1);
+      if (!(next >= 56320 && next <= 57343)) {
+        return false;
+      }
+      index += 1;
+    } else if (code >= 56320 && code <= 57343) {
+      return false;
+    }
+  }
+  return true;
+}
+var MAX_RAW_NAME_LENGTH = 1000;
+function boundedName(maxLength) {
+  return z2.string().max(MAX_RAW_NAME_LENGTH).trim().pipe(z2.string().min(1).max(maxLength).refine(isWellFormed, "Well-formed text only").refine((text) => !hasControlCharacter(text), "No control characters"));
+}
+var nameSchema = boundedName(MAX_NAME_LENGTH);
+var organizationNameSchema = nameSchema;
+var teamNameSchema = nameSchema;
+var MAX_PERSON_NAME_LENGTH = 201;
+var personNameSchema = boundedName(MAX_PERSON_NAME_LENGTH);
+var storedNameSchema = z2.string().min(1).max(1000);
+var INVITATION_STATES = ["pending", "accepted", "revoked"];
+var invitationStateSchema = z2.enum(INVITATION_STATES);
+var timestampSchema = z2.iso.datetime({ offset: true }).max(64);
+var invitationTokenSchema = z2.string().min(22).max(256).regex(/^[A-Za-z0-9_-]+$/);
+var retryAfterDetailsSchema = z2.strictObject({
+  retryAfter: z2.number().int().positive()
+});
+var IDEMPOTENCY_KEY_HEADER = "Idempotency-Key";
+var idempotencyKeySchema = z2.string().min(16).max(128).regex(/^[A-Za-z0-9_.:-]+$/);
+
 // src/core/errors.ts
 var CORE_ERRORS = {
   ...defineErrors("organization", {
@@ -96,6 +143,7 @@ var CORE_ERRORS = {
     name_taken: { status: 409, message: "A Team with that name already exists." }
   })
 };
+var DAILY_LIMIT_DETAILS_SCHEMA = retryAfterDetailsSchema;
 var SIGNUP_ERRORS = {
   ...defineErrors("auth", {
     no_organization: {
@@ -177,50 +225,6 @@ var AUTH_ERRORS = {
 };
 // src/auth/oidc.ts
 import { z as z5 } from "zod";
-
-// src/core/values.ts
-import { z as z2 } from "zod";
-var MAX_NAME_LENGTH = 200;
-function hasControlCharacter(text) {
-  for (let index = 0;index < text.length; index += 1) {
-    const code = text.charCodeAt(index);
-    if (code < 32 || code >= 127 && code <= 159) {
-      return true;
-    }
-  }
-  return false;
-}
-function isWellFormed(text) {
-  for (let index = 0;index < text.length; index += 1) {
-    const code = text.charCodeAt(index);
-    if (code >= 55296 && code <= 56319) {
-      const next = text.charCodeAt(index + 1);
-      if (!(next >= 56320 && next <= 57343)) {
-        return false;
-      }
-      index += 1;
-    } else if (code >= 56320 && code <= 57343) {
-      return false;
-    }
-  }
-  return true;
-}
-var MAX_RAW_NAME_LENGTH = 1000;
-function boundedName(maxLength) {
-  return z2.string().max(MAX_RAW_NAME_LENGTH).trim().pipe(z2.string().min(1).max(maxLength).refine(isWellFormed, "Well-formed text only").refine((text) => !hasControlCharacter(text), "No control characters"));
-}
-var nameSchema = boundedName(MAX_NAME_LENGTH);
-var organizationNameSchema = nameSchema;
-var teamNameSchema = nameSchema;
-var MAX_PERSON_NAME_LENGTH = 201;
-var personNameSchema = boundedName(MAX_PERSON_NAME_LENGTH);
-var storedNameSchema = z2.string().min(1).max(1000);
-var INVITATION_STATES = ["pending", "accepted", "revoked"];
-var invitationStateSchema = z2.enum(INVITATION_STATES);
-var timestampSchema = z2.iso.datetime({ offset: true }).max(64);
-var invitationTokenSchema = z2.string().min(22).max(256).regex(/^[A-Za-z0-9_-]+$/);
-var IDEMPOTENCY_KEY_HEADER = "Idempotency-Key";
-var idempotencyKeySchema = z2.string().min(16).max(128).regex(/^[A-Za-z0-9_.:-]+$/);
 
 // src/ids.ts
 import { z as z3 } from "zod";
@@ -623,6 +627,7 @@ var memberSchema = z10.object({
   createdAt: timestampSchema,
   updatedAt: timestampSchema
 });
+var LIST_MEMBERS_MIN_ROLE = "manager";
 var listMembersQuerySchema = pageQuerySchema.strict();
 var listMembersResponseSchema = pageSchema(memberSchema);
 var memberParamsSchema = z10.strictObject({
@@ -677,6 +682,7 @@ var teamMemberParamsSchema = z12.strictObject({
 });
 var listTeamMembersQuerySchema = pageQuerySchema.strict();
 var listTeamMembersResponseSchema = pageSchema(memberSchema);
+var LIST_TEAM_MEMBERS_MIN_ROLE = LIST_MEMBERS_MIN_ROLE;
 var LIST_TEAM_MEMBERS_ERROR_CODES = [
   "team.not_found",
   "request.invalid",
@@ -2251,6 +2257,7 @@ export {
   CREATE_INVITATION_ERROR_CODES,
   CSV_FAILURES,
   CURRENT_RIGHTS_WORDING_VERSION,
+  DAILY_LIMIT_DETAILS_SCHEMA,
   DEAL_CLOSED_AT_MAX_YEAR,
   DEAL_CLOSED_AT_MIN_YEAR,
   DEAL_IMPORT_FAILURE_REASONS,
@@ -2287,7 +2294,9 @@ export {
   INTERNAL_CALL_ERRORS,
   INVITABLE_ROLES,
   INVITATION_STATES,
+  LIST_MEMBERS_MIN_ROLE,
   LIST_TEAM_MEMBERS_ERROR_CODES,
+  LIST_TEAM_MEMBERS_MIN_ROLE,
   MAX_AUTHORIZATION_URL_LENGTH,
   MAX_CALL_SPEAKERS,
   MAX_CURSOR_LENGTH,
@@ -2516,6 +2525,7 @@ export {
   repChoiceSchema,
   repChoiceSuits,
   requestIdSchema,
+  retryAfterDetailsSchema,
   returnToSchema,
   rightsConfirmationSchema,
   rightsRequiredDetailsSchema,
