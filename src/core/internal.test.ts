@@ -11,6 +11,12 @@ import {
   internalAcceptInvitationResponseSchema,
   internalCreateOrganizationRequestSchema,
   internalCreateOrganizationResponseSchema,
+  internalDirectoryMembershipRequestSchema,
+  internalDirectoryMembershipResponseSchema,
+  internalDirectoryRepCheckRequestSchema,
+  internalDirectoryRepCheckResponseSchema,
+  internalDirectoryTeamCheckRequestSchema,
+  internalDirectoryTeamCheckResponseSchema,
   internalMembershipRequestSchema,
   internalMembershipResponseSchema,
   internalUpdateMemberProfileParamsSchema,
@@ -348,5 +354,67 @@ describe('internal abandon', () => {
       internalAbandonOrganizationResponseSchema.safeParse({ organizationId, status: 'active' })
         .success
     ).toBe(false)
+  })
+})
+
+describe('directory calls', () => {
+  const organizationId = id('org')
+  const userId = id('usr')
+  const membershipId = id('mem')
+  const teamId = id('team')
+
+  test('membership request takes an Organization and a user, strictly', () => {
+    expect(
+      internalDirectoryMembershipRequestSchema.safeParse({ organizationId, userId }).success
+    ).toBe(true)
+    expect(internalDirectoryMembershipRequestSchema.safeParse({ userId }).success).toBe(false)
+    expect(
+      internalDirectoryMembershipRequestSchema.safeParse({ organizationId, userId, extra: 1 })
+        .success
+    ).toBe(false)
+    expect(
+      internalDirectoryMembershipRequestSchema.safeParse({ organizationId, userId: teamId }).success
+    ).toBe(false)
+  })
+
+  test('membership response is found with a role and status, or not found', () => {
+    const found = { found: true, membershipId, role: 'rep', status: 'active' }
+    expect(internalDirectoryMembershipResponseSchema.parse(found)).toEqual(found as never)
+    expect(internalDirectoryMembershipResponseSchema.parse({ found: false })).toEqual({
+      found: false,
+    })
+    expect(
+      internalDirectoryMembershipResponseSchema.safeParse({ found: true, membershipId }).success
+    ).toBe(false)
+    expect(
+      internalDirectoryMembershipResponseSchema.safeParse({ ...found, role: 'root' }).success
+    ).toBe(false)
+  })
+
+  test('rep check request and response', () => {
+    expect(
+      internalDirectoryRepCheckRequestSchema.safeParse({ organizationId, membershipId }).success
+    ).toBe(true)
+    expect(
+      internalDirectoryRepCheckRequestSchema.safeParse({ organizationId, userId }).success
+    ).toBe(false)
+    expect(internalDirectoryRepCheckResponseSchema.parse({ isRep: false })).toEqual({
+      isRep: false,
+    })
+    expect(internalDirectoryRepCheckResponseSchema.safeParse({ isRep: 'yes' }).success).toBe(false)
+  })
+
+  test('team check request and response', () => {
+    expect(
+      internalDirectoryTeamCheckRequestSchema.safeParse({ organizationId, teamId }).success
+    ).toBe(true)
+    expect(
+      internalDirectoryTeamCheckRequestSchema.safeParse({ organizationId, teamId: membershipId })
+        .success
+    ).toBe(false)
+    expect(internalDirectoryTeamCheckResponseSchema.parse({ exists: true })).toEqual({
+      exists: true,
+    })
+    expect(internalDirectoryTeamCheckResponseSchema.safeParse({}).success).toBe(false)
   })
 })

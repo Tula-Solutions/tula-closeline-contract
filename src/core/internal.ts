@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { emailSchema } from '../email'
-import { organizationIdSchema, userIdSchema } from '../ids'
+import { membershipIdSchema, organizationIdSchema, teamIdSchema, userIdSchema } from '../ids'
 import { invitableRoleSchema, organizationStatusSchema, roleSchema } from '../tenancy'
 import type { CoreErrorCode } from './errors'
 import {
@@ -236,4 +236,81 @@ export const internalAbandonOrganizationResponseSchema = z.object({
 /** Internal: the answer to an abandon. */
 export type InternalAbandonOrganizationResponse = z.infer<
   typeof internalAbandonOrganizationResponseSchema
+>
+
+/**
+ * Internal: `POST /internal/v1/directory/membership`, the body of the call voice makes to find a
+ * user's Membership in a named Organization. The Organization is named in the body because voice
+ * serves many; it is not taken from a token.
+ */
+export const internalDirectoryMembershipRequestSchema = z.strictObject({
+  organizationId: organizationIdSchema,
+  userId: userIdSchema,
+})
+
+/** Internal: the body of a directory membership lookup. */
+export type InternalDirectoryMembershipRequest = z.infer<
+  typeof internalDirectoryMembershipRequestSchema
+>
+
+/**
+ * Internal: the Membership of a user in an Organization, or `{ found: false }` for none. `status`
+ * is the Organization's status (a Membership has none of its own), so a suspended Organization is
+ * found and the caller decides what to do. The lookup returns no domain error.
+ */
+export const internalDirectoryMembershipResponseSchema = z.discriminatedUnion('found', [
+  z.object({
+    found: z.literal(true),
+    membershipId: membershipIdSchema,
+    role: roleSchema,
+    status: organizationStatusSchema,
+  }),
+  z.object({ found: z.literal(false) }),
+])
+
+/** Internal: the answer to a directory membership lookup. */
+export type InternalDirectoryMembershipResponse = z.infer<
+  typeof internalDirectoryMembershipResponseSchema
+>
+
+/** Internal: `POST /internal/v1/directory/rep-check`, the body asking whether a Membership is a Rep. */
+export const internalDirectoryRepCheckRequestSchema = z.strictObject({
+  organizationId: organizationIdSchema,
+  membershipId: membershipIdSchema,
+})
+
+/** Internal: the body of a directory Rep check. */
+export type InternalDirectoryRepCheckRequest = z.infer<
+  typeof internalDirectoryRepCheckRequestSchema
+>
+
+/** Internal: the answer to a Rep check; `false` also for an unknown Membership. */
+export const internalDirectoryRepCheckResponseSchema = z.object({
+  isRep: z.boolean(),
+})
+
+/** Internal: the answer to a directory Rep check. */
+export type InternalDirectoryRepCheckResponse = z.infer<
+  typeof internalDirectoryRepCheckResponseSchema
+>
+
+/** Internal: `POST /internal/v1/directory/team-check`, the body asking whether a Team exists. */
+export const internalDirectoryTeamCheckRequestSchema = z.strictObject({
+  organizationId: organizationIdSchema,
+  teamId: teamIdSchema,
+})
+
+/** Internal: the body of a directory Team check. */
+export type InternalDirectoryTeamCheckRequest = z.infer<
+  typeof internalDirectoryTeamCheckRequestSchema
+>
+
+/** Internal: the answer to a Team check; `false` also for a Team in another Organization. */
+export const internalDirectoryTeamCheckResponseSchema = z.object({
+  exists: z.boolean(),
+})
+
+/** Internal: the answer to a directory Team check. */
+export type InternalDirectoryTeamCheckResponse = z.infer<
+  typeof internalDirectoryTeamCheckResponseSchema
 >

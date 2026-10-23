@@ -7902,6 +7902,33 @@ var internalAbandonOrganizationResponseSchema = z69.object({
   organizationId: organizationIdSchema,
   status: z69.literal("deleted")
 });
+var internalDirectoryMembershipRequestSchema = z69.strictObject({
+  organizationId: organizationIdSchema,
+  userId: userIdSchema
+});
+var internalDirectoryMembershipResponseSchema = z69.discriminatedUnion("found", [
+  z69.object({
+    found: z69.literal(true),
+    membershipId: membershipIdSchema,
+    role: roleSchema,
+    status: organizationStatusSchema
+  }),
+  z69.object({ found: z69.literal(false) })
+]);
+var internalDirectoryRepCheckRequestSchema = z69.strictObject({
+  organizationId: organizationIdSchema,
+  membershipId: membershipIdSchema
+});
+var internalDirectoryRepCheckResponseSchema = z69.object({
+  isRep: z69.boolean()
+});
+var internalDirectoryTeamCheckRequestSchema = z69.strictObject({
+  organizationId: organizationIdSchema,
+  teamId: teamIdSchema
+});
+var internalDirectoryTeamCheckResponseSchema = z69.object({
+  exists: z69.boolean()
+});
 // src/core/invitation.ts
 import { z as z70 } from "zod";
 var invitationSchema = z70.object({
@@ -13913,6 +13940,12 @@ export {
   internalAcceptInvitationResponseSchema,
   internalCreateOrganizationRequestSchema,
   internalCreateOrganizationResponseSchema,
+  internalDirectoryMembershipRequestSchema,
+  internalDirectoryMembershipResponseSchema,
+  internalDirectoryRepCheckRequestSchema,
+  internalDirectoryRepCheckResponseSchema,
+  internalDirectoryTeamCheckRequestSchema,
+  internalDirectoryTeamCheckResponseSchema,
   internalMembershipRequestSchema,
   internalMembershipResponseSchema,
   internalRemoveOrganizationDocumentsParamsSchema,
