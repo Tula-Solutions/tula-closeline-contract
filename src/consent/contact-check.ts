@@ -39,11 +39,24 @@ export const CONTACT_ALLOW_BASES = [
 /** The longest name of a calling service. */
 const MAX_CALLER_LENGTH = 32
 
+/** The address field a channel is reached on. */
+const ADDRESS_FIELD_OF_CHANNEL = {
+  phone: 'phone',
+  sms: 'phone',
+  whatsapp: 'phone',
+  email: 'email',
+  linkedin: 'linkedinUrl',
+} as const
+
 /**
  * Internal: the body of a Contact Check. The calling service has no user token, so it names the
  * Organization (ADR 0013) and itself as `caller`; the purpose is set by that service from what it
- * is about to do, and there is no field that waives the check. The target is exactly one of a
- * Prospect or an address (an email, a phone or a LinkedIn address), which core normalises.
+ * is about to do, and there is no field that waives the check. The target is either exactly one
+ * address (an email, a phone or a LinkedIn address, which core normalises) with no `prospectId`,
+ * or a `prospectId` with at most one address. With both, the address must be of the channel's kind
+ * (`phone` for phone, sms and whatsapp, `email` for email, `linkedinUrl` for linkedin) and core
+ * then requires it to belong to that Prospect's stored identities, checks Suppression on that
+ * address, and reads consent from the Prospect's ledger.
  */
 export const contactCheckRequestSchema = z
   .strictObject({
@@ -58,13 +71,36 @@ export const contactCheckRequestSchema = z
       .max(MAX_CALLER_LENGTH)
       .regex(/^[a-z][a-z0-9_-]*$/),
   })
-  .refine(
-    (body) =>
-      [body.prospectId, body.email, body.phone, body.linkedinUrl].filter(
-        (value) => value !== undefined
-      ).length === 1,
-    'Give exactly one of prospectId, email, phone or linkedinUrl'
-  )
+  .superRefine((body, ctx) => {
+    const given = (['email', 'phone', 'linkedinUrl'] as const).filter(
+      (field) => body[field] !== undefined
+    )
+    if (given.length > 1) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Give at most one of email, phone or linkedinUrl',
+      })
+      return
+    }
+    if (body.prospectId === undefined && given.length === 0) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Give a prospectId or exactly one of email, phone or linkedinUrl',
+      })
+      return
+    }
+    const field = given[0]
+    if (body.prospectId !== undefined && field !== undefined) {
+      const expected = ADDRESS_FIELD_OF_CHANNEL[body.channel]
+      if (field !== expected) {
+        ctx.addIssue({
+          code: 'custom',
+          path: [field],
+          message: `With a prospectId, a ${body.channel} check takes ${expected}, not ${field}`,
+        })
+      }
+    }
+  })
 
 /** The body of a Contact Check. */
 export type ContactCheckRequest = z.infer<typeof contactCheckRequestSchema>

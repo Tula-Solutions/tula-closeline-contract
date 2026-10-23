@@ -559,6 +559,58 @@ describe('contact check', () => {
         .success
     ).toBe(false)
   })
+  test('a Prospect may come with one address of the channel kind', () => {
+    const addresses = {
+      phone: { phone: '+14155550100' },
+      sms: { phone: '+14155550100' },
+      whatsapp: { phone: '+14155550100' },
+      email: { email: 'a@b.co' },
+      linkedin: { linkedinUrl: 'https://www.linkedin.com/in/someone' },
+    } as const
+    for (const [channel, address] of Object.entries(addresses)) {
+      expect(contactCheckRequestSchema.safeParse({ ...request, channel, ...address }).success).toBe(
+        true
+      )
+    }
+  })
+  test('a Prospect with an address of the wrong kind for the channel is refused', () => {
+    const wrong = [
+      ['sms', { email: 'a@b.co' }],
+      ['whatsapp', { linkedinUrl: 'https://www.linkedin.com/in/someone' }],
+      ['phone', { email: 'a@b.co' }],
+      ['email', { phone: '+14155550100' }],
+      ['email', { linkedinUrl: 'https://www.linkedin.com/in/someone' }],
+      ['linkedin', { phone: '+14155550100' }],
+      ['linkedin', { email: 'a@b.co' }],
+    ] as const
+    for (const [channel, address] of wrong) {
+      expect(contactCheckRequestSchema.safeParse({ ...request, channel, ...address }).success).toBe(
+        false
+      )
+    }
+  })
+  test('a Prospect with two addresses, and a request with no target, are refused', () => {
+    expect(
+      contactCheckRequestSchema.safeParse({
+        ...request,
+        phone: '+14155550100',
+        email: 'a@b.co',
+      }).success
+    ).toBe(false)
+    const { prospectId: _p, ...none } = request
+    expect(contactCheckRequestSchema.safeParse(none).success).toBe(false)
+  })
+  test('an address alone and a Prospect alone are still valid', () => {
+    const { prospectId: _p, ...base } = request
+    expect(contactCheckRequestSchema.safeParse({ ...base, phone: '+14155550100' }).success).toBe(
+      true
+    )
+    expect(
+      contactCheckRequestSchema.safeParse({ ...base, channel: 'email', phone: '+14155550100' })
+        .success
+    ).toBe(true)
+    expect(contactCheckRequestSchema.safeParse(request).success).toBe(true)
+  })
   test('a denial is a typed result with a code, an allowance has none', () => {
     expect(
       contactCheckResultSchema.safeParse({ allowed: true, checkId: chk, basis: 'consent_granted' })
