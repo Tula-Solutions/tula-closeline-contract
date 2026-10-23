@@ -6527,6 +6527,13 @@ var CONTACT_ALLOW_BASES = [
   "email_no_suppression"
 ];
 var MAX_CALLER_LENGTH = 32;
+var ADDRESS_FIELD_OF_CHANNEL = {
+  phone: "phone",
+  sms: "phone",
+  whatsapp: "phone",
+  email: "email",
+  linkedin: "linkedinUrl"
+};
 var contactCheckRequestSchema = z58.strictObject({
   organizationId: organizationIdSchema,
   prospectId: prospectIdSchema.optional(),
@@ -6534,7 +6541,34 @@ var contactCheckRequestSchema = z58.strictObject({
   channel: consentChannelSchema,
   purpose: contactPurposeSchema,
   caller: z58.string().min(1).max(MAX_CALLER_LENGTH).regex(/^[a-z][a-z0-9_-]*$/)
-}).refine((body) => [body.prospectId, body.email, body.phone, body.linkedinUrl].filter((value) => value !== undefined).length === 1, "Give exactly one of prospectId, email, phone or linkedinUrl");
+}).superRefine((body, ctx) => {
+  const given = ["email", "phone", "linkedinUrl"].filter((field) => body[field] !== undefined);
+  if (given.length > 1) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Give at most one of email, phone or linkedinUrl"
+    });
+    return;
+  }
+  if (body.prospectId === undefined && given.length === 0) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Give a prospectId or exactly one of email, phone or linkedinUrl"
+    });
+    return;
+  }
+  const field = given[0];
+  if (body.prospectId !== undefined && field !== undefined) {
+    const expected = ADDRESS_FIELD_OF_CHANNEL[body.channel];
+    if (field !== expected) {
+      ctx.addIssue({
+        code: "custom",
+        path: [field],
+        message: `With a prospectId, a ${body.channel} check takes ${expected}, not ${field}`
+      });
+    }
+  }
+});
 var allowedSchema = z58.strictObject({
   allowed: z58.literal(true),
   checkId: contactCheckIdSchema,

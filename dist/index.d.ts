@@ -8296,8 +8296,12 @@ declare const CONTACT_ALLOW_BASES: readonly ["consent_granted", "rep_initiated",
 /**
 * Internal: the body of a Contact Check. The calling service has no user token, so it names the
 * Organization (ADR 0013) and itself as `caller`; the purpose is set by that service from what it
-* is about to do, and there is no field that waives the check. The target is exactly one of a
-* Prospect or an address (an email, a phone or a LinkedIn address), which core normalises.
+* is about to do, and there is no field that waives the check. The target is either exactly one
+* address (an email, a phone or a LinkedIn address, which core normalises) with no `prospectId`,
+* or a `prospectId` with at most one address. With both, the address must be of the channel's kind
+* (`phone` for phone, sms and whatsapp, `email` for email, `linkedinUrl` for linkedin) and core
+* then requires it to belong to that Prospect's stored identities, checks Suppression on that
+* address, and reads consent from the Prospect's ledger.
 */
 declare const contactCheckRequestSchema: z34.ZodObject<{
 	email: z34.ZodOptional<z34.ZodPipe<z34.ZodPipe<z34.ZodString, z34.ZodTransform<string, string>>, z34.ZodString>>;
