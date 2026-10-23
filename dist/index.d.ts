@@ -5002,6 +5002,10 @@ type BookingRoute = {
 	readonly path: string;
 	/** The roles allowed. Empty for a public route. Any other role is the common `auth.forbidden`. */
 	readonly roles: readonly Role[];
+	/** Set on a route an API key may call: the scope its token must carry. Never on a public, internal or Owner-only route. */
+	readonly publicApi?: {
+		readonly scope: ApiKeyScope;
+	};
 	/** True: the route takes no token and no Organization; anyone may call it. */
 	readonly public?: true;
 	/** The success statuses, the first being the usual one. */
@@ -9459,6 +9463,10 @@ type ConsentRoute = {
 	readonly access: ConsentRouteAccess;
 	/** The roles allowed; empty for a public or internal route. Any other role is the common `auth.forbidden`. */
 	readonly roles: readonly Role[];
+	/** Set on a route an API key may call: the scope its token must carry. Never on a public, internal or Owner-only route. */
+	readonly publicApi?: {
+		readonly scope: ApiKeyScope;
+	};
 	/** The success statuses, the first being the usual one. */
 	readonly success: readonly number[];
 	/** True when the route accepts an `Idempotency-Key` header. */
@@ -25222,6 +25230,10 @@ type ProspectRoute = {
 	readonly path: string;
 	/** The roles allowed. Any other role is the common `auth.forbidden`. */
 	readonly roles: readonly Role[];
+	/** Set on a route an API key may call: the scope its token must carry. Never on a public, internal or Owner-only route. */
+	readonly publicApi?: {
+		readonly scope: ApiKeyScope;
+	};
 	/** The success statuses, the first being the usual one. */
 	readonly success: readonly number[];
 	/** True when the route accepts an `Idempotency-Key` header. */
@@ -26529,6 +26541,10 @@ type VoiceRoute = {
 	readonly path: string;
 	/** The roles allowed. Any other role is the common `auth.forbidden`. */
 	readonly roles: readonly Role[];
+	/** Set on a route an API key may call: the scope its token must carry. Never on a public, internal or Owner-only route. */
+	readonly publicApi?: {
+		readonly scope: ApiKeyScope;
+	};
 	/** The success statuses, the first being the usual one. */
 	readonly success: readonly number[];
 	/** True when a retry of the route is safe by the `Idempotency-Key` header. */

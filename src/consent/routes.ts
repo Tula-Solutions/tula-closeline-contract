@@ -1,3 +1,4 @@
+import type { ApiKeyScope } from '../apikey/values'
 import type { CommonErrorCode } from '../errors'
 import type { ProspectErrorCode } from '../prospect/errors'
 import type { Role } from '../tenancy'
@@ -60,6 +61,8 @@ export type ConsentRoute = {
   readonly access: ConsentRouteAccess
   /** The roles allowed; empty for a public or internal route. Any other role is the common `auth.forbidden`. */
   readonly roles: readonly Role[]
+  /** Set on a route an API key may call: the scope its token must carry. Never on a public, internal or Owner-only route. */
+  readonly publicApi?: { readonly scope: ApiKeyScope }
   /** The success statuses, the first being the usual one. */
   readonly success: readonly number[]
   /** True when the route accepts an `Idempotency-Key` header. */
@@ -93,6 +96,7 @@ export const CONSENT_ROUTES: Readonly<Record<ConsentRouteName, ConsentRoute>> = 
     path: '/v1/prospects/{prospectId}/consent',
     access: 'user',
     roles: CONSENT_ALL_ROLES,
+    publicApi: { scope: 'consent:read' },
     success: [200],
     idempotent: false,
     errors: ['prospect.not_found'],
@@ -105,6 +109,7 @@ export const CONSENT_ROUTES: Readonly<Record<ConsentRouteName, ConsentRoute>> = 
     path: '/v1/prospects/{prospectId}/consent-events',
     access: 'user',
     roles: CONSENT_ALL_ROLES,
+    publicApi: { scope: 'consent:read' },
     success: [200],
     idempotent: false,
     errors: ['prospect.not_found'],
@@ -117,6 +122,7 @@ export const CONSENT_ROUTES: Readonly<Record<ConsentRouteName, ConsentRoute>> = 
     path: '/v1/prospects/{prospectId}/consents',
     access: 'user',
     roles: CONSENT_ALL_ROLES,
+    publicApi: { scope: 'consent:write' },
     success: [201, 200],
     idempotent: true,
     errors: ['prospect.not_found', 'consent.not_found'],
@@ -129,6 +135,7 @@ export const CONSENT_ROUTES: Readonly<Record<ConsentRouteName, ConsentRoute>> = 
     path: '/v1/prospects/{prospectId}/consent-withdrawals',
     access: 'user',
     roles: CONSENT_ALL_ROLES,
+    publicApi: { scope: 'consent:write' },
     success: [201, 200],
     idempotent: true,
     errors: ['prospect.not_found'],
