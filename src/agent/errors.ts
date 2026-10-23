@@ -14,7 +14,9 @@ import { defineErrors } from '../errors'
  * - `agent.question_invalid` (422): a Qualification question refers to an unknown question or its
  *   skip logic loops.
  * - `agent.question_not_found` (404): the Qualification question is unknown.
- * - `agent.settings_invalid` (422): the hours, caps or greeting are not usable.
+ * - `agent.settings_invalid` (422): the hours, caps, greeting or control settings are not usable.
+ * - `agent.version_not_found` (404): the instruction version is unknown.
+ * - `agent.instruction_too_long` (422): the instructions are over 20,000 characters.
  * - `agent.not_enough_deals` (409): too few won Deals to suggest Qualification questions from.
  * - `agent.session_not_found` (404): the try-it session is unknown, expired or not the caller's.
  * - `handoff.no_rep_available` (409): no Rep could take the Handoff. The Agent then offers a
@@ -37,6 +39,11 @@ export const AGENT_ERRORS = {
     question_invalid: { status: 422, message: 'The Qualification question is not valid.' },
     question_not_found: { status: 404, message: 'The Qualification question was not found.' },
     settings_invalid: { status: 422, message: 'The Inbound Agent settings are not valid.' },
+    version_not_found: { status: 404, message: 'The instruction version was not found.' },
+    instruction_too_long: {
+      status: 422,
+      message: 'The instructions are longer than 20,000 characters.',
+    },
     not_enough_deals: {
       status: 409,
       message: 'There are not enough won Deals to suggest Qualification questions.',
