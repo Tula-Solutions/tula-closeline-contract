@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { callIdSchema, dealRecordIdSchema, documentIdSchema } from '../ids'
 import { PLAYBOOK_READ_ROLES, type PlaybookRoute } from './routes'
-import { momentSnippetSchema } from './search'
+import { momentIndexSchema, momentSnippetSchema } from './search'
 import { documentFileNameSchema, MAX_DOCUMENT_PAGES } from './values'
 
 /** The most Citations one resolve request names. */
@@ -9,7 +9,8 @@ export const MAX_CITATION_REFS = 20
 
 /**
  * What a Citation points at in the Playbook, as the resolve request names it: a Moment of a won
- * Deal (`callId` and `dealRecordId`, opaque ids) or a page of a Playbook document. Unknown fields
+ * Deal (`callId` and `dealRecordId`, opaque ids, and an optional `momentIndex`: absent means the
+ * lowest-numbered Moment of the Call) or a page of a Playbook document. Unknown fields
  * are rejected.
  */
 export const citationRefSchema = z.discriminatedUnion('kind', [
@@ -17,6 +18,7 @@ export const citationRefSchema = z.discriminatedUnion('kind', [
     kind: z.literal('moment'),
     callId: callIdSchema,
     dealRecordId: dealRecordIdSchema,
+    momentIndex: momentIndexSchema.optional(),
   }),
   z.strictObject({
     kind: z.literal('document'),
@@ -50,6 +52,7 @@ export const resolvedCitationSchema = z.union([
     kind: z.literal('moment'),
     callId: callIdSchema,
     dealRecordId: dealRecordIdSchema,
+    momentIndex: momentIndexSchema.optional(),
     prospect: momentSnippetSchema,
     repNext: momentSnippetSchema,
   }),
@@ -66,6 +69,7 @@ export const resolvedCitationSchema = z.union([
     kind: z.literal('moment'),
     callId: callIdSchema,
     dealRecordId: dealRecordIdSchema,
+    momentIndex: momentIndexSchema.optional(),
   }),
   z.object({
     state: z.literal('removed'),
@@ -106,6 +110,6 @@ export const CITATION_ROUTES: Readonly<Record<CitationRouteName, PlaybookRoute>>
     errors: [],
     commonErrors: ['request.invalid', 'server.timeout', 'server.unavailable'],
     description:
-      "Resolves the Citations on a Draft back to the text they point at, so a Rep sees why a sentence was written. The body is refs: one to 20 references, each a Moment (callId, dealRecordId) or a document page (documentId, page or null). It answers one item per reference, in request order. An item is state available, with the snippets of at most 512 characters (what the Prospect said and the Rep said next for a Moment; the file name and passage for a document), or state removed, with the ids only and no text, when the Call, Deal or document was deleted, is no longer searchable, never existed or belongs to another Organization; none of those is an error, so existence is not revealed. It never returns the customer's dealId, name or amount. The snippets are tenant text and are never logged. It only reads, so it takes no Idempotency-Key and a repeat is harmless. request.invalid (400) for a body outside the bounds; server.timeout (504) when it takes too long; server.unavailable (503) with a Retry-After header when the store cannot answer. Every role that reads the Playbook (Owner, Admin, Manager and Rep) may call it; any other is auth.forbidden.",
+      "Resolves the Citations on a Draft back to the text they point at, so a Rep sees why a sentence was written. The body is refs: one to 20 references, each a Moment (callId, dealRecordId and an optional momentIndex, the 0-based number of the Moment within the Call) or a document page (documentId, page or null). When momentIndex is present, a Moment resolves to that Moment of the Call's current build, or to removed if the current build no longer has it; when it is absent, it resolves to the lowest-numbered Moment of the Call's current build. An item for a Moment echoes the momentIndex it resolved (or was asked for, when removed). It answers one item per reference, in request order. An item is state available, with the snippets of at most 512 characters (what the Prospect said and the Rep said next for a Moment; the file name and passage for a document), or state removed, with the ids only and no text, when the Call, Deal or document was deleted, is no longer searchable, never existed or belongs to another Organization; none of those is an error, so existence is not revealed. It never returns the customer's dealId, name or amount. The snippets are tenant text and are never logged. It only reads, so it takes no Idempotency-Key and a repeat is harmless. request.invalid (400) for a body outside the bounds; server.timeout (504) when it takes too long; server.unavailable (503) with a Retry-After header when the store cannot answer. Every role that reads the Playbook (Owner, Admin, Manager and Rep) may call it; any other is auth.forbidden.",
   }),
 })

@@ -4,6 +4,7 @@ import {
   ALL_PLAYBOOK_ROUTES,
   CITATION_ROUTES,
   MAX_CITATION_REFS,
+  MAX_MOMENT_INDEX,
   resolveCitationsRequestSchema,
   resolveCitationsResponseSchema,
 } from './index'
@@ -74,5 +75,45 @@ describe('citation resolve', () => {
     expect(route.roles).toEqual(['owner', 'admin', 'manager', 'rep'])
     expect(route.description).toContain('takes no Idempotency-Key')
     expect(ALL_PLAYBOOK_ROUTES.resolveCitations).toBe(route)
+  })
+})
+
+describe('momentIndex', () => {
+  const parseRef = (ref: unknown) => resolveCitationsRequestSchema.safeParse({ refs: [ref] })
+  test('a Moment ref is valid with and without the index', () => {
+    expect(parseRef(moment).success).toBe(true)
+    expect(parseRef({ ...moment, momentIndex: 0 }).success).toBe(true)
+    expect(parseRef({ ...moment, momentIndex: MAX_MOMENT_INDEX }).success).toBe(true)
+  })
+  test('refuses a negative, fractional, over-max or non-number index', () => {
+    for (const momentIndex of [-1, 1.5, MAX_MOMENT_INDEX + 1, '1', null, Number.NaN]) {
+      expect(parseRef({ ...moment, momentIndex }).success).toBe(false)
+    }
+  })
+  test('the ref is still strict and a document ref refuses the index', () => {
+    expect(parseRef({ ...moment, momentIndex: 1, extra: 1 }).success).toBe(false)
+    expect(parseRef({ ...doc, momentIndex: 1 }).success).toBe(false)
+  })
+  test('available and removed Moment items carry the index when present', () => {
+    const parse = (item: unknown) => resolveCitationsResponseSchema.safeParse({ items: [item] })
+    const available = { state: 'available', ...moment, prospect: 'a', repNext: 'b' }
+    expect(parse(available).success).toBe(true)
+    const withIndex = parse({ ...available, momentIndex: 3 })
+    expect(withIndex.success && withIndex.data.items[0]).toMatchObject({ momentIndex: 3 })
+    const removed = parse({ state: 'removed', ...moment, momentIndex: 2, prospect: 'x' })
+    expect(removed.success && removed.data.items[0]).toEqual({
+      state: 'removed',
+      ...moment,
+      momentIndex: 2,
+    })
+    expect(parse({ ...available, momentIndex: -1 }).success).toBe(false)
+    expect(parse({ ...available, momentIndex: 0.5 }).success).toBe(false)
+    expect(parse({ state: 'removed', ...moment, momentIndex: MAX_MOMENT_INDEX + 1 }).success).toBe(
+      false
+    )
+  })
+  test('route descriptions say what an absent index resolves to', () => {
+    expect(CITATION_ROUTES.resolveCitations.description).toContain('lowest-numbered Moment')
+    expect(CITATION_ROUTES.resolveCitations.description).toContain('no longer has it')
   })
 })
