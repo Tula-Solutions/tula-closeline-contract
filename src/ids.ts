@@ -85,6 +85,14 @@ export const chatIdSchema = idSchema('cht')
 export const handoffIdSchema = idSchema('hof')
 /** The id of a text session an Admin uses to try the Inbound Agent before it speaks to anyone (`try_…`). */
 export const trySessionIdSchema = idSchema('try')
+/** The id of a Conversation (`cnv_…`): all Messages between one Prospect and an Organization on one channel. */
+export const conversationIdSchema = idSchema('cnv')
+/** The id of a Message (`msg_…`): one piece of text sent or received in a Conversation. */
+export const messageIdSchema = idSchema('msg')
+/** The id of a Draft (`drf_…`): text an Agent or a Rep wrote for a Conversation and not yet sent. */
+export const draftIdSchema = idSchema('drf')
+/** The id of an approval Decision (`dcs_…`): one recorded decision about a Draft or a Conversation. */
+export const decisionIdSchema = idSchema('dcs')
 
 /** The id of an Organization. */
 export type OrganizationId = z.infer<typeof organizationIdSchema>
@@ -164,3 +172,11 @@ export function formatId<const Prefix extends string>(prefix: Prefix, uuid: stri
   const hex = uuid.replaceAll('-', '').toLowerCase()
   return idSchema(prefix).parse(`${prefix}_${hex}`) as Id<Prefix>
 }
+/** The id of a Conversation. */
+export type ConversationId = z.infer<typeof conversationIdSchema>
+/** The id of a Message. */
+export type MessageId = z.infer<typeof messageIdSchema>
+/** The id of a Draft. */
+export type DraftId = z.infer<typeof draftIdSchema>
+/** The id of an approval Decision. */
+export type DecisionId = z.infer<typeof decisionIdSchema>

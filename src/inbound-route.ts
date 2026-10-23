@@ -9,6 +9,8 @@ export type InboundRoute<Code extends string> = {
   readonly roles: readonly Role[]
   /** True: the route takes no token and no Organization; the publishable key or session token stands in. */
   readonly public?: true
+  /** True: a service-to-service route under `/internal`, called with the shared secret (ADR 0013), never with a user token. */
+  readonly internal?: true
   /** The success statuses, the first being the usual one. */
   readonly success: readonly number[]
   /** True when a retry of the route is safe by the `Idempotency-Key` header. */
