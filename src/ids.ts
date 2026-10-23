@@ -126,6 +126,10 @@ export const agentInstructionVersionIdSchema = idSchema('ains')
 export const auditEventIdSchema = idSchema('aud')
 /** The id of a data export job (`exp_…`): one Organization-wide export, built in parts by the services. */
 export const exportJobIdSchema = idSchema('exp')
+/** The id of a CRM connection (`crn_…`): an Organization's authorised link to one external CRM. */
+export const crmConnectionIdSchema = idSchema('crn')
+/** The id of a CRM sync run (`crun_…`): one pull or sweep of one kind of CRM object. */
+export const crmSyncRunIdSchema = idSchema('crun')
 /** The id of an Assessment (`asm_…`): the automatic check of one Agent turn. */
 export const assessmentIdSchema = idSchema('asm')
 /** The id of a finding (`fnd_…`): one problem an Assessment found in a Draft or a Call turn. */
@@ -267,6 +271,10 @@ export type AgentInstructionVersionId = z.infer<typeof agentInstructionVersionId
 export type AuditEventId = z.infer<typeof auditEventIdSchema>
 /** The id of a data export job. */
 export type ExportJobId = z.infer<typeof exportJobIdSchema>
+/** The id of a CRM connection. */
+export type CrmConnectionId = z.infer<typeof crmConnectionIdSchema>
+/** The id of a CRM sync run. */
+export type CrmSyncRunId = z.infer<typeof crmSyncRunIdSchema>
 /** The id of an API key. */
 export type ApiKeyId = z.infer<typeof apiKeyIdSchema>
 /** The id of a LinkedIn account. */
