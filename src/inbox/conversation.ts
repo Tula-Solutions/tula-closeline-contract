@@ -571,8 +571,9 @@ export const setApprovalPolicyRequestSchema = z.strictObject({ rule: approvalRul
 
 /**
  * An ingested body: a Prospect's text as the channel gave it. Line endings become `\n` and other
- * control characters are dropped, so an ordinary CRLF reply is never refused (a lost reply could be
- * a lost unsubscribe); the raw text is capped at 20,000 characters, so the normalised body never exceeds that, and it must not be blank.
+ * control characters are dropped, so an ordinary CRLF reply is never refused (a lost reply could
+ * be a lost unsubscribe). The cap applies to the raw text: 20,000 characters, so the normalised
+ * body never exceeds it and the generated OpenAPI limit is the real one. It must not be blank.
  */
 const ingestBodySchema = z
   .string()

@@ -549,6 +549,17 @@ describe('lists and ingest', () => {
     const json = JSON.stringify(z.toJSONSchema(ingestMessageRequestSchema, { io: 'input' }))
     expect(json).toContain('"maxLength":20000')
     expect(json).not.toContain('40000')
+    const request = {
+      channel: 'email',
+      providerMessageId: '<abc@mail.example>',
+      prospectId: prs,
+      direction: 'inbound',
+      sentAt: NOW,
+    }
+    const parse = (n: number) =>
+      ingestMessageRequestSchema.safeParse({ ...request, body: 'x'.repeat(n) }).success
+    expect(parse(20000)).toBe(true)
+    expect(parse(20001)).toBe(false)
   })
   test('an outbound ingest without a Draft parses and its stored Message validates', () => {
     const request = ingestMessageRequestSchema.parse({
