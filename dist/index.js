@@ -12524,6 +12524,27 @@ var DEAL_IMPORT_UPLOADED_MESSAGE = {
   scope: "organization",
   payload: dealImportUploadedPayloadSchema
 };
+// src/public-api-marks.ts
+var PUBLIC_MARK = "x-closeline-public";
+var SCOPES_MARK = "x-closeline-scopes";
+function publicApiExtensions(route) {
+  if (route.publicApi === undefined) {
+    return {};
+  }
+  const { scope } = route.publicApi;
+  const label = `${route.method.toUpperCase()} ${route.path}`;
+  if (!API_KEY_SCOPES.includes(scope)) {
+    throw new Error(`${label}: ${scope} is not an API key scope`);
+  }
+  if (!route.path.startsWith("/v1/") || route.path.split("/").includes("..")) {
+    throw new Error(`${label}: a public route must be a /v1 path`);
+  }
+  const expected = route.method.toUpperCase() === "GET" ? "read" : "write";
+  if (scope.split(":")[1] !== expected) {
+    throw new Error(`${label}: needs a ${expected} scope, not ${scope}`);
+  }
+  return { [PUBLIC_MARK]: true, [SCOPES_MARK]: [scope] };
+}
 // src/voice/errors.ts
 var VOICE_ERRORS = {
   ...defineErrors("call", {
@@ -13249,6 +13270,7 @@ export {
   PROSPECT_MERGE_UNDO_DAYS,
   PROSPECT_ROUTES,
   PROSPECT_STATUSES,
+  PUBLIC_MARK,
   QUALIFICATION_QUESTION_KINDS,
   RECORDING_MEDIA_TYPES,
   REGIONS,
@@ -13264,6 +13286,7 @@ export {
   SALES_HISTORY_ERRORS,
   SALES_HISTORY_READ_ROLES,
   SALES_HISTORY_ROUTES,
+  SCOPES_MARK,
   SEARCH_ROUTES,
   SEND_CHECKS,
   SEND_DEFERRING_REASONS,
@@ -14179,6 +14202,7 @@ export {
   providerKeySchema,
   providerMessageIdSchema,
   providerSettingsSchema,
+  publicApiExtensions,
   publicBookRequestSchema,
   publicBookingConfirmationSchema,
   publicBookingParamsSchema,
