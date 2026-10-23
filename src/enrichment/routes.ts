@@ -279,7 +279,7 @@ export const ENRICHMENT_ROUTES: Readonly<Record<EnrichmentRouteName, EnrichmentR
       keyRequired: true,
       errors: [],
       commonErrors: [...IDEMPOTENT_ERRORS],
-      description: `Makes a new signing secret for the Organization's signal webhook and answers it this once; the old one stops working at once. ${KEY} A replay answers the same secret. Owner and Admin only; any other is auth.forbidden. The secret is stored encrypted and is never returned again, logged or put in an error report.`,
+      description: `Makes a new signing secret for the Organization's signal webhook and answers it this once; the old one stops working at once. ${KEY} A replay within the idempotency window answers the same secret from a stored reply that is encrypted and discarded when the window ends. Owner and Admin only; any other is auth.forbidden. The secret is stored encrypted and is never returned again, logged or put in an error report.`,
     }),
     receiveSignalWebhook: inboundRoute({
       method: 'POST',

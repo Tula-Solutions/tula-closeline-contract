@@ -15,6 +15,7 @@ import {
   fieldProvenanceSchema,
   fitConditionSchema,
   fitConditionSuitsField,
+  fitCriterionSchema,
   fitScoreSchema,
   listEnrichmentRunsQuerySchema,
   listFitScoresQuerySchema,
@@ -32,9 +33,11 @@ import {
   setSignalSettingsRequestSchema,
   setWaterfallRequestSchema,
   signalSchema,
+  signalSettingsSchema,
   signalWebhookRequestSchema,
   updateFitCriterionRequestSchema,
   vendorTextSchema,
+  waterfallSchema,
 } from './index'
 
 const hex = (n: number) => n.toString(16).padStart(32, '0')
@@ -450,6 +453,58 @@ describe('fit', () => {
     expect(listFitScoresQuerySchema.safeParse({ minScore: '-1' }).success).toBe(false)
     expect(listFitScoresQuerySchema.safeParse({ minScore: 999999 }).success).toBe(false)
     expect(listFitScoresQuerySchema.safeParse({ limit: 101 }).success).toBe(false)
+  })
+})
+
+describe('responses drop unknown nested fields, requests refuse them', () => {
+  const order = { person: ['alpha'], company: [], email_verification: [] }
+  const kinds = SIGNAL_KINDS.map((kind) => ({ kind, enabled: true, freshnessDays: 30 }))
+  const condition = { operator: 'one_of', values: ['x'] }
+  test('waterfall order', () => {
+    const parsed = waterfallSchema.safeParse({
+      order: { ...order, phone: [] },
+      version: 1,
+      updatedAt: NOW,
+    })
+    expect(parsed.success).toBe(true)
+    expect(
+      setWaterfallRequestSchema.safeParse({ order: { ...order, phone: [] }, expectedVersion: 1 })
+        .success
+    ).toBe(false)
+  })
+  test('signal settings kinds', () => {
+    const extra = kinds.map((k) => ({ ...k, note: 'x' }))
+    const body = {
+      kinds: extra,
+      webhook: { configured: false, rotatedAt: null },
+      version: 1,
+      updatedAt: null,
+    }
+    expect(signalSettingsSchema.safeParse(body).success).toBe(true)
+    expect(
+      setSignalSettingsRequestSchema.safeParse({ kinds: extra, expectedVersion: 1 }).success
+    ).toBe(false)
+  })
+  test('fit condition', () => {
+    const crit = {
+      id: id('fcr', 7),
+      name: 'n',
+      field: 'industry',
+      condition: { ...condition, future: 1 },
+      weight: 5,
+      enabled: true,
+      createdAt: NOW,
+      updatedAt: NOW,
+    }
+    expect(fitCriterionSchema.safeParse(crit).success).toBe(true)
+    expect(
+      createFitCriterionRequestSchema.safeParse({
+        name: 'n',
+        field: 'industry',
+        condition: crit.condition,
+        weight: 5,
+      }).success
+    ).toBe(false)
   })
 })
 

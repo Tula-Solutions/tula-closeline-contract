@@ -186,12 +186,17 @@ export const signalWebhookResponseSchema = z.object({
 /** What the webhook answers. */
 export type SignalWebhookResponse = z.infer<typeof signalWebhookResponseSchema>
 
-/** How long one kind of signal stays fresh, and whether it counts at all. */
-export const signalKindSettingSchema = z.strictObject({
+const kindSettingShape = {
   kind: signalKindSchema,
   enabled: z.boolean(),
   freshnessDays: z.number().int().min(1).max(MAX_SIGNAL_FRESHNESS_DAYS),
-})
+}
+
+/** How long one kind of signal stays fresh, and whether it counts at all (response side). */
+export const signalKindSettingSchema = z.object(kindSettingShape)
+
+/** The same setting in a request, which refuses unknown fields. */
+const kindSettingRequestSchema = z.strictObject(kindSettingShape)
 
 /** The setting of one kind of signal. */
 export type SignalKindSetting = z.infer<typeof signalKindSettingSchema>
@@ -216,7 +221,7 @@ export type SignalSettings = z.infer<typeof signalSettingsSchema>
 /** The body to save the signal settings: every kind once, and the `expectedVersion` the caller read. */
 export const setSignalSettingsRequestSchema = z
   .strictObject({
-    kinds: z.array(signalKindSettingSchema).length(SIGNAL_KINDS.length),
+    kinds: z.array(kindSettingRequestSchema).length(SIGNAL_KINDS.length),
     expectedVersion: z.number().int().min(0).max(1_000_000),
   })
   .refine(

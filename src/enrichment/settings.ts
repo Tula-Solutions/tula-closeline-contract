@@ -59,11 +59,13 @@ const orderSchema = z
   .refine((order) => new Set(order).size === order.length, 'A provider is listed once')
 
 /** The Organization's provider order per field group; the waterfall asks them first to last. */
-export const waterfallOrderSchema = z.strictObject({
+const orderShape = {
   person: orderSchema,
   company: orderSchema,
   email_verification: orderSchema,
-})
+}
+
+export const waterfallOrderSchema = z.object(orderShape)
 
 /** The provider order per field group. */
 export type WaterfallOrder = z.infer<typeof waterfallOrderSchema>
@@ -80,7 +82,7 @@ export type Waterfall = z.infer<typeof waterfallSchema>
 
 /** The body to save the provider order: the order and the `expectedVersion` the caller read. */
 export const setWaterfallRequestSchema = z.strictObject({
-  order: waterfallOrderSchema,
+  order: z.strictObject(orderShape),
   expectedVersion: z.number().int().min(0).max(1_000_000),
 })
 

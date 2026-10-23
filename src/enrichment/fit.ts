@@ -39,24 +39,30 @@ const bound = z.number().int().min(0).max(100_000_000)
  * least `min` and at most `max`; one of the two may be left out). `between` is for
  * `employeeCount` only and `employeeCount` takes nothing else.
  */
-export const fitConditionSchema = z.discriminatedUnion('operator', [
-  z.strictObject({ operator: z.literal('one_of'), values: valuesSchema }),
-  z.strictObject({ operator: z.literal('contains_any'), values: valuesSchema }),
-  z
-    .strictObject({
+function conditionOf(strict: boolean) {
+  const make = <T extends z.core.$ZodLooseShape>(shape: T) =>
+    strict ? z.strictObject(shape) : z.object(shape)
+  return z.discriminatedUnion('operator', [
+    make({ operator: z.literal('one_of'), values: valuesSchema }),
+    make({ operator: z.literal('contains_any'), values: valuesSchema }),
+    make({
       operator: z.literal('between'),
       min: bound.nullable(),
       max: bound.nullable(),
     })
-    .refine((condition) => condition.min !== null || condition.max !== null, 'Give min or max')
-    .refine(
-      (condition) =>
-        condition.min === null || condition.max === null || condition.min <= condition.max,
-      'min is not above max'
-    ),
-])
+      .refine((condition) => condition.min !== null || condition.max !== null, 'Give min or max')
+      .refine(
+        (condition) =>
+          condition.min === null || condition.max === null || condition.min <= condition.max,
+        'min is not above max'
+      ),
+  ])
+}
 
-/** What a criterion asks of an attribute. */
+export const fitConditionSchema = conditionOf(false)
+
+const fitConditionRequestSchema = conditionOf(true)
+
 export type FitCondition = z.infer<typeof fitConditionSchema>
 
 /** Whether an operator suits an attribute: `between` only for `employeeCount`, and `employeeCount` only with `between`. */
@@ -85,7 +91,7 @@ export type FitCriterion = z.infer<typeof fitCriterionSchema>
 export const createFitCriterionRequestSchema = z.strictObject({
   name: enrichmentTextSchema(MAX_CRITERION_NAME_LENGTH),
   field: fitFieldSchema,
-  condition: fitConditionSchema,
+  condition: fitConditionRequestSchema,
   weight: WEIGHT,
   enabled: z.boolean().default(true),
 })
@@ -98,7 +104,7 @@ export const updateFitCriterionRequestSchema = z
   .strictObject({
     name: enrichmentTextSchema(MAX_CRITERION_NAME_LENGTH).optional(),
     field: fitFieldSchema.optional(),
-    condition: fitConditionSchema.optional(),
+    condition: fitConditionRequestSchema.optional(),
     weight: WEIGHT.optional(),
     enabled: z.boolean().optional(),
   })

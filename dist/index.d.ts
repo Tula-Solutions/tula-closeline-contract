@@ -9769,12 +9769,6 @@ declare const fitFieldSchema: z47.ZodEnum<{
 }>;
 /** An attribute a fit criterion looks at. */
 type FitField = z47.infer<typeof fitFieldSchema>;
-/**
-* What a criterion asks of the attribute: `one_of` (equals one of the values, ignoring case),
-* `contains_any` (contains one of the values, ignoring case) or `between` (a whole number, at
-* least `min` and at most `max`; one of the two may be left out). `between` is for
-* `employeeCount` only and `employeeCount` takes nothing else.
-*/
 declare const fitConditionSchema: z47.ZodDiscriminatedUnion<[z47.ZodObject<{
 	operator: z47.ZodLiteral<"one_of">;
 	values: z47.ZodArray<z47.ZodPipe<z47.ZodString, z47.ZodString>>;
@@ -9786,7 +9780,6 @@ declare const fitConditionSchema: z47.ZodDiscriminatedUnion<[z47.ZodObject<{
 	min: z47.ZodNullable<z47.ZodNumber>;
 	max: z47.ZodNullable<z47.ZodNumber>;
 }, z47.core.$strict>], "operator">;
-/** What a criterion asks of an attribute. */
 type FitCondition = z47.infer<typeof fitConditionSchema>;
 /** Whether an operator suits an attribute: `between` only for `employeeCount`, and `employeeCount` only with `between`. */
 declare function fitConditionSuitsField(field: FitField, condition: FitCondition): boolean;
@@ -10535,12 +10528,11 @@ declare const listProvidersResponseSchema: z49.ZodObject<{
 	}, z49.core.$strip>>;
 	nextCursor: z49.ZodNullable<z49.ZodString>;
 }, z49.core.$strip>;
-/** The Organization's provider order per field group; the waterfall asks them first to last. */
 declare const waterfallOrderSchema: z49.ZodObject<{
 	person: z49.ZodArray<z49.ZodString>;
 	company: z49.ZodArray<z49.ZodString>;
 	email_verification: z49.ZodArray<z49.ZodString>;
-}, z49.core.$strict>;
+}, z49.core.$strip>;
 /** The provider order per field group. */
 type WaterfallOrder = z49.infer<typeof waterfallOrderSchema>;
 /** The saved provider order with its version and when it was saved. Version 0 is the default order, never saved. */
@@ -10549,7 +10541,7 @@ declare const waterfallSchema: z49.ZodObject<{
 		person: z49.ZodArray<z49.ZodString>;
 		company: z49.ZodArray<z49.ZodString>;
 		email_verification: z49.ZodArray<z49.ZodString>;
-	}, z49.core.$strict>;
+	}, z49.core.$strip>;
 	version: z49.ZodNumber;
 	updatedAt: z49.ZodNullable<z49.ZodISODateTime>;
 }, z49.core.$strip>;
@@ -10977,7 +10969,7 @@ declare const signalWebhookResponseSchema: z50.ZodObject<{
 }, z50.core.$strip>;
 /** What the webhook answers. */
 type SignalWebhookResponse = z50.infer<typeof signalWebhookResponseSchema>;
-/** How long one kind of signal stays fresh, and whether it counts at all. */
+/** How long one kind of signal stays fresh, and whether it counts at all (response side). */
 declare const signalKindSettingSchema: z50.ZodObject<{
 	kind: z50.ZodEnum<{
 		funding: "funding";
@@ -10989,7 +10981,7 @@ declare const signalKindSettingSchema: z50.ZodObject<{
 	}>;
 	enabled: z50.ZodBoolean;
 	freshnessDays: z50.ZodNumber;
-}, z50.core.$strict>;
+}, z50.core.$strip>;
 /** The setting of one kind of signal. */
 type SignalKindSetting = z50.infer<typeof signalKindSettingSchema>;
 /** Whether the Organization's signing secret is set, and when it was last changed. The secret is never returned here. */
@@ -11010,7 +11002,7 @@ declare const signalSettingsSchema: z50.ZodObject<{
 		}>;
 		enabled: z50.ZodBoolean;
 		freshnessDays: z50.ZodNumber;
-	}, z50.core.$strict>>;
+	}, z50.core.$strip>>;
 	webhook: z50.ZodObject<{
 		configured: z50.ZodBoolean;
 		rotatedAt: z50.ZodNullable<z50.ZodISODateTime>;

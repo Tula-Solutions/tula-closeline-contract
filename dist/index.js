@@ -6923,11 +6923,13 @@ var signalWebhookResponseSchema = z65.object({
   duplicate: z65.boolean(),
   signalId: signalIdSchema.nullable()
 });
-var signalKindSettingSchema = z65.strictObject({
+var kindSettingShape = {
   kind: signalKindSchema,
   enabled: z65.boolean(),
   freshnessDays: z65.number().int().min(1).max(MAX_SIGNAL_FRESHNESS_DAYS)
-});
+};
+var signalKindSettingSchema = z65.object(kindSettingShape);
+var kindSettingRequestSchema = z65.strictObject(kindSettingShape);
 var signalWebhookStateSchema = z65.object({
   configured: z65.boolean(),
   rotatedAt: timestampSchema.nullable()
@@ -6939,7 +6941,7 @@ var signalSettingsSchema = z65.object({
   updatedAt: timestampSchema.nullable()
 });
 var setSignalSettingsRequestSchema = z65.strictObject({
-  kinds: z65.array(signalKindSettingSchema).length(SIGNAL_KINDS.length),
+  kinds: z65.array(kindSettingRequestSchema).length(SIGNAL_KINDS.length),
   expectedVersion: z65.number().int().min(0).max(1e6)
 }).refine((body) => new Set(body.kinds.map((setting) => setting.kind)).size === SIGNAL_KINDS.length, "Each kind is set once");
 var signalWebhookSecretSchema = z65.string().regex(/^[A-Za-z0-9_-]{43}$/);
@@ -6993,15 +6995,20 @@ var FIT_FIELDS = [
 var fitFieldSchema = z67.enum(FIT_FIELDS);
 var valuesSchema = z67.array(enrichmentTextSchema(MAX_CRITERION_VALUE_LENGTH)).min(1).max(MAX_CRITERION_VALUES);
 var bound = z67.number().int().min(0).max(1e8);
-var fitConditionSchema = z67.discriminatedUnion("operator", [
-  z67.strictObject({ operator: z67.literal("one_of"), values: valuesSchema }),
-  z67.strictObject({ operator: z67.literal("contains_any"), values: valuesSchema }),
-  z67.strictObject({
-    operator: z67.literal("between"),
-    min: bound.nullable(),
-    max: bound.nullable()
-  }).refine((condition) => condition.min !== null || condition.max !== null, "Give min or max").refine((condition) => condition.min === null || condition.max === null || condition.min <= condition.max, "min is not above max")
-]);
+function conditionOf(strict) {
+  const make = (shape) => strict ? z67.strictObject(shape) : z67.object(shape);
+  return z67.discriminatedUnion("operator", [
+    make({ operator: z67.literal("one_of"), values: valuesSchema }),
+    make({ operator: z67.literal("contains_any"), values: valuesSchema }),
+    make({
+      operator: z67.literal("between"),
+      min: bound.nullable(),
+      max: bound.nullable()
+    }).refine((condition) => condition.min !== null || condition.max !== null, "Give min or max").refine((condition) => condition.min === null || condition.max === null || condition.min <= condition.max, "min is not above max")
+  ]);
+}
+var fitConditionSchema = conditionOf(false);
+var fitConditionRequestSchema = conditionOf(true);
 function fitConditionSuitsField(field, condition) {
   return field === "employeeCount" === (condition.operator === "between");
 }
@@ -7019,14 +7026,14 @@ var fitCriterionSchema = z67.object({
 var createFitCriterionRequestSchema = z67.strictObject({
   name: enrichmentTextSchema(MAX_CRITERION_NAME_LENGTH),
   field: fitFieldSchema,
-  condition: fitConditionSchema,
+  condition: fitConditionRequestSchema,
   weight: WEIGHT,
   enabled: z67.boolean().default(true)
 });
 var updateFitCriterionRequestSchema = z67.strictObject({
   name: enrichmentTextSchema(MAX_CRITERION_NAME_LENGTH).optional(),
   field: fitFieldSchema.optional(),
-  condition: fitConditionSchema.optional(),
+  condition: fitConditionRequestSchema.optional(),
   weight: WEIGHT.optional(),
   enabled: z67.boolean().optional()
 }).refine((body) => Object.keys(body).length > 0, "Change at least one part");
@@ -7275,7 +7282,7 @@ var ENRICHMENT_ROUTES = Object.freeze({
     keyRequired: true,
     errors: [],
     commonErrors: [...IDEMPOTENT_ERRORS],
-    description: `Makes a new signing secret for the Organization's signal webhook and answers it this once; the old one stops working at once. ${KEY2} A replay answers the same secret. Owner and Admin only; any other is auth.forbidden. The secret is stored encrypted and is never returned again, logged or put in an error report.`
+    description: `Makes a new signing secret for the Organization's signal webhook and answers it this once; the old one stops working at once. ${KEY2} A replay within the idempotency window answers the same secret from a stored reply that is encrypted and discarded when the window ends. Owner and Admin only; any other is auth.forbidden. The secret is stored encrypted and is never returned again, logged or put in an error report.`
   }),
   receiveSignalWebhook: inboundRoute({
     method: "POST",
@@ -7491,18 +7498,19 @@ var setProviderRequestSchema = z69.strictObject({
 var listProvidersQuerySchema = pageQuerySchema;
 var listProvidersResponseSchema = pageSchema(providerSettingsSchema);
 var orderSchema = z69.array(providerKeySchema).max(MAX_PROVIDERS).refine((order) => new Set(order).size === order.length, "A provider is listed once");
-var waterfallOrderSchema = z69.strictObject({
+var orderShape = {
   person: orderSchema,
   company: orderSchema,
   email_verification: orderSchema
-});
+};
+var waterfallOrderSchema = z69.object(orderShape);
 var waterfallSchema = z69.object({
   order: waterfallOrderSchema,
   version: z69.number().int().min(0).max(1e6),
   updatedAt: timestampSchema.nullable()
 });
 var setWaterfallRequestSchema = z69.strictObject({
-  order: waterfallOrderSchema,
+  order: z69.strictObject(orderShape),
   expectedVersion: z69.number().int().min(0).max(1e6)
 });
 var enrichmentBudgetSchema = z69.object({
