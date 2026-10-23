@@ -114,8 +114,8 @@ export const enrollProspectsRequestSchema = z.strictObject({
 /** The body that enrolls Prospects. */
 export type EnrollProspectsRequest = z.infer<typeof enrollProspectsRequestSchema>
 
-/** Why a Prospect was not enrolled: `suppressed`, `no_consent` or `already_active` (in another active Campaign, or this one). */
-export const ENROLL_REFUSALS = ['suppressed', 'no_consent', 'already_active'] as const
+/** Why a Prospect was not enrolled: `suppressed`, `no_consent`, `already_active` (in another active Campaign, or this one) or `not_found` (unknown or out of view). */
+export const ENROLL_REFUSALS = ['suppressed', 'no_consent', 'already_active', 'not_found'] as const
 
 /** Why a Prospect was not enrolled. */
 export const enrollRefusalSchema = z.enum(ENROLL_REFUSALS)
@@ -128,6 +128,7 @@ export const ENROLL_REFUSAL_CODES = {
   suppressed: 'enrollment.suppressed',
   no_consent: 'enrollment.no_consent',
   already_active: 'enrollment.already_active',
+  not_found: 'enrollment.not_found',
 } as const satisfies Record<EnrollRefusal, string>
 
 /**

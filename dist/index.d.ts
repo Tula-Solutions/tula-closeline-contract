@@ -3281,12 +3281,13 @@ declare const enrollProspectsRequestSchema: z18.ZodObject<{
 }, z18.core.$strict>;
 /** The body that enrolls Prospects. */
 type EnrollProspectsRequest = z18.infer<typeof enrollProspectsRequestSchema>;
-/** Why a Prospect was not enrolled: `suppressed`, `no_consent` or `already_active` (in another active Campaign, or this one). */
-declare const ENROLL_REFUSALS: readonly ["suppressed", "no_consent", "already_active"];
+/** Why a Prospect was not enrolled: `suppressed`, `no_consent`, `already_active` (in another active Campaign, or this one) or `not_found` (unknown or out of view). */
+declare const ENROLL_REFUSALS: readonly ["suppressed", "no_consent", "already_active", "not_found"];
 /** Why a Prospect was not enrolled. */
 declare const enrollRefusalSchema: z18.ZodEnum<{
 	already_active: "already_active";
 	no_consent: "no_consent";
+	not_found: "not_found";
 	suppressed: "suppressed";
 }>;
 /** Why a Prospect was not enrolled. */
@@ -3296,6 +3297,7 @@ declare const ENROLL_REFUSAL_CODES: {
 	readonly suppressed: "enrollment.suppressed";
 	readonly no_consent: "enrollment.no_consent";
 	readonly already_active: "enrollment.already_active";
+	readonly not_found: "enrollment.not_found";
 };
 /**
 * What happened to one Prospect of an enroll request: `enrolled` with its Enrollment, or
@@ -3311,6 +3313,7 @@ declare const enrollResultSchema: z18.ZodObject<{
 	refusal: z18.ZodNullable<z18.ZodEnum<{
 		already_active: "already_active";
 		no_consent: "no_consent";
+		not_found: "not_found";
 		suppressed: "suppressed";
 	}>>;
 	enrollmentId: z18.ZodNullable<z18.core.$ZodBranded<z18.ZodString, "enr", "out">>;
@@ -3328,6 +3331,7 @@ declare const enrollProspectsResponseSchema: z18.ZodObject<{
 		refusal: z18.ZodNullable<z18.ZodEnum<{
 			already_active: "already_active";
 			no_consent: "no_consent";
+			not_found: "not_found";
 			suppressed: "suppressed";
 		}>>;
 		enrollmentId: z18.ZodNullable<z18.core.$ZodBranded<z18.ZodString, "enr", "out">>;
@@ -3508,8 +3512,9 @@ import { ErrorDefinition as ErrorDefinition_8gwh456 } from "..";
 *   archived one, editing a running Sequence, pausing a draft).
 * - `campaign.invalid_sequence` (422): the Sequence has a cycle without a wait, an unreachable
 *   Step, an unknown target, a duplicate key or a Step that cannot reach an end; `details` lists
-*   the problems as closed codes (`SEQUENCE_PROBLEMS`). A branch without a default or a wrong
-*   Variant count is `request.invalid` at the edge.
+*   the problems as closed codes (`SEQUENCE_PROBLEMS`). The body schema (`sequenceStepsSchema`)
+*   rejects the same input, so the service answers this 422 code, not `request.invalid`, for a
+*   body that fails it after the envelope parses; it recomputes `findSequenceProblems` for `details`.
 * - `campaign.sequence_version_conflict` (409): the Sequence was saved since the caller read it.
 * - `campaign.not_previewed` (409): launch needs the current Sequence version previewed.
 * - `campaign.no_healthy_mailbox` (409): no healthy connected Mailbox can send for the Campaign.
@@ -3522,7 +3527,8 @@ import { ErrorDefinition as ErrorDefinition_8gwh456 } from "..";
 * - `enrollment.already_active` (409): the Prospect is already in an active Campaign.
 * - `variant.not_found` (404): the Step has no such Variant, or the Step has no test.
 * - `variant.invalid_weights` (422): Variants are not two to four with weights adding up to 100;
-*   `details` carries the weights' total.
+*   `details` carries the weights' total. As with
+*   `campaign.invalid_sequence`, the service maps the schema's failure to this code.
 * - `variant.already_promoted` (409): a winner was already promoted for the Step.
 * - `play.not_found` (404): unknown or not in the Organization.
 * - `play.no_evidence` (409): accepting a Play that cites no evidence needs the acknowledgement.

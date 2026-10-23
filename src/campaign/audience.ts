@@ -69,6 +69,10 @@ export const audienceCountsSchema = z
     if (c.verified + c.unverified !== c.total) {
       issue('unverified', 'Verified and unverified add up to the total')
     }
+    const refused = Math.max(c.suppressed, c.noConsent, c.activeInOtherCampaign)
+    if (c.eligible + refused > c.total) {
+      issue('eligible', 'Eligible and the largest refusal count fit in the total')
+    }
     for (const field of ['suppressed', 'noConsent', 'activeInOtherCampaign', 'eligible'] as const) {
       if (c[field] > c.total) {
         issue(field, 'No count is above the total')

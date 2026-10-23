@@ -207,7 +207,7 @@ export const CAMPAIGN_ROUTES: Readonly<Record<CampaignRouteName, CampaignRoute>>
       'variant.invalid_weights',
     ],
     commonErrors: [...IDEMPOTENT_ERRORS],
-    description: `Replaces the Steps of a draft, ready or paused Campaign with a new Sequence version, given the version the caller edited (expectedVersion). The Sequence must be valid: no loop that passes no wait, no unreachable Step, every target a known Step, every Step able to reach an end, every branch with a default. A graph problem is campaign.invalid_sequence (422) with the problems in details; a test whose Variants are not two to four with weights adding up to 100 is variant.invalid_weights (422); a stale expectedVersion is campaign.sequence_version_conflict (409); a running or archived Campaign is campaign.invalid_state. A new version needs a new preview and returns a ready Campaign to draft. Enrollments already in the Sequence keep the version they started on. ${KEY} Repeating the same body at the same expectedVersion changes nothing. ${NO_TEXT} ${VISIBILITY}`,
+    description: `Replaces the Steps of a draft, ready or paused Campaign with a new Sequence version, given the version the caller edited (expectedVersion). The Sequence must be valid: no loop that passes no wait, no unreachable Step, every target a known Step, every Step able to reach an end, every branch with a default. The body schema rejects these inputs, and the service answers with the area codes rather than request.invalid once the envelope parses: a graph problem is campaign.invalid_sequence (422) with the problems in details; a test whose Variants are not two to four with weights adding up to 100 is variant.invalid_weights (422); a stale expectedVersion is campaign.sequence_version_conflict (409); a running or archived Campaign is campaign.invalid_state. A new version needs a new preview and returns a ready Campaign to draft. Enrollments already in the Sequence keep the version they started on. ${KEY} Repeating the same body at the same expectedVersion changes nothing. ${NO_TEXT} ${VISIBILITY}`,
   }),
   startAudienceCheck: inboundRoute({
     method: 'POST',
@@ -249,7 +249,7 @@ export const CAMPAIGN_ROUTES: Readonly<Record<CampaignRouteName, CampaignRoute>>
     keyRequired: true,
     errors: ['campaign.not_found', 'campaign.invalid_state'],
     commonErrors: [...IDEMPOTENT_ERRORS],
-    description: `Enrolls 1 to 100 listed Prospects into a running or paused Campaign and answers one result per Prospect in the order asked: enrolled, or refused with suppressed (enrollment.suppressed), no_consent (enrollment.no_consent) or already_active (enrollment.already_active; one active Campaign per Prospect, with no setting to change that). A refusal does not fail the request. ${KEY} A Prospect already in this Campaign is already_active with its Enrollment's id; a replay changes nothing. Only Prospects the caller may see are enrolled; any other is reported as not enrolled the same as an unknown one. A draft or archived Campaign is campaign.invalid_state. ${VISIBILITY}`,
+    description: `Enrolls 1 to 100 listed Prospects into a running or paused Campaign and answers one result per Prospect in the order asked: enrolled, or refused with suppressed (enrollment.suppressed), no_consent (enrollment.no_consent) or already_active (enrollment.already_active; one active Campaign per Prospect, with no setting to change that). A refusal does not fail the request. ${KEY} A Prospect already in this Campaign is already_active with its Enrollment's id; a replay changes nothing. Only Prospects the caller may see are enrolled; any other, and an unknown one, is refused as not_found (enrollment.not_found) with no Enrollment id, so existence is not revealed. A draft or archived Campaign is campaign.invalid_state. ${VISIBILITY}`,
   }),
   listEnrollments: inboundRoute({
     method: 'GET',
@@ -331,7 +331,7 @@ export const CAMPAIGN_ROUTES: Readonly<Record<CampaignRouteName, CampaignRoute>>
     idempotent: false,
     errors: ['play.not_found'],
     commonErrors: [],
-    description: `Reads one Play with its Steps and the evidence it cites, by id: Moments of won Deals' calls and pages of documents, never their text. A Play of another Organization is play.not_found (404).`,
+    description: `Reads one Play with its Steps and the evidence it cites, by id: Moments of won Deals' calls and pages of documents, never their text. A Play of another Organization is play.not_found (404), and so is a proposed or discarded Play for anyone but an Owner or Admin.`,
   }),
   createPlay: inboundRoute({
     method: 'POST',

@@ -216,6 +216,15 @@ describe('Sequence', () => {
     expect(sequenceStepsSchema.safeParse([{ ...end('z'), extra: 1 }]).success).toBe(false)
     expect(sequenceStepsSchema.safeParse([{ kind: 'sms', key: 'z' }]).success).toBe(false)
   })
+  test('the body schema rejects what the 422 codes name, and the details can be computed', () => {
+    const cyclic = [email('a', 'b'), email('b', 'a'), end('z')]
+    expect(setSequenceRequestSchema.safeParse({ expectedVersion: 0, steps: cyclic }).success).toBe(
+      false
+    )
+    const problems = findSequenceProblems(cyclic)
+    expect(invalidSequenceDetailsSchema.safeParse({ problems }).success).toBe(true)
+    expect(CAMPAIGN_ROUTES.setSequence.description).toContain('rather than request.invalid')
+  })
   test('the set request needs a version and valid Steps', () => {
     expect(
       setSequenceRequestSchema.safeParse({ expectedVersion: 0, steps: validSteps }).success
@@ -417,6 +426,9 @@ describe('audience check and launch check', () => {
     expect(
       audienceCheckSchema.safeParse({ ...check, counts: { ...counts, eligible: 101 } }).success
     ).toBe(false)
+    expect(
+      audienceCheckSchema.safeParse({ ...check, counts: { ...counts, eligible: 100 } }).success
+    ).toBe(false)
   })
   const items = (results: string[]) =>
     ['sequence', 'preview', 'audience', 'mailbox'].map((c, i) => ({
@@ -519,7 +531,7 @@ describe('Enrollment', () => {
         enrollmentId: enr,
       }).success
     ).toBe(true)
-    for (const refusal of ['suppressed', 'no_consent', 'already_active']) {
+    for (const refusal of ['suppressed', 'no_consent', 'already_active', 'not_found']) {
       expect(
         enrollResultSchema.safeParse({
           prospectId: prs,
@@ -777,6 +789,8 @@ describe('routes', () => {
     expect(CAMPAIGN_ROUTES.enrollProspects.description).toContain('enrollment.suppressed')
     expect(CAMPAIGN_ROUTES.enrollProspects.description).toContain('enrollment.no_consent')
     expect(CAMPAIGN_ROUTES.enrollProspects.description).toContain('enrollment.already_active')
+    expect(CAMPAIGN_ROUTES.enrollProspects.description).toContain('enrollment.not_found')
+    expect(CAMPAIGN_ROUTES.getPlay.description).toContain('proposed or discarded')
     expect(CAMPAIGN_ROUTES.getCampaign.description).toContain('never 403')
     expect(CAMPAIGN_ROUTES.getEnrollment.description).toContain('never 403')
   })
@@ -797,12 +811,13 @@ describe('routes', () => {
         continue
       }
       for (const r of Object.values(value as Record<string, { method: string; path: string }>)) {
-        const key = `${r.method} ${r.path}`
+        const key = `${r.method} ${r.path.replace(/\{[^}]+\}/g, '{}')}`
         expect(seen.has(key) ? `${key} in ${seen.get(key)} and ${name}` : null).toBeNull()
         seen.set(key, name)
       }
     }
     expect(seen.has('GET /v1/campaigns')).toBe(true)
+    expect(new Set(seen.values()).size).toBeGreaterThanOrEqual(5)
   })
   test('the area is exported from the package index', async () => {
     const api = (await import('../index')) as Record<string, unknown>

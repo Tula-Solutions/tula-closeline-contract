@@ -11,8 +11,9 @@ import { defineErrors } from '../errors'
  *   archived one, editing a running Sequence, pausing a draft).
  * - `campaign.invalid_sequence` (422): the Sequence has a cycle without a wait, an unreachable
  *   Step, an unknown target, a duplicate key or a Step that cannot reach an end; `details` lists
- *   the problems as closed codes (`SEQUENCE_PROBLEMS`). A branch without a default or a wrong
- *   Variant count is `request.invalid` at the edge.
+ *   the problems as closed codes (`SEQUENCE_PROBLEMS`). The body schema (`sequenceStepsSchema`)
+ *   rejects the same input, so the service answers this 422 code, not `request.invalid`, for a
+ *   body that fails it after the envelope parses; it recomputes `findSequenceProblems` for `details`.
  * - `campaign.sequence_version_conflict` (409): the Sequence was saved since the caller read it.
  * - `campaign.not_previewed` (409): launch needs the current Sequence version previewed.
  * - `campaign.no_healthy_mailbox` (409): no healthy connected Mailbox can send for the Campaign.
@@ -25,7 +26,8 @@ import { defineErrors } from '../errors'
  * - `enrollment.already_active` (409): the Prospect is already in an active Campaign.
  * - `variant.not_found` (404): the Step has no such Variant, or the Step has no test.
  * - `variant.invalid_weights` (422): Variants are not two to four with weights adding up to 100;
- *   `details` carries the weights' total.
+ *   `details` carries the weights' total. As with
+ *   `campaign.invalid_sequence`, the service maps the schema's failure to this code.
  * - `variant.already_promoted` (409): a winner was already promoted for the Step.
  * - `play.not_found` (404): unknown or not in the Organization.
  * - `play.no_evidence` (409): accepting a Play that cites no evidence needs the acknowledgement.
