@@ -1456,6 +1456,7 @@ var SALES_HISTORY_ROUTES = Object.freeze({
 
 // src/playbook/search.ts
 var MAX_SEARCH_LIMIT = 20;
+var MAX_MOMENT_INDEX = 999;
 var DEFAULT_SEARCH_LIMIT = 5;
 var MAX_SEARCH_TURNS = 6;
 var MAX_SEARCH_TEXT_CHARACTERS = 2000;
@@ -1483,9 +1484,11 @@ var momentSnippetSchema = z18.string().max(MAX_MOMENT_SNIPPET_CHARACTERS * 2).re
 function momentSnippet(text) {
   return excerptText(text, MAX_MOMENT_SNIPPET_CHARACTERS);
 }
+var momentIndexSchema = z18.number().int().min(0).max(MAX_MOMENT_INDEX);
 var momentMatchSchema = z18.object({
   callId: callIdSchema,
   dealRecordId: dealRecordIdSchema,
+  momentIndex: momentIndexSchema.optional(),
   score: z18.number().finite(),
   prospect: momentSnippetSchema,
   repNext: momentSnippetSchema
@@ -1551,7 +1554,7 @@ var SEARCH_ROUTES = Object.freeze({
     success: [200],
     errors: [],
     commonErrors: ["request.invalid", "server.timeout", "server.unavailable"],
-    description: "Finds Moments in the Organization's won Deals that resemble the conversation so far, so the Copilot can show what worked. The body is the latest turns (1 to 6, each a role of rep or prospect and its text, at most 2000 characters in all) and an optional limit (1 to 20, default 5). It answers the best matches, best first, at most 20, each with the opaque callId and dealRecordId, a score and two snippets of at most 512 characters (what the Prospect said and what the Rep said next), and evidence: the number of candidate Moments and the distinct won Deals among them. The evidence counts only the over-fetched candidate window (the best min(100, limit x 5) Moments by similarity, after the eligibility checks), not every won Deal in the Organization. There is no cursor: the result is a bounded top-k. Only Moments of Calls whose Deal is won and whose Call is in search are returned, and only from the caller's Organization. It never returns the customer's dealId, name or amount. The request and the snippets are tenant conversation text and are never logged. It only reads, so it takes no Idempotency-Key and a repeat is harmless. request.invalid (400) for a body outside the bounds; server.timeout (504) when it takes too long; server.unavailable (503) with a Retry-After header when the embedding model or the vector store cannot answer. Owner and Admin only, as for all sales history (the owner's decision of 2026-10-13); a Manager or a Rep gets auth.forbidden, because a Rep sees only their own conversations. The phase-2 Copilot calls this service-to-service, not with a Rep's token."
+    description: "Finds Moments in the Organization's won Deals that resemble the conversation so far, so the Copilot can show what worked. The body is the latest turns (1 to 6, each a role of rep or prospect and its text, at most 2000 characters in all) and an optional limit (1 to 20, default 5). It answers the best matches, best first, at most 20, each with the opaque callId and dealRecordId, the momentIndex (the 0-based number of the Moment within the Call, so a Citation can point at exactly this Moment), a score and two snippets of at most 512 characters (what the Prospect said and what the Rep said next), and evidence: the number of candidate Moments and the distinct won Deals among them. The evidence counts only the over-fetched candidate window (the best min(100, limit x 5) Moments by similarity, after the eligibility checks), not every won Deal in the Organization. There is no cursor: the result is a bounded top-k. Only Moments of Calls whose Deal is won and whose Call is in search are returned, and only from the caller's Organization. It never returns the customer's dealId, name or amount. The request and the snippets are tenant conversation text and are never logged. It only reads, so it takes no Idempotency-Key and a repeat is harmless. request.invalid (400) for a body outside the bounds; server.timeout (504) when it takes too long; server.unavailable (503) with a Retry-After header when the embedding model or the vector store cannot answer. Owner and Admin only, as for all sales history (the owner's decision of 2026-10-13); a Manager or a Rep gets auth.forbidden, because a Rep sees only their own conversations. The phase-2 Copilot calls this service-to-service, not with a Rep's token."
   }),
   searchDocuments: route3({
     method: "POST",
@@ -2269,7 +2272,8 @@ var citationRefSchema = z28.discriminatedUnion("kind", [
   z28.strictObject({
     kind: z28.literal("moment"),
     callId: callIdSchema,
-    dealRecordId: dealRecordIdSchema
+    dealRecordId: dealRecordIdSchema,
+    momentIndex: momentIndexSchema.optional()
   }),
   z28.strictObject({
     kind: z28.literal("document"),
@@ -2286,6 +2290,7 @@ var resolvedCitationSchema = z28.union([
     kind: z28.literal("moment"),
     callId: callIdSchema,
     dealRecordId: dealRecordIdSchema,
+    momentIndex: momentIndexSchema.optional(),
     prospect: momentSnippetSchema,
     repNext: momentSnippetSchema
   }),
@@ -2301,7 +2306,8 @@ var resolvedCitationSchema = z28.union([
     state: z28.literal("removed"),
     kind: z28.literal("moment"),
     callId: callIdSchema,
-    dealRecordId: dealRecordIdSchema
+    dealRecordId: dealRecordIdSchema,
+    momentIndex: momentIndexSchema.optional()
   }),
   z28.object({
     state: z28.literal("removed"),
@@ -2323,7 +2329,7 @@ var CITATION_ROUTES = Object.freeze({
     success: [200],
     errors: [],
     commonErrors: ["request.invalid", "server.timeout", "server.unavailable"],
-    description: "Resolves the Citations on a Draft back to the text they point at, so a Rep sees why a sentence was written. The body is refs: one to 20 references, each a Moment (callId, dealRecordId) or a document page (documentId, page or null). It answers one item per reference, in request order. An item is state available, with the snippets of at most 512 characters (what the Prospect said and the Rep said next for a Moment; the file name and passage for a document), or state removed, with the ids only and no text, when the Call, Deal or document was deleted, is no longer searchable, never existed or belongs to another Organization; none of those is an error, so existence is not revealed. It never returns the customer's dealId, name or amount. The snippets are tenant text and are never logged. It only reads, so it takes no Idempotency-Key and a repeat is harmless. request.invalid (400) for a body outside the bounds; server.timeout (504) when it takes too long; server.unavailable (503) with a Retry-After header when the store cannot answer. Every role that reads the Playbook (Owner, Admin, Manager and Rep) may call it; any other is auth.forbidden."
+    description: "Resolves the Citations on a Draft back to the text they point at, so a Rep sees why a sentence was written. The body is refs: one to 20 references, each a Moment (callId, dealRecordId and an optional momentIndex, the 0-based number of the Moment within the Call) or a document page (documentId, page or null). When momentIndex is present, a Moment resolves to that Moment of the Call's current build, or to removed if the current build no longer has it; when it is absent, it resolves to the lowest-numbered Moment of the Call's current build. An item for a Moment echoes the momentIndex it resolved (or was asked for, when removed). It answers one item per reference, in request order. An item is state available, with the snippets of at most 512 characters (what the Prospect said and the Rep said next for a Moment; the file name and passage for a document), or state removed, with the ids only and no text, when the Call, Deal or document was deleted, is no longer searchable, never existed or belongs to another Organization; none of those is an error, so existence is not revealed. It never returns the customer's dealId, name or amount. The snippets are tenant text and are never logged. It only reads, so it takes no Idempotency-Key and a repeat is harmless. request.invalid (400) for a body outside the bounds; server.timeout (504) when it takes too long; server.unavailable (503) with a Retry-After header when the store cannot answer. Every role that reads the Playbook (Owner, Admin, Manager and Rep) may call it; any other is auth.forbidden."
   })
 });
 
@@ -13092,6 +13098,7 @@ export {
   MAX_MESSAGE_BODY_LENGTH,
   MAX_MICRO_DOLLARS,
   MAX_MIN_GAP_SECONDS,
+  MAX_MOMENT_INDEX,
   MAX_MOMENT_SNIPPET_CHARACTERS,
   MAX_NAME_LENGTH,
   MAX_PAGE_SIZE,
@@ -14062,6 +14069,7 @@ export {
   metricValueSchema,
   microDollarsSchema,
   minuteOfDaySchema,
+  momentIndexSchema,
   momentMatchSchema,
   momentOriginSchema,
   momentQueryText,

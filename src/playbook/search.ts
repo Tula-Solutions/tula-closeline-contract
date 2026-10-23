@@ -13,6 +13,9 @@ import {
 /** The most Moments a search returns (the `limit` ceiling). */
 export const MAX_SEARCH_LIMIT = 20
 
+/** The highest `momentIndex` of a Moment within one Call: a Call has at most 1000 Moments. */
+export const MAX_MOMENT_INDEX = 999
+
 /** How many Moments a search returns when `limit` is left out. */
 export const DEFAULT_SEARCH_LIMIT = 5
 
@@ -90,8 +93,11 @@ export function momentSnippet(text: string): string {
   return excerptText(text, MAX_MOMENT_SNIPPET_CHARACTERS)
 }
 
+/** Which Moment of a Call: its 0-based number in the Call's current build, at most `MAX_MOMENT_INDEX`. */
+export const momentIndexSchema = z.number().int().min(0).max(MAX_MOMENT_INDEX)
+
 /**
- * One similar Moment from a won Deal: the Call and Deal it comes from (opaque ids), its similarity
+ * One similar Moment from a won Deal: the Call and Deal it comes from (opaque ids), its optional `momentIndex` (which Moment of the Call), its similarity
  * `score` (higher is closer) and two snippets, what the Prospect said and what the Rep said next.
  * It never carries the customer's `dealId`, name or amount; unknown fields are dropped. The
  * snippets are tenant Transcript text: never logged.
@@ -99,6 +105,7 @@ export function momentSnippet(text: string): string {
 export const momentMatchSchema = z.object({
   callId: callIdSchema,
   dealRecordId: dealRecordIdSchema,
+  momentIndex: momentIndexSchema.optional(),
   score: z.number().finite(),
   prospect: momentSnippetSchema,
   repNext: momentSnippetSchema,
@@ -253,7 +260,7 @@ export const SEARCH_ROUTES: Readonly<Record<SearchRouteName, PlaybookRoute>> = O
     errors: [],
     commonErrors: ['request.invalid', 'server.timeout', 'server.unavailable'],
     description:
-      "Finds Moments in the Organization's won Deals that resemble the conversation so far, so the Copilot can show what worked. The body is the latest turns (1 to 6, each a role of rep or prospect and its text, at most 2000 characters in all) and an optional limit (1 to 20, default 5). It answers the best matches, best first, at most 20, each with the opaque callId and dealRecordId, a score and two snippets of at most 512 characters (what the Prospect said and what the Rep said next), and evidence: the number of candidate Moments and the distinct won Deals among them. The evidence counts only the over-fetched candidate window (the best min(100, limit x 5) Moments by similarity, after the eligibility checks), not every won Deal in the Organization. There is no cursor: the result is a bounded top-k. Only Moments of Calls whose Deal is won and whose Call is in search are returned, and only from the caller's Organization. It never returns the customer's dealId, name or amount. The request and the snippets are tenant conversation text and are never logged. It only reads, so it takes no Idempotency-Key and a repeat is harmless. request.invalid (400) for a body outside the bounds; server.timeout (504) when it takes too long; server.unavailable (503) with a Retry-After header when the embedding model or the vector store cannot answer. Owner and Admin only, as for all sales history (the owner's decision of 2026-10-13); a Manager or a Rep gets auth.forbidden, because a Rep sees only their own conversations. The phase-2 Copilot calls this service-to-service, not with a Rep's token.",
+      "Finds Moments in the Organization's won Deals that resemble the conversation so far, so the Copilot can show what worked. The body is the latest turns (1 to 6, each a role of rep or prospect and its text, at most 2000 characters in all) and an optional limit (1 to 20, default 5). It answers the best matches, best first, at most 20, each with the opaque callId and dealRecordId, the momentIndex (the 0-based number of the Moment within the Call, so a Citation can point at exactly this Moment), a score and two snippets of at most 512 characters (what the Prospect said and what the Rep said next), and evidence: the number of candidate Moments and the distinct won Deals among them. The evidence counts only the over-fetched candidate window (the best min(100, limit x 5) Moments by similarity, after the eligibility checks), not every won Deal in the Organization. There is no cursor: the result is a bounded top-k. Only Moments of Calls whose Deal is won and whose Call is in search are returned, and only from the caller's Organization. It never returns the customer's dealId, name or amount. The request and the snippets are tenant conversation text and are never logged. It only reads, so it takes no Idempotency-Key and a repeat is harmless. request.invalid (400) for a body outside the bounds; server.timeout (504) when it takes too long; server.unavailable (503) with a Retry-After header when the embedding model or the vector store cannot answer. Owner and Admin only, as for all sales history (the owner's decision of 2026-10-13); a Manager or a Rep gets auth.forbidden, because a Rep sees only their own conversations. The phase-2 Copilot calls this service-to-service, not with a Rep's token.",
   }),
   searchDocuments: route({
     method: 'POST',

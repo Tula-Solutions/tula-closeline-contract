@@ -3,6 +3,7 @@ import { id } from '../core/fixtures'
 import {
   ALL_PLAYBOOK_ROUTES,
   DEFAULT_SEARCH_LIMIT,
+  MAX_MOMENT_INDEX,
   MAX_MOMENT_SNIPPET_CHARACTERS,
   MAX_SEARCH_CANDIDATES,
   MAX_SEARCH_LIMIT,
@@ -264,5 +265,28 @@ describe('momentQueryText', () => {
 
   test('adds nothing but the role label: no speaker name and no reply', () => {
     expect(momentQueryText(turns(3))).toBe('Rep: t0\nProspect: t1\nRep: t2')
+  })
+})
+
+describe('momentIndex on a search item', () => {
+  const base = {
+    callId: id('call'),
+    dealRecordId: id('deal'),
+    score: 0.5,
+    prospect: 'a',
+    repNext: 'b',
+  }
+  const evidence = { moments: 1, deals: 1 }
+  const parse = (item: unknown) =>
+    searchMomentsResponseSchema.safeParse({ items: [item], evidence })
+  test('is optional, an integer from 0 to the max', () => {
+    expect(parse(base).success).toBe(true)
+    expect(parse({ ...base, momentIndex: 4 }).success).toBe(true)
+    for (const momentIndex of [-1, 1.5, MAX_MOMENT_INDEX + 1]) {
+      expect(parse({ ...base, momentIndex }).success).toBe(false)
+    }
+  })
+  test('the description names the momentIndex', () => {
+    expect(SEARCH_ROUTES.searchMoments.description).toContain('momentIndex')
   })
 })
