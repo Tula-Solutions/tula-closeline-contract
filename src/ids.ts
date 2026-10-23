@@ -66,6 +66,15 @@ export const requestIdSchema = idSchema('req')
 /** The id of a Demo Request (`dreq_…`), a Visitor's submitted wish to see Closeline. */
 export const demoRequestIdSchema = idSchema('dreq')
 
+/** The id of a Booking (`bkg_…`), a time reserved on a Rep's calendar for a Prospect. */
+export const bookingIdSchema = idSchema('bkg')
+/** The id of a Booking Type (`bkt_…`), a named kind of Booking with a length, buffers and mode. */
+export const bookingTypeIdSchema = idSchema('bkt')
+/** The id of a Routing Rule (`rrl_…`). */
+export const routingRuleIdSchema = idSchema('rrl')
+/** The id of a stored routing decision (`rdc_…`): which rule picked which Rep, and who was skipped. */
+export const routingDecisionIdSchema = idSchema('rdc')
+
 /** The id of an Organization. */
 export type OrganizationId = z.infer<typeof organizationIdSchema>
 /** The id of a user. */
@@ -114,6 +123,14 @@ export type EventId = z.infer<typeof eventIdSchema>
 export type RequestId = z.infer<typeof requestIdSchema>
 /** The id of a Demo Request. */
 export type DemoRequestId = z.infer<typeof demoRequestIdSchema>
+/** The id of a Booking. */
+export type BookingId = z.infer<typeof bookingIdSchema>
+/** The id of a Booking Type. */
+export type BookingTypeId = z.infer<typeof bookingTypeIdSchema>
+/** The id of a Routing Rule. */
+export type RoutingRuleId = z.infer<typeof routingRuleIdSchema>
+/** The id of a stored routing decision. */
+export type RoutingDecisionId = z.infer<typeof routingDecisionIdSchema>
 
 const UUID_PATTERN =
   /^(?:[0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i
