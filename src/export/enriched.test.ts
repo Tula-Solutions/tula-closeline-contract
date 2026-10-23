@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { formatId } from '../ids'
 import { PROSPECT_COMPANY_FIELD_NAMES, PROSPECT_FIELD_NAMES } from '../prospect/values'
 import {
+  CSV_FORMULA_TRIGGER_CHARS,
   createExportRequestSchema,
   ENRICHED_EXPORT_COLUMNS,
   ENRICHED_EXPORT_FORMATS,
@@ -9,9 +10,11 @@ import {
   EXPORT_KINDS,
   EXPORT_ROUTES,
   enrichedProspectsFilterSchema,
+  escapeCsvCell,
   exportEnrichedProspectsRequestedEvent,
   exportJobSchema,
   exportKindSchema,
+  jsonlLine,
 } from './index'
 
 const hex = (n: number) => n.toString(16).padStart(32, '0')
@@ -38,9 +41,9 @@ const enrichedJob = {
 }
 
 describe('export kinds', () => {
-  test('two kinds, one format (csv)', () => {
+  test('two kinds, two formats (csv, jsonl)', () => {
     expect([...EXPORT_KINDS]).toEqual(['organization', 'enriched_prospects'])
-    expect([...ENRICHED_EXPORT_FORMATS]).toEqual(['csv'])
+    expect([...ENRICHED_EXPORT_FORMATS]).toEqual(['csv', 'jsonl'])
     expect(exportKindSchema.safeParse('everything').success).toBe(false)
   })
 })
@@ -69,6 +72,11 @@ describe('create request', () => {
     ['an unknown filter field', { kind: 'enriched_prospects', filter: { q: 'a'.repeat(5000) } }],
   ])('refuses %s', (_name, body) => {
     expect(createExportRequestSchema.safeParse(body).success).toBe(false)
+  })
+  test('accepts jsonl and keeps it on the job', () => {
+    const parsed = createExportRequestSchema.parse({ kind: 'enriched_prospects', format: 'jsonl' })
+    expect(parsed.format).toBe('jsonl')
+    expect(exportJobSchema.safeParse({ ...enrichedJob, format: 'jsonl' }).success).toBe(true)
   })
   test('accepts a bounded filter and carries no cursor', () => {
     const body = {
@@ -200,5 +208,49 @@ describe('routes', () => {
     expect(d).toContain('export.enriched_prospects_requested')
     expect(EXPORT_ROUTES.createExport.roles).toEqual(['owner', 'admin'])
     expect('publicApi' in EXPORT_ROUTES.createExport).toBe(false)
+  })
+})
+
+describe('CSV cell escaping', () => {
+  test('lists the characters that start a formula', () => {
+    expect([...CSV_FORMULA_TRIGGER_CHARS]).toEqual(['=', '+', '-', '@', '\t', '\r'])
+  })
+  test.each([
+    ['=SUM(A1)', "'=SUM(A1)"],
+    ['+1', "'+1"],
+    ['-2', "'-2"],
+    ['@cmd', "'@cmd"],
+    ['\tx', "'\tx"],
+    ['plain', 'plain'],
+    ['a=b', 'a=b'],
+    ['', ''],
+  ])('neutralises a formula: %p', (input, out) => {
+    expect(escapeCsvCell(input)).toBe(out)
+  })
+  test('quotes a cell with a comma, quote or line break, and doubles quotes', () => {
+    expect(escapeCsvCell('a,b')).toBe('"a,b"')
+    expect(escapeCsvCell('say "hi"')).toBe('"say ""hi"""')
+    expect(escapeCsvCell('a\nb')).toBe('"a\nb"')
+    expect(escapeCsvCell('=HYPERLINK("x","y")')).toBe('"\'=HYPERLINK(""x"",""y"")"')
+  })
+  test('writes a list as one cell joined with "; " and escapes the joined text', () => {
+    expect(escapeCsvCell(['a', 'b'])).toBe('a; b')
+    expect(escapeCsvCell(['=cmd', 'b'])).toBe("'=cmd; b")
+    expect(escapeCsvCell(['a,b', 'c'])).toBe('"a,b; c"')
+    expect(escapeCsvCell([])).toBe('')
+  })
+  test('writes null and undefined as an empty cell, numbers as digits', () => {
+    expect(escapeCsvCell(null)).toBe('')
+    expect(escapeCsvCell(undefined)).toBe('')
+    expect(escapeCsvCell(42)).toBe('42')
+    expect(escapeCsvCell(-5)).toBe('-5')
+  })
+})
+
+describe('jsonl line', () => {
+  test('is one JSON object per line with no formula escaping and no raw line break', () => {
+    const line = jsonlLine({ first_name: '=x', other: 'a\nb', n: null })
+    expect(line).toBe('{"first_name":"=x","other":"a\\nb","n":null}')
+    expect(line).not.toContain('\n')
   })
 })

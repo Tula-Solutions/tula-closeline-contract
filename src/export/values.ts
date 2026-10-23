@@ -82,8 +82,12 @@ export const exportKindSchema = z.enum(EXPORT_KINDS)
 /** What an export holds. */
 export type ExportKind = z.infer<typeof exportKindSchema>
 
-/** The formats of an enriched Prospect export. CSV is the only one. */
-export const ENRICHED_EXPORT_FORMATS = ['csv'] as const
+/**
+ * The formats of an enriched Prospect export: `csv` (one header row of ENRICHED_EXPORT_COLUMNS,
+ * cells written by `escapeCsvCell`) and `jsonl` (one JSON object per line keyed by the same
+ * columns, written by `jsonlLine`, values verbatim).
+ */
+export const ENRICHED_EXPORT_FORMATS = ['csv', 'jsonl'] as const
 
 /** The format of an enriched Prospect export. */
 export const enrichedExportFormatSchema = z.enum(ENRICHED_EXPORT_FORMATS)
@@ -108,7 +112,7 @@ export const enrichedProspectsFilterSchema = z.strictObject({
 export type EnrichedProspectsFilter = z.infer<typeof enrichedProspectsFilterSchema>
 
 /**
- * The columns of an enriched Prospect export CSV, in order: one row per Prospect with its Prospect
+ * The columns of an enriched Prospect export file, in order: one row per Prospect with its Prospect
  * Company. Each sourced field is followed by `<field>_source`, the Source kind of its current
  * value (`import`, `manual`, `enrichment:<provider>` and so on). Phone numbers are not enriched
  * and are left out. There is no consent evidence, IP address, user agent, transcript, message
@@ -258,3 +262,42 @@ export const exportDownloadSchema = z.object({
 
 /** The answer to asking for a download. */
 export type ExportDownload = z.infer<typeof exportDownloadSchema>
+
+/**
+ * The characters that make a spreadsheet read a CSV cell as a formula when it comes first:
+ * `=`, `+`, `-`, `@`, tab and carriage return.
+ */
+export const CSV_FORMULA_TRIGGER_CHARS = ['=', '+', '-', '@', '\t', '\r'] as const
+
+/**
+ * Writes one CSV cell of an enriched export. A string that starts with a formula trigger gets a
+ * leading `'` so a spreadsheet shows it as text; a string with a comma, quote or line break is
+ * quoted with quotes doubled; a list (`company_technologies`) is joined with `; ` into one cell and then escaped as a whole; `null` and `undefined` are an empty cell. A number is written as
+ * digits and is not escaped, so a negative number stays a number. Core must write every text cell
+ * through this, because Prospect data from imports and enrichment is untrusted.
+ */
+export function escapeCsvCell(
+  value: string | number | readonly string[] | null | undefined
+): string {
+  if (value === null || value === undefined) {
+    return ''
+  }
+  if (typeof value === 'number') {
+    return String(value)
+  }
+  const text = typeof value === 'string' ? value : value.join('; ')
+  const guarded = (CSV_FORMULA_TRIGGER_CHARS as readonly string[]).includes(text.charAt(0))
+    ? `'${text}`
+    : text
+  return /[",\r\n]/.test(guarded) ? `"${guarded.replaceAll('"', '""')}"` : guarded
+}
+
+/**
+ * Writes one line of a `jsonl` enriched export: the row as a single JSON object with no line
+ * break inside it. Values are verbatim; JSON is not read as a formula, so nothing is prefixed.
+ */
+export function jsonlLine(
+  row: Record<string, string | number | boolean | null | string[]>
+): string {
+  return JSON.stringify(row)
+}
