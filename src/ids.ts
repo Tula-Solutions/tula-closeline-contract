@@ -120,6 +120,14 @@ export const enrichmentRunIdSchema = idSchema('erun')
 export const enrichmentRunSetIdSchema = idSchema('erset')
 /** The id of a fit criterion (`fcr_…`): one named, weighted part of an Organization's ideal customer. */
 export const fitCriterionIdSchema = idSchema('fcr')
+/** The id of an Agent instruction version (`ains_…`): one immutable, numbered save of an Agent's written instructions. */
+export const agentInstructionVersionIdSchema = idSchema('ains')
+/** The id of an audit event (`aud_…`): one immutable record of who or what did what to which subject. */
+export const auditEventIdSchema = idSchema('aud')
+/** The id of a data export job (`exp_…`): one Organization-wide export, built in parts by the services. */
+export const exportJobIdSchema = idSchema('exp')
+/** The id of an API key (`akey_…`): a secret an Admin creates so a program can call Closeline. The secret is not the id. */
+export const apiKeyIdSchema = idSchema('akey')
 
 /** The id of an Organization. */
 export type OrganizationId = z.infer<typeof organizationIdSchema>
@@ -233,3 +241,11 @@ export type MessageId = z.infer<typeof messageIdSchema>
 export type DraftId = z.infer<typeof draftIdSchema>
 /** The id of an approval Decision. */
 export type DecisionId = z.infer<typeof decisionIdSchema>
+/** The id of an Agent instruction version. */
+export type AgentInstructionVersionId = z.infer<typeof agentInstructionVersionIdSchema>
+/** The id of an audit event. */
+export type AuditEventId = z.infer<typeof auditEventIdSchema>
+/** The id of a data export job. */
+export type ExportJobId = z.infer<typeof exportJobIdSchema>
+/** The id of an API key. */
+export type ApiKeyId = z.infer<typeof apiKeyIdSchema>

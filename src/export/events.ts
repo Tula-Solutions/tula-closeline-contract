@@ -1,0 +1,70 @@
+import { z } from 'zod'
+import { timestampSchema } from '../core/values'
+import { defineEvent } from '../events'
+import { exportJobIdSchema, membershipIdSchema } from '../ids'
+import {
+  exportPartFailureReasonSchema,
+  exportPrefixSchema,
+  exportServiceSchema,
+  MAX_EXPORT_PART_BYTES,
+  MAX_EXPORT_PART_FILES,
+} from './values'
+
+/**
+ * `export.requested` (version 1): an Admin or Owner asked for an export. Every service that holds
+ * a slice writes it and answers with `export.part_ready`. Ids and a flag only.
+ */
+export const exportRequestedEvent = defineEvent(
+  'export.requested',
+  1,
+  z.strictObject({
+    exportId: exportJobIdSchema,
+    requestedByMembershipId: membershipIdSchema,
+    includeRecordingLinks: z.boolean(),
+    requestedAt: timestampSchema,
+  })
+)
+
+/**
+ * `export.part_ready` (version 1): one service finished writing its slice as newline-delimited JSON
+ * and files under `prefix`. A redelivery for the same `exportId` and `service` changes nothing.
+ * Counts and a path only; never any exported data.
+ */
+export const exportPartReadyEvent = defineEvent(
+  'export.part_ready',
+  1,
+  z.strictObject({
+    exportId: exportJobIdSchema,
+    service: exportServiceSchema,
+    prefix: exportPrefixSchema,
+    fileCount: z.number().int().min(0).max(MAX_EXPORT_PART_FILES),
+    bytes: z.number().int().min(0).max(MAX_EXPORT_PART_BYTES),
+    readyAt: timestampSchema,
+  })
+)
+
+/**
+ * `export.part_failed` (version 1): one service could not write its slice, so the job fails at
+ * once instead of waiting for the timeout, which stays as the backstop for a service that never
+ * answers. The reason is from a closed list; no message, path or exported data.
+ */
+export const exportPartFailedEvent = defineEvent(
+  'export.part_failed',
+  1,
+  z.strictObject({
+    exportId: exportJobIdSchema,
+    service: exportServiceSchema,
+    reason: exportPartFailureReasonSchema,
+    failedAt: timestampSchema,
+  })
+)
+
+/** Every export event, by type. */
+export const EXPORT_EVENTS = {
+  'export.requested': exportRequestedEvent,
+  'export.part_ready': exportPartReadyEvent,
+  'export.part_failed': exportPartFailedEvent,
+} as const
+
+/** The type of an export event. */
+export type ExportEventType = keyof typeof EXPORT_EVENTS

@@ -1,3 +1,4 @@
+import type { ApiKeyScope } from './apikey/values'
 import type { CommonErrorCode } from './errors'
 import type { Role } from './tenancy'
 
@@ -11,6 +12,13 @@ export type InboundRoute<Code extends string> = {
   readonly public?: true
   /** True: a service-to-service route under `/internal`, called with the shared secret (ADR 0013), never with a user token. */
   readonly internal?: true
+  /**
+   * Set on a route that is part of the public API: it is published in the merged public OpenAPI
+   * document under `/v1`, and an API key reaches it only when its token carries this scope. Not
+   * the same as `public`, which means the route takes no token. Never set with `public` or
+   * `internal`, and the route still lists the roles an API key's ceiling is checked against.
+   */
+  readonly publicApi?: { readonly scope: ApiKeyScope }
   /** The success statuses, the first being the usual one. */
   readonly success: readonly number[]
   /** True when a retry of the route is safe by the `Idempotency-Key` header. */
