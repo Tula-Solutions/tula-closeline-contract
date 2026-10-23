@@ -17,6 +17,8 @@ import { defineErrors } from '../errors'
  * - `call.line_unavailable` (409): the Organization has no active Line the caller may place a Call
  *   from, or the Line named is released or porting.
  * - `call.limit_reached` (429): the Organization is at its cap of concurrent Calls.
+ * - `call.provider_call_not_found` (404): a telephony provider's call identifier (a Twilio call
+ *   SID) matches no Call. It is distinct from `call.not_found`, which names a Call by its own id.
  * - `call.not_ended` (409): the action (wrap-up) needs a Call that has ended.
  * - `line.number_unavailable` (409): the number asked for cannot be bought or ported.
  * - `line.released` (409): the Line is released and cannot be changed.
@@ -41,6 +43,10 @@ export const VOICE_ERRORS = {
       message: 'The Organization has reached its limit of concurrent Calls.',
     },
     not_ended: { status: 409, message: 'The Call has not ended yet.' },
+    provider_call_not_found: {
+      status: 404,
+      message: 'The telephony provider call is not known.',
+    },
   }),
   ...defineErrors('line', {
     not_found: { status: 404, message: 'The Line was not found.' },

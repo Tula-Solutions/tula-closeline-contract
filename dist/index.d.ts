@@ -27471,6 +27471,8 @@ import { ErrorDefinition as ErrorDefinition_8gwh4527 } from "..";
 * - `call.line_unavailable` (409): the Organization has no active Line the caller may place a Call
 *   from, or the Line named is released or porting.
 * - `call.limit_reached` (429): the Organization is at its cap of concurrent Calls.
+* - `call.provider_call_not_found` (404): a telephony provider's call identifier (a Twilio call
+*   SID) matches no Call. It is distinct from `call.not_found`, which names a Call by its own id.
 * - `call.not_ended` (409): the action (wrap-up) needs a Call that has ended.
 * - `line.number_unavailable` (409): the number asked for cannot be bought or ported.
 * - `line.released` (409): the Line is released and cannot be changed.
@@ -27485,6 +27487,7 @@ declare const VOICE_ERRORS: {
 	readonly "call.line_unavailable": ErrorDefinition_8gwh4527<"call.line_unavailable">;
 	readonly "call.not_ended": ErrorDefinition_8gwh4527<"call.not_ended">;
 	readonly "call.number_invalid": ErrorDefinition_8gwh4527<"call.number_invalid">;
+	readonly "call.provider_call_not_found": ErrorDefinition_8gwh4527<"call.provider_call_not_found">;
 	readonly "line.assignment_invalid": ErrorDefinition_8gwh4527<"line.assignment_invalid">;
 	readonly "line.not_found": ErrorDefinition_8gwh4527<"line.not_found">;
 	readonly "line.number_unavailable": ErrorDefinition_8gwh4527<"line.number_unavailable">;
