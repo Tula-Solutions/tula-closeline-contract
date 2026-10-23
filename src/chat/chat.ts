@@ -119,6 +119,18 @@ export const publicChatConsentRequestSchema = z.strictObject({
 /** The body of a public callback request from a Chat. */
 export type PublicChatConsentRequest = z.infer<typeof publicChatConsentRequestSchema>
 
+/**
+ * The receipt of a callback request from a Chat: that it arrived, and when. It does not say
+ * whether a call is coming, so it cannot reveal a suppressed number. No Inquiry, Prospect or Rep id.
+ */
+export const publicChatConsentReceiptSchema = z.strictObject({
+  received: z.literal(true),
+  receivedAt: timestampSchema,
+})
+
+/** The receipt of a callback request from a Chat. */
+export type PublicChatConsentReceipt = z.infer<typeof publicChatConsentReceiptSchema>
+
 /** The body of a public request to talk to a Rep: nothing; the Rep is chosen by routing. */
 export const publicChatHandoffRequestSchema = z.strictObject({})
 

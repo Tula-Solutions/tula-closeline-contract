@@ -88,18 +88,22 @@ describe('the public Inquiry request', () => {
     )
     expect(publicInquiryHeadersSchema.safeParse({ 'idempotency-key': KEY }).success).toBe(false)
   })
-  test('the receipt carries no id', () => {
+  test('the receipt does not reveal whether a number is suppressed', () => {
+    expect(publicInquiryReceiptSchema.safeParse({ received: true, receivedAt: NOW }).success).toBe(
+      true
+    )
     expect(
       publicInquiryReceiptSchema.safeParse({
         received: true,
         callbackExpected: true,
         receivedAt: NOW,
       }).success
-    ).toBe(true)
+    ).toBe(false)
+  })
+  test('the receipt carries no id', () => {
     expect(
       publicInquiryReceiptSchema.safeParse({
         received: true,
-        callbackExpected: true,
         receivedAt: NOW,
         inquiryId: inq,
       }).success
@@ -338,6 +342,9 @@ describe('routes', () => {
     expect(INQUIRY_ROUTES.retryInquiryCallback.errors).toEqual(
       expect.arrayContaining(['agent.paused', 'agent.consent_required', 'agent.outside_hours'])
     )
+    expect(INQUIRY_ROUTES.retryInquiryCallback.errors).toContain('inquiry.retries_exhausted')
+    expect(INQUIRY_ERRORS['inquiry.retries_exhausted'].status).toBe(409)
+    expect(INQUIRY_ROUTES.retryInquiryCallback.description).toContain('retries_exhausted')
   })
 })
 

@@ -14,6 +14,8 @@ import { defineErrors } from '../errors'
  *   Wording the form is set to display, or the embed has none. The Inquiry is not stored.
  * - `inquiry.embed_invalid` (422): an allowed-origin or wording the Organization cannot use (a
  *   wording that does not exist or does not cover the phone channel).
+ * - `inquiry.retries_exhausted` (409): the callback already used its attempts, so a manual retry is
+ *   refused and nothing is queued.
  * - `inquiry.not_found` (404): the Inquiry is unknown or not the caller's to see.
  */
 export const INQUIRY_ERRORS = {
@@ -26,6 +28,10 @@ export const INQUIRY_ERRORS = {
     },
     embed_invalid: { status: 422, message: 'The embed settings are not valid.' },
     not_found: { status: 404, message: 'The Inquiry was not found.' },
+    retries_exhausted: {
+      status: 409,
+      message: 'The callback has used all its attempts.',
+    },
   }),
 } as const
 

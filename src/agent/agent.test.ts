@@ -87,6 +87,10 @@ describe('Agent settings and ADR 0003', () => {
       setAgentSettingsRequestSchema.safeParse({ ...set, hours: day('09:00', '17:00') }).success
     ).toBe(true)
   })
+  test('hours are not empty and the route says where they are checked', () => {
+    expect(setAgentSettingsRequestSchema.safeParse({ ...set, hours: [] }).success).toBe(false)
+    expect(AGENT_ROUTES.setAgentSettings.description).toContain("Organization's zone")
+  })
   test('the caps are bounded', () => {
     expect(setAgentSettingsRequestSchema.safeParse({ ...set, maxCallSeconds: 0 }).success).toBe(
       false

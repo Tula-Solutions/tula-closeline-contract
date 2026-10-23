@@ -66,7 +66,7 @@ export const AGENT_ROUTES: Readonly<Record<AgentRouteName, AgentRoute>> = Object
     errors: ['agent.settings_invalid'],
     commonErrors: [...IDEMPOTENT_ERRORS],
     description:
-      "Replaces the Inbound Agent settings, so a repeat changes nothing. Pausing stops callbacks and answers at once. Hours can only narrow the fixed calling window in the Prospect's local time. The body has no field for the Disclosure, the Recording or Contact Consent: they are not settings and an unknown field is request.invalid (ADR 0003). A greeting is spoken after the Disclosure, never in place of it. Owner and Admin only.",
+      "Replaces the Inbound Agent settings, so a repeat changes nothing. Pausing stops callbacks and answers at once. Hours must not be empty and are checked in the Organization's zone (timeZone) against the fixed calling window; the service applies the Prospect-local window separately, so a call is placed only inside both. The body has no field for the Disclosure, the Recording or Contact Consent: they are not settings and an unknown field is request.invalid (ADR 0003). A greeting is spoken after the Disclosure, never in place of it. Owner and Admin only.",
   }),
   listQualificationQuestions: inboundRoute({
     method: 'GET',

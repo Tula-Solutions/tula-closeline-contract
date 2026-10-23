@@ -138,9 +138,15 @@ export const INQUIRY_ROUTES: Readonly<Record<InquiryRouteName, InquiryRoute>> = 
     success: [202],
     idempotent: true,
     keyRequired: true,
-    errors: ['inquiry.not_found', 'agent.paused', 'agent.consent_required', 'agent.outside_hours'],
+    errors: [
+      'inquiry.not_found',
+      'inquiry.retries_exhausted',
+      'agent.paused',
+      'agent.consent_required',
+      'agent.outside_hours',
+    ],
     commonErrors: [...IDEMPOTENT_ERRORS],
     description:
-      'Asks the Inbound Agent to place a callback again for an Inquiry whose callback was skipped or did not connect. It is queued, not dialled in the request, and every gate is checked again at dial time: a paused Agent is agent.paused (409), no Contact Consent for the phone channel (or one revoked) is agent.consent_required (409), and a time outside the calling hours is agent.outside_hours (409). Nothing can override those checks (ADR 0003). Requires an Idempotency-Key header: a replay answers 202 without queueing a second callback. Owner, Admin, and a Manager for Inquiries assigned to Reps of their Team.',
+      'Asks the Inbound Agent to place a callback again for an Inquiry whose callback was skipped or did not connect. It is queued, not dialled in the request, and every gate is checked again at dial time: a paused Agent is agent.paused (409), no Contact Consent for the phone channel (or one revoked) is agent.consent_required (409), and a time outside the calling hours is agent.outside_hours (409). Nothing can override those checks (ADR 0003). A callback that already has the maximum number of attempts (including after retries_exhausted) is inquiry.retries_exhausted (409) and nothing is queued, so a retry never pushes attempts past the maximum. Requires an Idempotency-Key header: a replay answers 202 without queueing a second callback. Owner, Admin, and a Manager for Inquiries assigned to Reps of their Team.',
   }),
 })

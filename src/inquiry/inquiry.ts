@@ -246,12 +246,13 @@ export const publicInquiryRequestSchema = z.strictObject({
 export type PublicInquiryRequest = z.infer<typeof publicInquiryRequestSchema>
 
 /**
- * The receipt a Prospect gets: that it arrived and whether a call is coming. No Inquiry, Prospect,
- * Rep or Organization id, and no echo of the address or number.
+ * The receipt a Prospect gets: that it arrived, and when. It says nothing about whether a call is
+ * coming, so a public caller cannot learn whether a number is suppressed, revoked or blocked by a
+ * paused Agent or the hours. No Inquiry, Prospect, Rep or Organization id, and no echo of the
+ * address or number.
  */
 export const publicInquiryReceiptSchema = z.strictObject({
   received: z.literal(true),
-  callbackExpected: z.boolean(),
   receivedAt: timestampSchema,
 })
 

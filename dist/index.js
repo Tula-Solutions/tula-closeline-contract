@@ -1536,7 +1536,7 @@ var AGENT_ROUTES = Object.freeze({
     idempotent: true,
     errors: ["agent.settings_invalid"],
     commonErrors: [...IDEMPOTENT_ERRORS],
-    description: "Replaces the Inbound Agent settings, so a repeat changes nothing. Pausing stops callbacks and answers at once. Hours can only narrow the fixed calling window in the Prospect's local time. The body has no field for the Disclosure, the Recording or Contact Consent: they are not settings and an unknown field is request.invalid (ADR 0003). A greeting is spoken after the Disclosure, never in place of it. Owner and Admin only."
+    description: "Replaces the Inbound Agent settings, so a repeat changes nothing. Pausing stops callbacks and answers at once. Hours must not be empty and are checked in the Organization's zone (timeZone) against the fixed calling window; the service applies the Prospect-local window separately, so a call is placed only inside both. The body has no field for the Disclosure, the Recording or Contact Consent: they are not settings and an unknown field is request.invalid (ADR 0003). A greeting is spoken after the Disclosure, never in place of it. Owner and Admin only."
   }),
   listQualificationQuestions: inboundRoute({
     method: "GET",
@@ -1754,7 +1754,7 @@ var minutesOf = (time) => {
   const [h = 0, m = 0] = time.split(":").map(Number);
   return h * 60 + m;
 };
-var hoursSchema = z23.array(workingDaySchema).max(7).refine((days) => days.every((d) => d.windows.every((w) => minutesOf(w.start) >= AGENT_CALLING_WINDOW.startHour * 60 && minutesOf(w.end) <= AGENT_CALLING_WINDOW.endHour * 60)), { message: "Hours lie within the fixed calling window" }).refine((days) => new Set(days.map((d) => d.day)).size === days.length, {
+var hoursSchema = z23.array(workingDaySchema).min(1).max(7).refine((days) => days.every((d) => d.windows.every((w) => minutesOf(w.start) >= AGENT_CALLING_WINDOW.startHour * 60 && minutesOf(w.end) <= AGENT_CALLING_WINDOW.endHour * 60)), { message: "Hours lie within the fixed calling window" }).refine((days) => new Set(days.map((d) => d.day)).size === days.length, {
   message: "Each day appears once"
 });
 var setAgentSettingsRequestSchema = z23.strictObject({
@@ -2781,6 +2781,10 @@ var publicChatConsentRequestSchema = z30.strictObject({
   callbackConsent: z30.boolean(),
   sourceUrl: sourceUrlSchema
 });
+var publicChatConsentReceiptSchema = z30.strictObject({
+  received: z30.literal(true),
+  receivedAt: timestampSchema
+});
 var publicChatHandoffRequestSchema = z30.strictObject({});
 var publicChatHandoffReplySchema = z30.strictObject({
   requested: z30.literal(true),
@@ -2844,7 +2848,7 @@ var CHAT_ROUTES = Object.freeze({
     keyRequired: true,
     errors: ["chat.origin_not_allowed", "chat.key_invalid"],
     commonErrors: [...PUBLIC_ERRORS, ...PUBLIC_REPLAY],
-    description: `Public: no token, no Organization; the Organization's publishable key in the path stands in for both. Starts a Chat from the website widget with the page address. The Origin header must be an allowed origin (chat.origin_not_allowed, 403). Requires an Idempotency-Key header (16 to 128 characters; the client generates one per Chat): a replay answers the original session with 200 and starts one Chat. Answers 201 with a secret session token, its expiry and the opening message, which says the visitor is talking to an AI. No Chat, Prospect or Rep id. A visitor-started Chat needs no Contact Consent; only a callback does. A filled honeypot (website) is answered exactly as a real request and stores nothing. Rate-limited by client address and by key. ${PUBLIC_SECRET}`
+    description: `Public: no token, no Organization; the Organization's publishable key in the path stands in for both. Starts a Chat from the website widget with the page address. The Origin header must be an allowed origin (chat.origin_not_allowed, 403). Requires an Idempotency-Key header (16 to 128 characters; the client generates one per Chat): a replay answers the original session with 200 and starts one Chat. Answers 201 with a secret session token, its expiry and the opening message, which says the visitor is talking to an AI. No Chat, Prospect or Rep id. A visitor-started Chat needs no Contact Consent; only a callback does. A filled honeypot (website) is answered like an accepted start but stores nothing: the session token it returns is an unusable session token, and any later call with it is chat.session_not_found. Rate-limited by client address and by key. ${PUBLIC_SECRET}`
   }),
   publicSendChatMessage: inboundRoute({
     method: "POST",
@@ -4710,7 +4714,11 @@ var INQUIRY_ERRORS = {
       message: "The consent wording shown with the form is missing or out of date."
     },
     embed_invalid: { status: 422, message: "The embed settings are not valid." },
-    not_found: { status: 404, message: "The Inquiry was not found." }
+    not_found: { status: 404, message: "The Inquiry was not found." },
+    retries_exhausted: {
+      status: 409,
+      message: "The callback has used all its attempts."
+    }
   })
 };
 // src/inquiry/events.ts
@@ -4839,7 +4847,6 @@ var publicInquiryRequestSchema = z49.strictObject({
 });
 var publicInquiryReceiptSchema = z49.strictObject({
   received: z49.literal(true),
-  callbackExpected: z49.boolean(),
   receivedAt: timestampSchema
 });
 // src/inquiry/routes.ts
@@ -4946,9 +4953,15 @@ var INQUIRY_ROUTES = Object.freeze({
     success: [202],
     idempotent: true,
     keyRequired: true,
-    errors: ["inquiry.not_found", "agent.paused", "agent.consent_required", "agent.outside_hours"],
+    errors: [
+      "inquiry.not_found",
+      "inquiry.retries_exhausted",
+      "agent.paused",
+      "agent.consent_required",
+      "agent.outside_hours"
+    ],
     commonErrors: [...IDEMPOTENT_ERRORS],
-    description: "Asks the Inbound Agent to place a callback again for an Inquiry whose callback was skipped or did not connect. It is queued, not dialled in the request, and every gate is checked again at dial time: a paused Agent is agent.paused (409), no Contact Consent for the phone channel (or one revoked) is agent.consent_required (409), and a time outside the calling hours is agent.outside_hours (409). Nothing can override those checks (ADR 0003). Requires an Idempotency-Key header: a replay answers 202 without queueing a second callback. Owner, Admin, and a Manager for Inquiries assigned to Reps of their Team."
+    description: "Asks the Inbound Agent to place a callback again for an Inquiry whose callback was skipped or did not connect. It is queued, not dialled in the request, and every gate is checked again at dial time: a paused Agent is agent.paused (409), no Contact Consent for the phone channel (or one revoked) is agent.consent_required (409), and a time outside the calling hours is agent.outside_hours (409). Nothing can override those checks (ADR 0003). A callback that already has the maximum number of attempts (including after retries_exhausted) is inquiry.retries_exhausted (409) and nothing is queued, so a retry never pushes attempts past the maximum. Requires an Idempotency-Key header: a replay answers 202 without queueing a second callback. Owner, Admin, and a Manager for Inquiries assigned to Reps of their Team."
   })
 });
 // src/marketing/demo-request.ts
@@ -7055,6 +7068,7 @@ export {
   publicBookingConfirmationSchema,
   publicBookingParamsSchema,
   publicBookingTypeSchema,
+  publicChatConsentReceiptSchema,
   publicChatConsentRequestSchema,
   publicChatHandoffReplySchema,
   publicChatHandoffRequestSchema,

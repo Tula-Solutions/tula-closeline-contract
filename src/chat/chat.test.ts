@@ -10,6 +10,7 @@ import {
   chatSchema,
   listChatMessagesQuerySchema,
   listChatsQuerySchema,
+  publicChatConsentReceiptSchema,
   publicChatConsentRequestSchema,
   publicChatHeadersSchema,
   publicChatMessageReplySchema,
@@ -128,6 +129,28 @@ describe('admin Chat views', () => {
         at: NOW,
       }).success
     ).toBe(true)
+  })
+})
+
+describe('the callback receipt and the honeypot', () => {
+  test('the receipt has a time only, no id and no verdict on the number', () => {
+    expect(
+      publicChatConsentReceiptSchema.safeParse({ received: true, receivedAt: NOW }).success
+    ).toBe(true)
+    expect(
+      publicChatConsentReceiptSchema.safeParse({ received: true, receivedAt: NOW, inquiryId: inq })
+        .success
+    ).toBe(false)
+    expect(
+      publicChatConsentReceiptSchema.safeParse({
+        received: true,
+        receivedAt: NOW,
+        callbackExpected: true,
+      }).success
+    ).toBe(false)
+  })
+  test('the route says what a honeypot hit gets', () => {
+    expect(CHAT_ROUTES.publicStartChat.description).toContain('unusable session token')
   })
 })
 

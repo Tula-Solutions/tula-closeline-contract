@@ -21,6 +21,7 @@ const minutesOf = (time: string): number => {
 
 const hoursSchema = z
   .array(workingDaySchema)
+  .min(1)
   .max(7)
   .refine(
     (days) =>
