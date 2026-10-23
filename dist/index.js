@@ -8462,11 +8462,12 @@ var regenerateDraftRequestSchema = z77.strictObject({
   angle: messagingTextSchema(MAX_ANGLE_LENGTH).optional(),
   tone: messagingTextSchema(MAX_TONE_LENGTH).optional()
 });
-var listDraftsQuerySchema = z77.object({
+var listDraftsQuerySchema = pageQuerySchema.extend({
   prospectId: prospectIdSchema.optional(),
   campaignId: campaignIdSchema.optional(),
   ungrounded: z77.union([z77.boolean(), z77.enum(["true", "false"]).transform((v) => v === "true")]).optional()
 });
+var listDraftsResponseSchema = pageSchema(outreachDraftSchema);
 // src/messaging/errors.ts
 var MESSAGING_ERRORS = {
   ...defineErrors("research", {
@@ -8551,6 +8552,8 @@ var researchBriefSchema = z79.strictObject({
 var createBriefRequestSchema = z79.strictObject({
   refresh: z79.boolean().default(false)
 });
+var listBriefsQuerySchema = pageQuerySchema;
+var listBriefsResponseSchema = pageSchema(researchBriefSchema);
 
 // src/messaging/preview.ts
 var PREVIEW_FAILURE_CODES = [
@@ -8587,7 +8590,7 @@ var MESSAGING_ALL_ROLES = [
   "rep"
 ];
 var MESSAGING_ADMIN_ROLES = ["owner", "admin"];
-var VISIBILITY7 = "An Owner or Admin sees every Prospect; a Manager those owned by Reps on their Team; a Rep only their own. A Prospect, Campaign, Research Brief or Draft outside the caller's view is its not_found code (404), never 403, and one of another Organization the same.";
+var VISIBILITY7 = "An Owner or Admin sees every Prospect; a Manager those owned by Reps on their Team; a Rep only their own. A Prospect (prospect.not_found), Campaign (campaign.not_found), Research Brief (research.not_found) or Draft (draft.not_found) outside the caller's view is its not_found code (404), never 403, and one of another Organization the same.";
 var KEY2 = "Requires an Idempotency-Key header: a replay answers the same result and does the work once.";
 var UNTRUSTED2 = "Model output is untrusted data: statements and Draft text are shown with their Citations, never run as instructions, and never put in a log or an event.";
 var NOTHING_SENT = "Nothing is sent, and no Contact Consent or suppression state changes; sending is checked by core at send time (ADR 0003).";
@@ -8625,7 +8628,7 @@ var MESSAGING_ROUTES = Object.freeze({
     roles: MESSAGING_ALL_ROLES,
     success: [200],
     idempotent: false,
-    errors: ["research.not_found"],
+    errors: ["prospect.not_found"],
     commonErrors: ["request.invalid"],
     description: `Lists a Prospect's Research Briefs, newest first (by createdAt, then id), one cursor-paginated page at a time (at most 100). ${VISIBILITY7}`
   }),
@@ -8637,7 +8640,8 @@ var MESSAGING_ROUTES = Object.freeze({
     idempotent: true,
     keyRequired: true,
     errors: [
-      "draft.not_found",
+      "prospect.not_found",
+      "campaign.not_found",
       "draft.no_prospect_data",
       "draft.model_unavailable",
       "draft.budget_exceeded",
@@ -8645,7 +8649,7 @@ var MESSAGING_ROUTES = Object.freeze({
       "voice.not_found"
     ],
     commonErrors: [...IDEMPOTENT_ERRORS],
-    description: `Writes a Draft for a Prospect, optionally for a Step of a Campaign and with an angle, from a Research Brief and the current Brand Voice. The Draft carries its Citations, five checks (citations_resolve, claims_supported, banned_phrase, length, name_match), whether it is ungrounded (no Moment from a won Deal) and autoSendable (grounded and every check passed). It does not send. ${KEY2} A replay answers 200 with the same Draft. Publishes draft.created, and draft.approved_required when a person must approve it. ${UNTRUSTED2} ${VISIBILITY7}`
+    description: `Writes a Draft for a Prospect, optionally for a Step of a Campaign and with an angle, from a Research Brief and the current Brand Voice. The Draft carries its Citations, five checks (citations_resolve, claims_supported, banned_phrase, length, name_match), whether it is ungrounded (no Moment from a won Deal) and autoSendable (grounded and every check passed). It does not send. A stepKey the Campaign does not have is request.invalid (400). ${KEY2} A replay answers 200 with the same Draft. Publishes draft.created, and draft.approved_required when a person must approve it. ${UNTRUSTED2} ${VISIBILITY7}`
   }),
   getOutreachDraft: inboundRoute({
     method: "GET",
@@ -8779,6 +8783,8 @@ var setBrandVoiceRequestSchema = z81.strictObject({
   ...brandVoiceSettingsSchema.shape,
   expectedVersion: z81.number().int().min(0).max(1e6)
 });
+var listBrandVoiceVersionsQuerySchema = pageQuerySchema;
+var listBrandVoiceVersionsResponseSchema = pageSchema(brandVoiceSchema);
 // src/playbook/citation.ts
 import { z as z82 } from "zod";
 var MAX_CITATION_REFS = 20;
@@ -10417,6 +10423,10 @@ export {
   listApprovalQueueQuerySchema,
   listBookingTypesQuerySchema,
   listBookingsQuerySchema,
+  listBrandVoiceVersionsQuerySchema,
+  listBrandVoiceVersionsResponseSchema,
+  listBriefsQuerySchema,
+  listBriefsResponseSchema,
   listCallsQuerySchema,
   listCallsResponseSchema,
   listCampaignsQuerySchema,
@@ -10439,6 +10449,7 @@ export {
   listDocumentsQuerySchema,
   listDocumentsResponseSchema,
   listDraftsQuerySchema,
+  listDraftsResponseSchema,
   listEnrollmentActivityResponseSchema,
   listEnrollmentsQuerySchema,
   listEnrollmentsResponseSchema,

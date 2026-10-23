@@ -3,6 +3,7 @@ import { campaignSchema } from '../campaign/campaign'
 import { CAMPAIGN_ERRORS } from '../campaign/errors'
 import { ERRORS } from '../errors'
 import { formatId } from '../ids'
+import { PROSPECT_ERRORS } from '../prospect/errors'
 import {
   acceptPreviewRequestSchema,
   brandVoiceSchema,
@@ -10,6 +11,12 @@ import {
   createBriefRequestSchema,
   draftCitationSchema,
   editDraftRequestSchema,
+  listBrandVoiceVersionsQuerySchema,
+  listBrandVoiceVersionsResponseSchema,
+  listBriefsQuerySchema,
+  listBriefsResponseSchema,
+  listDraftsQuerySchema,
+  listDraftsResponseSchema,
   MAX_PREVIEW_PROSPECTS,
   MESSAGING_ERRORS,
   MESSAGING_EVENTS,
@@ -256,6 +263,36 @@ describe('preview', () => {
   })
 })
 
+describe('lists', () => {
+  test.each([
+    ['briefs', listBriefsQuerySchema],
+    ['drafts', listDraftsQuerySchema],
+    ['voice versions', listBrandVoiceVersionsQuerySchema],
+  ] as const)('%s take a cursor and a limit of 1 to 100', (_name, schema) => {
+    expect(schema.safeParse({ cursor: 'abc', limit: 100 }).success).toBe(true)
+    expect(schema.safeParse({ limit: 101 }).success).toBe(false)
+    expect(schema.safeParse({ limit: 0 }).success).toBe(false)
+    expect(schema.parse({}).limit).toBe(25)
+  })
+  test('the Draft list filters and the pages carry nextCursor', () => {
+    expect(listDraftsQuerySchema.parse({ ungrounded: 'true' }).ungrounded).toBe(true)
+    for (const schema of [
+      listBriefsResponseSchema,
+      listDraftsResponseSchema,
+      listBrandVoiceVersionsResponseSchema,
+    ]) {
+      expect(schema.safeParse({ items: [], nextCursor: null }).success).toBe(true)
+    }
+  })
+  test('createDraft names the not_found codes its visibility text promises', () => {
+    const route = MESSAGING_ROUTES.createDraft
+    for (const code of ['prospect.not_found', 'campaign.not_found']) {
+      expect(route.description).toContain(code)
+      expect(route.errors).toContain(code as never)
+    }
+  })
+})
+
 describe('errors', () => {
   test('every code is area.reason, listed with a status and message', () => {
     for (const [code, def] of Object.entries(MESSAGING_ERRORS)) {
@@ -344,6 +381,7 @@ describe('routes', () => {
     const known = new Set([
       ...Object.keys(MESSAGING_ERRORS),
       ...Object.keys(CAMPAIGN_ERRORS),
+      ...Object.keys(PROSPECT_ERRORS),
       ...Object.keys(ERRORS),
     ])
     for (const [, r] of routes) {

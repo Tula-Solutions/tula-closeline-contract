@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { campaignLanguageSchema } from '../campaign/values'
 import { timestampSchema } from '../core/values'
 import { briefIdSchema, prospectIdSchema } from '../ids'
+import { pageQuerySchema, pageSchema } from '../pagination'
 import { citationSourceSchema } from './citation'
 import {
   MAX_ANGLE_LENGTH,
@@ -75,3 +76,9 @@ export const createBriefRequestSchema = z.strictObject({
 
 /** The body to make a Research Brief. */
 export type CreateBriefRequest = z.infer<typeof createBriefRequestSchema>
+
+/** The query of a Research Brief list: cursor and limit (at most 100). */
+export const listBriefsQuerySchema = pageQuerySchema
+
+/** One page of Research Briefs, newest first (by `createdAt`, then id). */
+export const listBriefsResponseSchema = pageSchema(researchBriefSchema)

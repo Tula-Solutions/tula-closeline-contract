@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { timestampSchema } from '../core/values'
 import { brandVoiceIdSchema, membershipIdSchema } from '../ids'
+import { pageQuerySchema, pageSchema } from '../pagination'
 import {
   MAX_BANNED_PHRASES,
   MAX_PREFERRED_WORDS,
@@ -49,3 +50,9 @@ export const setBrandVoiceRequestSchema = z.strictObject({
 
 /** The body to save a new Brand Voice version. */
 export type SetBrandVoiceRequest = z.infer<typeof setBrandVoiceRequestSchema>
+
+/** The query of a Brand Voice version list: cursor and limit (at most 100). */
+export const listBrandVoiceVersionsQuerySchema = pageQuerySchema
+
+/** One page of Brand Voice versions, newest first. */
+export const listBrandVoiceVersionsResponseSchema = pageSchema(brandVoiceSchema)

@@ -8,6 +8,7 @@ import {
   draftIdSchema,
   prospectIdSchema,
 } from '../ids'
+import { pageQuerySchema, pageSchema } from '../pagination'
 import { draftCitationSchema } from './citation'
 import {
   draftChannelSchema,
@@ -131,8 +132,8 @@ export const regenerateDraftRequestSchema = z.strictObject({
 /** The body to write a Draft again. */
 export type RegenerateDraftRequest = z.infer<typeof regenerateDraftRequestSchema>
 
-/** The filters of a Draft list: by Prospect, by Campaign, by whether it is grounded. */
-export const listDraftsQuerySchema = z.object({
+/** The query of a Draft list: cursor and limit (at most 100), and filters by Prospect, Campaign and whether it is ungrounded. */
+export const listDraftsQuerySchema = pageQuerySchema.extend({
   prospectId: prospectIdSchema.optional(),
   campaignId: campaignIdSchema.optional(),
   ungrounded: z
@@ -140,5 +141,8 @@ export const listDraftsQuerySchema = z.object({
     .optional(),
 })
 
-/** The filters of a Draft list. */
+/** The query of a Draft list. */
 export type ListDraftsQuery = z.infer<typeof listDraftsQuerySchema>
+
+/** One page of Drafts, newest first (by `createdAt`, then id). */
+export const listDraftsResponseSchema = pageSchema(outreachDraftSchema)

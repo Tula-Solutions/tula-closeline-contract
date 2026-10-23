@@ -1,5 +1,6 @@
 import type { CampaignErrorCode } from '../campaign/errors'
 import { IDEMPOTENT_ERRORS, type InboundRoute, inboundRoute } from '../inbound-route'
+import type { ProspectErrorCode } from '../prospect/errors'
 import type { Role } from '../tenancy'
 import type { MessagingErrorCode } from './errors'
 
@@ -31,10 +32,12 @@ export type MessagingRouteName =
   | 'acceptCampaignPreview'
 
 /** One messaging route; its errors are messaging codes and, for the preview, Campaign codes. */
-export type MessagingRoute = InboundRoute<MessagingErrorCode | CampaignErrorCode>
+export type MessagingRoute = InboundRoute<
+  MessagingErrorCode | CampaignErrorCode | ProspectErrorCode
+>
 
 const VISIBILITY =
-  "An Owner or Admin sees every Prospect; a Manager those owned by Reps on their Team; a Rep only their own. A Prospect, Campaign, Research Brief or Draft outside the caller's view is its not_found code (404), never 403, and one of another Organization the same."
+  "An Owner or Admin sees every Prospect; a Manager those owned by Reps on their Team; a Rep only their own. A Prospect (prospect.not_found), Campaign (campaign.not_found), Research Brief (research.not_found) or Draft (draft.not_found) outside the caller's view is its not_found code (404), never 403, and one of another Organization the same."
 
 const KEY =
   'Requires an Idempotency-Key header: a replay answers the same result and does the work once.'
@@ -86,7 +89,7 @@ export const MESSAGING_ROUTES: Readonly<Record<MessagingRouteName, MessagingRout
       roles: MESSAGING_ALL_ROLES,
       success: [200],
       idempotent: false,
-      errors: ['research.not_found'],
+      errors: ['prospect.not_found'],
       commonErrors: ['request.invalid'],
       description: `Lists a Prospect's Research Briefs, newest first (by createdAt, then id), one cursor-paginated page at a time (at most 100). ${VISIBILITY}`,
     }),
@@ -98,7 +101,8 @@ export const MESSAGING_ROUTES: Readonly<Record<MessagingRouteName, MessagingRout
       idempotent: true,
       keyRequired: true,
       errors: [
-        'draft.not_found',
+        'prospect.not_found',
+        'campaign.not_found',
         'draft.no_prospect_data',
         'draft.model_unavailable',
         'draft.budget_exceeded',
@@ -106,7 +110,7 @@ export const MESSAGING_ROUTES: Readonly<Record<MessagingRouteName, MessagingRout
         'voice.not_found',
       ],
       commonErrors: [...IDEMPOTENT_ERRORS],
-      description: `Writes a Draft for a Prospect, optionally for a Step of a Campaign and with an angle, from a Research Brief and the current Brand Voice. The Draft carries its Citations, five checks (citations_resolve, claims_supported, banned_phrase, length, name_match), whether it is ungrounded (no Moment from a won Deal) and autoSendable (grounded and every check passed). It does not send. ${KEY} A replay answers 200 with the same Draft. Publishes draft.created, and draft.approved_required when a person must approve it. ${UNTRUSTED} ${VISIBILITY}`,
+      description: `Writes a Draft for a Prospect, optionally for a Step of a Campaign and with an angle, from a Research Brief and the current Brand Voice. The Draft carries its Citations, five checks (citations_resolve, claims_supported, banned_phrase, length, name_match), whether it is ungrounded (no Moment from a won Deal) and autoSendable (grounded and every check passed). It does not send. A stepKey the Campaign does not have is request.invalid (400). ${KEY} A replay answers 200 with the same Draft. Publishes draft.created, and draft.approved_required when a person must approve it. ${UNTRUSTED} ${VISIBILITY}`,
     }),
     getOutreachDraft: inboundRoute({
       method: 'GET',
