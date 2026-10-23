@@ -5,7 +5,8 @@ import { userIdSchema } from '../ids'
 
 const MAX_RAW_LENGTH = 1000
 
-function hasControlCharacter(text: string, allowLineBreaks: boolean): boolean {
+/** True when the text holds a control character; line breaks and tabs are allowed when `allowLineBreaks` is set. */
+export function hasControlCharacter(text: string, allowLineBreaks: boolean): boolean {
   for (let index = 0; index < text.length; index += 1) {
     const code = text.charCodeAt(index)
     if (allowLineBreaks && (code === 0x0a || code === 0x09)) {
