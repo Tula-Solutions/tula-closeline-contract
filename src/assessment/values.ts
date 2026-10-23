@@ -65,9 +65,6 @@ export const MAX_FINDING_SPAN_OFFSET = 20_000
 /** The most categories an Assessment event lists. */
 export const MAX_FINDING_CATEGORIES = FINDING_CATEGORIES.length
 
-/** The most items one weekly-rates response holds. */
-export const MAX_RATE_ITEMS = 2000
-
 /** How the Assessment list is ordered: newest first, or flagged turns first by severity. */
 export const ASSESSMENT_SORTS = ['newest', 'worst_first'] as const
 
@@ -175,9 +172,10 @@ export type ListAssessmentsQuery = z.infer<typeof listAssessmentsQuerySchema>
 /** One page of Assessments. */
 export const listAssessmentsResponseSchema = pageSchema(assessmentSchema)
 
-/** The query of the weekly failed rate: a required date range of at most 13 months and an optional Agent kind. */
+/** The query of the weekly failed rate: a required date range of at most 13 months, an optional Agent kind, and a cursor and limit (at most 100). */
 export const getAssessmentRatesQuerySchema = z
   .object({ ...analyticsRangeShape, agentKind: agentKindSchema.optional() })
+  .extend(pageQuerySchema.shape)
   .superRefine((query, ctx) => checkAnalyticsRange(query, ctx))
 
 /** The query of the weekly failed rate. */
@@ -202,10 +200,10 @@ export const assessmentRateItemSchema = z.union([
 /** One weekly rate. */
 export type AssessmentRateItem = z.infer<typeof assessmentRateItemSchema>
 
-/** The answer to a weekly-rate read: bounded to 2,000 items, oldest week first. */
+/** The answer to a weekly-rate read: one cursor-paginated page of at most 100 items, oldest week first. */
 export const getAssessmentRatesResponseSchema = z.strictObject({
   ...analyticsRangeShape,
-  items: z.array(assessmentRateItemSchema).max(MAX_RATE_ITEMS),
+  ...pageSchema(assessmentRateItemSchema).shape,
 })
 
 /** The answer to a weekly-rate read. */

@@ -147,6 +147,10 @@ describe('requests and queries', () => {
       getAssessmentRatesQuerySchema.safeParse({ from: '2026-01-01', to: '2027-02-01' }).success
     ).toBe(false)
     expect(getAssessmentRatesQuerySchema.safeParse({}).success).toBe(false)
+    const range = { from: '2026-01-01', to: '2026-02-01' }
+    expect(getAssessmentRatesQuerySchema.safeParse({ ...range, limit: '101' }).success).toBe(false)
+    expect(getAssessmentRatesQuerySchema.safeParse({ ...range, limit: '100' }).success).toBe(true)
+    expect(getAssessmentRatesQuerySchema.safeParse({ ...range, cursor: 'abc' }).success).toBe(true)
   })
 })
 
@@ -157,7 +161,12 @@ describe('weekly rates', () => {
     agentKind: 'outbound',
     instructionVersion: 2,
   }
-  const response = (items: unknown[]) => ({ from: '2026-10-01', to: '2026-10-31', items })
+  const response = (items: unknown[], nextCursor: string | null = null) => ({
+    from: '2026-10-01',
+    to: '2026-10-31',
+    items,
+    nextCursor,
+  })
 
   test('each item has a record count and not_enough_data below 20', () => {
     const ok = { ...item, kind: 'rate', state: 'ok', value: 0.1, recordCount: 50 }
@@ -171,10 +180,16 @@ describe('weekly rates', () => {
     ).toBe(false)
   })
 
-  test('is bounded', () => {
+  test('is a page of at most 100 items with a next cursor', () => {
     const few = { ...item, kind: 'rate', state: 'not_enough_data', value: null, recordCount: 4 }
-    const items = Array.from({ length: 2001 }, () => few)
+    const items = Array.from({ length: 101 }, () => few)
     expect(getAssessmentRatesResponseSchema.safeParse(response(items)).success).toBe(false)
+    expect(getAssessmentRatesResponseSchema.safeParse(response(items.slice(0, 100))).success).toBe(
+      true
+    )
+    expect(
+      getAssessmentRatesResponseSchema.safeParse(response(items.slice(0, 100), 'abc')).success
+    ).toBe(true)
   })
 })
 

@@ -2061,7 +2061,7 @@ var ANALYTICS_ROUTES = Object.freeze({
     idempotent: false,
     errors: ["analytics.range_too_large"],
     commonErrors: ["request.invalid"],
-    description: `Reads one metric (sends, replies, positive_replies, meetings, outcomes_won or outcomes_lost) per day, optionally split by channel, agent_kind, campaign or rep and filtered by channel, Agent kind, Campaign and Rep. At most 400 lines of at most 400 days. ${RANGE} ${SAMPLE} ${SCOPE}`
+    description: `Reads one metric (sends, replies, positive_replies, meetings, outcomes_won or outcomes_lost) per day, optionally split by channel, agent_kind, campaign or rep and filtered by channel, Agent kind, Campaign and Rep. Lines (groups) are cursor-paginated, at most 20 a page (limit, cursor), each of at most 400 days. ${RANGE} ${SAMPLE} ${SCOPE}`
   }),
   listTable: inboundRoute({
     method: "GET",
@@ -2618,6 +2618,7 @@ var analyticsTableGroupSchema = z29.enum(ANALYTICS_TABLE_GROUPS);
 var MAX_ANALYTICS_RANGE_MONTHS = 13;
 var MAX_SERIES_POINTS = 400;
 var MAX_SERIES_GROUPS = 400;
+var MAX_SERIES_GROUPS_PER_PAGE = 20;
 var MIN_RATE_SAMPLE = 20;
 var MIN_SOURCE_SAMPLE = 20;
 var MAX_ANALYTICS_CSV_PAGE_SIZE = 1000;
@@ -2663,7 +2664,9 @@ var getSeriesQuerySchema = z29.object({
   metric: analyticsMetricSchema,
   groupBy: analyticsGroupBySchema.optional(),
   ...analyticsRangeShape,
-  ...analyticsFilterShape
+  ...analyticsFilterShape,
+  cursor: pageQuerySchema.shape.cursor,
+  limit: z29.union([z29.number(), z29.string().regex(/^\d{1,3}$/)]).transform((value) => Number(value)).pipe(z29.number().int().min(1).max(MAX_SERIES_GROUPS_PER_PAGE)).default(MAX_SERIES_GROUPS_PER_PAGE)
 }).superRefine((query, ctx) => checkAnalyticsRange(query, ctx));
 var listTableQuerySchema = z29.object({
   groupBy: analyticsTableGroupSchema,
@@ -2714,7 +2717,8 @@ var getSeriesResponseSchema = z29.strictObject({
   metric: analyticsMetricSchema,
   groupBy: analyticsGroupBySchema.nullable(),
   ...analyticsRangeShape,
-  series: z29.array(seriesLineSchema).max(MAX_SERIES_GROUPS)
+  series: z29.array(seriesLineSchema).max(MAX_SERIES_GROUPS_PER_PAGE),
+  nextCursor: pageSchema(z29.never()).shape.nextCursor
 });
 var tableRowSchema = z29.strictObject({
   group: analyticsGroupKeySchema,
@@ -2954,7 +2958,6 @@ var MAX_FINDINGS = 50;
 var MAX_FINDING_EXPLANATION_LENGTH = 500;
 var MAX_FINDING_SPAN_OFFSET = 20000;
 var MAX_FINDING_CATEGORIES = FINDING_CATEGORIES.length;
-var MAX_RATE_ITEMS = 2000;
 var ASSESSMENT_SORTS = ["newest", "worst_first"];
 var findingSpanSchema = z31.strictObject({
   start: z31.number().int().min(0).max(MAX_FINDING_SPAN_OFFSET),
@@ -3013,7 +3016,7 @@ var listAssessmentsQuerySchema = pageQuerySchema.extend({
   checkAnalyticsRange(query, ctx);
 });
 var listAssessmentsResponseSchema = pageSchema(assessmentSchema);
-var getAssessmentRatesQuerySchema = z31.object({ ...analyticsRangeShape, agentKind: agentKindSchema.optional() }).superRefine((query, ctx) => checkAnalyticsRange(query, ctx));
+var getAssessmentRatesQuerySchema = z31.object({ ...analyticsRangeShape, agentKind: agentKindSchema.optional() }).extend(pageQuerySchema.shape).superRefine((query, ctx) => checkAnalyticsRange(query, ctx));
 var isoWeekSchema = z31.string().regex(/^\d{4}-W(0[1-9]|[1-4]\d|5[0-3])$/);
 var rateItem = {
   week: isoWeekSchema,
@@ -3027,7 +3030,7 @@ var assessmentRateItemSchema = z31.union([
 ]);
 var getAssessmentRatesResponseSchema = z31.strictObject({
   ...analyticsRangeShape,
-  items: z31.array(assessmentRateItemSchema).max(MAX_RATE_ITEMS)
+  ...pageSchema(assessmentRateItemSchema).shape
 });
 
 // src/assessment/events.ts
@@ -3114,7 +3117,7 @@ var ASSESSMENT_ROUTES = Object.freeze({
     idempotent: false,
     errors: ["analytics.range_too_large"],
     commonErrors: ["request.invalid"],
-    description: "Reads the weekly rate of failed Assessments, per ISO week, Agent kind and instruction version, so an Admin sees whether a change helped. Each item carries recordCount, the Assessments judged that week; below 20 the state is not_enough_data with a null value. The range (from, to) spans at most 13 calendar months, else analytics.range_too_large (422). At most 2,000 items. Owner and Admin only."
+    description: "Reads the weekly rate of failed Assessments, per ISO week, Agent kind and instruction version, so an Admin sees whether a change helped. Each item carries recordCount, the Assessments judged that week; below 20 the state is not_enough_data with a null value. The range (from, to) spans at most 13 calendar months, else analytics.range_too_large (422). One cursor-paginated page at a time (at most 100 items). Owner and Admin only."
   })
 });
 // src/audit/errors.ts
@@ -12076,7 +12079,6 @@ export {
   MAX_QUESTION_PROMPT_LENGTH,
   MAX_QUESTION_SUGGESTIONS,
   MAX_QUEUED_DEAL_IMPORTS,
-  MAX_RATE_ITEMS,
   MAX_RECORDING_BYTES,
   MAX_RECORDING_KEY_LENGTH,
   MAX_RECORDING_SECONDS,
@@ -12101,6 +12103,7 @@ export {
   MAX_SEQUENCE_STEP,
   MAX_SEQUENCE_STEPS,
   MAX_SERIES_GROUPS,
+  MAX_SERIES_GROUPS_PER_PAGE,
   MAX_SERIES_POINTS,
   MAX_SIGNAL_FRESHNESS_DAYS,
   MAX_SIGNAL_LABEL_LENGTH,

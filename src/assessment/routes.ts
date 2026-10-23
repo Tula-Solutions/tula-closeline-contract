@@ -77,6 +77,6 @@ export const ASSESSMENT_ROUTES: Readonly<Record<AssessmentRouteName, AssessmentR
       errors: ['analytics.range_too_large'],
       commonErrors: ['request.invalid'],
       description:
-        'Reads the weekly rate of failed Assessments, per ISO week, Agent kind and instruction version, so an Admin sees whether a change helped. Each item carries recordCount, the Assessments judged that week; below 20 the state is not_enough_data with a null value. The range (from, to) spans at most 13 calendar months, else analytics.range_too_large (422). At most 2,000 items. Owner and Admin only.',
+        'Reads the weekly rate of failed Assessments, per ISO week, Agent kind and instruction version, so an Admin sees whether a change helped. Each item carries recordCount, the Assessments judged that week; below 20 the state is not_enough_data with a null value. The range (from, to) spans at most 13 calendar months, else analytics.range_too_large (422). One cursor-paginated page at a time (at most 100 items). Owner and Admin only.',
     }),
   })

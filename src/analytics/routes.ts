@@ -48,7 +48,7 @@ export const ANALYTICS_ROUTES: Readonly<Record<AnalyticsRouteName, AnalyticsRout
       idempotent: false,
       errors: ['analytics.range_too_large'],
       commonErrors: ['request.invalid'],
-      description: `Reads one metric (sends, replies, positive_replies, meetings, outcomes_won or outcomes_lost) per day, optionally split by channel, agent_kind, campaign or rep and filtered by channel, Agent kind, Campaign and Rep. At most 400 lines of at most 400 days. ${RANGE} ${SAMPLE} ${SCOPE}`,
+      description: `Reads one metric (sends, replies, positive_replies, meetings, outcomes_won or outcomes_lost) per day, optionally split by channel, agent_kind, campaign or rep and filtered by channel, Agent kind, Campaign and Rep. Lines (groups) are cursor-paginated, at most 20 a page (limit, cursor), each of at most 400 days. ${RANGE} ${SAMPLE} ${SCOPE}`,
     }),
     listTable: inboundRoute({
       method: 'GET',

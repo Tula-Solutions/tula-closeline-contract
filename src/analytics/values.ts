@@ -56,6 +56,9 @@ export const MAX_SERIES_POINTS = 400
 /** The most groups one series response holds. */
 export const MAX_SERIES_GROUPS = 400
 
+/** The most lines (groups) one page of a series holds; further groups come on the next page. */
+export const MAX_SERIES_GROUPS_PER_PAGE = 20
+
 /** The fewest records a rate needs before it is shown; below it the state is `not_enough_data`. */
 export const MIN_RATE_SAMPLE = 20
 
@@ -135,13 +138,19 @@ export const analyticsFilterShape = {
   repMembershipId: membershipIdSchema.optional(),
 } as const
 
-/** The query of a series read. Without `groupBy` the series is the total. */
+/** The query of a series read. Without `groupBy` the series is the total. Groups are paged: a cursor and a `limit` of groups (at most 20, default 20). */
 export const getSeriesQuerySchema = z
   .object({
     metric: analyticsMetricSchema,
     groupBy: analyticsGroupBySchema.optional(),
     ...analyticsRangeShape,
     ...analyticsFilterShape,
+    cursor: pageQuerySchema.shape.cursor,
+    limit: z
+      .union([z.number(), z.string().regex(/^\d{1,3}$/)])
+      .transform((value) => Number(value))
+      .pipe(z.number().int().min(1).max(MAX_SERIES_GROUPS_PER_PAGE))
+      .default(MAX_SERIES_GROUPS_PER_PAGE),
   })
   .superRefine((query, ctx) => checkAnalyticsRange(query, ctx))
 
@@ -245,12 +254,13 @@ export const seriesLineSchema = z.strictObject({
   points: z.array(seriesPointSchema).max(MAX_SERIES_POINTS),
 })
 
-/** The answer to a series read: the metric, the split, the range and the lines. */
+/** The answer to a series read: the metric, the split, the range, one page of at most 20 lines and the cursor of the next page, or null at the end. */
 export const getSeriesResponseSchema = z.strictObject({
   metric: analyticsMetricSchema,
   groupBy: analyticsGroupBySchema.nullable(),
   ...analyticsRangeShape,
-  series: z.array(seriesLineSchema).max(MAX_SERIES_GROUPS),
+  series: z.array(seriesLineSchema).max(MAX_SERIES_GROUPS_PER_PAGE),
+  nextCursor: pageSchema(z.never()).shape.nextCursor,
 })
 
 /** The answer to a series read. */

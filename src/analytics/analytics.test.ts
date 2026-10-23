@@ -136,6 +136,7 @@ describe('values', () => {
       from: '2026-09-01',
       to: '2026-09-30',
       series: [{ group: 'email', points: [point] }],
+      nextCursor: null,
     }
     expect(getSeriesResponseSchema.safeParse(response).success).toBe(true)
     const noCount = { day: '2026-09-01', kind: 'count', value: 2 }
@@ -150,6 +151,23 @@ describe('values', () => {
       getSeriesResponseSchema.safeParse({ ...response, series: [{ group: null, points: tooMany }] })
         .success
     ).toBe(false)
+    const line = { group: 'email', points: [point] }
+    const groups = (n: number) => Array.from({ length: n }, () => line)
+    expect(getSeriesResponseSchema.safeParse({ ...response, series: groups(21) }).success).toBe(
+      false
+    )
+    expect(
+      getSeriesResponseSchema.safeParse({ ...response, series: groups(20), nextCursor: 'abc' })
+        .success
+    ).toBe(true)
+  })
+
+  test('a series query takes a cursor and at most 20 groups a page', () => {
+    const base = { metric: 'sends', from: '2026-09-01', to: '2026-09-30' }
+    expect(getSeriesQuerySchema.safeParse({ ...base, cursor: 'abc' }).success).toBe(true)
+    expect(getSeriesQuerySchema.safeParse({ ...base, limit: '20' }).success).toBe(true)
+    expect(getSeriesQuerySchema.safeParse({ ...base, limit: '21' }).success).toBe(false)
+    expect(getSeriesQuerySchema.parse(base).limit).toBe(20)
   })
 })
 
