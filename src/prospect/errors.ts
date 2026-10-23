@@ -17,6 +17,8 @@ import { prospectIdentityKindSchema } from './values'
  *   it is a row in the report.
  * - `prospect.merge_conflict` (409): the merge cannot be made or undone, for example a Prospect is
  *   already merged, the same Prospect is named twice, or the thirty-day undo window has passed.
+ * - `prospect.company_domain_taken` (409): another Prospect Company of the Organization already has
+ *   this normalised domain, so a Company cannot be created or edited to carry it.
  * - `prospect.forbidden_owner` (403): the named owner is not allowed: a member of another
  *   Organization, someone who is not a Rep or Manager, or a Rep naming someone other than themselves.
  */
@@ -36,6 +38,10 @@ export const PROSPECT_ERRORS = {
       message: 'These Prospects cannot be merged, or this merge cannot be undone.',
     },
     forbidden_owner: { status: 403, message: 'This member cannot own the Prospect.' },
+    company_domain_taken: {
+      status: 409,
+      message: 'Another Prospect Company already has this domain.',
+    },
   }),
 } as const
 

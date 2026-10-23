@@ -362,7 +362,13 @@ describe('import', () => {
 })
 
 describe('errors', () => {
-  test('the five codes have fixed statuses and messages', () => {
+  test('a company domain that is taken is its own 409, returned by the routes that set a domain', () => {
+    expect(PROSPECT_ERRORS['prospect.company_domain_taken'].status).toBe(409)
+    expect(PROSPECT_ROUTES.createProspectCompany.errors).toContain('prospect.company_domain_taken')
+    expect(PROSPECT_ROUTES.updateProspectCompany.errors).toContain('prospect.company_domain_taken')
+    expect(PROSPECT_ROUTES.updateProspectCompany.description).toContain('company_domain_taken')
+  })
+  test('the codes have fixed statuses and messages', () => {
     expect(
       Object.fromEntries(Object.entries(PROSPECT_ERRORS).map(([key, value]) => [key, value.status]))
     ).toEqual({
@@ -371,6 +377,7 @@ describe('errors', () => {
       'prospect.import_invalid': 422,
       'prospect.merge_conflict': 409,
       'prospect.forbidden_owner': 403,
+      'prospect.company_domain_taken': 409,
     })
     for (const [code, definition] of Object.entries(PROSPECT_ERRORS)) {
       expect(errorCodeSchema.safeParse(code).success).toBe(true)
