@@ -102,7 +102,7 @@ export const startLinkedinConnectionRequestSchema = z.strictObject({})
 
 /** The hosted login the Rep opens to connect their account; Closeline never sees the password. */
 export const startLinkedinConnectionResponseSchema = z.strictObject({
-  hostedLoginUrl: z.url({ protocol: /^https?$/ }).max(2048),
+  hostedLoginUrl: z.url({ protocol: /^https$/ }).max(2048),
   expiresAt: timestampSchema,
 })
 
@@ -152,7 +152,7 @@ export type LinkedinRiskAcceptance = z.infer<typeof linkedinRiskAcceptanceSchema
 export const linkedinSettingsSchema = z.strictObject({
   enabled: z.boolean(),
   currentWordingVersion: z.string().min(1).max(40),
-  activeAcceptance: linkedinRiskAcceptanceSchema.nullable(),
+  acceptedAt: timestampSchema.nullable(),
   effectivelyEnabled: z.boolean(),
 })
 

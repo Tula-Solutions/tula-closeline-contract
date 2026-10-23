@@ -17857,14 +17857,7 @@ type LinkedinRiskAcceptance = z72.infer<typeof linkedinRiskAcceptanceSchema>;
 declare const linkedinSettingsSchema: z72.ZodObject<{
 	enabled: z72.ZodBoolean;
 	currentWordingVersion: z72.ZodString;
-	activeAcceptance: z72.ZodNullable<z72.ZodObject<{
-		id: z72.core.$ZodBranded<z72.ZodString, "lra", "out">;
-		wordingVersion: z72.ZodString;
-		acceptedByMembershipId: z72.core.$ZodBranded<z72.ZodString, "mem", "out">;
-		typedFullName: z72.ZodString;
-		acceptedAt: z72.ZodISODateTime;
-		revokedAt: z72.ZodNullable<z72.ZodISODateTime>;
-	}, z72.core.$strict>>;
+	acceptedAt: z72.ZodNullable<z72.ZodISODateTime>;
 	effectivelyEnabled: z72.ZodBoolean;
 }, z72.core.$strict>;
 /** The LinkedIn channel settings. */

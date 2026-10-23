@@ -19,7 +19,9 @@ import {
   linkedinChannelDisabledEvent,
   linkedinInvitationAcceptedEvent,
   linkedinLimitsSchema,
+  linkedinSettingsSchema,
   linkedinUsagePageSchema,
+  startLinkedinConnectionResponseSchema,
   updateLinkedinSettingsRequestSchema,
 } from './index'
 
@@ -125,6 +127,29 @@ describe('risk acceptance', () => {
 })
 
 describe('schemas', () => {
+  test('the settings every role reads carry no acceptance details', () => {
+    const keys = Object.keys(linkedinSettingsSchema.shape)
+    expect(keys).not.toContain('activeAcceptance')
+    expect(keys).not.toContain('typedFullName')
+    expect(keys).not.toContain('acceptedByMembershipId')
+  })
+
+  test('the hosted login address is https only', () => {
+    const base = { expiresAt: NOW }
+    expect(
+      startLinkedinConnectionResponseSchema.safeParse({
+        ...base,
+        hostedLoginUrl: 'http://a.test/x',
+      }).success
+    ).toBe(false)
+    expect(
+      startLinkedinConnectionResponseSchema.safeParse({
+        ...base,
+        hostedLoginUrl: 'https://a.test/x',
+      }).success
+    ).toBe(true)
+  })
+
   test('an account parses and rejects a provider account reference', () => {
     expect(linkedinAccountSchema.safeParse(account).success).toBe(true)
     expect(

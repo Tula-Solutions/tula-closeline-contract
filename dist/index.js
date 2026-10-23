@@ -9851,7 +9851,7 @@ var linkedinAccountSchema = z86.strictObject({
 });
 var startLinkedinConnectionRequestSchema = z86.strictObject({});
 var startLinkedinConnectionResponseSchema = z86.strictObject({
-  hostedLoginUrl: z86.url({ protocol: /^https?$/ }).max(2048),
+  hostedLoginUrl: z86.url({ protocol: /^https$/ }).max(2048),
   expiresAt: timestampSchema
 });
 var linkedinRiskStatementSchema = z86.strictObject({
@@ -9874,7 +9874,7 @@ var linkedinRiskAcceptanceSchema = z86.strictObject({
 var linkedinSettingsSchema = z86.strictObject({
   enabled: z86.boolean(),
   currentWordingVersion: z86.string().min(1).max(40),
-  activeAcceptance: linkedinRiskAcceptanceSchema.nullable(),
+  acceptedAt: timestampSchema.nullable(),
   effectivelyEnabled: z86.boolean()
 });
 var updateLinkedinSettingsRequestSchema = z86.strictObject({ enabled: z86.boolean() });
