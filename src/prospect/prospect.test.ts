@@ -666,4 +666,18 @@ describe('Prospect Company enrichment fields', () => {
       createProspectCompanyRequestSchema.safeParse({ name: 'A', industry: null }).success
     ).toBe(false)
   })
+  test('technologies whose JSON text is over 5,300 characters are refused (escaping counts)', () => {
+    const escaped = Array.from({ length: 50 }, () => '"'.repeat(100))
+    expect(JSON.stringify(escaped).length).toBeGreaterThan(5300)
+    expect(
+      createProspectCompanyRequestSchema.safeParse({ name: 'A', technologies: escaped }).success
+    ).toBe(false)
+    expect(updateProspectCompanyRequestSchema.safeParse({ technologies: escaped }).success).toBe(
+      false
+    )
+    const plain = Array.from({ length: 50 }, () => 't'.repeat(100))
+    expect(
+      createProspectCompanyRequestSchema.safeParse({ name: 'A', technologies: plain }).success
+    ).toBe(true)
+  })
 })

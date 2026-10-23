@@ -191,7 +191,7 @@ var MAX_PROSPECT_COMPANY_EMPLOYEE_COUNT = 999999999;
 var prospectCompanyIndustrySchema = boundedTextSchema(MAX_PROSPECT_COMPANY_NAME_LENGTH);
 var prospectCompanyRegionSchema = boundedTextSchema(MAX_PROSPECT_COMPANY_NAME_LENGTH);
 var prospectCompanyEmployeeCountSchema = z4.number().int().min(0).max(MAX_PROSPECT_COMPANY_EMPLOYEE_COUNT);
-var prospectCompanyTechnologiesSchema = z4.array(boundedTextSchema(MAX_PROSPECT_COMPANY_TECHNOLOGY_LENGTH)).max(MAX_PROSPECT_COMPANY_TECHNOLOGIES);
+var prospectCompanyTechnologiesSchema = z4.array(boundedTextSchema(MAX_PROSPECT_COMPANY_TECHNOLOGY_LENGTH)).max(MAX_PROSPECT_COMPANY_TECHNOLOGIES).refine((list) => JSON.stringify(list).length <= MAX_PROSPECT_FIELD_VALUE_LENGTH, "The list is too long once stored as JSON");
 var prospectNotesSchema = z4.string().max(MAX_PROSPECT_NOTES_LENGTH * 2).trim().pipe(z4.string().min(1).max(MAX_PROSPECT_NOTES_LENGTH).refine((text) => !hasControlCharacter2(text, true), "No control characters"));
 var prospectTagsSchema = z4.array(boundedTextSchema(MAX_PROSPECT_TAG_LENGTH)).max(MAX_PROSPECT_TAGS).refine((tags) => new Set(tags).size === tags.length, "No duplicate tags");
 var rawPhoneSchema = z4.string().max(MAX_RAW_LENGTH).trim().pipe(z4.string().min(3).max(40).regex(/^\+?[0-9 ().-]+$/));

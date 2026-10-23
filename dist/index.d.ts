@@ -25393,7 +25393,7 @@ declare const MAX_PROSPECT_TAG_LENGTH = 50;
 declare const MAX_PROSPECT_TAGS = 20;
 /** The longest search text of a list request, in characters. */
 declare const MAX_PROSPECT_SEARCH_LENGTH = 100;
-/** The longest value a stored field returns, in characters: a `technologies` list is stored as JSON text of up to 5,300. */
+/** The longest value a stored field returns, in characters: a `technologies` list is stored as JSON text, which a request may not take past this. */
 declare const MAX_PROSPECT_FIELD_VALUE_LENGTH = 5300;
 /** The longest Source reference (an import job id, a CRM record id), in characters. */
 declare const MAX_SOURCE_REF_LENGTH = 200;
@@ -25415,7 +25415,7 @@ declare const prospectCompanyIndustrySchema: z109.ZodPipe<z109.ZodString, z109.Z
 declare const prospectCompanyRegionSchema: z109.ZodPipe<z109.ZodString, z109.ZodString>;
 /** A Prospect Company employee count in a request: an integer from 0 to 999,999,999. */
 declare const prospectCompanyEmployeeCountSchema: z109.ZodNumber;
-/** The technologies of a Prospect Company in a request: at most 50, each trimmed and 1 to 100 characters. */
+/** The technologies of a Prospect Company in a request: at most 50, each trimmed and 1 to 100 characters, and at most 5,300 characters as JSON text. */
 declare const prospectCompanyTechnologiesSchema: z109.ZodArray<z109.ZodPipe<z109.ZodString, z109.ZodString>>;
 /** Free-text notes on a Prospect: trimmed, 1 to 5,000 characters; line breaks and tabs are allowed, other control characters are not. */
 declare const prospectNotesSchema: z109.ZodPipe<z109.ZodString, z109.ZodString>;

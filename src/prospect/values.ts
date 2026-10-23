@@ -48,7 +48,7 @@ export const MAX_PROSPECT_TAG_LENGTH = 50
 export const MAX_PROSPECT_TAGS = 20
 /** The longest search text of a list request, in characters. */
 export const MAX_PROSPECT_SEARCH_LENGTH = 100
-/** The longest value a stored field returns, in characters: a `technologies` list is stored as JSON text of up to 5,300. */
+/** The longest value a stored field returns, in characters: a `technologies` list is stored as JSON text, which a request may not take past this. */
 export const MAX_PROSPECT_FIELD_VALUE_LENGTH = 5300
 /** The longest Source reference (an import job id, a CRM record id), in characters. */
 export const MAX_SOURCE_REF_LENGTH = 200
@@ -82,10 +82,14 @@ export const prospectCompanyEmployeeCountSchema = z
   .min(0)
   .max(MAX_PROSPECT_COMPANY_EMPLOYEE_COUNT)
 
-/** The technologies of a Prospect Company in a request: at most 50, each trimmed and 1 to 100 characters. */
+/** The technologies of a Prospect Company in a request: at most 50, each trimmed and 1 to 100 characters, and at most 5,300 characters as JSON text. */
 export const prospectCompanyTechnologiesSchema = z
   .array(boundedTextSchema(MAX_PROSPECT_COMPANY_TECHNOLOGY_LENGTH))
   .max(MAX_PROSPECT_COMPANY_TECHNOLOGIES)
+  .refine(
+    (list) => JSON.stringify(list).length <= MAX_PROSPECT_FIELD_VALUE_LENGTH,
+    'The list is too long once stored as JSON'
+  )
 
 /** Free-text notes on a Prospect: trimmed, 1 to 5,000 characters; line breaks and tabs are allowed, other control characters are not. */
 export const prospectNotesSchema = z
