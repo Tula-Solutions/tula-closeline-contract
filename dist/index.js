@@ -8081,6 +8081,8 @@ var crmCallbackQuerySchema = z74.object({
   code: z74.string().min(1).max(MAX_CRM_CALLBACK_PARAM_LENGTH).optional(),
   state: z74.string().min(1).max(MAX_CRM_CALLBACK_PARAM_LENGTH),
   error: z74.string().min(1).max(100).optional()
+}).refine((q) => q.code === undefined !== (q.error === undefined), {
+  message: "exactly one of code and error"
 });
 var crmProviderParamsSchema = z74.strictObject({ provider: crmProviderSchema });
 var CRM_DIRECTIONS = ["read_only", "write_only", "both"];
@@ -8204,9 +8206,10 @@ var crmListRunsQuerySchema = pageQuerySchema.extend({
   objectKind: crmObjectKindSchema.optional()
 });
 var listCrmSyncRunsResponseSchema = pageSchema(crmSyncRunSchema);
+var MAX_CRM_PREVIEW_COUNT = 1e4;
 var crmSyncPreviewSchema = z74.object({
   objectKind: crmObjectKindSchema,
-  total: countSchema4,
+  total: z74.number().int().min(0).max(MAX_CRM_PREVIEW_COUNT),
   skipped: z74.array(z74.object({ reason: crmSkipReasonSchema, count: countSchema4 })).max(CRM_SKIP_REASONS.length),
   truncated: z74.boolean()
 });
@@ -8222,7 +8225,7 @@ var crmWebhookNoticeSchema = z74.object({
   occurredAt: timestampSchema
 });
 var crmWebhookAckSchema = z74.object({
-  accepted: z74.number().int().min(0).max(MAX_CRM_WEBHOOK_NOTICES)
+  received: z74.number().int().min(0).max(MAX_CRM_WEBHOOK_NOTICES)
 });
 
 // src/crm/events.ts
@@ -8378,7 +8381,7 @@ var CRM_ROUTES = Object.freeze({
       "crm.rights_not_confirmed"
     ],
     commonErrors: ["request.invalid"],
-    description: `Counts what a first load of one kind of object would do, with nothing written and no run recorded: the total and the records that would be skipped, by reason. Deals need a confirmed Stage mapping (crm.mapping_incomplete) and Calls need the rights confirmation (crm.rights_not_confirmed) before the CRM is asked. The count is capped and truncated says so. It has no effect, so it takes no Idempotency-Key. Owner and Admin only. ${ORG_ONLY2}`
+    description: `Counts what a first load of one kind of object would do, with nothing written and no run recorded: the total and the records that would be skipped, by reason. Deals need a confirmed Stage mapping (crm.mapping_incomplete) and Calls need the rights confirmation (crm.rights_not_confirmed) before the CRM is asked. The count stops at ${MAX_CRM_PREVIEW_COUNT} and truncated says so; the CRM call has a timeout. It has no effect, so it takes no Idempotency-Key. Owner and Admin only. ${ORG_ONLY2}`
   }),
   startCrmSync: inboundRoute({
     method: "POST",
@@ -8441,7 +8444,7 @@ var CRM_ROUTES = Object.freeze({
     idempotent: true,
     errors: [],
     commonErrors: ["auth.unauthenticated", ...PUBLIC_ERRORS],
-    description: `Public: the CRM calls it; the provider's signature stands in for a token. Core verifies the signature over the raw body in constant time, refuses a delivery whose timestamp is more than ${CRM_WEBHOOK_WINDOW_SECONDS} seconds from now, and refuses a replay (recorded as a receipt, kept for the window plus a margin); each of those is auth.unauthenticated (401) with no detail. The body is limited to ${MAX_CRM_WEBHOOK_BODY_BYTES} bytes (request.too_large) and at most ${MAX_CRM_WEBHOOK_NOTICES} notices. It only enqueues a targeted pull for the object each notice names and answers 202 at once with how many it accepted; it never trusts the payload as data and does no sync work. A notice for an account that no connection holds is dropped and still answers 202, so the route reveals nothing about which accounts are connected. The periodic sweep covers a lost delivery. Redelivery is harmless.`
+    description: `Public: the CRM calls it; the provider's signature stands in for a token. Core verifies the signature over the raw body in constant time, refuses a delivery whose timestamp is more than ${CRM_WEBHOOK_WINDOW_SECONDS} seconds from now, and refuses a replay (recorded as a receipt, kept for the window plus a margin); each of those is auth.unauthenticated (401) with no detail. The body is limited to ${MAX_CRM_WEBHOOK_BODY_BYTES} bytes (request.too_large) and at most ${MAX_CRM_WEBHOOK_NOTICES} notices. It only enqueues a targeted pull for the object each notice names and answers 202 at once with how many notices it received (the same whether or not an account matched); it never trusts the payload as data and does no sync work. A notice for an account that no connection holds is dropped and still answers 202, so the route reveals nothing about which accounts are connected. The periodic sweep covers a lost delivery. Redelivery is harmless.`
   })
 });
 // src/enrichment/errors.ts
@@ -13033,6 +13036,7 @@ export {
   MAX_CRM_CALLBACK_PARAM_LENGTH,
   MAX_CRM_EXTERNAL_ID_LENGTH,
   MAX_CRM_LABEL_LENGTH,
+  MAX_CRM_PREVIEW_COUNT,
   MAX_CRM_RUN_FAILURES,
   MAX_CRM_STAGE_MAPPINGS,
   MAX_CRM_WEBHOOK_BODY_BYTES,

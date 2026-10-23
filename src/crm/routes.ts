@@ -3,6 +3,7 @@ import type { Role } from '../tenancy'
 import type { CrmErrorCode } from './errors'
 import {
   CRM_WEBHOOK_WINDOW_SECONDS,
+  MAX_CRM_PREVIEW_COUNT,
   MAX_CRM_WEBHOOK_BODY_BYTES,
   MAX_CRM_WEBHOOK_NOTICES,
 } from './values'
@@ -172,7 +173,7 @@ export const CRM_ROUTES: Readonly<Record<CrmRouteName, CrmRoute>> = Object.freez
       'crm.rights_not_confirmed',
     ],
     commonErrors: ['request.invalid'],
-    description: `Counts what a first load of one kind of object would do, with nothing written and no run recorded: the total and the records that would be skipped, by reason. Deals need a confirmed Stage mapping (crm.mapping_incomplete) and Calls need the rights confirmation (crm.rights_not_confirmed) before the CRM is asked. The count is capped and truncated says so. It has no effect, so it takes no Idempotency-Key. Owner and Admin only. ${ORG_ONLY}`,
+    description: `Counts what a first load of one kind of object would do, with nothing written and no run recorded: the total and the records that would be skipped, by reason. Deals need a confirmed Stage mapping (crm.mapping_incomplete) and Calls need the rights confirmation (crm.rights_not_confirmed) before the CRM is asked. The count stops at ${MAX_CRM_PREVIEW_COUNT} and truncated says so; the CRM call has a timeout. It has no effect, so it takes no Idempotency-Key. Owner and Admin only. ${ORG_ONLY}`,
   }),
   startCrmSync: inboundRoute({
     method: 'POST',
@@ -235,6 +236,6 @@ export const CRM_ROUTES: Readonly<Record<CrmRouteName, CrmRoute>> = Object.freez
     idempotent: true,
     errors: [],
     commonErrors: ['auth.unauthenticated', ...PUBLIC_ERRORS],
-    description: `Public: the CRM calls it; the provider's signature stands in for a token. Core verifies the signature over the raw body in constant time, refuses a delivery whose timestamp is more than ${CRM_WEBHOOK_WINDOW_SECONDS} seconds from now, and refuses a replay (recorded as a receipt, kept for the window plus a margin); each of those is auth.unauthenticated (401) with no detail. The body is limited to ${MAX_CRM_WEBHOOK_BODY_BYTES} bytes (request.too_large) and at most ${MAX_CRM_WEBHOOK_NOTICES} notices. It only enqueues a targeted pull for the object each notice names and answers 202 at once with how many it accepted; it never trusts the payload as data and does no sync work. A notice for an account that no connection holds is dropped and still answers 202, so the route reveals nothing about which accounts are connected. The periodic sweep covers a lost delivery. Redelivery is harmless.`,
+    description: `Public: the CRM calls it; the provider's signature stands in for a token. Core verifies the signature over the raw body in constant time, refuses a delivery whose timestamp is more than ${CRM_WEBHOOK_WINDOW_SECONDS} seconds from now, and refuses a replay (recorded as a receipt, kept for the window plus a margin); each of those is auth.unauthenticated (401) with no detail. The body is limited to ${MAX_CRM_WEBHOOK_BODY_BYTES} bytes (request.too_large) and at most ${MAX_CRM_WEBHOOK_NOTICES} notices. It only enqueues a targeted pull for the object each notice names and answers 202 at once with how many notices it received (the same whether or not an account matched); it never trusts the payload as data and does no sync work. A notice for an account that no connection holds is dropped and still answers 202, so the route reveals nothing about which accounts are connected. The periodic sweep covers a lost delivery. Redelivery is harmless.`,
   }),
 })

@@ -126,11 +126,15 @@ export const MAX_CRM_CALLBACK_PARAM_LENGTH = 2048
  * the signed `state`. Parameters this contract does not name are dropped, not refused, because a
  * provider may add its own; nothing from them is used.
  */
-export const crmCallbackQuerySchema = z.object({
-  code: z.string().min(1).max(MAX_CRM_CALLBACK_PARAM_LENGTH).optional(),
-  state: z.string().min(1).max(MAX_CRM_CALLBACK_PARAM_LENGTH),
-  error: z.string().min(1).max(100).optional(),
-})
+export const crmCallbackQuerySchema = z
+  .object({
+    code: z.string().min(1).max(MAX_CRM_CALLBACK_PARAM_LENGTH).optional(),
+    state: z.string().min(1).max(MAX_CRM_CALLBACK_PARAM_LENGTH),
+    error: z.string().min(1).max(100).optional(),
+  })
+  .refine((q) => (q.code === undefined) !== (q.error === undefined), {
+    message: 'exactly one of code and error',
+  })
 
 /** The path parameter that names a provider. */
 export const crmProviderParamsSchema = z.strictObject({ provider: crmProviderSchema })
@@ -406,9 +410,12 @@ export const crmListRunsQuerySchema = pageQuerySchema.extend({
 export const listCrmSyncRunsResponseSchema = pageSchema(crmSyncRunSchema)
 
 /** The preview of a first load: what a run would do, counted, with nothing written. */
+/** The most a preview counts; past it `truncated` is true. */
+export const MAX_CRM_PREVIEW_COUNT = 10_000
+
 export const crmSyncPreviewSchema = z.object({
   objectKind: crmObjectKindSchema,
-  total: countSchema,
+  total: z.number().int().min(0).max(MAX_CRM_PREVIEW_COUNT),
   skipped: z
     .array(z.object({ reason: crmSkipReasonSchema, count: countSchema }))
     .max(CRM_SKIP_REASONS.length),
@@ -445,7 +452,7 @@ export const crmWebhookNoticeSchema = z.object({
 /** What core takes from a verified webhook delivery. */
 export type CrmWebhookNotice = z.infer<typeof crmWebhookNoticeSchema>
 
-/** The webhook's answer: how many notices queued a pull. It is fast and does no sync work. */
+/** The webhook's answer: how many notices were received (parsed), whether or not an account matched, so it reveals nothing about connections. */
 export const crmWebhookAckSchema = z.object({
-  accepted: z.number().int().min(0).max(MAX_CRM_WEBHOOK_NOTICES),
+  received: z.number().int().min(0).max(MAX_CRM_WEBHOOK_NOTICES),
 })

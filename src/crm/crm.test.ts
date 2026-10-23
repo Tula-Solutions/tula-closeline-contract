@@ -25,8 +25,11 @@ import {
   crmSourceKind,
   crmStageMappingSchema,
   crmStartRunRequestSchema,
+  crmSyncPreviewSchema,
   crmSyncRunSchema,
+  crmWebhookAckSchema,
   crmWebhookNoticeSchema,
+  MAX_CRM_PREVIEW_COUNT,
 } from './index'
 
 const hex = (n: number) => n.toString(16).padStart(32, '0')
@@ -443,5 +446,27 @@ describe('errors and routes', () => {
   test('no description invites a token in a response', () => {
     expect(CRM_ROUTES.getCrmConnection.description).toContain('No token')
     expect(CRM_ROUTES.disconnectCrm.description).toContain('deleted')
+  })
+})
+
+describe('review round 1 follow-ups', () => {
+  test('the callback has exactly one of code and error', () => {
+    expect(crmCallbackQuerySchema.safeParse({ state: 's' }).success).toBe(false)
+    expect(crmCallbackQuerySchema.safeParse({ state: 's', code: 'c', error: 'e' }).success).toBe(
+      false
+    )
+  })
+  test('the preview total is capped and the cap is named in the description', () => {
+    const base = { objectKind: 'deal', total: MAX_CRM_PREVIEW_COUNT, skipped: [], truncated: true }
+    expect(crmSyncPreviewSchema.safeParse(base).success).toBe(true)
+    expect(
+      crmSyncPreviewSchema.safeParse({ ...base, total: MAX_CRM_PREVIEW_COUNT + 1 }).success
+    ).toBe(false)
+    expect(CRM_ROUTES.previewCrmSync.description).toContain(String(MAX_CRM_PREVIEW_COUNT))
+  })
+  test('the webhook ack counts notices received, not connections found', () => {
+    expect(crmWebhookAckSchema.safeParse({ received: 3 }).success).toBe(true)
+    expect(crmWebhookAckSchema.safeParse({ accepted: 3 }).success).toBe(false)
+    expect(CRM_ROUTES.crmWebhook.description).toContain('received')
   })
 })
