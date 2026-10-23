@@ -19,6 +19,8 @@ import { defineErrors } from '../errors'
  * - `agent.instruction_too_long` (422): the instructions are over 20,000 characters.
  * - `agent.not_enough_deals` (409): too few won Deals to suggest Qualification questions from.
  * - `agent.session_not_found` (404): the try-it session is unknown, expired or not the caller's.
+ * - `agent.no_published_instructions` (409): the Agent kind has no published instruction version, so
+ *   a service that runs it must not start a conversation (fail closed).
  * - `handoff.no_rep_available` (409): no Rep could take the Handoff. The Agent then offers a
  *   Booking instead.
  * - `handoff.not_found` (404): the Handoff is unknown or not the caller's.
@@ -49,6 +51,10 @@ export const AGENT_ERRORS = {
       message: 'There are not enough won Deals to suggest Qualification questions.',
     },
     session_not_found: { status: 404, message: 'The try-it session was not found.' },
+    no_published_instructions: {
+      status: 409,
+      message: 'The Agent has no published instructions.',
+    },
   }),
   ...defineErrors('handoff', {
     no_rep_available: { status: 409, message: 'No Rep is available to take the Handoff.' },

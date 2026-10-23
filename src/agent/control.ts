@@ -66,7 +66,8 @@ export const escalationRuleSchema = z.strictObject({
 /** One escalation rule. */
 export type EscalationRule = z.infer<typeof escalationRuleSchema>
 
-const escalationRulesSchema = z
+/** The escalation rules of one set of controls: each trigger at most once. */
+export const escalationRulesSchema = z
   .array(escalationRuleSchema)
   .max(ESCALATION_TRIGGERS.length)
   .refine((rules) => new Set(rules.map((r) => r.trigger)).size === rules.length, {

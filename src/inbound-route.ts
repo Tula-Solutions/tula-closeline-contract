@@ -2,6 +2,12 @@ import type { ApiKeyScope } from './apikey/values'
 import type { CommonErrorCode } from './errors'
 import type { Role } from './tenancy'
 
+/** The services that call another service with a service token (ADR 0013), named by the token's audience claim. */
+export const SERVICE_AUDIENCES = ['voice', 'outbound'] as const
+
+/** The audience of a service token. */
+export type ServiceAudience = (typeof SERVICE_AUDIENCES)[number]
+
 /** The shared shape of an inbound route (Inquiry, Agent and Chat): who may call it, what it answers. */
 export type InboundRoute<Code extends string> = {
   readonly method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
@@ -12,6 +18,17 @@ export type InboundRoute<Code extends string> = {
   readonly public?: true
   /** True: a service-to-service route under `/internal`, called with the shared secret (ADR 0013), never with a user token. */
   readonly internal?: true
+  /**
+   * Set on an internal route called with a service token, not the shared secret: only a token whose
+   * audience is listed may call it, any other caller gets `auth.forbidden`. The Organization is the
+   * token's subject, never a path or body field.
+   */
+  readonly serviceToken?: { readonly audiences: readonly ServiceAudience[] }
+  /**
+   * True: the route sends an `ETag` and honours `If-None-Match`, answering 304 with no body when it
+   * matches; `success` then lists 304. The ETag is opaque and only compared for equality.
+   */
+  readonly etag?: true
   /**
    * Set on a route that is part of the public API: it is published in the merged public OpenAPI
    * document under `/v1`, and an API key reaches it only when its token carries this scope. Not
