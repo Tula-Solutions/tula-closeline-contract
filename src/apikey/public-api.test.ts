@@ -31,8 +31,6 @@ const UNMARKED_GROUPS = [
   'AGENT_CONTROL_ROUTES',
   'AGENT_ROUTES',
   'AGENT_RUNTIME_ROUTES',
-  'AUTH_ROUTES',
-  'CORE_ROUTES',
   'ANALYTICS_ROUTES',
   'PLAYBOOK_ROUTES',
 ]
@@ -83,9 +81,7 @@ describe('the routes an API key may call', () => {
   test('no administration, settings, billing, member, auth or webhook route is marked', () => {
     for (const group of UNMARKED_GROUPS) {
       const routes = (api as Record<string, unknown>)[group]
-      if (routes === undefined) {
-        continue
-      }
+      expect(`${group} ${routes !== undefined}`).toBe(`${group} true`)
       for (const [name, route] of Object.entries(routes as Record<string, Marked>)) {
         expect(`${group}.${name} ${route.publicApi === undefined}`).toBe(`${group}.${name} true`)
       }
@@ -102,5 +98,11 @@ describe('the routes an API key may call', () => {
       const everyoneBelowAdmin = route.roles.some((r) => r === 'rep' || r === 'manager')
       expect(`${key} ${everyoneBelowAdmin}`).toBe(`${key} true`)
     }
+  })
+
+  test('only the playbook scopes are carried by no route (its routes are not under /v1 yet)', () => {
+    const used = new Set(marked.map((e) => e.route.publicApi?.scope))
+    const unused = API_KEY_SCOPES.filter((scope) => !used.has(scope))
+    expect(unused).toEqual(['playbook:read', 'playbook:write'])
   })
 })
