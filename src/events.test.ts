@@ -20,12 +20,15 @@ const teamCreated = defineEvent(
 )
 
 describe('eventTypeSchema', () => {
-  test.each(['team.created', 'a.b'])('accepts %s', (v) => {
+  test.each(['team.created', 'a.b', 'voice.call.started'])('accepts %s', (v) => {
     expect(eventTypeSchema.safeParse(v).success).toBe(true)
   })
-  test.each(['team', 'Team.created', 'team.Created', 'team.created.x', ''])('rejects %p', (v) => {
-    expect(eventTypeSchema.safeParse(v).success).toBe(false)
-  })
+  test.each(['team', 'Team.created', 'team.Created', 'team.created.x.y', 'voice..started', ''])(
+    'rejects %p',
+    (v) => {
+      expect(eventTypeSchema.safeParse(v).success).toBe(false)
+    }
+  )
 })
 
 describe('eventEnvelopeSchema', () => {

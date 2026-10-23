@@ -52,6 +52,8 @@ export const documentIdSchema = idSchema('doc')
 export const dealRecordIdSchema = idSchema('deal')
 /** The id of a Call (`call_…`). */
 export const callIdSchema = idSchema('call')
+/** The id of a Line (`line_…`), a phone number an Organization uses to place and receive Calls. */
+export const lineIdSchema = idSchema('line')
 /** The id of a Deal import (`dimp_…`). */
 export const dealImportIdSchema = idSchema('dimp')
 /** The id of an event (`evt_…`). */
@@ -98,6 +100,8 @@ export type DocumentId = z.infer<typeof documentIdSchema>
 export type DealRecordId = z.infer<typeof dealRecordIdSchema>
 /** The id of a Call. */
 export type CallId = z.infer<typeof callIdSchema>
+/** The id of a Line. */
+export type LineId = z.infer<typeof lineIdSchema>
 /** The id of a Deal import. */
 export type DealImportId = z.infer<typeof dealImportIdSchema>
 /** The id of an event. */

@@ -1,10 +1,11 @@
 import { z } from 'zod'
-import { errorCodeSchema } from './errors'
 import { eventIdSchema, organizationIdSchema } from './ids'
 import { regionSchema } from './tenancy'
 
-/** An event type in `area.event_name` form, such as `team.created`. */
-export const eventTypeSchema = errorCodeSchema
+const EVENT_TYPE_PATTERN = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*){1,2}$/
+
+/** An event type in `area.event_name` or `area.subject.event_name` form, such as `team.created` or `voice.call.started`. */
+export const eventTypeSchema = z.string().max(100).regex(EVENT_TYPE_PATTERN)
 
 /** An event type. */
 export type EventType = z.infer<typeof eventTypeSchema>

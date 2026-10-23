@@ -2795,7 +2795,7 @@ declare const emailSchema: z19.ZodPipe<z19.ZodPipe<z19.ZodString, z19.ZodTransfo
 /** An email address, folded to lower case. */
 type Email = z19.output<typeof emailSchema>;
 import { z as z20 } from "zod";
-/** An event type in `area.event_name` form, such as `team.created`. */
+/** An event type in `area.event_name` or `area.subject.event_name` form, such as `team.created` or `voice.call.started`. */
 declare const eventTypeSchema: z20.ZodString;
 /** An event type. */
 type EventType = z20.infer<typeof eventTypeSchema>;
@@ -2982,6 +2982,8 @@ declare const documentIdSchema: z21.core.$ZodBranded<z21.ZodString, "doc", "out"
 declare const dealRecordIdSchema: z21.core.$ZodBranded<z21.ZodString, "deal", "out">;
 /** The id of a Call (`call_…`). */
 declare const callIdSchema: z21.core.$ZodBranded<z21.ZodString, "call", "out">;
+/** The id of a Line (`line_…`), a phone number an Organization uses to place and receive Calls. */
+declare const lineIdSchema: z21.core.$ZodBranded<z21.ZodString, "line", "out">;
 /** The id of a Deal import (`dimp_…`). */
 declare const dealImportIdSchema: z21.core.$ZodBranded<z21.ZodString, "dimp", "out">;
 /** The id of an event (`evt_…`). */
@@ -3026,6 +3028,8 @@ type DocumentId = z21.infer<typeof documentIdSchema>;
 type DealRecordId = z21.infer<typeof dealRecordIdSchema>;
 /** The id of a Call. */
 type CallId = z21.infer<typeof callIdSchema>;
+/** The id of a Line. */
+type LineId = z21.infer<typeof lineIdSchema>;
 /** The id of a Deal import. */
 type DealImportId = z21.infer<typeof dealImportIdSchema>;
 /** The id of an event. */
@@ -6612,6 +6616,1102 @@ declare const fieldHistoryEntrySchema: z40.ZodObject<{
 }, z40.core.$strip>;
 /** One entry of a field's history. */
 type FieldHistoryEntry = z40.infer<typeof fieldHistoryEntrySchema>;
+import { z as z41 } from "zod";
+/** The longest a Call can last, in seconds: 12 hours. */
+declare const MAX_CALL_DURATION_SECONDS = 43200;
+/**
+* The Disclosure a Call played: the version of the wording and when it finished playing, both null
+* until it has. `aiAssisted` is whether it also told the Prospect an AI takes part (the Copilot,
+* an Agent). Nothing here, and no request, can turn the Disclosure off.
+*/
+declare const callDisclosureSchema: z41.ZodObject<{
+	wordingVersion: z41.ZodNullable<z41.ZodNumber>;
+	playedAt: z41.ZodNullable<z41.ZodISODateTime>;
+	aiAssisted: z41.ZodBoolean;
+}, z41.core.$strict>;
+/** The Disclosure a Call played. */
+type CallDisclosure = z41.infer<typeof callDisclosureSchema>;
+/**
+* A Call placed or taken in the Softphone. The Prospect's number is tenant data: it is shown to
+* those who may see the Call and never logged. The invariants of the state machine are checked:
+* `live` and `ended` need a played Disclosure, a Recording exists only after it, `failed` has a
+* reason and nothing else does, and the wrap-up (Deal identifier, note) exists only on `ended`.
+*/
+declare const voiceCallSchema: z41.ZodObject<{
+	id: z41.core.$ZodBranded<z41.ZodString, "call", "out">;
+	direction: z41.ZodEnum<{
+		inbound: "inbound";
+		outbound: "outbound";
+	}>;
+	state: z41.ZodEnum<{
+		connecting: "connecting";
+		disclosing: "disclosing";
+		ended: "ended";
+		failed: "failed";
+		live: "live";
+		missed: "missed";
+		ringing: "ringing";
+	}>;
+	lineId: z41.core.$ZodBranded<z41.ZodString, "line", "out">;
+	repMembershipId: z41.ZodNullable<z41.core.$ZodBranded<z41.ZodString, "mem", "out">>;
+	prospectId: z41.ZodNullable<z41.core.$ZodBranded<z41.ZodString, "prs", "out">>;
+	prospectNumber: z41.ZodString;
+	disclosure: z41.ZodObject<{
+		wordingVersion: z41.ZodNullable<z41.ZodNumber>;
+		playedAt: z41.ZodNullable<z41.ZodISODateTime>;
+		aiAssisted: z41.ZodBoolean;
+	}, z41.core.$strict>;
+	createdAt: z41.ZodISODateTime;
+	answeredAt: z41.ZodNullable<z41.ZodISODateTime>;
+	endedAt: z41.ZodNullable<z41.ZodISODateTime>;
+	durationSeconds: z41.ZodNullable<z41.ZodNumber>;
+	endedBy: z41.ZodNullable<z41.ZodEnum<{
+		prospect: "prospect";
+		rep: "rep";
+		system: "system";
+	}>>;
+	failureReason: z41.ZodNullable<z41.ZodEnum<{
+		busy: "busy";
+		carrier_dropped: "carrier_dropped";
+		carrier_rejected: "carrier_rejected";
+		disclosure_failed: "disclosure_failed";
+		no_answer: "no_answer";
+		provider_error: "provider_error";
+		rep_unreachable: "rep_unreachable";
+		timeout: "timeout";
+	}>>;
+	dealId: z41.ZodNullable<z41.ZodPipe<z41.ZodPipe<z41.ZodString, z41.ZodTransform<string, string>>, z41.ZodString>>;
+	note: z41.ZodNullable<z41.ZodPipe<z41.ZodString, z41.ZodString>>;
+	recordingState: z41.ZodEnum<{
+		deleted: "deleted";
+		none: "none";
+		stored: "stored";
+		storing: "storing";
+	}>;
+	transcriptState: z41.ZodEnum<{
+		deleted: "deleted";
+		pending: "pending";
+		ready: "ready";
+	}>;
+}, z41.core.$strip>;
+/** A Call. */
+type VoiceCall = z41.infer<typeof voiceCallSchema>;
+/** The path parameters of a request about one Call. */
+declare const voiceCallParamsSchema: z41.ZodObject<{
+	callId: z41.core.$ZodBranded<z41.ZodString, "call", "out">;
+}, z41.core.$strict>;
+/** The position a Call list resumes from: newest first, by creation time then id. */
+declare const voiceCallCursorSchema: z41.ZodObject<{
+	createdAt: z41.ZodISODateTime;
+	id: z41.core.$ZodBranded<z41.ZodString, "call", "out">;
+}, z41.core.$strict>;
+/**
+* The body of a request to place a Call to a number from the Rep's browser. The idempotency key is
+* not in the body: see `placeCallHeadersSchema`. `to` is as typed; voice normalises it to
+* E.164 and refuses what it cannot as `call.number_invalid`. `lineId` is the caller identity, the
+* Rep's own Line when absent. `prospectId` links the Call to a Prospect the caller may see. There is
+* no field that turns off the Disclosure or the Recording.
+*/
+declare const placeCallRequestSchema: z41.ZodObject<{
+	to: z41.ZodPipe<z41.ZodString, z41.ZodString>;
+	lineId: z41.ZodOptional<z41.core.$ZodBranded<z41.ZodString, "line", "out">>;
+	prospectId: z41.ZodOptional<z41.core.$ZodBranded<z41.ZodString, "prs", "out">>;
+}, z41.core.$strict>;
+/**
+* The headers of a request to place a Call. The `Idempotency-Key` header is required (header names
+* arrive lower-cased): a retry of the same key answers the original Call and dials once, and the
+* same key with a different body is `request.idempotency_key_reused`.
+*/
+declare const placeCallHeadersSchema: z41.ZodObject<{
+	"idempotency-key": z41.ZodString;
+}, z41.core.$strip>;
+/** The body of a request to place a Call. */
+type PlaceCallRequest = z41.infer<typeof placeCallRequestSchema>;
+/**
+* A warning for the Rep from the Contact Check on the number: the code of the denial and, for a
+* suppressed number, the reason. A Rep may still call (ADR 0003); the warning is for their eyes.
+*/
+declare const contactWarningSchema: z41.ZodObject<{
+	code: z41.ZodEnum<{
+		"consent.missing": "consent.missing";
+		"consent.suppressed": "consent.suppressed";
+		"consent.unavailable": "consent.unavailable";
+		"consent.withdrawn": "consent.withdrawn";
+	}>;
+	suppressionReason: z41.ZodNullable<z41.ZodEnum<{
+		bounce: "bounce";
+		complaint: "complaint";
+		crm: "crm";
+		erased: "erased";
+		manual: "manual";
+		stop: "stop";
+		unsubscribe: "unsubscribe";
+	}>>;
+}, z41.core.$strict>;
+/** A warning from the Contact Check. */
+type ContactWarning = z41.infer<typeof contactWarningSchema>;
+/** The answer to placing a Call: the Call, as it stands, and any warnings from the Contact Check. */
+declare const placedCallSchema: z41.ZodObject<{
+	call: z41.ZodObject<{
+		id: z41.core.$ZodBranded<z41.ZodString, "call", "out">;
+		direction: z41.ZodEnum<{
+			inbound: "inbound";
+			outbound: "outbound";
+		}>;
+		state: z41.ZodEnum<{
+			connecting: "connecting";
+			disclosing: "disclosing";
+			ended: "ended";
+			failed: "failed";
+			live: "live";
+			missed: "missed";
+			ringing: "ringing";
+		}>;
+		lineId: z41.core.$ZodBranded<z41.ZodString, "line", "out">;
+		repMembershipId: z41.ZodNullable<z41.core.$ZodBranded<z41.ZodString, "mem", "out">>;
+		prospectId: z41.ZodNullable<z41.core.$ZodBranded<z41.ZodString, "prs", "out">>;
+		prospectNumber: z41.ZodString;
+		disclosure: z41.ZodObject<{
+			wordingVersion: z41.ZodNullable<z41.ZodNumber>;
+			playedAt: z41.ZodNullable<z41.ZodISODateTime>;
+			aiAssisted: z41.ZodBoolean;
+		}, z41.core.$strict>;
+		createdAt: z41.ZodISODateTime;
+		answeredAt: z41.ZodNullable<z41.ZodISODateTime>;
+		endedAt: z41.ZodNullable<z41.ZodISODateTime>;
+		durationSeconds: z41.ZodNullable<z41.ZodNumber>;
+		endedBy: z41.ZodNullable<z41.ZodEnum<{
+			prospect: "prospect";
+			rep: "rep";
+			system: "system";
+		}>>;
+		failureReason: z41.ZodNullable<z41.ZodEnum<{
+			busy: "busy";
+			carrier_dropped: "carrier_dropped";
+			carrier_rejected: "carrier_rejected";
+			disclosure_failed: "disclosure_failed";
+			no_answer: "no_answer";
+			provider_error: "provider_error";
+			rep_unreachable: "rep_unreachable";
+			timeout: "timeout";
+		}>>;
+		dealId: z41.ZodNullable<z41.ZodPipe<z41.ZodPipe<z41.ZodString, z41.ZodTransform<string, string>>, z41.ZodString>>;
+		note: z41.ZodNullable<z41.ZodPipe<z41.ZodString, z41.ZodString>>;
+		recordingState: z41.ZodEnum<{
+			deleted: "deleted";
+			none: "none";
+			stored: "stored";
+			storing: "storing";
+		}>;
+		transcriptState: z41.ZodEnum<{
+			deleted: "deleted";
+			pending: "pending";
+			ready: "ready";
+		}>;
+	}, z41.core.$strip>;
+	warnings: z41.ZodArray<z41.ZodObject<{
+		code: z41.ZodEnum<{
+			"consent.missing": "consent.missing";
+			"consent.suppressed": "consent.suppressed";
+			"consent.unavailable": "consent.unavailable";
+			"consent.withdrawn": "consent.withdrawn";
+		}>;
+		suppressionReason: z41.ZodNullable<z41.ZodEnum<{
+			bounce: "bounce";
+			complaint: "complaint";
+			crm: "crm";
+			erased: "erased";
+			manual: "manual";
+			stop: "stop";
+			unsubscribe: "unsubscribe";
+		}>>;
+	}, z41.core.$strict>>;
+}, z41.core.$strict>;
+/** The answer to placing a Call. */
+type PlacedCall = z41.infer<typeof placedCallSchema>;
+/**
+* The query parameters of a request to list Calls, newest first. Filters narrow what the caller
+* may see and never widen it. `from` and `to` bound `createdAt` (from inclusive, to exclusive).
+*/
+declare const listVoiceCallsQuerySchema: z41.ZodObject<{
+	cursor: z41.ZodOptional<z41.ZodString>;
+	limit: z41.ZodDefault<z41.ZodPipe<z41.ZodPipe<z41.ZodUnion<readonly [z41.ZodNumber, z41.ZodString]>, z41.ZodTransform<number, string | number>>, z41.ZodNumber>>;
+	direction: z41.ZodOptional<z41.ZodEnum<{
+		inbound: "inbound";
+		outbound: "outbound";
+	}>>;
+	state: z41.ZodOptional<z41.ZodEnum<{
+		connecting: "connecting";
+		disclosing: "disclosing";
+		ended: "ended";
+		failed: "failed";
+		live: "live";
+		missed: "missed";
+		ringing: "ringing";
+	}>>;
+	repMembershipId: z41.ZodOptional<z41.core.$ZodBranded<z41.ZodString, "mem", "out">>;
+	lineId: z41.ZodOptional<z41.core.$ZodBranded<z41.ZodString, "line", "out">>;
+	prospectId: z41.ZodOptional<z41.core.$ZodBranded<z41.ZodString, "prs", "out">>;
+	from: z41.ZodOptional<z41.ZodISODateTime>;
+	to: z41.ZodOptional<z41.ZodISODateTime>;
+}, z41.core.$strict>;
+/** The query parameters of a request to list Calls. */
+type ListVoiceCallsQuery = z41.infer<typeof listVoiceCallsQuerySchema>;
+/** One page of Calls. */
+declare const voiceCallPageSchema: z41.ZodObject<{
+	items: z41.ZodArray<z41.ZodObject<{
+		id: z41.core.$ZodBranded<z41.ZodString, "call", "out">;
+		direction: z41.ZodEnum<{
+			inbound: "inbound";
+			outbound: "outbound";
+		}>;
+		state: z41.ZodEnum<{
+			connecting: "connecting";
+			disclosing: "disclosing";
+			ended: "ended";
+			failed: "failed";
+			live: "live";
+			missed: "missed";
+			ringing: "ringing";
+		}>;
+		lineId: z41.core.$ZodBranded<z41.ZodString, "line", "out">;
+		repMembershipId: z41.ZodNullable<z41.core.$ZodBranded<z41.ZodString, "mem", "out">>;
+		prospectId: z41.ZodNullable<z41.core.$ZodBranded<z41.ZodString, "prs", "out">>;
+		prospectNumber: z41.ZodString;
+		disclosure: z41.ZodObject<{
+			wordingVersion: z41.ZodNullable<z41.ZodNumber>;
+			playedAt: z41.ZodNullable<z41.ZodISODateTime>;
+			aiAssisted: z41.ZodBoolean;
+		}, z41.core.$strict>;
+		createdAt: z41.ZodISODateTime;
+		answeredAt: z41.ZodNullable<z41.ZodISODateTime>;
+		endedAt: z41.ZodNullable<z41.ZodISODateTime>;
+		durationSeconds: z41.ZodNullable<z41.ZodNumber>;
+		endedBy: z41.ZodNullable<z41.ZodEnum<{
+			prospect: "prospect";
+			rep: "rep";
+			system: "system";
+		}>>;
+		failureReason: z41.ZodNullable<z41.ZodEnum<{
+			busy: "busy";
+			carrier_dropped: "carrier_dropped";
+			carrier_rejected: "carrier_rejected";
+			disclosure_failed: "disclosure_failed";
+			no_answer: "no_answer";
+			provider_error: "provider_error";
+			rep_unreachable: "rep_unreachable";
+			timeout: "timeout";
+		}>>;
+		dealId: z41.ZodNullable<z41.ZodPipe<z41.ZodPipe<z41.ZodString, z41.ZodTransform<string, string>>, z41.ZodString>>;
+		note: z41.ZodNullable<z41.ZodPipe<z41.ZodString, z41.ZodString>>;
+		recordingState: z41.ZodEnum<{
+			deleted: "deleted";
+			none: "none";
+			stored: "stored";
+			storing: "storing";
+		}>;
+		transcriptState: z41.ZodEnum<{
+			deleted: "deleted";
+			pending: "pending";
+			ready: "ready";
+		}>;
+	}, z41.core.$strip>>;
+	nextCursor: z41.ZodNullable<z41.ZodString>;
+}, z41.core.$strip>;
+/** Who spoke a turn of a Call's Transcript: the Rep (channel 1) or the Prospect. */
+declare const transcriptSpeakerSchema: z41.ZodEnum<{
+	prospect: "prospect";
+	rep: "rep";
+}>;
+/** The longest text of one Transcript turn, in characters. */
+declare const MAX_TRANSCRIPT_TURN_LENGTH = 4e3;
+/** One turn of a Transcript: who spoke, when (milliseconds from the start of the Recording) and what. The text is the Prospect's and Rep's words: untrusted text, never logged. */
+declare const transcriptTurnSchema: z41.ZodObject<{
+	speaker: z41.ZodEnum<{
+		prospect: "prospect";
+		rep: "rep";
+	}>;
+	startMs: z41.ZodNumber;
+	endMs: z41.ZodNumber;
+	text: z41.ZodString;
+}, z41.core.$strict>;
+/** One turn of a Transcript. */
+type TranscriptTurn = z41.infer<typeof transcriptTurnSchema>;
+/** The position a Transcript resumes from: the index of the next turn. */
+declare const transcriptCursorSchema: z41.ZodObject<{
+	index: z41.ZodNumber;
+}, z41.core.$strict>;
+/** The query parameters of a request to read a Transcript, one cursor-paginated page of turns at a time. */
+declare const getTranscriptQuerySchema: z41.ZodObject<{
+	cursor: z41.ZodOptional<z41.ZodString>;
+	limit: z41.ZodDefault<z41.ZodPipe<z41.ZodPipe<z41.ZodUnion<readonly [z41.ZodNumber, z41.ZodString]>, z41.ZodTransform<number, string | number>>, z41.ZodNumber>>;
+}, z41.core.$strict>;
+/** One page of a Call's Transcript, in time order, with the state of the Transcript. Turns are empty unless `ready`. */
+declare const transcriptPageSchema: z41.ZodObject<{
+	items: z41.ZodArray<z41.ZodObject<{
+		speaker: z41.ZodEnum<{
+			prospect: "prospect";
+			rep: "rep";
+		}>;
+		startMs: z41.ZodNumber;
+		endMs: z41.ZodNumber;
+		text: z41.ZodString;
+	}, z41.core.$strict>>;
+	nextCursor: z41.ZodNullable<z41.ZodString>;
+	callId: z41.core.$ZodBranded<z41.ZodString, "call", "out">;
+	state: z41.ZodEnum<{
+		deleted: "deleted";
+		pending: "pending";
+		ready: "ready";
+	}>;
+}, z41.core.$strip>;
+/** One page of a Call's Transcript. */
+type TranscriptPage = z41.infer<typeof transcriptPageSchema>;
+/** The media types a Recording is played back as. */
+declare const RECORDING_MEDIA_TYPES: readonly ["audio/mpeg", "audio/wav", "audio/ogg"];
+/** The longest a playback URL can be, in characters. */
+declare const MAX_PLAYBACK_URL_LENGTH = 2048;
+/**
+* A short-lived signed URL to play a Recording, two channels (Rep and Prospect). It is a
+* credential: shown to the caller, never logged or stored, and it stops working at `expiresAt`.
+*/
+declare const recordingPlaybackSchema: z41.ZodObject<{
+	callId: z41.core.$ZodBranded<z41.ZodString, "call", "out">;
+	url: z41.ZodURL;
+	expiresAt: z41.ZodISODateTime;
+	mediaType: z41.ZodEnum<{
+		"audio/mpeg": "audio/mpeg";
+		"audio/ogg": "audio/ogg";
+		"audio/wav": "audio/wav";
+	}>;
+	channels: z41.ZodLiteral<2>;
+	durationSeconds: z41.ZodNumber;
+}, z41.core.$strict>;
+/** A short-lived signed URL to play a Recording. */
+type RecordingPlayback = z41.infer<typeof recordingPlaybackSchema>;
+/**
+* The body of a request to wrap up a Call: the Deal identifier (the customer's own, as in the
+* Playbook) and a note. A field left out is left alone; null clears it. At least one is sent.
+*/
+declare const wrapUpRequestSchema: z41.ZodObject<{
+	dealId: z41.ZodOptional<z41.ZodNullable<z41.ZodPipe<z41.ZodPipe<z41.ZodString, z41.ZodTransform<string, string>>, z41.ZodString>>>;
+	note: z41.ZodOptional<z41.ZodNullable<z41.ZodPipe<z41.ZodString, z41.ZodString>>>;
+}, z41.core.$strict>;
+/** The body of a request to wrap up a Call. */
+type WrapUpRequest = z41.infer<typeof wrapUpRequestSchema>;
+/** The answer to deleting a Recording: the Call, whose Recording and Transcript are now `deleted`. */
+declare const deletedRecordingSchema: z41.ZodObject<{
+	id: z41.core.$ZodBranded<z41.ZodString, "call", "out">;
+	direction: z41.ZodEnum<{
+		inbound: "inbound";
+		outbound: "outbound";
+	}>;
+	state: z41.ZodEnum<{
+		connecting: "connecting";
+		disclosing: "disclosing";
+		ended: "ended";
+		failed: "failed";
+		live: "live";
+		missed: "missed";
+		ringing: "ringing";
+	}>;
+	lineId: z41.core.$ZodBranded<z41.ZodString, "line", "out">;
+	repMembershipId: z41.ZodNullable<z41.core.$ZodBranded<z41.ZodString, "mem", "out">>;
+	prospectId: z41.ZodNullable<z41.core.$ZodBranded<z41.ZodString, "prs", "out">>;
+	prospectNumber: z41.ZodString;
+	disclosure: z41.ZodObject<{
+		wordingVersion: z41.ZodNullable<z41.ZodNumber>;
+		playedAt: z41.ZodNullable<z41.ZodISODateTime>;
+		aiAssisted: z41.ZodBoolean;
+	}, z41.core.$strict>;
+	createdAt: z41.ZodISODateTime;
+	answeredAt: z41.ZodNullable<z41.ZodISODateTime>;
+	endedAt: z41.ZodNullable<z41.ZodISODateTime>;
+	durationSeconds: z41.ZodNullable<z41.ZodNumber>;
+	endedBy: z41.ZodNullable<z41.ZodEnum<{
+		prospect: "prospect";
+		rep: "rep";
+		system: "system";
+	}>>;
+	failureReason: z41.ZodNullable<z41.ZodEnum<{
+		busy: "busy";
+		carrier_dropped: "carrier_dropped";
+		carrier_rejected: "carrier_rejected";
+		disclosure_failed: "disclosure_failed";
+		no_answer: "no_answer";
+		provider_error: "provider_error";
+		rep_unreachable: "rep_unreachable";
+		timeout: "timeout";
+	}>>;
+	dealId: z41.ZodNullable<z41.ZodPipe<z41.ZodPipe<z41.ZodString, z41.ZodTransform<string, string>>, z41.ZodString>>;
+	note: z41.ZodNullable<z41.ZodPipe<z41.ZodString, z41.ZodString>>;
+	recordingState: z41.ZodEnum<{
+		deleted: "deleted";
+		none: "none";
+		stored: "stored";
+		storing: "storing";
+	}>;
+	transcriptState: z41.ZodEnum<{
+		deleted: "deleted";
+		pending: "pending";
+		ready: "ready";
+	}>;
+}, z41.core.$strip>;
+import { ErrorDefinition as ErrorDefinition_8gwh459 } from "..";
+/**
+* The errors the voice routes return, as `area.reason` codes. A role that is not allowed is the
+* common `auth.forbidden`. A Line or Call of another Organization, or a Call the caller may not
+* see (a Rep's view of another Rep's Call, a Manager's view of a Rep outside their Team), is
+* `line.not_found` or `call.not_found` (404, never 403), so existence is not revealed.
+* `call.not_found` is the code the Playbook already uses for an uploaded Call (`SALES_HISTORY_ERRORS`);
+* voice returns that same code and does not register a second copy.
+*
+* - `call.number_invalid` (422): the number to dial cannot be normalised to E.164, or is one a
+*   Call cannot be placed to. A Contact Check denial is never this error: for a Rep it is a warning
+*   on the placed Call (ADR 0003).
+* - `call.disclosure_failed` (502): the Disclosure could not be played, so the Call never went
+*   live; `details.callId` names the Call, which is `failed`. There is no code or setting that lets
+*   a Call go on without the Disclosure.
+* - `call.line_unavailable` (409): the Organization has no active Line the caller may place a Call
+*   from, or the Line named is released or porting.
+* - `call.limit_reached` (429): the Organization is at its cap of concurrent Calls.
+* - `call.not_ended` (409): the action (wrap-up) needs a Call that has ended.
+* - `line.number_unavailable` (409): the number asked for cannot be bought or ported.
+* - `line.released` (409): the Line is released and cannot be changed.
+* - `line.assignment_invalid` (422): the Team or Rep named for a Line is not in the Organization,
+*   or is not a Rep.
+* - `recording.not_found` (404): the Call has no Recording, or it was deleted.
+* - `recording.not_ready` (409): the Recording is still being stored; try again shortly.
+*/
+declare const VOICE_ERRORS: {
+	readonly "call.disclosure_failed": ErrorDefinition_8gwh459<"call.disclosure_failed">;
+	readonly "call.limit_reached": ErrorDefinition_8gwh459<"call.limit_reached">;
+	readonly "call.line_unavailable": ErrorDefinition_8gwh459<"call.line_unavailable">;
+	readonly "call.not_ended": ErrorDefinition_8gwh459<"call.not_ended">;
+	readonly "call.number_invalid": ErrorDefinition_8gwh459<"call.number_invalid">;
+	readonly "line.assignment_invalid": ErrorDefinition_8gwh459<"line.assignment_invalid">;
+	readonly "line.not_found": ErrorDefinition_8gwh459<"line.not_found">;
+	readonly "line.number_unavailable": ErrorDefinition_8gwh459<"line.number_unavailable">;
+	readonly "line.released": ErrorDefinition_8gwh459<"line.released">;
+	readonly "recording.not_found": ErrorDefinition_8gwh459<"recording.not_found">;
+	readonly "recording.not_ready": ErrorDefinition_8gwh459<"recording.not_ready">;
+};
+/** A voice error code. */
+type VoiceErrorCode = keyof typeof VOICE_ERRORS;
+import { z as z42 } from "zod";
+/** The longest storage key of a Recording, in characters. */
+declare const MAX_RECORDING_KEY_LENGTH = 512;
+/** The key of a Recording in the Region's storage: opaque, made of ids, never a number or a name. */
+declare const recordingKeySchema: z42.ZodString;
+/**
+* `voice.call.started` (version 1): a Call began to ring. Ids, the direction and a keyed hash of the
+* Prospect's number: no number in clear, no name, no Transcript text.
+*/
+declare const voiceCallStartedEvent: {
+	type: "voice.call.started";
+	version: 1;
+	schema: z42.ZodObject<{
+		id: z42.core.$ZodBranded<z42.ZodString, "evt", "out">;
+		occurredAt: z42.ZodISODateTime;
+		organizationId: z42.core.$ZodBranded<z42.ZodString, "org", "out">;
+		region: z42.ZodEnum<{
+			eu: "eu";
+			us: "us";
+		}>;
+		type: z42.ZodLiteral<"voice.call.started">;
+		version: z42.ZodLiteral<1>;
+		data: z42.ZodObject<{
+			callId: z42.core.$ZodBranded<z42.ZodString, "call", "out">;
+			direction: z42.ZodEnum<{
+				inbound: "inbound";
+				outbound: "outbound";
+			}>;
+			lineId: z42.core.$ZodBranded<z42.ZodString, "line", "out">;
+			repMembershipId: z42.ZodNullable<z42.core.$ZodBranded<z42.ZodString, "mem", "out">>;
+			prospectId: z42.ZodNullable<z42.core.$ZodBranded<z42.ZodString, "prs", "out">>;
+			prospectPhoneHash: z42.ZodString;
+			startedAt: z42.ZodISODateTime;
+		}, z42.core.$strict>;
+	}, z42.core.$strip>;
+	parse: (input: unknown) => {
+		id: string & z42.$brand<"evt">;
+		occurredAt: string;
+		organizationId: string & z42.$brand<"org">;
+		region: "eu" | "us";
+		type: "voice.call.started";
+		version: 1;
+		data: {
+			callId: string & z42.$brand<"call">;
+			direction: "inbound" | "outbound";
+			lineId: string & z42.$brand<"line">;
+			repMembershipId: (string & z42.$brand<"mem">) | null;
+			prospectId: (string & z42.$brand<"prs">) | null;
+			prospectPhoneHash: string;
+			startedAt: string;
+		};
+	};
+	safeParse: (input: unknown) => z42.ZodSafeParseResult<{
+		id: string & z42.$brand<"evt">;
+		occurredAt: string;
+		organizationId: string & z42.$brand<"org">;
+		region: "eu" | "us";
+		type: "voice.call.started";
+		version: 1;
+		data: {
+			callId: string & z42.$brand<"call">;
+			direction: "inbound" | "outbound";
+			lineId: string & z42.$brand<"line">;
+			repMembershipId: (string & z42.$brand<"mem">) | null;
+			prospectId: (string & z42.$brand<"prs">) | null;
+			prospectPhoneHash: string;
+			startedAt: string;
+		};
+	}>;
+};
+/** How a Call ended, as the event says it. */
+declare const VOICE_CALL_OUTCOMES: readonly ["completed", "failed", "missed"];
+/** How a Call ended. */
+declare const voiceCallOutcomeSchema: z42.ZodEnum<{
+	completed: "completed";
+	failed: "failed";
+	missed: "missed";
+}>;
+/**
+* `voice.call.ended` (version 1): a Call reached a final state. Carries the Call id, the Rep, the
+* Prospect's phone hash, the direction, the times, the Recording key (null when there is none) and
+* the Deal identifier when the Rep has set one. The Playbook fetches the Recording from voice by
+* the Call id (ADR 0013), never by the key. No number in clear, no Transcript text.
+*/
+declare const voiceCallEndedEvent: {
+	type: "voice.call.ended";
+	version: 1;
+	schema: z42.ZodObject<{
+		id: z42.core.$ZodBranded<z42.ZodString, "evt", "out">;
+		occurredAt: z42.ZodISODateTime;
+		organizationId: z42.core.$ZodBranded<z42.ZodString, "org", "out">;
+		region: z42.ZodEnum<{
+			eu: "eu";
+			us: "us";
+		}>;
+		type: z42.ZodLiteral<"voice.call.ended">;
+		version: z42.ZodLiteral<1>;
+		data: z42.ZodObject<{
+			callId: z42.core.$ZodBranded<z42.ZodString, "call", "out">;
+			direction: z42.ZodEnum<{
+				inbound: "inbound";
+				outbound: "outbound";
+			}>;
+			lineId: z42.core.$ZodBranded<z42.ZodString, "line", "out">;
+			repMembershipId: z42.ZodNullable<z42.core.$ZodBranded<z42.ZodString, "mem", "out">>;
+			prospectId: z42.ZodNullable<z42.core.$ZodBranded<z42.ZodString, "prs", "out">>;
+			prospectPhoneHash: z42.ZodString;
+			outcome: z42.ZodEnum<{
+				completed: "completed";
+				failed: "failed";
+				missed: "missed";
+			}>;
+			failureReason: z42.ZodNullable<z42.ZodEnum<{
+				busy: "busy";
+				carrier_dropped: "carrier_dropped";
+				carrier_rejected: "carrier_rejected";
+				disclosure_failed: "disclosure_failed";
+				no_answer: "no_answer";
+				provider_error: "provider_error";
+				rep_unreachable: "rep_unreachable";
+				timeout: "timeout";
+			}>>;
+			startedAt: z42.ZodISODateTime;
+			answeredAt: z42.ZodNullable<z42.ZodISODateTime>;
+			endedAt: z42.ZodISODateTime;
+			durationSeconds: z42.ZodNullable<z42.ZodNumber>;
+			disclosureWordingVersion: z42.ZodNullable<z42.ZodNumber>;
+			recordingKey: z42.ZodNullable<z42.ZodString>;
+			dealId: z42.ZodNullable<z42.ZodPipe<z42.ZodPipe<z42.ZodString, z42.ZodTransform<string, string>>, z42.ZodString>>;
+		}, z42.core.$strict>;
+	}, z42.core.$strip>;
+	parse: (input: unknown) => {
+		id: string & z42.$brand<"evt">;
+		occurredAt: string;
+		organizationId: string & z42.$brand<"org">;
+		region: "eu" | "us";
+		type: "voice.call.ended";
+		version: 1;
+		data: {
+			callId: string & z42.$brand<"call">;
+			direction: "inbound" | "outbound";
+			lineId: string & z42.$brand<"line">;
+			repMembershipId: (string & z42.$brand<"mem">) | null;
+			prospectId: (string & z42.$brand<"prs">) | null;
+			prospectPhoneHash: string;
+			outcome: "completed" | "failed" | "missed";
+			failureReason: "busy" | "carrier_dropped" | "carrier_rejected" | "disclosure_failed" | "no_answer" | "provider_error" | "rep_unreachable" | "timeout" | null;
+			startedAt: string;
+			answeredAt: string | null;
+			endedAt: string;
+			durationSeconds: number | null;
+			disclosureWordingVersion: number | null;
+			recordingKey: string | null;
+			dealId: string | null;
+		};
+	};
+	safeParse: (input: unknown) => z42.ZodSafeParseResult<{
+		id: string & z42.$brand<"evt">;
+		occurredAt: string;
+		organizationId: string & z42.$brand<"org">;
+		region: "eu" | "us";
+		type: "voice.call.ended";
+		version: 1;
+		data: {
+			callId: string & z42.$brand<"call">;
+			direction: "inbound" | "outbound";
+			lineId: string & z42.$brand<"line">;
+			repMembershipId: (string & z42.$brand<"mem">) | null;
+			prospectId: (string & z42.$brand<"prs">) | null;
+			prospectPhoneHash: string;
+			outcome: "completed" | "failed" | "missed";
+			failureReason: "busy" | "carrier_dropped" | "carrier_rejected" | "disclosure_failed" | "no_answer" | "provider_error" | "rep_unreachable" | "timeout" | null;
+			startedAt: string;
+			answeredAt: string | null;
+			endedAt: string;
+			durationSeconds: number | null;
+			disclosureWordingVersion: number | null;
+			recordingKey: string | null;
+			dealId: string | null;
+		};
+	}>;
+};
+/** Every voice event, by type. */
+declare const VOICE_EVENTS: {
+	readonly "voice.call.started": {
+		type: "voice.call.started";
+		version: 1;
+		schema: z42.ZodObject<{
+			id: z42.core.$ZodBranded<z42.ZodString, "evt", "out">;
+			occurredAt: z42.ZodISODateTime;
+			organizationId: z42.core.$ZodBranded<z42.ZodString, "org", "out">;
+			region: z42.ZodEnum<{
+				eu: "eu";
+				us: "us";
+			}>;
+			type: z42.ZodLiteral<"voice.call.started">;
+			version: z42.ZodLiteral<1>;
+			data: z42.ZodObject<{
+				callId: z42.core.$ZodBranded<z42.ZodString, "call", "out">;
+				direction: z42.ZodEnum<{
+					inbound: "inbound";
+					outbound: "outbound";
+				}>;
+				lineId: z42.core.$ZodBranded<z42.ZodString, "line", "out">;
+				repMembershipId: z42.ZodNullable<z42.core.$ZodBranded<z42.ZodString, "mem", "out">>;
+				prospectId: z42.ZodNullable<z42.core.$ZodBranded<z42.ZodString, "prs", "out">>;
+				prospectPhoneHash: z42.ZodString;
+				startedAt: z42.ZodISODateTime;
+			}, z42.core.$strict>;
+		}, z42.core.$strip>;
+		parse: (input: unknown) => {
+			id: string & z42.$brand<"evt">;
+			occurredAt: string;
+			organizationId: string & z42.$brand<"org">;
+			region: "eu" | "us";
+			type: "voice.call.started";
+			version: 1;
+			data: {
+				callId: string & z42.$brand<"call">;
+				direction: "inbound" | "outbound";
+				lineId: string & z42.$brand<"line">;
+				repMembershipId: (string & z42.$brand<"mem">) | null;
+				prospectId: (string & z42.$brand<"prs">) | null;
+				prospectPhoneHash: string;
+				startedAt: string;
+			};
+		};
+		safeParse: (input: unknown) => z42.ZodSafeParseResult<{
+			id: string & z42.$brand<"evt">;
+			occurredAt: string;
+			organizationId: string & z42.$brand<"org">;
+			region: "eu" | "us";
+			type: "voice.call.started";
+			version: 1;
+			data: {
+				callId: string & z42.$brand<"call">;
+				direction: "inbound" | "outbound";
+				lineId: string & z42.$brand<"line">;
+				repMembershipId: (string & z42.$brand<"mem">) | null;
+				prospectId: (string & z42.$brand<"prs">) | null;
+				prospectPhoneHash: string;
+				startedAt: string;
+			};
+		}>;
+	};
+	readonly "voice.call.ended": {
+		type: "voice.call.ended";
+		version: 1;
+		schema: z42.ZodObject<{
+			id: z42.core.$ZodBranded<z42.ZodString, "evt", "out">;
+			occurredAt: z42.ZodISODateTime;
+			organizationId: z42.core.$ZodBranded<z42.ZodString, "org", "out">;
+			region: z42.ZodEnum<{
+				eu: "eu";
+				us: "us";
+			}>;
+			type: z42.ZodLiteral<"voice.call.ended">;
+			version: z42.ZodLiteral<1>;
+			data: z42.ZodObject<{
+				callId: z42.core.$ZodBranded<z42.ZodString, "call", "out">;
+				direction: z42.ZodEnum<{
+					inbound: "inbound";
+					outbound: "outbound";
+				}>;
+				lineId: z42.core.$ZodBranded<z42.ZodString, "line", "out">;
+				repMembershipId: z42.ZodNullable<z42.core.$ZodBranded<z42.ZodString, "mem", "out">>;
+				prospectId: z42.ZodNullable<z42.core.$ZodBranded<z42.ZodString, "prs", "out">>;
+				prospectPhoneHash: z42.ZodString;
+				outcome: z42.ZodEnum<{
+					completed: "completed";
+					failed: "failed";
+					missed: "missed";
+				}>;
+				failureReason: z42.ZodNullable<z42.ZodEnum<{
+					busy: "busy";
+					carrier_dropped: "carrier_dropped";
+					carrier_rejected: "carrier_rejected";
+					disclosure_failed: "disclosure_failed";
+					no_answer: "no_answer";
+					provider_error: "provider_error";
+					rep_unreachable: "rep_unreachable";
+					timeout: "timeout";
+				}>>;
+				startedAt: z42.ZodISODateTime;
+				answeredAt: z42.ZodNullable<z42.ZodISODateTime>;
+				endedAt: z42.ZodISODateTime;
+				durationSeconds: z42.ZodNullable<z42.ZodNumber>;
+				disclosureWordingVersion: z42.ZodNullable<z42.ZodNumber>;
+				recordingKey: z42.ZodNullable<z42.ZodString>;
+				dealId: z42.ZodNullable<z42.ZodPipe<z42.ZodPipe<z42.ZodString, z42.ZodTransform<string, string>>, z42.ZodString>>;
+			}, z42.core.$strict>;
+		}, z42.core.$strip>;
+		parse: (input: unknown) => {
+			id: string & z42.$brand<"evt">;
+			occurredAt: string;
+			organizationId: string & z42.$brand<"org">;
+			region: "eu" | "us";
+			type: "voice.call.ended";
+			version: 1;
+			data: {
+				callId: string & z42.$brand<"call">;
+				direction: "inbound" | "outbound";
+				lineId: string & z42.$brand<"line">;
+				repMembershipId: (string & z42.$brand<"mem">) | null;
+				prospectId: (string & z42.$brand<"prs">) | null;
+				prospectPhoneHash: string;
+				outcome: "completed" | "failed" | "missed";
+				failureReason: "busy" | "carrier_dropped" | "carrier_rejected" | "disclosure_failed" | "no_answer" | "provider_error" | "rep_unreachable" | "timeout" | null;
+				startedAt: string;
+				answeredAt: string | null;
+				endedAt: string;
+				durationSeconds: number | null;
+				disclosureWordingVersion: number | null;
+				recordingKey: string | null;
+				dealId: string | null;
+			};
+		};
+		safeParse: (input: unknown) => z42.ZodSafeParseResult<{
+			id: string & z42.$brand<"evt">;
+			occurredAt: string;
+			organizationId: string & z42.$brand<"org">;
+			region: "eu" | "us";
+			type: "voice.call.ended";
+			version: 1;
+			data: {
+				callId: string & z42.$brand<"call">;
+				direction: "inbound" | "outbound";
+				lineId: string & z42.$brand<"line">;
+				repMembershipId: (string & z42.$brand<"mem">) | null;
+				prospectId: (string & z42.$brand<"prs">) | null;
+				prospectPhoneHash: string;
+				outcome: "completed" | "failed" | "missed";
+				failureReason: "busy" | "carrier_dropped" | "carrier_rejected" | "disclosure_failed" | "no_answer" | "provider_error" | "rep_unreachable" | "timeout" | null;
+				startedAt: string;
+				answeredAt: string | null;
+				endedAt: string;
+				durationSeconds: number | null;
+				disclosureWordingVersion: number | null;
+				recordingKey: string | null;
+				dealId: string | null;
+			};
+		}>;
+	};
+};
+/** The type of a voice event. */
+type VoiceEventType = keyof typeof VOICE_EVENTS;
+import { z as z43 } from "zod";
+/** The states of a Line: `porting` while a number moves to Closeline, `active` when Calls can use it, `released` once given up. */
+declare const LINE_STATES: readonly ["porting", "active", "released"];
+/** The state of a Line. */
+declare const lineStateSchema: z43.ZodEnum<{
+	active: "active";
+	porting: "porting";
+	released: "released";
+}>;
+/** The state of a Line. */
+type LineState = z43.infer<typeof lineStateSchema>;
+/** Who inbound Calls on a Line ring: nobody yet, a Team's Reps, or one Rep. */
+declare const lineAssignmentSchema: z43.ZodDiscriminatedUnion<[z43.ZodObject<{
+	kind: z43.ZodLiteral<"unassigned">;
+}, z43.core.$strict>, z43.ZodObject<{
+	kind: z43.ZodLiteral<"team">;
+	teamId: z43.core.$ZodBranded<z43.ZodString, "team", "out">;
+}, z43.core.$strict>, z43.ZodObject<{
+	kind: z43.ZodLiteral<"rep">;
+	membershipId: z43.core.$ZodBranded<z43.ZodString, "mem", "out">;
+}, z43.core.$strict>], "kind">;
+/** Who inbound Calls on a Line ring. */
+type LineAssignment = z43.infer<typeof lineAssignmentSchema>;
+/** A Line: a phone number the Organization uses to place and receive Calls. */
+declare const lineSchema: z43.ZodObject<{
+	id: z43.core.$ZodBranded<z43.ZodString, "line", "out">;
+	number: z43.ZodString;
+	country: z43.ZodString;
+	label: z43.ZodNullable<z43.ZodPipe<z43.ZodString, z43.ZodString>>;
+	state: z43.ZodEnum<{
+		active: "active";
+		porting: "porting";
+		released: "released";
+	}>;
+	assignment: z43.ZodDiscriminatedUnion<[z43.ZodObject<{
+		kind: z43.ZodLiteral<"unassigned">;
+	}, z43.core.$strict>, z43.ZodObject<{
+		kind: z43.ZodLiteral<"team">;
+		teamId: z43.core.$ZodBranded<z43.ZodString, "team", "out">;
+	}, z43.core.$strict>, z43.ZodObject<{
+		kind: z43.ZodLiteral<"rep">;
+		membershipId: z43.core.$ZodBranded<z43.ZodString, "mem", "out">;
+	}, z43.core.$strict>], "kind">;
+	createdAt: z43.ZodISODateTime;
+	releasedAt: z43.ZodNullable<z43.ZodISODateTime>;
+}, z43.core.$strip>;
+/** A Line. */
+type Line = z43.infer<typeof lineSchema>;
+/** The path parameters of a request about one Line. */
+declare const lineParamsSchema: z43.ZodObject<{
+	lineId: z43.core.$ZodBranded<z43.ZodString, "line", "out">;
+}, z43.core.$strict>;
+/** The position a Line list resumes from: newest first, by creation time then id. */
+declare const lineCursorSchema: z43.ZodObject<{
+	createdAt: z43.ZodISODateTime;
+	id: z43.core.$ZodBranded<z43.ZodString, "line", "out">;
+}, z43.core.$strict>;
+/** The query parameters of a request to list Lines, newest first, optionally of one state. */
+declare const listLinesQuerySchema: z43.ZodObject<{
+	cursor: z43.ZodOptional<z43.ZodString>;
+	limit: z43.ZodDefault<z43.ZodPipe<z43.ZodPipe<z43.ZodUnion<readonly [z43.ZodNumber, z43.ZodString]>, z43.ZodTransform<number, string | number>>, z43.ZodNumber>>;
+	state: z43.ZodOptional<z43.ZodEnum<{
+		active: "active";
+		porting: "porting";
+		released: "released";
+	}>>;
+}, z43.core.$strict>;
+/** The query parameters of a request to list Lines. */
+type ListLinesQuery = z43.infer<typeof listLinesQuerySchema>;
+/** One page of Lines. */
+declare const linePageSchema: z43.ZodObject<{
+	items: z43.ZodArray<z43.ZodObject<{
+		id: z43.core.$ZodBranded<z43.ZodString, "line", "out">;
+		number: z43.ZodString;
+		country: z43.ZodString;
+		label: z43.ZodNullable<z43.ZodPipe<z43.ZodString, z43.ZodString>>;
+		state: z43.ZodEnum<{
+			active: "active";
+			porting: "porting";
+			released: "released";
+		}>;
+		assignment: z43.ZodDiscriminatedUnion<[z43.ZodObject<{
+			kind: z43.ZodLiteral<"unassigned">;
+		}, z43.core.$strict>, z43.ZodObject<{
+			kind: z43.ZodLiteral<"team">;
+			teamId: z43.core.$ZodBranded<z43.ZodString, "team", "out">;
+		}, z43.core.$strict>, z43.ZodObject<{
+			kind: z43.ZodLiteral<"rep">;
+			membershipId: z43.core.$ZodBranded<z43.ZodString, "mem", "out">;
+		}, z43.core.$strict>], "kind">;
+		createdAt: z43.ZodISODateTime;
+		releasedAt: z43.ZodNullable<z43.ZodISODateTime>;
+	}, z43.core.$strip>>;
+	nextCursor: z43.ZodNullable<z43.ZodString>;
+}, z43.core.$strip>;
+/**
+* The body of a request to add a Line: buy a new number (optionally with an area code) or port
+* one the Organization already owns. The route accepts an `Idempotency-Key` header so a retry buys
+* one number.
+*/
+declare const addLineRequestSchema: z43.ZodDiscriminatedUnion<[z43.ZodObject<{
+	method: z43.ZodLiteral<"buy">;
+	country: z43.ZodString;
+	areaCode: z43.ZodOptional<z43.ZodString>;
+	label: z43.ZodOptional<z43.ZodPipe<z43.ZodString, z43.ZodString>>;
+}, z43.core.$strict>, z43.ZodObject<{
+	method: z43.ZodLiteral<"port">;
+	number: z43.ZodPipe<z43.ZodString, z43.ZodString>;
+	label: z43.ZodOptional<z43.ZodPipe<z43.ZodString, z43.ZodString>>;
+}, z43.core.$strict>], "method">;
+/** The body of a request to add a Line. */
+type AddLineRequest = z43.infer<typeof addLineRequestSchema>;
+/** The body of a request to assign a Line: to a Team, to a Rep, or to nobody. */
+declare const assignLineRequestSchema: z43.ZodDiscriminatedUnion<[z43.ZodObject<{
+	kind: z43.ZodLiteral<"unassigned">;
+}, z43.core.$strict>, z43.ZodObject<{
+	kind: z43.ZodLiteral<"team">;
+	teamId: z43.core.$ZodBranded<z43.ZodString, "team", "out">;
+}, z43.core.$strict>, z43.ZodObject<{
+	kind: z43.ZodLiteral<"rep">;
+	membershipId: z43.core.$ZodBranded<z43.ZodString, "mem", "out">;
+}, z43.core.$strict>], "kind">;
+/** The body of a request to assign a Line. */
+type AssignLineRequest = z43.infer<typeof assignLineRequestSchema>;
+/** The roles that may use the Softphone and read the Lines and Calls they can see. */
+declare const VOICE_ALL_ROLES: readonly ["owner", "admin", "manager", "rep"];
+/** The roles that manage Lines and delete Recordings. */
+declare const VOICE_ADMIN_ROLES: readonly ["owner", "admin"];
+/** The voice routes, by name. */
+type VoiceRouteName = "listLines" | "addLine" | "getLine" | "assignLine" | "releaseLine" | "placeCall" | "listCalls" | "getCall" | "getCallTranscript" | "getCallRecording" | "deleteCallRecording" | "wrapUpCall" | "mintSoftphoneToken";
+/** What the service needs to describe one route: method, path, who may call it, what it answers. */
+type VoiceRoute = {
+	readonly method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+	readonly path: string;
+	/** The roles allowed. Any other role is the common `auth.forbidden`. */
+	readonly roles: readonly Role[];
+	/** The success statuses, the first being the usual one. */
+	readonly success: readonly number[];
+	/** True when a retry of the route is safe by the `Idempotency-Key` header. */
+	readonly idempotent: boolean;
+	/** True when the `Idempotency-Key` header is required, not just accepted; see `placeCallHeadersSchema`. */
+	readonly keyRequired?: true;
+	/** The domain codes the route may return, beyond the common ones. */
+	readonly errors: readonly (VoiceErrorCode | Extract<SalesHistoryErrorCode, "call.not_found"> | ProspectErrorCode)[];
+	/** The common codes the route may return, beyond those every route may. */
+	readonly commonErrors: readonly CommonErrorCode[];
+	/** The description for the OpenAPI document, role rules included. */
+	readonly description: string;
+};
+/**
+* The voice routes (spec M12). Every route may also return the common `auth.*`, `rate.limited`
+* and `server.*` codes. Every list is cursor-paginated with at most 100 items per page. A record of
+* another Organization is always not found. The Provider's webhooks are internal routes of the
+* voice service and are not part of this contract. No route or body can switch off the Disclosure
+* or the Recording, and none checks Contact Consent for a Rep: a Rep may call any Prospect, with a
+* warning from the Contact Check (ADR 0003).
+*/
+declare const VOICE_ROUTES: Readonly<Record<VoiceRouteName, VoiceRoute>>;
+import { z as z44 } from "zod";
+/** The shortest a Softphone token lives, in seconds. */
+declare const MIN_SOFTPHONE_TOKEN_TTL_SECONDS = 60;
+/** The longest a Softphone token lives, in seconds: one hour. */
+declare const MAX_SOFTPHONE_TOKEN_TTL_SECONDS = 3600;
+/** The longest Softphone token, in characters. */
+declare const MAX_SOFTPHONE_TOKEN_LENGTH = 4096;
+/**
+* A short-lived token the browser uses to register the Softphone with the telephony provider. It
+* is a credential for one Rep: shown once to the caller, never logged or stored, and it stops
+* working at `expiresAt`. The Rep takes Calls only while one is held.
+*/
+declare const softphoneTokenSchema: z44.ZodObject<{
+	token: z44.ZodString;
+	identity: z44.core.$ZodBranded<z44.ZodString, "mem", "out">;
+	ttlSeconds: z44.ZodNumber;
+	expiresAt: z44.ZodISODateTime;
+}, z44.core.$strict>;
+/** A short-lived Softphone token. */
+type SoftphoneToken = z44.infer<typeof softphoneTokenSchema>;
+import { z as z45 } from "zod";
+/** The directions of a Call. */
+declare const VOICE_CALL_DIRECTIONS: readonly ["inbound", "outbound"];
+/** The direction of a Call: `outbound` is placed by a Rep to a Prospect, `inbound` rings on a Line. */
+declare const voiceCallDirectionSchema: z45.ZodEnum<{
+	inbound: "inbound";
+	outbound: "outbound";
+}>;
+/** The direction of a Call. */
+type VoiceCallDirection = z45.infer<typeof voiceCallDirectionSchema>;
+/**
+* The states of a Call. It moves `ringing`, `connecting`, `disclosing`, `live`, `ended`, or ends
+* `failed` or `missed`. `live` is reached only after the Disclosure has played: a Call in `live` or
+* `ended` always carries the time and wording version of its Disclosure.
+*/
+declare const VOICE_CALL_STATES: readonly ["ringing", "connecting", "disclosing", "live", "ended", "failed", "missed"];
+/** The state of a Call. */
+declare const voiceCallStateSchema: z45.ZodEnum<{
+	connecting: "connecting";
+	disclosing: "disclosing";
+	ended: "ended";
+	failed: "failed";
+	live: "live";
+	missed: "missed";
+	ringing: "ringing";
+}>;
+/** The state of a Call. */
+type VoiceCallState = z45.infer<typeof voiceCallStateSchema>;
+/** The states a Call can no longer leave. */
+declare const VOICE_CALL_FINAL_STATES: readonly ["ended", "failed", "missed"];
+/** Why a Call ended in `failed`: a closed list the portal maps to its own wording, never free text. */
+declare const VOICE_CALL_FAILURE_REASONS: readonly ["disclosure_failed", "carrier_dropped", "carrier_rejected", "busy", "no_answer", "rep_unreachable", "provider_error", "timeout"];
+/** Why a Call ended in `failed`. */
+declare const voiceCallFailureReasonSchema: z45.ZodEnum<{
+	busy: "busy";
+	carrier_dropped: "carrier_dropped";
+	carrier_rejected: "carrier_rejected";
+	disclosure_failed: "disclosure_failed";
+	no_answer: "no_answer";
+	provider_error: "provider_error";
+	rep_unreachable: "rep_unreachable";
+	timeout: "timeout";
+}>;
+/** Why a Call ended in `failed`. */
+type VoiceCallFailureReason = z45.infer<typeof voiceCallFailureReasonSchema>;
+/** Who ended a Call that ended: the Rep, the Prospect, or the system (a time limit). */
+declare const VOICE_CALL_ENDED_BY: readonly ["rep", "prospect", "system"];
+/** Who ended a Call. */
+declare const voiceCallEndedBySchema: z45.ZodEnum<{
+	prospect: "prospect";
+	rep: "rep";
+	system: "system";
+}>;
+/** The state of a Call's Recording. `none` until the Disclosure has played; `storing` while it is copied to the Region's storage; `stored` once playable; `deleted` after an Admin deleted it. */
+declare const VOICE_RECORDING_STATES: readonly ["none", "storing", "stored", "deleted"];
+/** The state of a Call's Recording. */
+declare const voiceRecordingStateSchema: z45.ZodEnum<{
+	deleted: "deleted";
+	none: "none";
+	stored: "stored";
+	storing: "storing";
+}>;
+/** The state of a Call's Recording. */
+type VoiceRecordingState = z45.infer<typeof voiceRecordingStateSchema>;
+/** The state of a Call's Transcript: `pending` until it is made, `ready` once readable, `deleted` after the Recording and Transcript were deleted. */
+declare const VOICE_TRANSCRIPT_STATES: readonly ["pending", "ready", "deleted"];
+/** The state of a Call's Transcript. */
+declare const voiceTranscriptStateSchema: z45.ZodEnum<{
+	deleted: "deleted";
+	pending: "pending";
+	ready: "ready";
+}>;
+/** The state of a Call's Transcript. */
+type VoiceTranscriptState = z45.infer<typeof voiceTranscriptStateSchema>;
+/** The most characters of a wrap-up note. */
+declare const MAX_WRAP_UP_NOTE_LENGTH = 2e3;
+/** A wrap-up note: bounded text with no control character; untrusted text for display. */
+declare const wrapUpNoteSchema: z45.ZodPipe<z45.ZodString, z45.ZodString>;
+/** The longest label of a Line. */
+declare const MAX_LINE_LABEL_LENGTH = 100;
+/** A label an Admin gives a Line: bounded text with no control character. */
+declare const lineLabelSchema: z45.ZodPipe<z45.ZodString, z45.ZodString>;
+/** A two-letter ISO 3166-1 country code in upper case, such as `US` or `IE`. */
+declare const countryCodeSchema: z45.ZodString;
+/**
+* A keyed SHA-256 of a Prospect's E.164 number, as lower-case hex (64 characters). The key is the
+* Organization's, so a number cannot be recovered by hashing a list of guesses. Events carry this
+* and never the number.
+*/
+declare const phoneHashSchema: z45.ZodString;
 /** This library's package name, so a consumer can report which shared libraries it resolved. */
 declare const PACKAGE = "tula-closeline-contract";
-export { ABANDON_MAX_AGE_HOURS, ACCEPTED_DOCUMENT_EXTENSIONS, ACCEPTED_DOCUMENT_MEDIA_TYPES, ACCEPTED_RECORDING_EXTENSIONS, ACCEPTED_TRANSCRIPT_EXTENSIONS, ALL_PLAYBOOK_ERRORS, ALL_PLAYBOOK_ROUTES, AUTH_ERRORS, AUTH_OPTIONS_PATH, AUTH_OPTIONS_ROUTE, AcceptedCallExtension, AcceptedDocumentExtension, AddSuppressionRequest, AddTeamMemberRequest, AllPlaybookRouteName, AuthErrorCode, AuthOptionsResponse, AuthProviders, AuthRoute, BULK_ASSIGN_SYNC_LIMIT, BrowserSessionTokens, BulkAssignProspectsRequest, BulkAssignProspectsResponse, CALL_CHANNELS, CALL_DELETED_MESSAGE, CALL_FAILURE_FIXES, CALL_FAILURE_REASONS, CALL_KINDS, CALL_MEDIA_TYPES, CALL_REP_CHANGED_MESSAGE, CALL_STATES, CALL_TRANSCRIBED_MESSAGE, CALL_UPLOADED_MESSAGE, CONSENT_ADMIN_ROLES, CONSENT_ALL_ROLES, CONSENT_CHANNELS, CONSENT_ERRORS, CONSENT_EVENTS, CONSENT_FORM_STATES, CONSENT_GRANT_SOURCES, CONSENT_RECORDABLE_SOURCES, CONSENT_REQUIRED_CHANNELS, CONSENT_ROUTES, CONSENT_STATES, CONSENT_WITHDRAWAL_SOURCES, CONTACT_ALLOW_BASES, CONTACT_DENIAL_CODES, CONTACT_PURPOSES, CORE_ERRORS, CREATE_DEMO_REQUEST_ERROR_CODES, CREATE_INVITATION_ERROR_CODES, CSV_FAILURES, CURRENT_RIGHTS_WORDING_VERSION, Call, CallCursor, CallDeletedPayload, CallFailureFix, CallFailureReason, CallId, CallKind, CallMediaType, CallParams, CallRepChangedPayload, CallState, CallTranscribedPayload, CallUploadedPayload, CellResult, ChangeMemberRoleRequest, CheckCallFileResult, CheckDealImportHeaderResult, CheckDealImportHeaderTextResult, CheckDealImportRowResult, CheckUploadFileResult, CommonErrorCode, ConfirmRightsRequest, ConsentChannel, ConsentErrorCode, ConsentEvent, ConsentEventId, ConsentEventType, ConsentForm, ConsentFormId, ConsentFormState, ConsentGrantSource, ConsentRoute, ConsentRouteAccess, ConsentRouteName, ConsentSource, ConsentState, ConsentWithdrawalSource, ConsentWording, ConsentWordingId, ContactCheckId, ContactCheckLogEntry, ContactCheckRequest, ContactCheckResult, ContactDenialCode, ContactPurpose, CoreErrorCode, CreateConsentFormRequest, CreateConsentWordingRequest, CreateDemoRequestRequest, CreateDemoRequestResponse, CreateInvitationRequest, CreateProspectCompanyRequest, CreateProspectRequest, CreateTeamRequest, CsvFailure, CsvOptions, CsvResult, DAILY_LIMIT_DETAILS_SCHEMA, DEAL_CLOSED_AT_MAX_YEAR, DEAL_CLOSED_AT_MIN_YEAR, DEAL_IMPORT_FAILURE_REASONS, DEAL_IMPORT_FILE_FIELD, DEAL_IMPORT_HEADER_PREFIX_CHARS, DEAL_IMPORT_HEADER_PROBLEMS, DEAL_IMPORT_OPTIONAL_COLUMN, DEAL_IMPORT_REQUIRED_COLUMNS, DEAL_IMPORT_ROW_REASONS, DEAL_IMPORT_ROW_RESULTS, DEAL_IMPORT_STATES, DEAL_IMPORT_UPLOADED_MESSAGE, DEAL_OUTCOME_CHANGED_MESSAGE, DEFAULT_MAX_CALLS, DEFAULT_MAX_DEALS, DEFAULT_MAX_DOCUMENTS, DEFAULT_MAX_DOCUMENT_BYTES_TOTAL, DEFAULT_MAX_RECORDING_BYTES_TOTAL, DEFAULT_PAGE_SIZE, DEFAULT_SEARCH_LIMIT, DELIVERY_FAILURE_REASONS, DOCUMENT_DELETED_MESSAGE, DOCUMENT_FAILURE_REASONS, DOCUMENT_RETENTION_DAYS, DOCUMENT_STATES, DOCUMENT_UPLOADED_MESSAGE, Deal, DealCursor, DealId, DealImport, DealImportCursor, DealImportFailureReason, DealImportHeaderProblem, DealImportId, DealImportParams, DealImportRow, DealImportRowCursor, DealImportRowReason, DealImportRowResult, DealImportState, DealImportUploadedPayload, DealOutcomeChangedPayload, DealParams, DealRecordId, DemoRequestId, DocumentDeletedPayload, DocumentFailureReason, DocumentFileName, DocumentId, DocumentMatch, DocumentMediaType, DocumentParams, DocumentSearchEvidence, DocumentState, DocumentUploadedPayload, DuplicateIdentityDetails, ERRORS, EVIDENCE_CSV_COLUMNS, Email, EraseProspectResponse, ErrorBody, ErrorDefinition, ErrorInput, EventId, EventType, EvidenceEvent, FIELD_HISTORY_STATES, FIXED_SOURCE_KINDS, FieldHistoryCursor, FieldHistoryEntry, FieldValue, FirstCsvRecordResult, GOOGLE_ERROR_PARAM, GOOGLE_ERROR_PATH, GOOGLE_ROUTES, GOOGLE_SIGN_UP_ATTEMPT_PARAM, GOOGLE_SIGN_UP_PATH, GoogleCompleteRequest, GoogleCompleteResponse, GoogleIntent, GoogleStartRequest, GoogleStartResponse, HostedConsentFormView, HostedConsentReceipt, HostedConsentSubmission, IDEMPOTENCY_KEY_HEADER, INCOMPLETE_UPLOAD_PARTS_TTL_HOURS, INTERNAL_CALL_ERRORS, INVITABLE_ROLES, INVITATION_STATES, Id, IdempotencyKey, InternalAbandonOrganizationParams, InternalAbandonOrganizationRequest, InternalAbandonOrganizationResponse, InternalAcceptInvitationRequest, InternalAcceptInvitationResponse, InternalCallName, InternalCreateOrganizationRequest, InternalCreateOrganizationResponse, InternalMembershipRequest, InternalMembershipResponse, InternalRemoveOrganizationDocumentsParams, InternalRemoveOrganizationDocumentsRequest, InternalRemoveOrganizationDocumentsResponse, InternalUpdateMemberProfileParams, InternalUpdateMemberProfileRequest, InternalUpdateMemberProfileResponse, InvitableRole, Invitation, InvitationId, InvitationParams, InvitationState, LIST_MEMBERS_MIN_ROLE, LIST_TEAM_MEMBERS_ERROR_CODES, LIST_TEAM_MEMBERS_MIN_ROLE, ListCallsQuery, ListCallsResponse, ListConsentEventsQuery, ListContactChecksQuery, ListDealImportRowsQuery, ListDealImportRowsResponse, ListDealImportsQuery, ListDealImportsResponse, ListDealsQuery, ListDealsResponse, ListDocumentsQuery, ListDocumentsResponse, ListFieldHistoryQuery, ListFieldHistoryResponse, ListInvitationsQuery, ListInvitationsResponse, ListMembersQuery, ListMembersResponse, ListProspectCompaniesQuery, ListProspectCompaniesResponse, ListProspectDuplicatesQuery, ListProspectDuplicatesResponse, ListProspectImportRowsQuery, ListProspectImportRowsResponse, ListProspectImportsQuery, ListProspectImportsResponse, ListProspectsQuery, ListProspectsResponse, ListSuppressionEntriesQuery, ListTeamMembersQuery, ListTeamMembersResponse, ListTeamsQuery, ListTeamsResponse, LookupDealRequest, MARKETING_ERRORS, MARKETING_ROUTES, MAX_AUTHORIZATION_URL_LENGTH, MAX_BULK_ASSIGN_PROSPECTS, MAX_CALL_SPEAKERS, MAX_CONSENT_FORM_NAME_LENGTH, MAX_CONSENT_WORDING_LENGTH, MAX_CURSOR_LENGTH, MAX_DEAL_ID_BYTES, MAX_DEAL_ID_LENGTH, MAX_DEAL_IMPORT_BYTES, MAX_DEAL_IMPORT_CELL_LENGTH, MAX_DEAL_IMPORT_HEADER_LENGTH, MAX_DEAL_IMPORT_ROWS, MAX_DEAL_NAME_BYTES, MAX_DEAL_NAME_LENGTH, MAX_DELETION_SEQ, MAX_DEMO_REQUEST_FIELD_LENGTH, MAX_DEMO_REQUEST_MESSAGE_LENGTH, MAX_DOCUMENT_BYTES, MAX_DOCUMENT_FILE_NAME_BYTES, MAX_DOCUMENT_FILE_NAME_LENGTH, MAX_DOCUMENT_PAGES, MAX_EMAIL_LENGTH, MAX_EVIDENCE_REF_LENGTH, MAX_FIELD_HISTORY_ENTRIES, MAX_MERGED_PROSPECTS, MAX_MOMENT_SNIPPET_CHARACTERS, MAX_NAME_LENGTH, MAX_PAGE_SIZE, MAX_PERSON_NAME_LENGTH, MAX_PROSPECT_COMPANY_NAME_LENGTH, MAX_PROSPECT_FIELD_VALUE_LENGTH, MAX_PROSPECT_IMPORT_BYTES, MAX_PROSPECT_IMPORT_ROWS, MAX_PROSPECT_JOB_TITLE_LENGTH, MAX_PROSPECT_NAME_PART_LENGTH, MAX_PROSPECT_NOTES_LENGTH, MAX_PROSPECT_SEARCH_LENGTH, MAX_PROSPECT_TAGS, MAX_PROSPECT_TAG_LENGTH, MAX_QUEUED_DEAL_IMPORTS, MAX_RECORDING_BYTES, MAX_RECORDING_SECONDS, MAX_REP_FIELD_LENGTH, MAX_REP_FOLLOWING_CHARACTERS, MAX_REP_FOLLOWING_TURNS, MAX_RETURN_TO_LENGTH, MAX_RIGHTS_HEADING_LENGTH, MAX_RIGHTS_PARAGRAPHS, MAX_RIGHTS_TEXT_LENGTH, MAX_RIGHTS_WORDING_VERSION, MAX_SEARCH_CANDIDATES, MAX_SEARCH_LIMIT, MAX_SEARCH_TEXT_CHARACTERS, MAX_SEARCH_TURNS, MAX_SEQ, MAX_SOURCE_REF_LENGTH, MAX_SPEAKER_EXCERPT_LENGTH, MAX_SPEAKER_LABEL_BYTES, MAX_SPEAKER_LABEL_LENGTH, MAX_SUPPRESSION_IMPORT_BYTES, MAX_SUPPRESSION_IMPORT_ROWS, MAX_SUPPRESSION_NOTE_LENGTH, MAX_TRANSCRIPT_BYTES, MAX_UTF8_BYTES_PER_CODE_POINT, MEDIA_TYPE_BY_CALL_EXTENSION, MEDIA_TYPE_BY_EXTENSION, MarketingErrorCode, MarketingRoute, MarketingRouteName, Member, MemberParams, MembershipId, MergeProspectsRequest, MomentMatch, OIDC_COOKIE_BASE_NAME, OIDC_COOKIE_SECURE_PREFIX, ONE_ADDRESS_MESSAGE, ORGANIZATION_STATUSES, OUTCOMES, OneClickUnsubscribeRequest, Organization, OrganizationId, OrganizationStatus, Outcome, PACKAGE, PLAYBOOK_ERRORS, PLAYBOOK_READ_ROLES, PLAYBOOK_ROUTES, PLAYBOOK_WRITE_ROLES, PROSPECT_ADMIN_ROLES, PROSPECT_ALL_ROLES, PROSPECT_COMPANY_FIELD_NAMES, PROSPECT_ERRORS, PROSPECT_EVENTS, PROSPECT_FIELD_NAMES, PROSPECT_IDENTITY_KINDS, PROSPECT_IMPORT_COLUMNS, PROSPECT_IMPORT_FAILURE_REASONS, PROSPECT_IMPORT_FILE_FIELD, PROSPECT_IMPORT_INVALID_REASONS, PROSPECT_IMPORT_REJECT_REASONS, PROSPECT_IMPORT_REPORT_COLUMNS, PROSPECT_IMPORT_ROW_RESULTS, PROSPECT_IMPORT_SKIP_REASONS, PROSPECT_IMPORT_STATES, PROSPECT_MERGE_STATES, PROSPECT_MERGE_UNDO_DAYS, PROSPECT_ROUTES, PROSPECT_STATUSES, Page, PageQuery, ParseRepFieldResult, ParsedDealImportRow, PlaybookDocument, PlaybookErrorCode, PlaybookRoute, PlaybookRouteName, Prospect, ProspectCompany, ProspectCompanyCursor, ProspectCompanyFieldName, ProspectCompanyFieldParams, ProspectCompanyId, ProspectCompanyParams, ProspectConsent, ProspectCursor, ProspectDuplicate, ProspectDuplicateCursor, ProspectErrorCode, ProspectEventType, ProspectFieldName, ProspectFieldParams, ProspectId, ProspectIdentityKind, ProspectImport, ProspectImportCursor, ProspectImportFailureReason, ProspectImportId, ProspectImportInvalidDetails, ProspectImportParams, ProspectImportRow, ProspectImportRowCursor, ProspectImportRowReason, ProspectImportRowResult, ProspectImportState, ProspectMerge, ProspectMergeId, ProspectMergeParams, ProspectNotFoundDetails, ProspectParams, ProspectRoute, ProspectRouteName, ProspectStatus, REGIONS, RIGHTS_WORDINGS, ROLES, RecordConsentRequest, RecordDeliveryFailureRequest, RecordWithdrawalRequest, RecordedConsent, Region, RemoveSuppressionRequest, RenameOrganizationRequest, RenameTeamRequest, RepChoice, RequestId, RetryAfterDetails, RightsConfirmation, RightsRequiredDetails, RightsStatus, RightsWording, Role, SALES_HISTORY_ERRORS, SALES_HISTORY_READ_ROLES, SALES_HISTORY_ROUTES, SEARCH_ROUTES, SIGNUP_ERRORS, SUPPRESSION_ADDRESS_KINDS, SUPPRESSION_IMPORT_COLUMNS, SUPPRESSION_IMPORT_FAILURE_REASONS, SUPPRESSION_IMPORT_FILE_FIELD, SUPPRESSION_IMPORT_ROW_RESULTS, SUPPRESSION_IMPORT_STATES, SUPPRESSION_REASONS, SUPPRESSION_REMOVABLE_REASONS, SalesHistoryErrorCode, SalesHistoryRoute, SalesHistoryRouteName, SearchDocumentsRequest, SearchDocumentsResponse, SearchEvidence, SearchMomentsRequest, SearchMomentsResponse, SearchRouteName, SearchTurn, SetCallRepRequest, SetDealOutcomeRequest, SetProspectOwnerRequest, SignupErrorCode, SourceKind, SpeakerExcerpt, SuppressionAddressKind, SuppressionEntry, SuppressionEntryId, SuppressionImport, SuppressionImportId, SuppressionImportRow, SuppressionReason, Team, TeamId, TeamMember, TeamMemberParams, TeamParams, UPLOAD_CONTENT_TYPE, UPLOAD_FILE_FIELD, UnsubscribePreview, UnsubscribeReceipt, UpdateConsentWordingRequest, UpdateProspectCompanyRequest, UpdateProspectRequest, UploadCallFields, UploadDocumentFile, UserId, WithdrawConsentRequest, addSuppressionRequestSchema, addTeamMemberRequestSchema, addressFieldsShape, attemptIdSchema, authOptionsResponseSchema, authProvidersSchema, authorizationUrlSchema, boundedTextSchema, browserSessionTokensSchema, bulkAssignProspectsRequestSchema, bulkAssignProspectsResponseSchema, calendarDateSchema, callChannelSchema, callCursorSchema, callDeletedPayloadSchema, callFailureReasonSchema, callIdSchema, callKindSchema, callListItemSchema, callMediaTypeSchema, callParamsSchema, callRepChangedPayloadSchema, callReuploadRequeues, callSchema, callStateSchema, callTranscribedPayloadSchema, callUploadedPayloadSchema, changeMemberRoleRequestSchema, channelConsentSchema, checkCallFile, checkDealImportHeader, checkDealImportHeaderText, checkDealImportRow, checkUploadFile, confirmRightsRequestSchema, consentChannelSchema, consentEventIdSchema, consentEventPageSchema, consentEventSchema, consentFormIdSchema, consentFormPageSchema, consentFormParamsSchema, consentFormSchema, consentFormStateSchema, consentGrantSourceSchema, consentGrantedEvent, consentProspectParamsSchema, consentSourceSchema, consentStateSchema, consentTokenParamsSchema, consentTokenSchema, consentWithdrawalSourceSchema, consentWithdrawnEvent, consentWordingIdSchema, consentWordingPageSchema, consentWordingParamsSchema, consentWordingSchema, consentWordingTextSchema, contactCheckIdSchema, contactCheckLogEntrySchema, contactCheckLogPageSchema, contactCheckRequestSchema, contactCheckResultSchema, contactDenialCodeSchema, contactPurposeSchema, createConsentFormRequestSchema, createConsentWordingRequestSchema, createDemoRequestRequestSchema, createDemoRequestResponseSchema, createInvitationRequestSchema, createProspectCompanyRequestSchema, createProspectRequestSchema, createTeamRequestSchema, dealAmountSchema, dealCurrencySchema, dealCursorSchema, dealIdSchema, dealImportCursorSchema, dealImportFailureReasonSchema, dealImportIdSchema, dealImportParamsSchema, dealImportRowCursorSchema, dealImportRowReasonSchema, dealImportRowResultSchema, dealImportRowSchema, dealImportSchema, dealImportStateSchema, dealImportUploadedPayloadSchema, dealNameSchema, dealOutcomeChangedPayloadSchema, dealParamsSchema, dealRecordIdSchema, dealSchema, decodeCursor, defineErrors, defineEvent, demoRequestIdSchema, demoRequestMessageSchema, demoRequestSourcePageSchema, documentDeletedPayloadSchema, documentExtension, documentFailureReasonSchema, documentFileNameSchema, documentIdSchema, documentMatchSchema, documentMediaTypeSchema, documentParamsSchema, documentQueryText, documentSchema, documentSearchEvidenceSchema, documentSizeCheckSchema, documentStateSchema, documentTypeCheckSchema, documentUploadedPayloadSchema, duplicateIdentityDetailsSchema, e164PhoneSchema, emailSchema, encodeCursor, eraseProspectResponseSchema, errorBodySchema, errorCodeSchema, eventEnvelopeSchema, eventIdSchema, eventTypeSchema, evidenceEventSchema, evidencePageSchema, evidenceRefSchema, excerptText, fieldHistoryCursorSchema, fieldHistoryEntrySchema, fieldHistoryStateSchema, fieldValueSchema, firstCsvRecord, foldAscii, formatId, googleCompleteRequestSchema, googleCompleteResponseSchema, googleErrorQuerySchema, googleIntentSchema, googleSignUpQuerySchema, googleStartRequestSchema, googleStartResponseSchema, hasControlCharacter, hasExactlyOneAddress, hasStrippableCharacter, hostedConsentFormViewSchema, hostedConsentReceiptSchema, hostedConsentSubmissionSchema, idSchema, idempotencyKeySchema, internalAbandonOrganizationParamsSchema, internalAbandonOrganizationRequestSchema, internalAbandonOrganizationResponseSchema, internalAcceptInvitationRequestSchema, internalAcceptInvitationResponseSchema, internalCreateOrganizationRequestSchema, internalCreateOrganizationResponseSchema, internalMembershipRequestSchema, internalMembershipResponseSchema, internalRemoveOrganizationDocumentsParamsSchema, internalRemoveOrganizationDocumentsRequestSchema, internalRemoveOrganizationDocumentsResponseSchema, internalUpdateMemberProfileParamsSchema, internalUpdateMemberProfileRequestSchema, internalUpdateMemberProfileResponseSchema, invitableRoleSchema, invitationIdSchema, invitationParamsSchema, invitationSchema, invitationStateSchema, invitationTokenSchema, isBlankCsvRecord, isWellFormedText, listCallsQuerySchema, listCallsResponseSchema, listConsentEventsQuerySchema, listConsentFormsQuerySchema, listConsentWordingsQuerySchema, listContactChecksQuerySchema, listDealImportRowsQuerySchema, listDealImportRowsResponseSchema, listDealImportsQuerySchema, listDealImportsResponseSchema, listDealsQuerySchema, listDealsResponseSchema, listDocumentsQuerySchema, listDocumentsResponseSchema, listEvidenceQuerySchema, listFieldHistoryQuerySchema, listFieldHistoryResponseSchema, listInvitationsQuerySchema, listInvitationsResponseSchema, listMembersQuerySchema, listMembersResponseSchema, listProspectCompaniesQuerySchema, listProspectCompaniesResponseSchema, listProspectDuplicatesQuerySchema, listProspectDuplicatesResponseSchema, listProspectImportRowsQuerySchema, listProspectImportRowsResponseSchema, listProspectImportsQuerySchema, listProspectImportsResponseSchema, listProspectsQuerySchema, listProspectsResponseSchema, listSuppressionEntriesQuerySchema, listSuppressionImportRowsQuerySchema, listSuppressionImportsQuerySchema, listTeamMembersQuerySchema, listTeamMembersResponseSchema, listTeamsQuerySchema, listTeamsResponseSchema, lookupDealRequestSchema, lookupSuppressionRequestSchema, maskedAddressSchema, memberParamsSchema, memberSchema, membershipIdSchema, mergeProspectsRequestSchema, momentMatchSchema, momentQueryText, momentSnippet, momentSnippetSchema, normaliseDealId, normaliseFileName, normaliseMediaType, normaliseSpeakerLabel, oneClickUnsubscribeRequestSchema, organizationIdSchema, organizationNameSchema, organizationSchema, organizationStatusSchema, outcomeSchema, pageQuerySchema, pageSchema, parseAmountCell, parseClosedAtCell, parseCsv, parseCurrencyCell, parseOutcomeCell, parseRepField, personNameSchema, prospectCompanyCursorSchema, prospectCompanyDomainSchema, prospectCompanyFieldNameSchema, prospectCompanyFieldParamsSchema, prospectCompanyIdSchema, prospectCompanyNameSchema, prospectCompanyParamsSchema, prospectCompanySchema, prospectConsentSchema, prospectCreatedEvent, prospectCursorSchema, prospectDuplicateCursorSchema, prospectDuplicateSchema, prospectErasedEvent, prospectFieldNameSchema, prospectFieldParamsSchema, prospectIdSchema, prospectIdentityKindSchema, prospectImportCursorSchema, prospectImportFailureReasonSchema, prospectImportIdSchema, prospectImportInvalidDetailsSchema, prospectImportParamsSchema, prospectImportRowCursorSchema, prospectImportRowReasonSchema, prospectImportRowResultSchema, prospectImportRowSchema, prospectImportSchema, prospectImportStateSchema, prospectJobTitleSchema, prospectMergeIdSchema, prospectMergeParamsSchema, prospectMergeSchema, prospectMergeUndoneEvent, prospectMergedEvent, prospectNamePartSchema, prospectNotFoundDetailsSchema, prospectNotesSchema, prospectParamsSchema, prospectSchema, prospectSearchSchema, prospectStatusSchema, prospectTagsSchema, prospectUpdatedEvent, rawLinkedinUrlSchema, rawPhoneSchema, recordConsentRequestSchema, recordDeliveryFailureRequestSchema, recordWithdrawalRequestSchema, recordedConsentSchema, recordedSuppressionSchema, regionSchema, removeSuppressionRequestSchema, renameOrganizationRequestSchema, renameTeamRequestSchema, repChangeAllowed, repChoiceSchema, repChoiceSuits, requestIdSchema, retryAfterDetailsSchema, returnToSchema, rightsConfirmationSchema, rightsRequiredDetailsSchema, rightsStatusSchema, rightsWordingFor, rightsWordingSchema, rightsWordingVersionSchema, roleAtLeast, roleSchema, searchDocumentsRequestSchema, searchDocumentsResponseSchema, searchEvidenceSchema, searchMomentsRequestSchema, searchMomentsResponseSchema, searchTurnSchema, setCallRepRequestSchema, setDealOutcomeRequestSchema, setProspectOwnerRequestSchema, sourceKindSchema, speakerExcerpt, speakerExcerptSchema, speakerLabelSchema, storedNameSchema, suppressionAddedEvent, suppressionAddressKindSchema, suppressionEntryIdSchema, suppressionEntryPageSchema, suppressionEntryParamsSchema, suppressionEntrySchema, suppressionImportIdSchema, suppressionImportPageSchema, suppressionImportParamsSchema, suppressionImportRowPageSchema, suppressionImportRowSchema, suppressionImportSchema, suppressionImportStateSchema, suppressionListStateSchema, suppressionReasonSchema, suppressionRemovedEvent, teamIdSchema, teamMemberParamsSchema, teamMemberSchema, teamNameSchema, teamParamsSchema, teamSchema, timestampSchema, unsubscribePreviewSchema, unsubscribeReceiptSchema, updateConsentWordingRequestSchema, updateProspectCompanyRequestSchema, updateProspectRequestSchema, uploadCallFieldsSchema, uploadCallFileSchema, uploadDocumentFileSchema, userIdSchema, withdrawConsentRequestSchema };
+export { ABANDON_MAX_AGE_HOURS, ACCEPTED_DOCUMENT_EXTENSIONS, ACCEPTED_DOCUMENT_MEDIA_TYPES, ACCEPTED_RECORDING_EXTENSIONS, ACCEPTED_TRANSCRIPT_EXTENSIONS, ALL_PLAYBOOK_ERRORS, ALL_PLAYBOOK_ROUTES, AUTH_ERRORS, AUTH_OPTIONS_PATH, AUTH_OPTIONS_ROUTE, AcceptedCallExtension, AcceptedDocumentExtension, AddLineRequest, AddSuppressionRequest, AddTeamMemberRequest, AllPlaybookRouteName, AssignLineRequest, AuthErrorCode, AuthOptionsResponse, AuthProviders, AuthRoute, BULK_ASSIGN_SYNC_LIMIT, BrowserSessionTokens, BulkAssignProspectsRequest, BulkAssignProspectsResponse, CALL_CHANNELS, CALL_DELETED_MESSAGE, CALL_FAILURE_FIXES, CALL_FAILURE_REASONS, CALL_KINDS, CALL_MEDIA_TYPES, CALL_REP_CHANGED_MESSAGE, CALL_STATES, CALL_TRANSCRIBED_MESSAGE, CALL_UPLOADED_MESSAGE, CONSENT_ADMIN_ROLES, CONSENT_ALL_ROLES, CONSENT_CHANNELS, CONSENT_ERRORS, CONSENT_EVENTS, CONSENT_FORM_STATES, CONSENT_GRANT_SOURCES, CONSENT_RECORDABLE_SOURCES, CONSENT_REQUIRED_CHANNELS, CONSENT_ROUTES, CONSENT_STATES, CONSENT_WITHDRAWAL_SOURCES, CONTACT_ALLOW_BASES, CONTACT_DENIAL_CODES, CONTACT_PURPOSES, CORE_ERRORS, CREATE_DEMO_REQUEST_ERROR_CODES, CREATE_INVITATION_ERROR_CODES, CSV_FAILURES, CURRENT_RIGHTS_WORDING_VERSION, Call, CallCursor, CallDeletedPayload, CallDisclosure, CallFailureFix, CallFailureReason, CallId, CallKind, CallMediaType, CallParams, CallRepChangedPayload, CallState, CallTranscribedPayload, CallUploadedPayload, CellResult, ChangeMemberRoleRequest, CheckCallFileResult, CheckDealImportHeaderResult, CheckDealImportHeaderTextResult, CheckDealImportRowResult, CheckUploadFileResult, CommonErrorCode, ConfirmRightsRequest, ConsentChannel, ConsentErrorCode, ConsentEvent, ConsentEventId, ConsentEventType, ConsentForm, ConsentFormId, ConsentFormState, ConsentGrantSource, ConsentRoute, ConsentRouteAccess, ConsentRouteName, ConsentSource, ConsentState, ConsentWithdrawalSource, ConsentWording, ConsentWordingId, ContactCheckId, ContactCheckLogEntry, ContactCheckRequest, ContactCheckResult, ContactDenialCode, ContactPurpose, ContactWarning, CoreErrorCode, CreateConsentFormRequest, CreateConsentWordingRequest, CreateDemoRequestRequest, CreateDemoRequestResponse, CreateInvitationRequest, CreateProspectCompanyRequest, CreateProspectRequest, CreateTeamRequest, CsvFailure, CsvOptions, CsvResult, DAILY_LIMIT_DETAILS_SCHEMA, DEAL_CLOSED_AT_MAX_YEAR, DEAL_CLOSED_AT_MIN_YEAR, DEAL_IMPORT_FAILURE_REASONS, DEAL_IMPORT_FILE_FIELD, DEAL_IMPORT_HEADER_PREFIX_CHARS, DEAL_IMPORT_HEADER_PROBLEMS, DEAL_IMPORT_OPTIONAL_COLUMN, DEAL_IMPORT_REQUIRED_COLUMNS, DEAL_IMPORT_ROW_REASONS, DEAL_IMPORT_ROW_RESULTS, DEAL_IMPORT_STATES, DEAL_IMPORT_UPLOADED_MESSAGE, DEAL_OUTCOME_CHANGED_MESSAGE, DEFAULT_MAX_CALLS, DEFAULT_MAX_DEALS, DEFAULT_MAX_DOCUMENTS, DEFAULT_MAX_DOCUMENT_BYTES_TOTAL, DEFAULT_MAX_RECORDING_BYTES_TOTAL, DEFAULT_PAGE_SIZE, DEFAULT_SEARCH_LIMIT, DELIVERY_FAILURE_REASONS, DOCUMENT_DELETED_MESSAGE, DOCUMENT_FAILURE_REASONS, DOCUMENT_RETENTION_DAYS, DOCUMENT_STATES, DOCUMENT_UPLOADED_MESSAGE, Deal, DealCursor, DealId, DealImport, DealImportCursor, DealImportFailureReason, DealImportHeaderProblem, DealImportId, DealImportParams, DealImportRow, DealImportRowCursor, DealImportRowReason, DealImportRowResult, DealImportState, DealImportUploadedPayload, DealOutcomeChangedPayload, DealParams, DealRecordId, DemoRequestId, DocumentDeletedPayload, DocumentFailureReason, DocumentFileName, DocumentId, DocumentMatch, DocumentMediaType, DocumentParams, DocumentSearchEvidence, DocumentState, DocumentUploadedPayload, DuplicateIdentityDetails, ERRORS, EVIDENCE_CSV_COLUMNS, Email, EraseProspectResponse, ErrorBody, ErrorDefinition, ErrorInput, EventId, EventType, EvidenceEvent, FIELD_HISTORY_STATES, FIXED_SOURCE_KINDS, FieldHistoryCursor, FieldHistoryEntry, FieldValue, FirstCsvRecordResult, GOOGLE_ERROR_PARAM, GOOGLE_ERROR_PATH, GOOGLE_ROUTES, GOOGLE_SIGN_UP_ATTEMPT_PARAM, GOOGLE_SIGN_UP_PATH, GoogleCompleteRequest, GoogleCompleteResponse, GoogleIntent, GoogleStartRequest, GoogleStartResponse, HostedConsentFormView, HostedConsentReceipt, HostedConsentSubmission, IDEMPOTENCY_KEY_HEADER, INCOMPLETE_UPLOAD_PARTS_TTL_HOURS, INTERNAL_CALL_ERRORS, INVITABLE_ROLES, INVITATION_STATES, Id, IdempotencyKey, InternalAbandonOrganizationParams, InternalAbandonOrganizationRequest, InternalAbandonOrganizationResponse, InternalAcceptInvitationRequest, InternalAcceptInvitationResponse, InternalCallName, InternalCreateOrganizationRequest, InternalCreateOrganizationResponse, InternalMembershipRequest, InternalMembershipResponse, InternalRemoveOrganizationDocumentsParams, InternalRemoveOrganizationDocumentsRequest, InternalRemoveOrganizationDocumentsResponse, InternalUpdateMemberProfileParams, InternalUpdateMemberProfileRequest, InternalUpdateMemberProfileResponse, InvitableRole, Invitation, InvitationId, InvitationParams, InvitationState, LINE_STATES, LIST_MEMBERS_MIN_ROLE, LIST_TEAM_MEMBERS_ERROR_CODES, LIST_TEAM_MEMBERS_MIN_ROLE, Line, LineAssignment, LineId, LineState, ListCallsQuery, ListCallsResponse, ListConsentEventsQuery, ListContactChecksQuery, ListDealImportRowsQuery, ListDealImportRowsResponse, ListDealImportsQuery, ListDealImportsResponse, ListDealsQuery, ListDealsResponse, ListDocumentsQuery, ListDocumentsResponse, ListFieldHistoryQuery, ListFieldHistoryResponse, ListInvitationsQuery, ListInvitationsResponse, ListLinesQuery, ListMembersQuery, ListMembersResponse, ListProspectCompaniesQuery, ListProspectCompaniesResponse, ListProspectDuplicatesQuery, ListProspectDuplicatesResponse, ListProspectImportRowsQuery, ListProspectImportRowsResponse, ListProspectImportsQuery, ListProspectImportsResponse, ListProspectsQuery, ListProspectsResponse, ListSuppressionEntriesQuery, ListTeamMembersQuery, ListTeamMembersResponse, ListTeamsQuery, ListTeamsResponse, ListVoiceCallsQuery, LookupDealRequest, MARKETING_ERRORS, MARKETING_ROUTES, MAX_AUTHORIZATION_URL_LENGTH, MAX_BULK_ASSIGN_PROSPECTS, MAX_CALL_DURATION_SECONDS, MAX_CALL_SPEAKERS, MAX_CONSENT_FORM_NAME_LENGTH, MAX_CONSENT_WORDING_LENGTH, MAX_CURSOR_LENGTH, MAX_DEAL_ID_BYTES, MAX_DEAL_ID_LENGTH, MAX_DEAL_IMPORT_BYTES, MAX_DEAL_IMPORT_CELL_LENGTH, MAX_DEAL_IMPORT_HEADER_LENGTH, MAX_DEAL_IMPORT_ROWS, MAX_DEAL_NAME_BYTES, MAX_DEAL_NAME_LENGTH, MAX_DELETION_SEQ, MAX_DEMO_REQUEST_FIELD_LENGTH, MAX_DEMO_REQUEST_MESSAGE_LENGTH, MAX_DOCUMENT_BYTES, MAX_DOCUMENT_FILE_NAME_BYTES, MAX_DOCUMENT_FILE_NAME_LENGTH, MAX_DOCUMENT_PAGES, MAX_EMAIL_LENGTH, MAX_EVIDENCE_REF_LENGTH, MAX_FIELD_HISTORY_ENTRIES, MAX_LINE_LABEL_LENGTH, MAX_MERGED_PROSPECTS, MAX_MOMENT_SNIPPET_CHARACTERS, MAX_NAME_LENGTH, MAX_PAGE_SIZE, MAX_PERSON_NAME_LENGTH, MAX_PLAYBACK_URL_LENGTH, MAX_PROSPECT_COMPANY_NAME_LENGTH, MAX_PROSPECT_FIELD_VALUE_LENGTH, MAX_PROSPECT_IMPORT_BYTES, MAX_PROSPECT_IMPORT_ROWS, MAX_PROSPECT_JOB_TITLE_LENGTH, MAX_PROSPECT_NAME_PART_LENGTH, MAX_PROSPECT_NOTES_LENGTH, MAX_PROSPECT_SEARCH_LENGTH, MAX_PROSPECT_TAGS, MAX_PROSPECT_TAG_LENGTH, MAX_QUEUED_DEAL_IMPORTS, MAX_RECORDING_BYTES, MAX_RECORDING_KEY_LENGTH, MAX_RECORDING_SECONDS, MAX_REP_FIELD_LENGTH, MAX_REP_FOLLOWING_CHARACTERS, MAX_REP_FOLLOWING_TURNS, MAX_RETURN_TO_LENGTH, MAX_RIGHTS_HEADING_LENGTH, MAX_RIGHTS_PARAGRAPHS, MAX_RIGHTS_TEXT_LENGTH, MAX_RIGHTS_WORDING_VERSION, MAX_SEARCH_CANDIDATES, MAX_SEARCH_LIMIT, MAX_SEARCH_TEXT_CHARACTERS, MAX_SEARCH_TURNS, MAX_SEQ, MAX_SOFTPHONE_TOKEN_LENGTH, MAX_SOFTPHONE_TOKEN_TTL_SECONDS, MAX_SOURCE_REF_LENGTH, MAX_SPEAKER_EXCERPT_LENGTH, MAX_SPEAKER_LABEL_BYTES, MAX_SPEAKER_LABEL_LENGTH, MAX_SUPPRESSION_IMPORT_BYTES, MAX_SUPPRESSION_IMPORT_ROWS, MAX_SUPPRESSION_NOTE_LENGTH, MAX_TRANSCRIPT_BYTES, MAX_TRANSCRIPT_TURN_LENGTH, MAX_UTF8_BYTES_PER_CODE_POINT, MAX_WRAP_UP_NOTE_LENGTH, MEDIA_TYPE_BY_CALL_EXTENSION, MEDIA_TYPE_BY_EXTENSION, MIN_SOFTPHONE_TOKEN_TTL_SECONDS, MarketingErrorCode, MarketingRoute, MarketingRouteName, Member, MemberParams, MembershipId, MergeProspectsRequest, MomentMatch, OIDC_COOKIE_BASE_NAME, OIDC_COOKIE_SECURE_PREFIX, ONE_ADDRESS_MESSAGE, ORGANIZATION_STATUSES, OUTCOMES, OneClickUnsubscribeRequest, Organization, OrganizationId, OrganizationStatus, Outcome, PACKAGE, PLAYBOOK_ERRORS, PLAYBOOK_READ_ROLES, PLAYBOOK_ROUTES, PLAYBOOK_WRITE_ROLES, PROSPECT_ADMIN_ROLES, PROSPECT_ALL_ROLES, PROSPECT_COMPANY_FIELD_NAMES, PROSPECT_ERRORS, PROSPECT_EVENTS, PROSPECT_FIELD_NAMES, PROSPECT_IDENTITY_KINDS, PROSPECT_IMPORT_COLUMNS, PROSPECT_IMPORT_FAILURE_REASONS, PROSPECT_IMPORT_FILE_FIELD, PROSPECT_IMPORT_INVALID_REASONS, PROSPECT_IMPORT_REJECT_REASONS, PROSPECT_IMPORT_REPORT_COLUMNS, PROSPECT_IMPORT_ROW_RESULTS, PROSPECT_IMPORT_SKIP_REASONS, PROSPECT_IMPORT_STATES, PROSPECT_MERGE_STATES, PROSPECT_MERGE_UNDO_DAYS, PROSPECT_ROUTES, PROSPECT_STATUSES, Page, PageQuery, ParseRepFieldResult, ParsedDealImportRow, PlaceCallRequest, PlacedCall, PlaybookDocument, PlaybookErrorCode, PlaybookRoute, PlaybookRouteName, Prospect, ProspectCompany, ProspectCompanyCursor, ProspectCompanyFieldName, ProspectCompanyFieldParams, ProspectCompanyId, ProspectCompanyParams, ProspectConsent, ProspectCursor, ProspectDuplicate, ProspectDuplicateCursor, ProspectErrorCode, ProspectEventType, ProspectFieldName, ProspectFieldParams, ProspectId, ProspectIdentityKind, ProspectImport, ProspectImportCursor, ProspectImportFailureReason, ProspectImportId, ProspectImportInvalidDetails, ProspectImportParams, ProspectImportRow, ProspectImportRowCursor, ProspectImportRowReason, ProspectImportRowResult, ProspectImportState, ProspectMerge, ProspectMergeId, ProspectMergeParams, ProspectNotFoundDetails, ProspectParams, ProspectRoute, ProspectRouteName, ProspectStatus, RECORDING_MEDIA_TYPES, REGIONS, RIGHTS_WORDINGS, ROLES, RecordConsentRequest, RecordDeliveryFailureRequest, RecordWithdrawalRequest, RecordedConsent, RecordingPlayback, Region, RemoveSuppressionRequest, RenameOrganizationRequest, RenameTeamRequest, RepChoice, RequestId, RetryAfterDetails, RightsConfirmation, RightsRequiredDetails, RightsStatus, RightsWording, Role, SALES_HISTORY_ERRORS, SALES_HISTORY_READ_ROLES, SALES_HISTORY_ROUTES, SEARCH_ROUTES, SIGNUP_ERRORS, SUPPRESSION_ADDRESS_KINDS, SUPPRESSION_IMPORT_COLUMNS, SUPPRESSION_IMPORT_FAILURE_REASONS, SUPPRESSION_IMPORT_FILE_FIELD, SUPPRESSION_IMPORT_ROW_RESULTS, SUPPRESSION_IMPORT_STATES, SUPPRESSION_REASONS, SUPPRESSION_REMOVABLE_REASONS, SalesHistoryErrorCode, SalesHistoryRoute, SalesHistoryRouteName, SearchDocumentsRequest, SearchDocumentsResponse, SearchEvidence, SearchMomentsRequest, SearchMomentsResponse, SearchRouteName, SearchTurn, SetCallRepRequest, SetDealOutcomeRequest, SetProspectOwnerRequest, SignupErrorCode, SoftphoneToken, SourceKind, SpeakerExcerpt, SuppressionAddressKind, SuppressionEntry, SuppressionEntryId, SuppressionImport, SuppressionImportId, SuppressionImportRow, SuppressionReason, Team, TeamId, TeamMember, TeamMemberParams, TeamParams, TranscriptPage, TranscriptTurn, UPLOAD_CONTENT_TYPE, UPLOAD_FILE_FIELD, UnsubscribePreview, UnsubscribeReceipt, UpdateConsentWordingRequest, UpdateProspectCompanyRequest, UpdateProspectRequest, UploadCallFields, UploadDocumentFile, UserId, VOICE_ADMIN_ROLES, VOICE_ALL_ROLES, VOICE_CALL_DIRECTIONS, VOICE_CALL_ENDED_BY, VOICE_CALL_FAILURE_REASONS, VOICE_CALL_FINAL_STATES, VOICE_CALL_OUTCOMES, VOICE_CALL_STATES, VOICE_ERRORS, VOICE_EVENTS, VOICE_RECORDING_STATES, VOICE_ROUTES, VOICE_TRANSCRIPT_STATES, VoiceCall, VoiceCallDirection, VoiceCallFailureReason, VoiceCallState, VoiceErrorCode, VoiceEventType, VoiceRecordingState, VoiceRoute, VoiceRouteName, VoiceTranscriptState, WithdrawConsentRequest, WrapUpRequest, addLineRequestSchema, addSuppressionRequestSchema, addTeamMemberRequestSchema, addressFieldsShape, assignLineRequestSchema, attemptIdSchema, authOptionsResponseSchema, authProvidersSchema, authorizationUrlSchema, boundedTextSchema, browserSessionTokensSchema, bulkAssignProspectsRequestSchema, bulkAssignProspectsResponseSchema, calendarDateSchema, callChannelSchema, callCursorSchema, callDeletedPayloadSchema, callDisclosureSchema, callFailureReasonSchema, callIdSchema, callKindSchema, callListItemSchema, callMediaTypeSchema, callParamsSchema, callRepChangedPayloadSchema, callReuploadRequeues, callSchema, callStateSchema, callTranscribedPayloadSchema, callUploadedPayloadSchema, changeMemberRoleRequestSchema, channelConsentSchema, checkCallFile, checkDealImportHeader, checkDealImportHeaderText, checkDealImportRow, checkUploadFile, confirmRightsRequestSchema, consentChannelSchema, consentEventIdSchema, consentEventPageSchema, consentEventSchema, consentFormIdSchema, consentFormPageSchema, consentFormParamsSchema, consentFormSchema, consentFormStateSchema, consentGrantSourceSchema, consentGrantedEvent, consentProspectParamsSchema, consentSourceSchema, consentStateSchema, consentTokenParamsSchema, consentTokenSchema, consentWithdrawalSourceSchema, consentWithdrawnEvent, consentWordingIdSchema, consentWordingPageSchema, consentWordingParamsSchema, consentWordingSchema, consentWordingTextSchema, contactCheckIdSchema, contactCheckLogEntrySchema, contactCheckLogPageSchema, contactCheckRequestSchema, contactCheckResultSchema, contactDenialCodeSchema, contactPurposeSchema, contactWarningSchema, countryCodeSchema, createConsentFormRequestSchema, createConsentWordingRequestSchema, createDemoRequestRequestSchema, createDemoRequestResponseSchema, createInvitationRequestSchema, createProspectCompanyRequestSchema, createProspectRequestSchema, createTeamRequestSchema, dealAmountSchema, dealCurrencySchema, dealCursorSchema, dealIdSchema, dealImportCursorSchema, dealImportFailureReasonSchema, dealImportIdSchema, dealImportParamsSchema, dealImportRowCursorSchema, dealImportRowReasonSchema, dealImportRowResultSchema, dealImportRowSchema, dealImportSchema, dealImportStateSchema, dealImportUploadedPayloadSchema, dealNameSchema, dealOutcomeChangedPayloadSchema, dealParamsSchema, dealRecordIdSchema, dealSchema, decodeCursor, defineErrors, defineEvent, deletedRecordingSchema, demoRequestIdSchema, demoRequestMessageSchema, demoRequestSourcePageSchema, documentDeletedPayloadSchema, documentExtension, documentFailureReasonSchema, documentFileNameSchema, documentIdSchema, documentMatchSchema, documentMediaTypeSchema, documentParamsSchema, documentQueryText, documentSchema, documentSearchEvidenceSchema, documentSizeCheckSchema, documentStateSchema, documentTypeCheckSchema, documentUploadedPayloadSchema, duplicateIdentityDetailsSchema, e164PhoneSchema, emailSchema, encodeCursor, eraseProspectResponseSchema, errorBodySchema, errorCodeSchema, eventEnvelopeSchema, eventIdSchema, eventTypeSchema, evidenceEventSchema, evidencePageSchema, evidenceRefSchema, excerptText, fieldHistoryCursorSchema, fieldHistoryEntrySchema, fieldHistoryStateSchema, fieldValueSchema, firstCsvRecord, foldAscii, formatId, getTranscriptQuerySchema, googleCompleteRequestSchema, googleCompleteResponseSchema, googleErrorQuerySchema, googleIntentSchema, googleSignUpQuerySchema, googleStartRequestSchema, googleStartResponseSchema, hasControlCharacter, hasExactlyOneAddress, hasStrippableCharacter, hostedConsentFormViewSchema, hostedConsentReceiptSchema, hostedConsentSubmissionSchema, idSchema, idempotencyKeySchema, internalAbandonOrganizationParamsSchema, internalAbandonOrganizationRequestSchema, internalAbandonOrganizationResponseSchema, internalAcceptInvitationRequestSchema, internalAcceptInvitationResponseSchema, internalCreateOrganizationRequestSchema, internalCreateOrganizationResponseSchema, internalMembershipRequestSchema, internalMembershipResponseSchema, internalRemoveOrganizationDocumentsParamsSchema, internalRemoveOrganizationDocumentsRequestSchema, internalRemoveOrganizationDocumentsResponseSchema, internalUpdateMemberProfileParamsSchema, internalUpdateMemberProfileRequestSchema, internalUpdateMemberProfileResponseSchema, invitableRoleSchema, invitationIdSchema, invitationParamsSchema, invitationSchema, invitationStateSchema, invitationTokenSchema, isBlankCsvRecord, isWellFormedText, lineAssignmentSchema, lineCursorSchema, lineIdSchema, lineLabelSchema, linePageSchema, lineParamsSchema, lineSchema, lineStateSchema, listCallsQuerySchema, listCallsResponseSchema, listConsentEventsQuerySchema, listConsentFormsQuerySchema, listConsentWordingsQuerySchema, listContactChecksQuerySchema, listDealImportRowsQuerySchema, listDealImportRowsResponseSchema, listDealImportsQuerySchema, listDealImportsResponseSchema, listDealsQuerySchema, listDealsResponseSchema, listDocumentsQuerySchema, listDocumentsResponseSchema, listEvidenceQuerySchema, listFieldHistoryQuerySchema, listFieldHistoryResponseSchema, listInvitationsQuerySchema, listInvitationsResponseSchema, listLinesQuerySchema, listMembersQuerySchema, listMembersResponseSchema, listProspectCompaniesQuerySchema, listProspectCompaniesResponseSchema, listProspectDuplicatesQuerySchema, listProspectDuplicatesResponseSchema, listProspectImportRowsQuerySchema, listProspectImportRowsResponseSchema, listProspectImportsQuerySchema, listProspectImportsResponseSchema, listProspectsQuerySchema, listProspectsResponseSchema, listSuppressionEntriesQuerySchema, listSuppressionImportRowsQuerySchema, listSuppressionImportsQuerySchema, listTeamMembersQuerySchema, listTeamMembersResponseSchema, listTeamsQuerySchema, listTeamsResponseSchema, listVoiceCallsQuerySchema, lookupDealRequestSchema, lookupSuppressionRequestSchema, maskedAddressSchema, memberParamsSchema, memberSchema, membershipIdSchema, mergeProspectsRequestSchema, momentMatchSchema, momentQueryText, momentSnippet, momentSnippetSchema, normaliseDealId, normaliseFileName, normaliseMediaType, normaliseSpeakerLabel, oneClickUnsubscribeRequestSchema, organizationIdSchema, organizationNameSchema, organizationSchema, organizationStatusSchema, outcomeSchema, pageQuerySchema, pageSchema, parseAmountCell, parseClosedAtCell, parseCsv, parseCurrencyCell, parseOutcomeCell, parseRepField, personNameSchema, phoneHashSchema, placeCallHeadersSchema, placeCallRequestSchema, placedCallSchema, prospectCompanyCursorSchema, prospectCompanyDomainSchema, prospectCompanyFieldNameSchema, prospectCompanyFieldParamsSchema, prospectCompanyIdSchema, prospectCompanyNameSchema, prospectCompanyParamsSchema, prospectCompanySchema, prospectConsentSchema, prospectCreatedEvent, prospectCursorSchema, prospectDuplicateCursorSchema, prospectDuplicateSchema, prospectErasedEvent, prospectFieldNameSchema, prospectFieldParamsSchema, prospectIdSchema, prospectIdentityKindSchema, prospectImportCursorSchema, prospectImportFailureReasonSchema, prospectImportIdSchema, prospectImportInvalidDetailsSchema, prospectImportParamsSchema, prospectImportRowCursorSchema, prospectImportRowReasonSchema, prospectImportRowResultSchema, prospectImportRowSchema, prospectImportSchema, prospectImportStateSchema, prospectJobTitleSchema, prospectMergeIdSchema, prospectMergeParamsSchema, prospectMergeSchema, prospectMergeUndoneEvent, prospectMergedEvent, prospectNamePartSchema, prospectNotFoundDetailsSchema, prospectNotesSchema, prospectParamsSchema, prospectSchema, prospectSearchSchema, prospectStatusSchema, prospectTagsSchema, prospectUpdatedEvent, rawLinkedinUrlSchema, rawPhoneSchema, recordConsentRequestSchema, recordDeliveryFailureRequestSchema, recordWithdrawalRequestSchema, recordedConsentSchema, recordedSuppressionSchema, recordingKeySchema, recordingPlaybackSchema, regionSchema, removeSuppressionRequestSchema, renameOrganizationRequestSchema, renameTeamRequestSchema, repChangeAllowed, repChoiceSchema, repChoiceSuits, requestIdSchema, retryAfterDetailsSchema, returnToSchema, rightsConfirmationSchema, rightsRequiredDetailsSchema, rightsStatusSchema, rightsWordingFor, rightsWordingSchema, rightsWordingVersionSchema, roleAtLeast, roleSchema, searchDocumentsRequestSchema, searchDocumentsResponseSchema, searchEvidenceSchema, searchMomentsRequestSchema, searchMomentsResponseSchema, searchTurnSchema, setCallRepRequestSchema, setDealOutcomeRequestSchema, setProspectOwnerRequestSchema, softphoneTokenSchema, sourceKindSchema, speakerExcerpt, speakerExcerptSchema, speakerLabelSchema, storedNameSchema, suppressionAddedEvent, suppressionAddressKindSchema, suppressionEntryIdSchema, suppressionEntryPageSchema, suppressionEntryParamsSchema, suppressionEntrySchema, suppressionImportIdSchema, suppressionImportPageSchema, suppressionImportParamsSchema, suppressionImportRowPageSchema, suppressionImportRowSchema, suppressionImportSchema, suppressionImportStateSchema, suppressionListStateSchema, suppressionReasonSchema, suppressionRemovedEvent, teamIdSchema, teamMemberParamsSchema, teamMemberSchema, teamNameSchema, teamParamsSchema, teamSchema, timestampSchema, transcriptCursorSchema, transcriptPageSchema, transcriptSpeakerSchema, transcriptTurnSchema, unsubscribePreviewSchema, unsubscribeReceiptSchema, updateConsentWordingRequestSchema, updateProspectCompanyRequestSchema, updateProspectRequestSchema, uploadCallFieldsSchema, uploadCallFileSchema, uploadDocumentFileSchema, userIdSchema, voiceCallCursorSchema, voiceCallDirectionSchema, voiceCallEndedBySchema, voiceCallEndedEvent, voiceCallFailureReasonSchema, voiceCallOutcomeSchema, voiceCallPageSchema, voiceCallParamsSchema, voiceCallSchema, voiceCallStartedEvent, voiceCallStateSchema, voiceRecordingStateSchema, voiceTranscriptStateSchema, withdrawConsentRequestSchema, wrapUpNoteSchema, wrapUpRequestSchema };
