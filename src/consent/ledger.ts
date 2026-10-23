@@ -13,6 +13,7 @@ import {
   CONSENT_CHANNELS,
   CONSENT_GRANT_SOURCES,
   CONSENT_RECORDABLE_SOURCES,
+  CONSENT_WITHDRAWAL_SOURCES,
   consentChannelSchema,
   consentSourceSchema,
   evidenceRefSchema,
@@ -55,7 +56,8 @@ export const consentEventSchema = z
   .superRefine((event, ctx) => {
     const issue = (message: string) => ctx.addIssue({ code: 'custom', message })
     const grant = event.kind === 'granted'
-    if (grant !== (CONSENT_GRANT_SOURCES as readonly string[]).includes(event.source)) {
+    const sources: readonly string[] = grant ? CONSENT_GRANT_SOURCES : CONSENT_WITHDRAWAL_SOURCES
+    if (!sources.includes(event.source)) {
       issue(grant ? 'A grant has a grant source' : 'A withdrawal has a withdrawal source')
     }
     if (grant && (event.wordingId === null || event.evidenceRef === null)) {

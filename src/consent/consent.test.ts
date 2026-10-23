@@ -158,6 +158,45 @@ describe('consent events', () => {
     )
     expect(consentEventSchema.safeParse({ ...grantedEvent, stopAll: true }).success).toBe(false)
   })
+  test('manual and crm are valid sources on both a grant and a withdrawal', () => {
+    const withdrawn = {
+      ...grantedEvent,
+      kind: 'withdrawn',
+      wordingId: null,
+      evidenceRef: null,
+      callId: null,
+    }
+    for (const source of ['manual', 'crm']) {
+      expect(consentEventSchema.safeParse({ ...grantedEvent, source, callId: null }).success).toBe(
+        true
+      )
+      expect(consentEventSchema.safeParse({ ...withdrawn, source }).success).toBe(true)
+    }
+  })
+  test('a withdrawal-only source is refused on a grant, and a grant-only source on a withdrawal', () => {
+    const withdrawn = {
+      ...grantedEvent,
+      kind: 'withdrawn',
+      wordingId: null,
+      evidenceRef: null,
+      callId: null,
+    }
+    for (const source of ['stop_reply', 'unsubscribe']) {
+      expect(consentEventSchema.safeParse({ ...grantedEvent, source, callId: null }).success).toBe(
+        false
+      )
+      expect(consentEventSchema.safeParse({ ...withdrawn, source }).success).toBe(true)
+    }
+    expect(
+      consentEventSchema.safeParse({ ...withdrawn, source: 'import_attestation' }).success
+    ).toBe(false)
+    expect(
+      consentEventSchema.safeParse({ ...withdrawn, source: 'hosted_form', formId: cfm }).success
+    ).toBe(false)
+    expect(
+      consentEventSchema.safeParse({ ...withdrawn, source: 'verbal_call', callId: call }).success
+    ).toBe(false)
+  })
   test('the evidence event adds the wording text and the hosted submission, only for a form', () => {
     const wording = { id: cwd, version: 2, text: 'I agree to be texted by an AI.' }
     expect(
