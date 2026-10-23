@@ -75,6 +75,17 @@ export const routingRuleIdSchema = idSchema('rrl')
 /** The id of a stored routing decision (`rdc_…`): which rule picked which Rep, and who was skipped. */
 export const routingDecisionIdSchema = idSchema('rdc')
 
+/** The id of an Inquiry (`inq_…`): a Prospect's request, through a form, a Chat or a Call, to talk to the Organization. */
+export const inquiryIdSchema = idSchema('inq')
+/** The id of a Qualification question (`qst_…`). */
+export const qualificationQuestionIdSchema = idSchema('qst')
+/** The id of a Chat (`cht_…`): a text conversation between a Prospect and the Inbound Agent on a website. */
+export const chatIdSchema = idSchema('cht')
+/** The id of a Handoff (`hof_…`): a live Call or Chat passed from the Inbound Agent to a Rep. */
+export const handoffIdSchema = idSchema('hof')
+/** The id of a text session an Admin uses to try the Inbound Agent before it speaks to anyone (`try_…`). */
+export const trySessionIdSchema = idSchema('try')
+
 /** The id of an Organization. */
 export type OrganizationId = z.infer<typeof organizationIdSchema>
 /** The id of a user. */
@@ -131,6 +142,16 @@ export type BookingTypeId = z.infer<typeof bookingTypeIdSchema>
 export type RoutingRuleId = z.infer<typeof routingRuleIdSchema>
 /** The id of a stored routing decision. */
 export type RoutingDecisionId = z.infer<typeof routingDecisionIdSchema>
+/** The id of an Inquiry. */
+export type InquiryId = z.infer<typeof inquiryIdSchema>
+/** The id of a Qualification question. */
+export type QualificationQuestionId = z.infer<typeof qualificationQuestionIdSchema>
+/** The id of a Chat. */
+export type ChatId = z.infer<typeof chatIdSchema>
+/** The id of a Handoff. */
+export type HandoffId = z.infer<typeof handoffIdSchema>
+/** The id of a try-it session. */
+export type TrySessionId = z.infer<typeof trySessionIdSchema>
 
 const UUID_PATTERN =
   /^(?:[0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i
