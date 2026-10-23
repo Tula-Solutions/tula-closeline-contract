@@ -35,9 +35,23 @@ export const LIST_MEMBERS_MIN_ROLE = 'manager' as const satisfies Role
 /** The longest `q` name filter of a members list. */
 export const MAX_MEMBER_QUERY_LENGTH = 100
 
-/** The query parameters of a request to list members: a cursor, a limit of at most the maximum page size, and optionally `q`, a case-insensitive filter on name. An unknown parameter is refused. */
+/** The most member ids one members list request may name in `ids`. */
+export const MAX_MEMBER_IDS = 100
+
+/** A comma-separated list of 1 to {@link MAX_MEMBER_IDS} member ids in a query string, parsed to an array. */
+const memberIdsParamSchema = z
+  .string()
+  .max(MAX_MEMBER_IDS * 64)
+  .transform((value) => value.split(','))
+  .pipe(z.array(membershipIdSchema).min(1).max(MAX_MEMBER_IDS))
+
+/** The query parameters of a request to list members: a cursor, a limit of at most the maximum page size, and optionally `q` (a case-insensitive filter on name), `role` (members holding that role) and `ids` (a comma-separated list of at most 100 member ids, to resolve specific members in one call). An unknown parameter is refused. */
 export const listMembersQuerySchema = pageQuerySchema
-  .extend({ q: boundedTextSchema(MAX_MEMBER_QUERY_LENGTH).optional() })
+  .extend({
+    q: boundedTextSchema(MAX_MEMBER_QUERY_LENGTH).optional(),
+    role: roleSchema.optional(),
+    ids: memberIdsParamSchema.optional(),
+  })
   .strict()
 
 /** The query parameters of a request to list members. */

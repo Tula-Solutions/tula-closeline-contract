@@ -7,6 +7,7 @@ import {
   LIST_MEMBERS_MIN_ROLE,
   listMembersQuerySchema,
   listMembersResponseSchema,
+  MAX_MEMBER_IDS,
   MAX_MEMBER_QUERY_LENGTH,
   memberParamsSchema,
   memberSchema,
@@ -63,6 +64,33 @@ describe('listMembersQuerySchema', () => {
     expect(listMembersQuerySchema.safeParse({ email: 'ada@example.com' }).success).toBe(false)
     expect(listMembersQuerySchema.safeParse({ name: 'Ada' }).success).toBe(false)
     expect(listMembersQuerySchema.safeParse({ surprise: '1' }).success).toBe(false)
+  })
+
+  test('takes an optional role filter of an existing role', () => {
+    expect(listMembersQuerySchema.parse({}).role).toBeUndefined()
+    expect(listMembersQuerySchema.parse({ role: 'rep' }).role).toBe('rep')
+    expect(listMembersQuerySchema.safeParse({ role: 'boss' }).success).toBe(false)
+  })
+
+  test('takes a comma-separated list of member ids, at most the maximum', () => {
+    const a = id('mem')
+    const b = id('mem')
+    expect(listMembersQuerySchema.parse({}).ids).toBeUndefined()
+    expect<unknown>(listMembersQuerySchema.parse({ ids: a }).ids).toEqual([a])
+    expect<unknown>(listMembersQuerySchema.parse({ ids: `${a},${b}` }).ids).toEqual([a, b])
+    const many = Array.from({ length: MAX_MEMBER_IDS }, () => id('mem'))
+    expect(listMembersQuerySchema.safeParse({ ids: many.join(',') }).success).toBe(true)
+    expect(listMembersQuerySchema.safeParse({ ids: [...many, id('mem')].join(',') }).success).toBe(
+      false
+    )
+  })
+
+  test('refuses an empty, malformed or wrong-kind id in the list', () => {
+    const a = id('mem')
+    expect(listMembersQuerySchema.safeParse({ ids: '' }).success).toBe(false)
+    expect(listMembersQuerySchema.safeParse({ ids: `${a},` }).success).toBe(false)
+    expect(listMembersQuerySchema.safeParse({ ids: `${a},nope` }).success).toBe(false)
+    expect(listMembersQuerySchema.safeParse({ ids: id('usr') }).success).toBe(false)
   })
 
   test('takes a trimmed name filter of 1 to the maximum length', () => {
