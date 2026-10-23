@@ -4854,8 +4854,11 @@ var messageSchema2 = z49.strictObject({
   if (m.authorKind === "rep" !== (m.authorMembershipId !== null)) {
     issue("authorMembershipId", "Exactly a Rep’s Message names the Rep");
   }
-  if (m.direction === "outbound" !== (m.draftId !== null)) {
-    issue("draftId", "An outbound Message names its Draft and an inbound one has none");
+  if (m.direction === "inbound" && m.draftId !== null) {
+    issue("draftId", "An inbound Message has no Draft");
+  }
+  if (m.authorKind === "rep" && m.draftId === null) {
+    issue("draftId", "A Rep’s Message comes from a Draft; only an Agent’s sequence Message has none");
   }
   if (m.direction === "outbound" && m.classification !== null) {
     issue("classification", "Only an inbound Message has a classification");
@@ -4941,8 +4944,21 @@ var draftSchema = z49.strictObject({
   if (new Set(d.sources.map((s) => `${s.kind}:${s.sourceRef}`)).size !== d.sources.length) {
     issue("sources", "A Source is cited once");
   }
-  if ((d.ungrounded || d.checks.some((c) => !c.passed)) && d.hold === null) {
+  const failedCheck = d.checks.some((c) => !c.passed);
+  if ((d.ungrounded || failedCheck) && d.hold === null) {
     issue("hold", "An ungrounded Draft or one that failed a check is always held");
+  }
+  if (d.ungrounded && d.hold !== null && d.hold !== "ungrounded") {
+    issue("hold", "An ungrounded Draft is held as ungrounded, whatever else holds it");
+  }
+  if (!d.ungrounded && failedCheck && d.hold !== null && d.hold !== "check_failed") {
+    issue("hold", "A Draft that failed a check is held as check_failed");
+  }
+  if (d.hold === "ungrounded" && !d.ungrounded) {
+    issue("hold", "Only an ungrounded Draft is held as ungrounded");
+  }
+  if (d.hold === "check_failed" && !failedCheck) {
+    issue("hold", "Only a Draft that failed a check is held as check_failed");
   }
   if (d.status === "pending" && d.hold === null) {
     issue("hold", "A pending Draft waits because it is held");
@@ -5091,12 +5107,14 @@ var approvalPoliciesSchema = z49.strictObject({
   items: z49.array(approvalPolicySchema).max(3)
 });
 var setApprovalPolicyRequestSchema = z49.strictObject({ rule: approvalRuleSchema });
+var ingestBodySchema = z49.string().max(MAX_MESSAGE_BODY_LENGTH * 2).transform((text) => text.replace(/\r\n?/g, `
+`).split("").filter((ch) => !hasControlCharacter2(ch, true)).join("")).pipe(messageBodySchema);
 var ingestMessageRequestSchema = z49.strictObject({
   channel: inboxChannelSchema,
   providerMessageId: providerMessageIdSchema,
   prospectId: prospectIdSchema,
   direction: messageDirectionSchema,
-  body: messageBodySchema,
+  body: ingestBodySchema,
   draftId: draftIdSchema.optional(),
   sentAt: timestampSchema
 }).superRefine((m, ctx) => {

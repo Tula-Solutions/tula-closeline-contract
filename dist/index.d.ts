@@ -8115,7 +8115,7 @@ declare const ingestMessageRequestSchema: z41.ZodObject<{
 		inbound: "inbound";
 		outbound: "outbound";
 	}>;
-	body: z41.ZodString;
+	body: z41.ZodPipe<z41.ZodPipe<z41.ZodString, z41.ZodTransform<string, string>>, z41.ZodString>;
 	draftId: z41.ZodOptional<z41.core.$ZodBranded<z41.ZodString, "drf", "out">>;
 	sentAt: z41.ZodISODateTime;
 }, z41.core.$strict>;

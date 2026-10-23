@@ -12,6 +12,7 @@ import {
 } from '../ids'
 import { pageQuerySchema, pageSchema } from '../pagination'
 import { outcomeSchema } from '../playbook/deal-values'
+import { hasControlCharacter } from '../prospect/values'
 import {
   confidenceSchema,
   conversationControllerSchema,
@@ -23,6 +24,7 @@ import {
   draftStatusSchema,
   inboxChannelSchema,
   MAX_DRAFT_SOURCES,
+  MAX_MESSAGE_BODY_LENGTH,
   MAX_SOURCE_PASSAGE_LENGTH,
   MAX_STRATEGY_LENGTH,
   messageAuthorKindSchema,
@@ -124,8 +126,14 @@ export const messageSchema = z
     if ((m.authorKind === 'rep') !== (m.authorMembershipId !== null)) {
       issue('authorMembershipId', 'Exactly a Rep’s Message names the Rep')
     }
-    if ((m.direction === 'outbound') !== (m.draftId !== null)) {
-      issue('draftId', 'An outbound Message names its Draft and an inbound one has none')
+    if (m.direction === 'inbound' && m.draftId !== null) {
+      issue('draftId', 'An inbound Message has no Draft')
+    }
+    if (m.authorKind === 'rep' && m.draftId === null) {
+      issue(
+        'draftId',
+        'A Rep’s Message comes from a Draft; only an Agent’s sequence Message has none'
+      )
     }
     if (m.direction === 'outbound' && m.classification !== null) {
       issue('classification', 'Only an inbound Message has a classification')
@@ -248,8 +256,21 @@ export const draftSchema = z
     if (new Set(d.sources.map((s) => `${s.kind}:${s.sourceRef}`)).size !== d.sources.length) {
       issue('sources', 'A Source is cited once')
     }
-    if ((d.ungrounded || d.checks.some((c) => !c.passed)) && d.hold === null) {
+    const failedCheck = d.checks.some((c) => !c.passed)
+    if ((d.ungrounded || failedCheck) && d.hold === null) {
       issue('hold', 'An ungrounded Draft or one that failed a check is always held')
+    }
+    if (d.ungrounded && d.hold !== null && d.hold !== 'ungrounded') {
+      issue('hold', 'An ungrounded Draft is held as ungrounded, whatever else holds it')
+    }
+    if (!d.ungrounded && failedCheck && d.hold !== null && d.hold !== 'check_failed') {
+      issue('hold', 'A Draft that failed a check is held as check_failed')
+    }
+    if (d.hold === 'ungrounded' && !d.ungrounded) {
+      issue('hold', 'Only an ungrounded Draft is held as ungrounded')
+    }
+    if (d.hold === 'check_failed' && !failedCheck) {
+      issue('hold', 'Only a Draft that failed a check is held as check_failed')
     }
     if (d.status === 'pending' && d.hold === null) {
       issue('hold', 'A pending Draft waits because it is held')
@@ -544,6 +565,23 @@ export const approvalPoliciesSchema = z.strictObject({
 export const setApprovalPolicyRequestSchema = z.strictObject({ rule: approvalRuleSchema })
 
 /**
+ * An ingested body: a Prospect's text as the channel gave it. Line endings become `\n` and other
+ * control characters are dropped, so an ordinary CRLF reply is never refused (a lost reply could be
+ * a lost unsubscribe); the result must still be 1 to 20,000 characters and not blank.
+ */
+const ingestBodySchema = z
+  .string()
+  .max(MAX_MESSAGE_BODY_LENGTH * 2)
+  .transform((text) =>
+    text
+      .replace(/\r\n?/g, '\n')
+      .split('')
+      .filter((ch) => !hasControlCharacter(ch, true))
+      .join('')
+  )
+  .pipe(messageBodySchema)
+
+/**
  * The body a channel service posts to `/internal/messages` for every Message it received or sent.
  * Core stores one Message per channel and provider id. An inbound Message is the Prospect's;
  * an outbound one carries its Draft's id when it came from one, else it is an Agent's sequence
@@ -555,7 +593,7 @@ export const ingestMessageRequestSchema = z
     providerMessageId: providerMessageIdSchema,
     prospectId: prospectIdSchema,
     direction: messageDirectionSchema,
-    body: messageBodySchema,
+    body: ingestBodySchema,
     draftId: draftIdSchema.optional(),
     sentAt: timestampSchema,
   })

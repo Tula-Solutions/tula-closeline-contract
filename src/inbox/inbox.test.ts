@@ -21,6 +21,7 @@ import {
   INBOX_EVENTS,
   INBOX_ROUTES,
   ingestMessageRequestSchema,
+  ingestMessageResultSchema,
   listApprovalQueueQuerySchema,
   listConversationsQuerySchema,
   listDecisionsQuerySchema,
@@ -233,7 +234,12 @@ describe('Message', () => {
   test('an outbound Message names its Draft and has no classification', () => {
     const out = { ...inbound, direction: 'outbound', authorKind: 'agent', draftId: drf }
     expect(messageSchema.safeParse(out).success).toBe(true)
-    expect(messageSchema.safeParse({ ...out, draftId: null }).success).toBe(false)
+    expect(messageSchema.safeParse({ ...out, draftId: null }).success).toBe(true)
+    expect(
+      messageSchema.safeParse({ ...out, authorKind: 'rep', authorMembershipId: mem, draftId: null })
+        .success
+    ).toBe(false)
+    expect(messageSchema.safeParse({ ...inbound, draftId: drf }).success).toBe(false)
     expect(
       messageSchema.safeParse({
         ...out,
@@ -316,9 +322,23 @@ describe('Draft', () => {
     ).toBe(false)
   })
   test('a Draft that failed a check is always held', () => {
-    const failed = { ...agentDraft, checks: [{ name: 'tone', passed: false }] }
+    const failed = {
+      ...agentDraft,
+      hold: 'check_failed',
+      checks: [{ name: 'tone', passed: false }],
+    }
     expect(draftSchema.safeParse({ ...failed, hold: null, status: 'approved' }).success).toBe(false)
     expect(draftSchema.safeParse(failed).success).toBe(true)
+  })
+  test('the hold names the real reason, which a policy hold cannot hide', () => {
+    expect(draftSchema.safeParse({ ...agentDraft, sources: [], ungrounded: true }).success).toBe(
+      false
+    )
+    expect(draftSchema.safeParse({ ...agentDraft, hold: 'ungrounded' }).success).toBe(false)
+    const failed = { ...agentDraft, checks: [{ name: 'tone', passed: false }] }
+    expect(draftSchema.safeParse(failed).success).toBe(false)
+    expect(draftSchema.safeParse({ ...agentDraft, hold: 'check_failed' }).success).toBe(false)
+    expect(draftSchema.safeParse({ ...agentDraft, hold: 'escalated' }).success).toBe(true)
   })
   test('a pending Draft is held and undecided', () => {
     expect(draftSchema.safeParse({ ...agentDraft, hold: null }).success).toBe(false)
@@ -487,6 +507,51 @@ describe('holdReasonFor', () => {
 })
 
 describe('lists and ingest', () => {
+  test('ingest normalises line endings and control characters instead of refusing a reply', () => {
+    const request = {
+      channel: 'email',
+      providerMessageId: '<abc@mail.example>',
+      prospectId: prs,
+      direction: 'inbound',
+      sentAt: NOW,
+    }
+    const parsed = ingestMessageRequestSchema.parse({
+      ...request,
+      body: 'Please stop\r\nthanks\rbye\u0000\u000c',
+    })
+    expect(parsed.body).toBe('Please stop\nthanks\nbye')
+    expect(ingestMessageRequestSchema.safeParse({ ...request, body: '\u0000\r\n ' }).success).toBe(
+      false
+    )
+  })
+  test('an outbound ingest without a Draft parses and its stored Message validates', () => {
+    const request = ingestMessageRequestSchema.parse({
+      channel: 'email',
+      providerMessageId: '<seq1@mail.example>',
+      prospectId: prs,
+      direction: 'outbound',
+      body: 'Following up.',
+      sentAt: NOW,
+    })
+    expect(request.draftId).toBeUndefined()
+    expect(
+      ingestMessageResultSchema.safeParse({
+        created: true,
+        message: {
+          id: msg,
+          conversationId: cnv,
+          direction: 'outbound',
+          authorKind: 'agent',
+          authorMembershipId: null,
+          providerMessageId: request.providerMessageId,
+          draftId: null,
+          body: request.body,
+          sentAt: NOW,
+          classification: null,
+        },
+      }).success
+    ).toBe(true)
+  })
   test('list queries default to a bounded page and refuse more than the maximum', () => {
     for (const schema of [
       listConversationsQuerySchema,
