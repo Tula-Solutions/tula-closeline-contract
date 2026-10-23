@@ -94,7 +94,8 @@ export type EnrichedExportFormat = z.infer<typeof enrichedExportFormatSchema>
 /**
  * Which Prospects an enriched export holds. Every field narrows and none is required, so `{}` is
  * every Prospect of the Organization. It is closed and bounded (ids, an enum and a Source kind of
- * at most 41 characters) and has no cursor: the job pages through core itself.
+ * at most 43 characters). `source` keeps a Prospect that has any current field value from that
+ * Source, on the Prospect or its Prospect Company and has no cursor: the job pages through core itself.
  */
 export const enrichedProspectsFilterSchema = z.strictObject({
   ownerMembershipId: membershipIdSchema.optional(),

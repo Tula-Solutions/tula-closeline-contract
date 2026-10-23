@@ -92,6 +92,12 @@ describe('create request', () => {
   })
 })
 
+test('a Source kind is bounded at its exact length', () => {
+  const at = (n: number) => `enrichment:${'a'.repeat(n)}`
+  expect(enrichedProspectsFilterSchema.safeParse({ source: at(32) }).success).toBe(true)
+  expect(enrichedProspectsFilterSchema.safeParse({ source: at(33) }).success).toBe(false)
+})
+
 describe('export job', () => {
   test('carries its kind, format and filter', () => {
     expect(exportJobSchema.safeParse(orgJob).success).toBe(true)
