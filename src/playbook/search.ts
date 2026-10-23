@@ -93,11 +93,12 @@ export function momentSnippet(text: string): string {
   return excerptText(text, MAX_MOMENT_SNIPPET_CHARACTERS)
 }
 
-/** Which Moment of a Call: its 0-based number in the Call's current build, at most `MAX_MOMENT_INDEX`. */
+/** Which Moment of a Call: its 0-based number in the current build, at most `MAX_MOMENT_INDEX`. */
 export const momentIndexSchema = z.number().int().min(0).max(MAX_MOMENT_INDEX)
 
 /**
- * One similar Moment from a won Deal: the Call and Deal it comes from (opaque ids), its optional `momentIndex` (which Moment of the Call), its similarity
+ * One similar Moment from a won Deal: the Call and Deal it comes from (opaque ids), its optional
+ * `momentIndex` (which Moment of the Call), its similarity
  * `score` (higher is closer) and two snippets, what the Prospect said and what the Rep said next.
  * It never carries the customer's `dealId`, name or amount; unknown fields are dropped. The
  * snippets are tenant Transcript text: never logged.
