@@ -76,6 +76,9 @@ export const voiceCallEndedEvent = defineEvent(
       if ((data.outcome === 'completed') !== (data.durationSeconds !== null)) {
         issue('durationSeconds', 'Only a completed Call has a duration')
       }
+      if (data.failureReason === 'disclosure_failed' && data.disclosureWordingVersion !== null) {
+        issue('failureReason', 'A Call whose Disclosure played did not fail on it')
+      }
       if (data.outcome === 'completed' && data.disclosureWordingVersion === null) {
         issue('disclosureWordingVersion', 'A completed Call played its Disclosure')
       }

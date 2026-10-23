@@ -4052,6 +4052,9 @@ var voiceCallEndedEvent = defineEvent("voice.call.ended", 1, z43.strictObject({
   if (data.outcome === "completed" !== (data.durationSeconds !== null)) {
     issue("durationSeconds", "Only a completed Call has a duration");
   }
+  if (data.failureReason === "disclosure_failed" && data.disclosureWordingVersion !== null) {
+    issue("failureReason", "A Call whose Disclosure played did not fail on it");
+  }
   if (data.outcome === "completed" && data.disclosureWordingVersion === null) {
     issue("disclosureWordingVersion", "A completed Call played its Disclosure");
   }
@@ -4139,7 +4142,7 @@ var VOICE_ROUTES = Object.freeze({
     roles: VOICE_ADMIN_ROLES,
     success: [201, 200],
     idempotent: true,
-    errors: ["line.number_unavailable", "call.limit_reached"],
+    errors: ["line.number_unavailable"],
     commonErrors: [...IDEMPOTENT_ERRORS3],
     description: "Adds a Line by buying a new number (country, optional area code) or porting one the Organization owns (the Line is porting until the carrier completes). A number that cannot be had is line.number_unavailable (409). Owner and Admin only. Answers 201, or 200 with the original Line for a replay of the same Idempotency-Key."
   }),

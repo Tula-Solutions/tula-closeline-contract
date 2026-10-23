@@ -316,6 +316,9 @@ describe('events', () => {
     expect(bad({ failureReason: 'busy' })).toBe(false)
     expect(bad({ outcome: 'failed', failureReason: null, durationSeconds: null })).toBe(false)
     expect(bad({ disclosureWordingVersion: null })).toBe(false)
+    expect(
+      bad({ outcome: 'failed', failureReason: 'disclosure_failed', durationSeconds: null })
+    ).toBe(false)
     expect(bad({ outcome: 'missed', durationSeconds: null, dealId: 'DEAL-1' })).toBe(false)
   })
 })
@@ -379,6 +382,9 @@ describe('routes', () => {
       }
     }
     expect(VOICE_ROUTES.placeCall.description).toContain('idempotencyKey')
+  })
+  test('adding a Line lists only Line codes', () => {
+    expect(VOICE_ROUTES.addLine.errors).toEqual(['line.number_unavailable'])
   })
   test('roles', () => {
     for (const name of ['addLine', 'assignLine', 'releaseLine', 'deleteCallRecording'] as const) {
