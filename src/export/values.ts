@@ -1,7 +1,9 @@
 import { z } from 'zod'
 import { timestampSchema } from '../core/values'
-import { exportJobIdSchema, membershipIdSchema } from '../ids'
+import { exportJobIdSchema, membershipIdSchema, prospectCompanyIdSchema } from '../ids'
 import { pageQuerySchema, pageSchema } from '../pagination'
+import { prospectStatusSchema } from '../prospect/prospect'
+import { sourceKindSchema } from '../prospect/values'
 
 /** The services that contribute a slice to an export. A closed list. */
 export const EXPORT_SERVICES = ['core', 'playbook', 'voice', 'outbound'] as const
@@ -71,10 +73,105 @@ export const exportPrefixSchema = z
   .regex(/^[A-Za-z0-9_][A-Za-z0-9_\-./]*$/)
   .refine((prefix) => !prefix.split('/').includes('..'), 'No parent directory in a prefix')
 
-/** The body of a request to start an export. Recordings are included as links, never copied inline. Unknown fields are refused. */
-export const createExportRequestSchema = z.strictObject({
-  includeRecordingLinks: z.boolean().default(false),
+/** What an export holds: the whole Organization's data, or only enriched Prospect and Prospect Company data. */
+export const EXPORT_KINDS = ['organization', 'enriched_prospects'] as const
+
+/** What an export holds. */
+export const exportKindSchema = z.enum(EXPORT_KINDS)
+
+/** What an export holds. */
+export type ExportKind = z.infer<typeof exportKindSchema>
+
+/** The formats of an enriched Prospect export. CSV is the only one. */
+export const ENRICHED_EXPORT_FORMATS = ['csv'] as const
+
+/** The format of an enriched Prospect export. */
+export const enrichedExportFormatSchema = z.enum(ENRICHED_EXPORT_FORMATS)
+
+/** The format of an enriched Prospect export. */
+export type EnrichedExportFormat = z.infer<typeof enrichedExportFormatSchema>
+
+/**
+ * Which Prospects an enriched export holds. Every field narrows and none is required, so `{}` is
+ * every Prospect of the Organization. It is closed and bounded (ids, an enum and a Source kind of
+ * at most 43 characters). `source` keeps a Prospect that has any current field value from that
+ * Source, on the Prospect or its Prospect Company and has no cursor: the job pages through core itself.
+ */
+export const enrichedProspectsFilterSchema = z.strictObject({
+  ownerMembershipId: membershipIdSchema.optional(),
+  companyId: prospectCompanyIdSchema.optional(),
+  status: prospectStatusSchema.optional(),
+  source: sourceKindSchema.optional(),
 })
+
+/** Which Prospects an enriched export holds. */
+export type EnrichedProspectsFilter = z.infer<typeof enrichedProspectsFilterSchema>
+
+/**
+ * The columns of an enriched Prospect export CSV, in order: one row per Prospect with its Prospect
+ * Company. Each sourced field is followed by `<field>_source`, the Source kind of its current
+ * value (`import`, `manual`, `enrichment:<provider>` and so on). Phone numbers are not enriched
+ * and are left out. There is no consent evidence, IP address, user agent, transcript, message
+ * body or note in any column, and none may be added.
+ */
+export const ENRICHED_EXPORT_COLUMNS = [
+  'prospect_id',
+  'status',
+  'first_name',
+  'first_name_source',
+  'last_name',
+  'last_name_source',
+  'job_title',
+  'job_title_source',
+  'email',
+  'email_source',
+  'linkedin_url',
+  'linkedin_url_source',
+  'company_id',
+  'company_name',
+  'company_name_source',
+  'company_domain',
+  'company_domain_source',
+  'company_industry',
+  'company_industry_source',
+  'company_employee_count',
+  'company_employee_count_source',
+  'company_region',
+  'company_region_source',
+  'company_technologies',
+  'company_technologies_source',
+] as const
+
+/** The body of a request to start an export. Recordings are included as links, never copied inline. Unknown fields are refused. */
+export const createExportRequestSchema = z
+  .strictObject({
+    kind: exportKindSchema.default('organization'),
+    includeRecordingLinks: z.boolean().default(false),
+    format: enrichedExportFormatSchema.optional(),
+    filter: enrichedProspectsFilterSchema.optional(),
+  })
+  .superRefine((body, ctx) => {
+    if (body.kind === 'organization') {
+      for (const key of ['format', 'filter'] as const) {
+        if (body[key] !== undefined) {
+          ctx.addIssue({
+            code: 'custom',
+            path: [key],
+            message: `${key} applies only to an enriched_prospects export`,
+          })
+        }
+      }
+    } else if (body.includeRecordingLinks) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['includeRecordingLinks'],
+        message: 'An enriched_prospects export holds no recordings',
+      })
+    }
+  })
+  .transform((body) =>
+    body.kind === 'enriched_prospects' ? { ...body, format: body.format ?? ('csv' as const) } : body
+  )
 
 /** The body of a request to start an export. */
 export type CreateExportRequest = z.infer<typeof createExportRequestSchema>
@@ -92,12 +189,15 @@ export const exportPartSchema = z.object({
 export type ExportPart = z.infer<typeof exportPartSchema>
 
 /**
- * An export job as read. Never carries a download link or an object-storage path: the link comes
+ * An export job as read (`format` and `filter` are set only for `enriched_prospects`). Never carries a download link or an object-storage path: the link comes
  * only from the download call. `failureReason` is set exactly when the state is `failed`.
  */
 export const exportJobSchema = z
   .object({
     id: exportJobIdSchema,
+    kind: exportKindSchema,
+    format: enrichedExportFormatSchema.nullable(),
+    filter: enrichedProspectsFilterSchema.nullable(),
     state: exportStateSchema,
     requestedByMembershipId: membershipIdSchema,
     includeRecordingLinks: z.boolean(),
@@ -108,6 +208,29 @@ export const exportJobSchema = z
     expiresAt: timestampSchema.nullable(),
   })
   .superRefine((job, ctx) => {
+    if (job.kind === 'organization' && (job.format !== null || job.filter !== null)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['format'],
+        message: 'An organization export has no format or filter',
+      })
+    }
+    if (job.kind === 'enriched_prospects') {
+      if (job.format === null) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['format'],
+          message: 'An enriched export has a format',
+        })
+      }
+      if (job.parts.some((part) => part.service !== 'core')) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['parts'],
+          message: 'An enriched export has only the core slice',
+        })
+      }
+    }
     if ((job.state === 'failed') !== (job.failureReason !== null)) {
       ctx.addIssue({
         code: 'custom',

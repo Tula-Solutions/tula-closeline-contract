@@ -3,6 +3,8 @@ import { timestampSchema } from '../core/values'
 import { defineEvent } from '../events'
 import { exportJobIdSchema, membershipIdSchema } from '../ids'
 import {
+  enrichedExportFormatSchema,
+  enrichedProspectsFilterSchema,
   exportPartFailureReasonSchema,
   exportPrefixSchema,
   exportServiceSchema,
@@ -26,8 +28,26 @@ export const exportRequestedEvent = defineEvent(
 )
 
 /**
- * `export.part_ready` (version 1): one service finished writing its slice as newline-delimited JSON
- * and files under `prefix`. A redelivery for the same `exportId` and `service` changes nothing.
+ * `export.enriched_prospects_requested` (version 1): an Owner or Admin asked for an enriched
+ * Prospect export. Only core, which owns Prospects and their Sources, writes it: one CSV file, paged
+ * internally, then `export.part_ready` (or `export.part_failed`) for `core`. Ids, a format and the
+ * bounded filter only; never exported data.
+ */
+export const exportEnrichedProspectsRequestedEvent = defineEvent(
+  'export.enriched_prospects_requested',
+  1,
+  z.strictObject({
+    exportId: exportJobIdSchema,
+    requestedByMembershipId: membershipIdSchema,
+    format: enrichedExportFormatSchema,
+    filter: enrichedProspectsFilterSchema.nullable(),
+    requestedAt: timestampSchema,
+  })
+)
+
+/**
+ * `export.part_ready` (version 1): one service finished writing its slice (newline-delimited JSON and
+ * files, or the one CSV of an enriched Prospect export) under `prefix`. A redelivery for the same `exportId` and `service` changes nothing.
  * Counts and a path only; never any exported data.
  */
 export const exportPartReadyEvent = defineEvent(
@@ -62,6 +82,7 @@ export const exportPartFailedEvent = defineEvent(
 /** Every export event, by type. */
 export const EXPORT_EVENTS = {
   'export.requested': exportRequestedEvent,
+  'export.enriched_prospects_requested': exportEnrichedProspectsRequestedEvent,
   'export.part_ready': exportPartReadyEvent,
   'export.part_failed': exportPartFailedEvent,
 } as const
