@@ -9,12 +9,14 @@ import {
   dealRecordIdSchema,
   demoRequestIdSchema,
   documentIdSchema,
+  enrollmentEventIdSchema,
   eventIdSchema,
   formatId,
   idSchema,
   invitationIdSchema,
   membershipIdSchema,
   organizationIdSchema,
+  playIdSchema,
   prospectCompanyIdSchema,
   prospectIdSchema,
   prospectImportIdSchema,
@@ -29,6 +31,8 @@ import {
 const HEX = '0190a5e0b3c17d2a8f4e5b6c7d8e9f01'
 
 const schemas = [
+  ['ply', playIdSchema],
+  ['eev', enrollmentEventIdSchema],
   ['org', organizationIdSchema],
   ['usr', userIdSchema],
   ['mem', membershipIdSchema],
