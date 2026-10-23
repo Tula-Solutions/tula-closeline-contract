@@ -165,6 +165,14 @@ describe('public routes do not leak Rep calendars', () => {
       expect(r.description).toContain('no token')
     }
   })
+  test('the path token is a secret to redact, and 429 carries Retry-After', () => {
+    for (const name of ['publicListSlots', 'publicBook'] as const) {
+      const r = BOOKING_ROUTES[name]
+      expect(r.description).toContain('redact')
+      expect(r.description).toContain('Retry-After')
+      expect(r.commonErrors).toContain('rate.limited')
+    }
+  })
   test('the public page is bounded like the rest', () => {
     const q = { from: NOW, to: '2026-01-20T00:00:00Z' }
     expect(publicListSlotsQuerySchema.safeParse(q).success).toBe(false)
