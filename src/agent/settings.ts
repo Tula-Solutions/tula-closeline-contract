@@ -5,6 +5,7 @@ import { timestampSchema } from '../core/values'
 import { membershipIdSchema } from '../ids'
 import { boundedTextSchema } from '../prospect/values'
 import {
+  AGENT_CALLING_WINDOW,
   agentLanguageSchema,
   agentVoiceStyleSchema,
   MAX_AGENT_CALL_COST_USD_CENTS,
@@ -13,9 +14,25 @@ import {
   MAX_AGENT_GREETING_LENGTH,
 } from './values'
 
+const minutesOf = (time: string): number => {
+  const [h = 0, m = 0] = time.split(':').map(Number)
+  return h * 60 + m
+}
+
 const hoursSchema = z
   .array(workingDaySchema)
   .max(7)
+  .refine(
+    (days) =>
+      days.every((d) =>
+        d.windows.every(
+          (w) =>
+            minutesOf(w.start) >= AGENT_CALLING_WINDOW.startHour * 60 &&
+            minutesOf(w.end) <= AGENT_CALLING_WINDOW.endHour * 60
+        )
+      ),
+    { message: 'Hours lie within the fixed calling window' }
+  )
   .refine((days) => new Set(days.map((d) => d.day)).size === days.length, {
     message: 'Each day appears once',
   })

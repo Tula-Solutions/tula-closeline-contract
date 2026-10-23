@@ -162,6 +162,29 @@ describe('the Inquiry', () => {
         .success
     ).toBe(false)
   })
+  test('no callback is placed without phone consent (ADR 0003)', () => {
+    const noConsent = { ...inquiry.consent, phoneGranted: false }
+    for (const state of ['pending', 'dialling', 'connected', 'no_answer', 'failed']) {
+      expect(
+        inquirySchema.safeParse({
+          ...inquiry,
+          consent: noConsent,
+          callback: { ...callback, state },
+        }).success
+      ).toBe(false)
+    }
+    const skipped = { ...callback, state: 'skipped', skipReason: 'no_consent' }
+    expect(
+      inquirySchema.safeParse({ ...inquiry, consent: noConsent, callback: skipped }).success
+    ).toBe(true)
+    expect(
+      inquirySchema.safeParse({
+        ...inquiry,
+        consent: noConsent,
+        callback: { ...callback, state: 'dialling' },
+      }).success
+    ).toBe(false)
+  })
   test('at most three attempts', () => {
     expect(
       inquirySchema.safeParse({ ...inquiry, callback: { ...callback, attempts: 4 } }).success

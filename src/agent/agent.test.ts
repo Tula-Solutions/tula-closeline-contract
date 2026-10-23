@@ -72,6 +72,21 @@ describe('Agent settings and ADR 0003', () => {
       expect(setAgentSettingsRequestSchema.safeParse({ ...set, ...extra }).success).toBe(false)
     }
   })
+  test('hours can only narrow the fixed calling window', () => {
+    const day = (start: string, end: string) => [{ day: 'mon', windows: [{ start, end }] }]
+    expect(
+      setAgentSettingsRequestSchema.safeParse({ ...set, hours: day('00:00', '23:59') }).success
+    ).toBe(false)
+    expect(
+      setAgentSettingsRequestSchema.safeParse({ ...set, hours: day('07:00', '12:00') }).success
+    ).toBe(false)
+    expect(
+      setAgentSettingsRequestSchema.safeParse({ ...set, hours: day('08:00', '21:00') }).success
+    ).toBe(true)
+    expect(
+      setAgentSettingsRequestSchema.safeParse({ ...set, hours: day('09:00', '17:00') }).success
+    ).toBe(true)
+  })
   test('the caps are bounded', () => {
     expect(setAgentSettingsRequestSchema.safeParse({ ...set, maxCallSeconds: 0 }).success).toBe(
       false

@@ -1750,7 +1750,11 @@ var availabilitySchema = z22.strictObject({
 });
 
 // src/agent/settings.ts
-var hoursSchema = z23.array(workingDaySchema).max(7).refine((days) => new Set(days.map((d) => d.day)).size === days.length, {
+var minutesOf = (time) => {
+  const [h = 0, m = 0] = time.split(":").map(Number);
+  return h * 60 + m;
+};
+var hoursSchema = z23.array(workingDaySchema).max(7).refine((days) => days.every((d) => d.windows.every((w) => minutesOf(w.start) >= AGENT_CALLING_WINDOW.startHour * 60 && minutesOf(w.end) <= AGENT_CALLING_WINDOW.endHour * 60)), { message: "Hours lie within the fixed calling window" }).refine((days) => new Set(days.map((d) => d.day)).size === days.length, {
   message: "Each day appears once"
 });
 var setAgentSettingsRequestSchema = z23.strictObject({
@@ -4775,6 +4779,10 @@ var inquirySchema = z49.strictObject({
   }
   if (inq.source !== "form" && inq.callback.state !== "not_applicable" && inq.consent === null) {
     issue("callback", "A callback needs the consent evidence it was based on");
+  }
+  const dialled = !["not_applicable", "skipped"].includes(inq.callback.state);
+  if (dialled && inq.consent?.phoneGranted !== true) {
+    issue("callback", "A callback is placed only with phone consent (ADR 0003)");
   }
   if (inq.source === "call" && inq.callback.state !== "not_applicable") {
     issue("callback", "A Call Inquiry is not called back");

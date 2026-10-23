@@ -106,6 +106,10 @@ export const inquirySchema = z
     if (inq.source !== 'form' && inq.callback.state !== 'not_applicable' && inq.consent === null) {
       issue('callback', 'A callback needs the consent evidence it was based on')
     }
+    const dialled = !['not_applicable', 'skipped'].includes(inq.callback.state)
+    if (dialled && inq.consent?.phoneGranted !== true) {
+      issue('callback', 'A callback is placed only with phone consent (ADR 0003)')
+    }
     if (inq.source === 'call' && inq.callback.state !== 'not_applicable') {
       issue('callback', 'A Call Inquiry is not called back')
     }
