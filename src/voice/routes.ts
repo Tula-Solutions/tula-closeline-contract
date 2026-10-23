@@ -1,3 +1,4 @@
+import type { ApiKeyScope } from '../apikey/values'
 import type { CommonErrorCode } from '../errors'
 import type { SalesHistoryErrorCode } from '../playbook/sales-history-errors'
 import type { ProspectErrorCode } from '../prospect/errors'
@@ -37,6 +38,8 @@ export type VoiceRoute = {
   readonly path: string
   /** The roles allowed. Any other role is the common `auth.forbidden`. */
   readonly roles: readonly Role[]
+  /** Set on a route an API key may call: the scope its token must carry. Never on a public, internal or Owner-only route. */
+  readonly publicApi?: { readonly scope: ApiKeyScope }
   /** The success statuses, the first being the usual one. */
   readonly success: readonly number[]
   /** True when a retry of the route is safe by the `Idempotency-Key` header. */
@@ -152,6 +155,7 @@ export const VOICE_ROUTES: Readonly<Record<VoiceRouteName, VoiceRoute>> = Object
     method: 'GET',
     path: '/v1/calls',
     roles: VOICE_ALL_ROLES,
+    publicApi: { scope: 'calls:read' },
     success: [200],
     idempotent: false,
     errors: [],
@@ -162,6 +166,7 @@ export const VOICE_ROUTES: Readonly<Record<VoiceRouteName, VoiceRoute>> = Object
     method: 'GET',
     path: '/v1/calls/{callId}',
     roles: VOICE_ALL_ROLES,
+    publicApi: { scope: 'calls:read' },
     success: [200],
     idempotent: false,
     errors: ['call.not_found'],
@@ -203,6 +208,7 @@ export const VOICE_ROUTES: Readonly<Record<VoiceRouteName, VoiceRoute>> = Object
     method: 'PUT',
     path: '/v1/calls/{callId}/wrap-up',
     roles: VOICE_ALL_ROLES,
+    publicApi: { scope: 'calls:write' },
     success: [200],
     idempotent: false,
     errors: ['call.not_found', 'call.not_ended'],

@@ -1,3 +1,4 @@
+import type { ApiKeyScope } from '../apikey/values'
 import type { CommonErrorCode } from '../errors'
 import type { ProspectErrorCode } from '../prospect/errors'
 import type { Role } from '../tenancy'
@@ -54,6 +55,8 @@ export type BookingRoute = {
   readonly path: string
   /** The roles allowed. Empty for a public route. Any other role is the common `auth.forbidden`. */
   readonly roles: readonly Role[]
+  /** Set on a route an API key may call: the scope its token must carry. Never on a public, internal or Owner-only route. */
+  readonly publicApi?: { readonly scope: ApiKeyScope }
   /** True: the route takes no token and no Organization; anyone may call it. */
   readonly public?: true
   /** The success statuses, the first being the usual one. */
@@ -173,6 +176,7 @@ export const BOOKING_ROUTES: Readonly<Record<BookingRouteName, BookingRoute>> = 
     method: 'GET',
     path: '/v1/booking-types',
     roles: BOOKING_ALL_ROLES,
+    publicApi: { scope: 'bookings:read' },
     success: [200],
     idempotent: false,
     errors: [],
@@ -195,6 +199,7 @@ export const BOOKING_ROUTES: Readonly<Record<BookingRouteName, BookingRoute>> = 
     method: 'GET',
     path: '/v1/booking-types/{bookingTypeId}',
     roles: BOOKING_ALL_ROLES,
+    publicApi: { scope: 'bookings:read' },
     success: [200],
     idempotent: false,
     errors: ['booking.type_not_found'],
@@ -313,6 +318,7 @@ export const BOOKING_ROUTES: Readonly<Record<BookingRouteName, BookingRoute>> = 
     method: 'GET',
     path: '/v1/booking-slots',
     roles: BOOKING_ALL_ROLES,
+    publicApi: { scope: 'bookings:read' },
     success: [200],
     idempotent: false,
     errors: ['booking.type_not_found', 'booking.no_eligible_rep', 'prospect.not_found'],
@@ -324,6 +330,7 @@ export const BOOKING_ROUTES: Readonly<Record<BookingRouteName, BookingRoute>> = 
     method: 'POST',
     path: '/v1/bookings',
     roles: BOOKING_ALL_ROLES,
+    publicApi: { scope: 'bookings:write' },
     success: [201, 200],
     idempotent: true,
     keyRequired: true,
@@ -343,6 +350,7 @@ export const BOOKING_ROUTES: Readonly<Record<BookingRouteName, BookingRoute>> = 
     method: 'GET',
     path: '/v1/bookings',
     roles: BOOKING_ALL_ROLES,
+    publicApi: { scope: 'bookings:read' },
     success: [200],
     idempotent: false,
     errors: [],
@@ -353,6 +361,7 @@ export const BOOKING_ROUTES: Readonly<Record<BookingRouteName, BookingRoute>> = 
     method: 'GET',
     path: '/v1/bookings/{bookingId}',
     roles: BOOKING_ALL_ROLES,
+    publicApi: { scope: 'bookings:read' },
     success: [200],
     idempotent: false,
     errors: ['booking.not_found'],
@@ -374,6 +383,7 @@ export const BOOKING_ROUTES: Readonly<Record<BookingRouteName, BookingRoute>> = 
     method: 'POST',
     path: '/v1/bookings/{bookingId}/reschedule',
     roles: BOOKING_ALL_ROLES,
+    publicApi: { scope: 'bookings:write' },
     success: [200],
     idempotent: false,
     errors: [
@@ -390,6 +400,7 @@ export const BOOKING_ROUTES: Readonly<Record<BookingRouteName, BookingRoute>> = 
     method: 'POST',
     path: '/v1/bookings/{bookingId}/cancel',
     roles: BOOKING_ALL_ROLES,
+    publicApi: { scope: 'bookings:write' },
     success: [200],
     idempotent: false,
     errors: ['booking.not_found', 'booking.calendar_unavailable'],

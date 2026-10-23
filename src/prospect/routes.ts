@@ -1,3 +1,4 @@
+import type { ApiKeyScope } from '../apikey/values'
 import type { CommonErrorCode } from '../errors'
 import type { Role } from '../tenancy'
 import type { ProspectErrorCode } from './errors'
@@ -44,6 +45,8 @@ export type ProspectRoute = {
   readonly path: string
   /** The roles allowed. Any other role is the common `auth.forbidden`. */
   readonly roles: readonly Role[]
+  /** Set on a route an API key may call: the scope its token must carry. Never on a public, internal or Owner-only route. */
+  readonly publicApi?: { readonly scope: ApiKeyScope }
   /** The success statuses, the first being the usual one. */
   readonly success: readonly number[]
   /** True when the route accepts an `Idempotency-Key` header. */
@@ -79,6 +82,7 @@ export const PROSPECT_ROUTES: Readonly<Record<ProspectRouteName, ProspectRoute>>
     method: 'POST',
     path: '/v1/prospects',
     roles: PROSPECT_ALL_ROLES,
+    publicApi: { scope: 'prospects:write' },
     success: [201, 200],
     idempotent: true,
     errors: ['prospect.duplicate_identity', 'prospect.forbidden_owner', 'prospect.not_found'],
@@ -90,6 +94,7 @@ export const PROSPECT_ROUTES: Readonly<Record<ProspectRouteName, ProspectRoute>>
     method: 'GET',
     path: '/v1/prospects',
     roles: PROSPECT_ALL_ROLES,
+    publicApi: { scope: 'prospects:read' },
     success: [200],
     idempotent: false,
     errors: [],
@@ -100,6 +105,7 @@ export const PROSPECT_ROUTES: Readonly<Record<ProspectRouteName, ProspectRoute>>
     method: 'GET',
     path: '/v1/prospects/{prospectId}',
     roles: PROSPECT_ALL_ROLES,
+    publicApi: { scope: 'prospects:read' },
     success: [200],
     idempotent: false,
     errors: ['prospect.not_found'],
@@ -110,6 +116,7 @@ export const PROSPECT_ROUTES: Readonly<Record<ProspectRouteName, ProspectRoute>>
     method: 'PATCH',
     path: '/v1/prospects/{prospectId}',
     roles: PROSPECT_ALL_ROLES,
+    publicApi: { scope: 'prospects:write' },
     success: [200],
     idempotent: false,
     errors: ['prospect.not_found', 'prospect.duplicate_identity'],
@@ -153,6 +160,7 @@ export const PROSPECT_ROUTES: Readonly<Record<ProspectRouteName, ProspectRoute>>
     method: 'GET',
     path: '/v1/prospects/{prospectId}/fields/{field}/history',
     roles: PROSPECT_ALL_ROLES,
+    publicApi: { scope: 'prospects:read' },
     success: [200],
     idempotent: false,
     errors: ['prospect.not_found'],
@@ -163,6 +171,7 @@ export const PROSPECT_ROUTES: Readonly<Record<ProspectRouteName, ProspectRoute>>
     method: 'POST',
     path: '/v1/prospect-companies',
     roles: PROSPECT_ALL_ROLES,
+    publicApi: { scope: 'prospects:write' },
     success: [201, 200],
     idempotent: true,
     errors: ['prospect.company_domain_taken'],
@@ -174,6 +183,7 @@ export const PROSPECT_ROUTES: Readonly<Record<ProspectRouteName, ProspectRoute>>
     method: 'GET',
     path: '/v1/prospect-companies',
     roles: PROSPECT_ALL_ROLES,
+    publicApi: { scope: 'prospects:read' },
     success: [200],
     idempotent: false,
     errors: [],
@@ -185,6 +195,7 @@ export const PROSPECT_ROUTES: Readonly<Record<ProspectRouteName, ProspectRoute>>
     method: 'GET',
     path: '/v1/prospect-companies/{companyId}',
     roles: PROSPECT_ALL_ROLES,
+    publicApi: { scope: 'prospects:read' },
     success: [200],
     idempotent: false,
     errors: ['prospect.not_found'],
@@ -195,6 +206,7 @@ export const PROSPECT_ROUTES: Readonly<Record<ProspectRouteName, ProspectRoute>>
     method: 'PATCH',
     path: '/v1/prospect-companies/{companyId}',
     roles: PROSPECT_ALL_ROLES,
+    publicApi: { scope: 'prospects:write' },
     success: [200],
     idempotent: false,
     errors: ['prospect.not_found', 'prospect.company_domain_taken'],
@@ -206,6 +218,7 @@ export const PROSPECT_ROUTES: Readonly<Record<ProspectRouteName, ProspectRoute>>
     method: 'GET',
     path: '/v1/prospect-companies/{companyId}/fields/{field}/history',
     roles: PROSPECT_ALL_ROLES,
+    publicApi: { scope: 'prospects:read' },
     success: [200],
     idempotent: false,
     errors: ['prospect.not_found'],
