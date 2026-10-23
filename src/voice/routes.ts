@@ -177,7 +177,6 @@ export const VOICE_ROUTES: Readonly<Record<VoiceRouteName, VoiceRoute>> = Object
     method: 'GET',
     path: '/v1/calls/{callId}/transcript',
     roles: VOICE_ALL_ROLES,
-    publicApi: { scope: 'calls:read' },
     success: [200],
     idempotent: false,
     errors: ['call.not_found'],

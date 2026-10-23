@@ -87,7 +87,7 @@ describe('the routes an API key may call', () => {
       }
     }
     const sensitive =
-      /settings|billing|members?|teams?|roles?|api-keys|webhook|wording|form|suppression|import|recording|softphone/i
+      /settings|billing|members?|teams?|roles?|api-keys|webhook|wording|form|suppression|import|recording|transcript|softphone/i
     for (const { key, route } of marked) {
       expect(`${key} ${sensitive.test(route.path)}`).toBe(`${key} false`)
     }
@@ -104,5 +104,13 @@ describe('the routes an API key may call', () => {
     const used = new Set(marked.map((e) => e.route.publicApi?.scope))
     const unused = API_KEY_SCOPES.filter((scope) => !used.has(scope))
     expect(unused).toEqual(['playbook:read', 'playbook:write'])
+  })
+
+  test('no key may reach a call recording or transcript', () => {
+    for (const { key, route } of entries) {
+      if (/\/calls\/\{[^}]+\}\/(recording|transcript)/.test(route.path)) {
+        expect(`${key} ${route.publicApi === undefined}`).toBe(`${key} true`)
+      }
+    }
   })
 })
