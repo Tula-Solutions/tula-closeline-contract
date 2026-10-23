@@ -12585,7 +12585,11 @@ var VOICE_ERRORS = {
       status: 429,
       message: "The Organization has reached its limit of concurrent Calls."
     },
-    not_ended: { status: 409, message: "The Call has not ended yet." }
+    not_ended: { status: 409, message: "The Call has not ended yet." },
+    provider_call_not_found: {
+      status: 404,
+      message: "The telephony provider call is not known."
+    }
   }),
   ...defineErrors("line", {
     not_found: { status: 404, message: "The Line was not found." },

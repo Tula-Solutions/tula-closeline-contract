@@ -337,9 +337,17 @@ describe('errors', () => {
     expect('call.disclosure_failed' in VOICE_ERRORS).toBe(true)
     expect('line.not_found' in VOICE_ERRORS).toBe(true)
     expect('call.not_found' in SALES_HISTORY_ERRORS).toBe(true)
+    expect('call.provider_call_not_found' in VOICE_ERRORS).toBe(true)
     for (const code of Object.keys(VOICE_ERRORS)) {
       expect(code).toMatch(/^[a-z]+\.[a-z_]+$/)
     }
+  })
+  test('call.provider_call_not_found is a 404 with its own message', () => {
+    expect(VOICE_ERRORS['call.provider_call_not_found']).toEqual({
+      code: 'call.provider_call_not_found',
+      status: 404,
+      message: 'The telephony provider call is not known.',
+    })
   })
   test('no code collides with another registry', () => {
     for (const code of Object.keys(VOICE_ERRORS)) {
