@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import {
+  brandVoiceIdSchema,
+  briefIdSchema,
   callIdSchema,
   consentEventIdSchema,
   consentFormIdSchema,
@@ -22,6 +24,7 @@ import {
   prospectImportIdSchema,
   prospectMergeIdSchema,
   requestIdSchema,
+  signalIdSchema,
   suppressionEntryIdSchema,
   suppressionImportIdSchema,
   teamIdSchema,
@@ -31,6 +34,9 @@ import {
 const HEX = '0190a5e0b3c17d2a8f4e5b6c7d8e9f01'
 
 const schemas = [
+  ['brf', briefIdSchema],
+  ['bvo', brandVoiceIdSchema],
+  ['sig', signalIdSchema],
   ['ply', playIdSchema],
   ['eev', enrollmentEventIdSchema],
   ['org', organizationIdSchema],
