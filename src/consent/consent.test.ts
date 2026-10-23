@@ -31,6 +31,7 @@ import {
   listEvidenceQuerySchema,
   listSuppressionEntriesQuerySchema,
   listSuppressionImportRowsQuerySchema,
+  lookupSuppressionRequestSchema,
   oneClickUnsubscribeRequestSchema,
   prospectConsentSchema,
   recordConsentRequestSchema,
@@ -94,11 +95,18 @@ describe('list queries', () => {
       expect(schema.safeParse({ cursor: 'x'.repeat(513) }).success).toBe(false)
     })
   }
-  test('suppression search takes one exact address and a reason', () => {
-    expect(
-      listSuppressionEntriesQuerySchema.safeParse({ reason: 'stop', q: 'A@Example.com' }).success
-    ).toBe(true)
+  test('the list takes a reason and never an address in the query string', () => {
+    expect(listSuppressionEntriesQuerySchema.safeParse({ reason: 'stop' }).success).toBe(true)
+    expect(listSuppressionEntriesQuerySchema.safeParse({ q: 'a@example.com' }).success).toBe(false)
     expect(listSuppressionEntriesQuerySchema.safeParse({ reason: 'dnc' }).success).toBe(false)
+  })
+  test('a lookup names exactly one address in a body', () => {
+    expect(lookupSuppressionRequestSchema.safeParse({ email: 'a@example.com' }).success).toBe(true)
+    expect(lookupSuppressionRequestSchema.safeParse({}).success).toBe(false)
+    expect(
+      lookupSuppressionRequestSchema.safeParse({ email: 'a@example.com', phone: '+14155550100' })
+        .success
+    ).toBe(false)
   })
 })
 
@@ -307,7 +315,11 @@ describe('forms', () => {
   }
   test('a form has a token and a publish time exactly when published or closed', () => {
     expect(consentFormSchema.safeParse(form).success).toBe(true)
-    expect(consentFormSchema.safeParse({ ...form, token: null }).success).toBe(false)
+    expect(consentFormSchema.safeParse({ ...form, token: null }).success).toBe(true)
+    expect(consentFormSchema.safeParse({ ...form, token: null, publishedAt: null }).success).toBe(
+      false
+    )
+    expect(consentFormSchema.safeParse({ ...form, state: 'draft' }).success).toBe(false)
     expect(
       consentFormSchema.safeParse({ ...form, state: 'draft', token: null, publishedAt: null })
         .success
@@ -744,6 +756,7 @@ describe('routes', () => {
     for (const name of [
       'addSuppression',
       'listSuppressionEntries',
+      'lookupSuppression',
       'removeSuppression',
       'uploadSuppressionImport',
       'createConsentWording',

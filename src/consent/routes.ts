@@ -33,6 +33,7 @@ export type ConsentRouteName =
   | 'closeConsentForm'
   | 'addSuppression'
   | 'listSuppressionEntries'
+  | 'lookupSuppression'
   | 'getSuppressionEntry'
   | 'removeSuppression'
   | 'uploadSuppressionImport'
@@ -288,7 +289,19 @@ export const CONSENT_ROUTES: Readonly<Record<ConsentRouteName, ConsentRoute>> = 
     errors: [],
     commonErrors: ['request.invalid'],
     description:
-      'Lists Suppression entries, newest first, one cursor-paginated page at a time (at most 100); filters: reason, addressKind, state (active by default) and q, one exact address. Entries show a masked address, never the address or its hash. Owner and Admin only.',
+      'Lists Suppression entries, newest first, one cursor-paginated page at a time (at most 100); filters: reason, addressKind, state (active by default). Entries show a masked address, never the address or its hash. Owner and Admin only.',
+  }),
+  lookupSuppression: route({
+    method: 'POST',
+    path: '/v1/suppression-entries/lookups',
+    access: 'user',
+    roles: CONSENT_ADMIN_ROLES,
+    success: [200],
+    idempotent: false,
+    errors: [],
+    commonErrors: ['request.invalid'],
+    description:
+      'Looks up one exact email, phone or LinkedIn address on the Suppression list, in the body so it never reaches an access log. Answers the active entries for it (a masked address, never the address or its hash), none if it is not suppressed. Owner and Admin only.',
   }),
   getSuppressionEntry: route({
     method: 'GET',

@@ -92,8 +92,9 @@ export type ConsentFormState = z.infer<typeof consentFormStateSchema>
 
 /**
  * A hosted consent form: a wording and the `channels` it offers, each with its own unticked
- * choice. `token` and `publishedAt` are set exactly once published (a closed form keeps them);
- * the token goes in the hosted page's URL and is shown to the Organization's Owner and Admin only.
+ * choice. `publishedAt` is set exactly once published (a closed form keeps it). `token` goes in the
+ * hosted page's URL and is the only credential of the public routes, so core returns it to Owner
+ * and Admin only and it is `null` for a Manager or Rep, and for a draft.
  */
 export const consentFormSchema = z
   .object({
@@ -110,9 +111,9 @@ export const consentFormSchema = z
   })
   .refine(
     (f) =>
-      (f.state === 'draft') === (f.token === null) &&
-      (f.state === 'draft') === (f.publishedAt === null),
-    'A form has a token and a publish time exactly once published'
+      (f.state === 'draft') === (f.publishedAt === null) &&
+      (f.state !== 'draft' || f.token === null),
+    'A form has a publish time exactly once published, and a draft has no token'
   )
   .refine(
     (f) => (f.state === 'closed') === (f.closedAt !== null),

@@ -96,17 +96,21 @@ export const suppressionListStateSchema = z.enum(['active', 'removed'])
 
 /**
  * The query parameters of a request to list the Suppression list, newest first: filters by
- * reason, address kind and state (default `active`), and `q`, one exact address (email, phone or
- * LinkedIn address), which core normalises and hashes to look up; there is no substring search.
+ * reason, address kind and state (default `active`). An address is never a query parameter (query strings reach access logs): look one up with
+ * {@link lookupSuppressionRequestSchema}.
  */
 export const listSuppressionEntriesQuerySchema = pageQuerySchema
   .extend({
     reason: suppressionReasonSchema.optional(),
     addressKind: suppressionAddressKindSchema.optional(),
     state: suppressionListStateSchema.optional(),
-    q: boundedTextSchema(320).optional(),
   })
   .strict()
+
+/** The body of a lookup of one address on the Suppression list: exactly one address, normalised and hashed by core; there is no substring search. */
+export const lookupSuppressionRequestSchema = z
+  .strictObject(addressFieldsShape)
+  .refine(hasExactlyOneAddress, ONE_ADDRESS_MESSAGE)
 
 /** The query parameters of a request to list Suppression entries. */
 export type ListSuppressionEntriesQuery = z.infer<typeof listSuppressionEntriesQuerySchema>

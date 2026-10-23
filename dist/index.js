@@ -936,7 +936,7 @@ var consentFormSchema = z15.object({
   createdByUserId: userIdSchema,
   publishedAt: timestampSchema.nullable(),
   closedAt: timestampSchema.nullable()
-}).refine((f) => f.state === "draft" === (f.token === null) && f.state === "draft" === (f.publishedAt === null), "A form has a token and a publish time exactly once published").refine((f) => f.state === "closed" === (f.closedAt !== null), "A form has a close time exactly when closed");
+}).refine((f) => f.state === "draft" === (f.publishedAt === null) && (f.state !== "draft" || f.token === null), "A form has a publish time exactly once published, and a draft has no token").refine((f) => f.state === "closed" === (f.closedAt !== null), "A form has a close time exactly when closed");
 var consentFormParamsSchema = z15.strictObject({ formId: consentFormIdSchema });
 var createConsentFormRequestSchema = z15.strictObject({
   wordingId: consentWordingIdSchema,
@@ -1204,7 +1204,18 @@ var CONSENT_ROUTES = Object.freeze({
     idempotent: false,
     errors: [],
     commonErrors: ["request.invalid"],
-    description: "Lists Suppression entries, newest first, one cursor-paginated page at a time (at most 100); filters: reason, addressKind, state (active by default) and q, one exact address. Entries show a masked address, never the address or its hash. Owner and Admin only."
+    description: "Lists Suppression entries, newest first, one cursor-paginated page at a time (at most 100); filters: reason, addressKind, state (active by default). Entries show a masked address, never the address or its hash. Owner and Admin only."
+  }),
+  lookupSuppression: route2({
+    method: "POST",
+    path: "/v1/suppression-entries/lookups",
+    access: "user",
+    roles: CONSENT_ADMIN_ROLES,
+    success: [200],
+    idempotent: false,
+    errors: [],
+    commonErrors: ["request.invalid"],
+    description: "Looks up one exact email, phone or LinkedIn address on the Suppression list, in the body so it never reaches an access log. Answers the active entries for it (a masked address, never the address or its hash), none if it is not suppressed. Owner and Admin only."
   }),
   getSuppressionEntry: route2({
     method: "GET",
@@ -1391,9 +1402,9 @@ var suppressionListStateSchema = z17.enum(["active", "removed"]);
 var listSuppressionEntriesQuerySchema = pageQuerySchema.extend({
   reason: suppressionReasonSchema.optional(),
   addressKind: suppressionAddressKindSchema.optional(),
-  state: suppressionListStateSchema.optional(),
-  q: boundedTextSchema(320).optional()
+  state: suppressionListStateSchema.optional()
 }).strict();
+var lookupSuppressionRequestSchema = z17.strictObject(addressFieldsShape).refine(hasExactlyOneAddress, ONE_ADDRESS_MESSAGE);
 var suppressionEntryPageSchema = pageSchema(suppressionEntrySchema);
 var recordWithdrawalRequestSchema = z17.strictObject({
   organizationId: organizationIdSchema,
@@ -4213,6 +4224,7 @@ export {
   listTeamsQuerySchema,
   listTeamsResponseSchema,
   lookupDealRequestSchema,
+  lookupSuppressionRequestSchema,
   maskedAddressSchema,
   memberParamsSchema,
   memberSchema,

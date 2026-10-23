@@ -28,7 +28,7 @@ export const contactDenialCodeSchema = z.enum(CONTACT_DENIAL_CODES)
 /** A code that denies a contact. */
 export type ContactDenialCode = z.infer<typeof contactDenialCodeSchema>
 
-/** Why a contact was allowed: a granted consent, a Rep acting on a Prospect, an answer to the Prospect's own message, or an email to an address that is not suppressed. */
+/** Why a contact was allowed: a granted consent, a Rep acting on a Prospect, an answer to the Prospect's own message, or an email to an address that is not suppressed. The basis is informative and the denial rules do not depend on it; a LinkedIn contact is allowed on `rep_initiated` or `reply`. */
 export const CONTACT_ALLOW_BASES = [
   'consent_granted',
   'rep_initiated',
