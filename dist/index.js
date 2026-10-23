@@ -4668,7 +4668,9 @@ var updateProspectCompanyRequestSchema = z45.strictObject({
   employeeCount: prospectCompanyEmployeeCountSchema.nullable().optional(),
   technologies: prospectCompanyTechnologiesSchema.nullable().optional()
 }).refine((body) => Object.values(body).some((value) => value !== undefined), "Send a change");
-var listProspectCompaniesQuerySchema = pageQuerySchema.extend({ q: prospectSearchSchema.optional() }).strict();
+var MAX_PROSPECT_COMPANY_IDS = 100;
+var prospectCompanyIdsQuerySchema = z45.string().max(8192).transform((value) => value.split(",").map((entry) => entry.trim())).pipe(z45.array(prospectCompanyIdSchema).min(1).max(MAX_PROSPECT_COMPANY_IDS)).transform((ids) => [...new Set(ids)]).describe(`Comma-separated Prospect Company ids (pco_…), 1 to ${MAX_PROSPECT_COMPANY_IDS}; duplicates are ignored and an empty entry is refused.`);
+var listProspectCompaniesQuerySchema = pageQuerySchema.extend({ q: prospectSearchSchema.optional(), ids: prospectCompanyIdsQuerySchema.optional() }).strict();
 var listProspectCompaniesResponseSchema = pageSchema(prospectCompanySchema);
 var prospectCompanyCursorSchema = z45.strictObject({
   createdAt: timestampSchema,
@@ -7952,7 +7954,8 @@ var memberSchema = z71.object({
   updatedAt: timestampSchema
 });
 var LIST_MEMBERS_MIN_ROLE = "manager";
-var listMembersQuerySchema = pageQuerySchema.strict();
+var MAX_MEMBER_QUERY_LENGTH = 100;
+var listMembersQuerySchema = pageQuerySchema.extend({ q: boundedTextSchema(MAX_MEMBER_QUERY_LENGTH).optional() }).strict();
 var listMembersResponseSchema = pageSchema(memberSchema);
 var memberParamsSchema = z71.strictObject({
   membershipId: membershipIdSchema
@@ -13131,6 +13134,7 @@ export {
   MAX_LINKEDIN_TYPED_NAME_LENGTH,
   MAX_MAILBOX_NAME_LENGTH,
   MAX_MAILBOX_TEAMS,
+  MAX_MEMBER_QUERY_LENGTH,
   MAX_MERGED_PROSPECTS,
   MAX_MESSAGE_BODY_LENGTH,
   MAX_MICRO_DOLLARS,
@@ -13148,6 +13152,7 @@ export {
   MAX_PROPOSED_PLAYS,
   MAX_PROSPECTS_PER_REQUEST,
   MAX_PROSPECT_COMPANY_EMPLOYEE_COUNT,
+  MAX_PROSPECT_COMPANY_IDS,
   MAX_PROSPECT_COMPANY_NAME_LENGTH,
   MAX_PROSPECT_COMPANY_TECHNOLOGIES,
   MAX_PROSPECT_COMPANY_TECHNOLOGY_LENGTH,
@@ -14171,6 +14176,7 @@ export {
   prospectCompanyFieldNameSchema,
   prospectCompanyFieldParamsSchema,
   prospectCompanyIdSchema,
+  prospectCompanyIdsQuerySchema,
   prospectCompanyIndustrySchema,
   prospectCompanyNameSchema,
   prospectCompanyParamsSchema,

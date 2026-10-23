@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { z } from 'zod'
+import { z } from 'zod'
 import { ERRORS, errorCodeSchema } from '../errors'
 import {
   formatId,
@@ -25,6 +25,7 @@ import {
   listProspectsQuerySchema,
   MAX_BULK_ASSIGN_PROSPECTS,
   MAX_MERGED_PROSPECTS,
+  MAX_PROSPECT_COMPANY_IDS,
   MAX_PROSPECT_IMPORT_ROWS,
   mergeProspectsRequestSchema,
   PROSPECT_COMPANY_FIELD_NAMES,
@@ -95,6 +96,60 @@ describe('list queries', () => {
     expect(listProspectsQuerySchema.safeParse({ source: 'enrichment:' }).success).toBe(false)
     expect(listProspectsQuerySchema.safeParse({ status: 'deleted' }).success).toBe(false)
     expect(listProspectsQuerySchema.safeParse({ q: 'x'.repeat(201) }).success).toBe(false)
+  })
+
+  describe('listProspectCompanies ids', () => {
+    const ids = (n: number) => Array.from({ length: n }, (_, i) => formatId('pco', hex(i + 1)))
+    const parse = (value: string) => listProspectCompaniesQuerySchema.safeParse({ ids: value })
+
+    test('parses a comma-separated list into an array', () => {
+      const a = formatId('pco', hex(1))
+      const b = formatId('pco', hex(2))
+      const result = listProspectCompaniesQuerySchema.parse({ ids: `${a},${b}` })
+      expect(result.ids).toEqual([a, b])
+      expect(listProspectCompaniesQuerySchema.parse({}).ids).toBeUndefined()
+    })
+
+    test('trims each entry and collapses duplicates, keeping the first position', () => {
+      const a = formatId('pco', hex(1))
+      const b = formatId('pco', hex(2))
+      expect(listProspectCompaniesQuerySchema.parse({ ids: ` ${a} , ${b},${a} ` }).ids).toEqual([
+        a,
+        b,
+      ])
+    })
+
+    test('accepts the maximum and refuses one more', () => {
+      expect(MAX_PROSPECT_COMPANY_IDS).toBe(100)
+      expect(parse(ids(MAX_PROSPECT_COMPANY_IDS).join(',')).success).toBe(true)
+      expect(parse(ids(MAX_PROSPECT_COMPANY_IDS + 1).join(',')).success).toBe(false)
+    })
+
+    test('refuses an id that is not a Prospect Company id, and any empty entry', () => {
+      const a = formatId('pco', hex(1))
+      expect(parse('not-an-id').success).toBe(false)
+      expect(parse(`${a},${formatId('mem', hex(1))}`).success).toBe(false)
+      expect(parse('').success).toBe(false)
+      expect(parse(`${a},`).success).toBe(false)
+      expect(parse(`,${a}`).success).toBe(false)
+      expect(parse(`${a},,${a}`).success).toBe(false)
+      expect(parse(`${a}, ,${a}`).success).toBe(false)
+    })
+
+    test('still refuses an unknown parameter beside ids', () => {
+      const a = formatId('pco', hex(1))
+      expect(listProspectCompaniesQuerySchema.safeParse({ ids: a, surprise: '1' }).success).toBe(
+        false
+      )
+    })
+
+    test('is a string on the wire, described with its format and maximum', () => {
+      const json = z.toJSONSchema(listProspectCompaniesQuerySchema, { io: 'input' })
+      const field = (json.properties as Record<string, { type?: string; description?: string }>).ids
+      expect(field?.type).toBe('string')
+      expect(field?.description).toContain('Comma-separated')
+      expect(field?.description).toContain(String(MAX_PROSPECT_COMPANY_IDS))
+    })
   })
 })
 

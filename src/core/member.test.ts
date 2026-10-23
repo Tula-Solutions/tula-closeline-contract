@@ -7,6 +7,7 @@ import {
   LIST_MEMBERS_MIN_ROLE,
   listMembersQuerySchema,
   listMembersResponseSchema,
+  MAX_MEMBER_QUERY_LENGTH,
   memberParamsSchema,
   memberSchema,
 } from './member'
@@ -61,7 +62,21 @@ describe('listMembersQuerySchema', () => {
     expect(listMembersQuerySchema.safeParse({ role: 'x' }).success).toBe(false)
     expect(listMembersQuerySchema.safeParse({ email: 'ada@example.com' }).success).toBe(false)
     expect(listMembersQuerySchema.safeParse({ name: 'Ada' }).success).toBe(false)
-    expect(listMembersQuerySchema.safeParse({ q: 'ada' }).success).toBe(false)
+    expect(listMembersQuerySchema.safeParse({ surprise: '1' }).success).toBe(false)
+  })
+
+  test('takes a trimmed name filter of 1 to the maximum length', () => {
+    expect(listMembersQuerySchema.parse({ q: '  ada  ' }).q).toBe('ada')
+    expect(listMembersQuerySchema.parse({}).q).toBeUndefined()
+    expect(listMembersQuerySchema.safeParse({ q: '' }).success).toBe(false)
+    expect(listMembersQuerySchema.safeParse({ q: '   ' }).success).toBe(false)
+    expect(
+      listMembersQuerySchema.safeParse({ q: 'a'.repeat(MAX_MEMBER_QUERY_LENGTH) }).success
+    ).toBe(true)
+    expect(
+      listMembersQuerySchema.safeParse({ q: 'a'.repeat(MAX_MEMBER_QUERY_LENGTH + 1) }).success
+    ).toBe(false)
+    expect(MAX_MEMBER_QUERY_LENGTH).toBe(100)
   })
 })
 

@@ -326,9 +326,23 @@ export const updateProspectCompanyRequestSchema = z
 /** The body of a request to edit a Prospect Company. */
 export type UpdateProspectCompanyRequest = z.infer<typeof updateProspectCompanyRequestSchema>
 
-/** The query parameters of a request to list Prospect Companies: a page and optionally a `q` search on name and domain. An unknown parameter is refused. */
+/** The most Prospect Company ids one `ids` filter may carry. */
+export const MAX_PROSPECT_COMPANY_IDS = 100
+
+/** The `ids` filter of a Prospect Company list: on the wire a comma-separated string, parsed to 1 to `MAX_PROSPECT_COMPANY_IDS` Prospect Company ids with each entry trimmed and duplicates removed. */
+export const prospectCompanyIdsQuerySchema = z
+  .string()
+  .max(8192)
+  .transform((value) => value.split(',').map((entry) => entry.trim()))
+  .pipe(z.array(prospectCompanyIdSchema).min(1).max(MAX_PROSPECT_COMPANY_IDS))
+  .transform((ids) => [...new Set(ids)])
+  .describe(
+    `Comma-separated Prospect Company ids (pco_…), 1 to ${MAX_PROSPECT_COMPANY_IDS}; duplicates are ignored and an empty entry is refused.`
+  )
+
+/** The query parameters of a request to list Prospect Companies: a page and optionally a `q` search on name and domain, and `ids` to fetch those Companies only. An unknown parameter is refused. */
 export const listProspectCompaniesQuerySchema = pageQuerySchema
-  .extend({ q: prospectSearchSchema.optional() })
+  .extend({ q: prospectSearchSchema.optional(), ids: prospectCompanyIdsQuerySchema.optional() })
   .strict()
 
 /** The query parameters of a request to list Prospect Companies. */
