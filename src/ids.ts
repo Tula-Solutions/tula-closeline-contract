@@ -108,6 +108,12 @@ export const enrollmentIdSchema = idSchema('enr')
 export const playIdSchema = idSchema('ply')
 /** The id of an entry in an Enrollment's activity log (`eev_…`). */
 export const enrollmentEventIdSchema = idSchema('eev')
+/** The id of a Research Brief (`brf_…`): the cited facts about one Prospect that a Draft is written from. */
+export const briefIdSchema = idSchema('brf')
+/** The id of a Brand Voice version (`bvo_…`): how an Organization's outreach sounds, saved as a new version on each change. */
+export const brandVoiceIdSchema = idSchema('bvo')
+/** The id of a buying signal (`sig_…`): a dated, sourced event about a Prospect's company that a Citation can point at. */
+export const signalIdSchema = idSchema('sig')
 
 /** The id of an Organization. */
 export type OrganizationId = z.infer<typeof organizationIdSchema>
@@ -189,6 +195,12 @@ export type EnrollmentId = z.infer<typeof enrollmentIdSchema>
 export type PlayId = z.infer<typeof playIdSchema>
 /** The id of an entry in an Enrollment's activity log. */
 export type EnrollmentEventId = z.infer<typeof enrollmentEventIdSchema>
+/** The id of a Research Brief. */
+export type BriefId = z.infer<typeof briefIdSchema>
+/** The id of a Brand Voice version. */
+export type BrandVoiceId = z.infer<typeof brandVoiceIdSchema>
+/** The id of a buying signal. */
+export type SignalId = z.infer<typeof signalIdSchema>
 
 const UUID_PATTERN =
   /^(?:[0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i

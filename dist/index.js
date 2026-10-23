@@ -210,6 +210,9 @@ var campaignIdSchema = idSchema("cpg");
 var enrollmentIdSchema = idSchema("enr");
 var playIdSchema = idSchema("ply");
 var enrollmentEventIdSchema = idSchema("eev");
+var briefIdSchema = idSchema("brf");
+var brandVoiceIdSchema = idSchema("bvo");
+var signalIdSchema = idSchema("sig");
 var UUID_PATTERN = /^(?:[0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
 function formatId(prefix, uuid) {
   if (typeof uuid !== "string" || !UUID_PATTERN.test(uuid)) {
@@ -8337,6 +8340,517 @@ var MARKETING_ERRORS = {
     }
   })
 };
+// src/messaging/citation.ts
+import { z as z76 } from "zod";
+
+// src/messaging/values.ts
+import { z as z75 } from "zod";
+var MAX_PREVIEW_PROSPECTS = 5;
+var MAX_BRIEF_STATEMENTS = 20;
+var MAX_BRIEF_STATEMENT_LENGTH = 500;
+var MAX_ANGLE_LENGTH = 500;
+var MAX_DRAFT_CITATIONS = 20;
+var MAX_DRAFT_SUBJECT_LENGTH = 200;
+var MAX_DRAFT_BODY_LENGTH = 5000;
+var MAX_TONE_LENGTH = 500;
+var MAX_PREFERRED_WORDS = 50;
+var MAX_BANNED_PHRASES = 100;
+var MAX_VOICE_TERM_LENGTH = 100;
+var MAX_SIGN_OFF_LENGTH = 200;
+var MAX_VOICE_LENGTH_CHARACTERS = 5000;
+var MAX_CITATION_URL_LENGTH = 2048;
+function messagingTextSchema(maxLength, multiline = false) {
+  return z75.string().max(maxLength * 2).trim().pipe(z75.string().min(1).max(maxLength).refine((text) => !hasControlCharacter2(text, multiline), "No control characters"));
+}
+var citationUrlSchema = z75.string().max(MAX_CITATION_URL_LENGTH).refine((text) => {
+  try {
+    const url = new URL(text);
+    return (url.protocol === "http:" || url.protocol === "https:") && url.username === "" && url.password === "";
+  } catch {
+    return false;
+  }
+}, "An http or https address without credentials");
+var DRAFT_CHANNELS = ["email"];
+var draftChannelSchema = z75.enum(DRAFT_CHANNELS);
+
+// src/messaging/citation.ts
+var citationSourceSchema = z76.discriminatedUnion("kind", [
+  z76.object({
+    kind: z76.literal("prospect_field"),
+    prospectId: prospectIdSchema,
+    field: prospectFieldNameSchema
+  }),
+  z76.object({ kind: z76.literal("signal"), signalId: signalIdSchema, observedAt: timestampSchema }),
+  z76.object({ kind: z76.literal("web_page"), url: citationUrlSchema, retrievedAt: timestampSchema }),
+  z76.object({ kind: z76.literal("moment"), callId: callIdSchema, dealRecordId: dealRecordIdSchema }),
+  z76.object({
+    kind: z76.literal("document"),
+    documentId: documentIdSchema,
+    page: z76.number().int().min(1).max(MAX_DOCUMENT_PAGES).nullable()
+  })
+]);
+var draftCitationSchema = z76.intersection(citationSourceSchema, z76.object({ applies: z76.boolean(), score: z76.number().finite().optional() }));
+// src/messaging/draft.ts
+import { z as z77 } from "zod";
+var DRAFT_CHECKS = [
+  "citations_resolve",
+  "claims_supported",
+  "banned_phrase",
+  "length",
+  "name_match"
+];
+var draftCheckNameSchema = z77.enum(DRAFT_CHECKS);
+var outreachDraftCheckSchema = z77.strictObject({
+  check: draftCheckNameSchema,
+  result: z77.enum(["pass", "fail"]),
+  count: z77.number().int().min(0).max(1000)
+}).refine((check) => check.result === "pass" === (check.count === 0), "Pass means nothing found");
+var draftSourceSchema = z77.enum(["generated", "edited"]);
+var outreachDraftSchema = z77.strictObject({
+  id: draftIdSchema,
+  prospectId: prospectIdSchema,
+  campaignId: campaignIdSchema.nullable(),
+  stepKey: stepKeySchema.nullable(),
+  channel: draftChannelSchema,
+  goal: goalSchema,
+  language: campaignLanguageSchema,
+  subject: messagingTextSchema(MAX_DRAFT_SUBJECT_LENGTH),
+  body: messagingTextSchema(MAX_DRAFT_BODY_LENGTH, true),
+  revision: z77.number().int().min(1).max(1e4),
+  source: draftSourceSchema,
+  citations: z77.array(draftCitationSchema).max(MAX_DRAFT_CITATIONS),
+  ungrounded: z77.boolean(),
+  wonDealCount: z77.number().int().min(0).max(100),
+  checks: z77.array(outreachDraftCheckSchema).length(DRAFT_CHECKS.length),
+  autoSendable: z77.boolean(),
+  brandVoiceId: brandVoiceIdSchema,
+  voiceVersion: z77.number().int().min(1).max(1e6),
+  briefId: briefIdSchema.nullable(),
+  model: z77.string().min(1).max(100),
+  createdAt: timestampSchema,
+  updatedAt: timestampSchema
+}).superRefine((draft, ctx) => {
+  const grounded = draft.citations.some((c) => c.kind === "moment" && c.applies);
+  if (draft.ungrounded === grounded) {
+    ctx.addIssue({ code: "custom", message: "ungrounded is true exactly when no Moment applies" });
+  }
+  const names = new Set(draft.checks.map((check) => check.check));
+  if (names.size !== DRAFT_CHECKS.length) {
+    ctx.addIssue({ code: "custom", message: "Each check appears once" });
+  }
+  const allPass = draft.checks.every((check) => check.result === "pass");
+  if (draft.autoSendable !== (!draft.ungrounded && allPass)) {
+    ctx.addIssue({
+      code: "custom",
+      message: "autoSendable needs grounding and every check passed"
+    });
+  }
+});
+var createDraftRequestSchema = z77.strictObject({
+  prospectId: prospectIdSchema,
+  campaignId: campaignIdSchema.optional(),
+  stepKey: stepKeySchema.optional(),
+  goal: goalSchema.optional(),
+  angle: messagingTextSchema(MAX_ANGLE_LENGTH).optional()
+});
+var editDraftRequestSchema = z77.strictObject({
+  expectedRevision: z77.number().int().min(1).max(1e4),
+  subject: messagingTextSchema(MAX_DRAFT_SUBJECT_LENGTH).optional(),
+  body: messagingTextSchema(MAX_DRAFT_BODY_LENGTH, true).optional()
+}).refine((body) => body.subject !== undefined || body.body !== undefined, "Change something");
+var regenerateDraftRequestSchema = z77.strictObject({
+  angle: messagingTextSchema(MAX_ANGLE_LENGTH).optional(),
+  tone: messagingTextSchema(MAX_TONE_LENGTH).optional()
+});
+var listDraftsQuerySchema = pageQuerySchema.extend({
+  prospectId: prospectIdSchema.optional(),
+  campaignId: campaignIdSchema.optional(),
+  ungrounded: z77.union([z77.boolean(), z77.enum(["true", "false"]).transform((v) => v === "true")]).optional()
+});
+var listDraftsResponseSchema = pageSchema(outreachDraftSchema);
+// src/messaging/errors.ts
+var MESSAGING_ERRORS = {
+  ...defineErrors("research", {
+    not_found: { status: 404, message: "The Research Brief was not found." },
+    timeout: { status: 504, message: "Research on the Prospect took too long. Try again." }
+  }),
+  ...defineErrors("draft", {
+    not_found: { status: 404, message: "The Draft was not found." },
+    invalid_state: { status: 409, message: "The Draft is not in a state that allows this." },
+    no_prospect_data: {
+      status: 422,
+      message: "There is too little about this Prospect to write a message from."
+    },
+    model_unavailable: { status: 503, message: "The writing model is not available. Try again." },
+    budget_exceeded: { status: 429, message: "The drafting budget for this period is spent." }
+  }),
+  ...defineErrors("voice", {
+    not_found: { status: 404, message: "There is no Brand Voice yet." },
+    version_conflict: {
+      status: 409,
+      message: "The Brand Voice changed since it was read. Reload it and try again."
+    },
+    invalid: { status: 422, message: "The Brand Voice is not valid." }
+  }),
+  ...defineErrors("preview", {
+    too_many_prospects: { status: 422, message: "A preview covers at most five Prospects." }
+  })
+};
+// src/messaging/events.ts
+import { z as z78 } from "zod";
+var draftCreatedEvent = defineEvent("draft.created", 1, z78.strictObject({
+  draftId: draftIdSchema,
+  prospectId: prospectIdSchema,
+  campaignId: campaignIdSchema.nullable(),
+  stepKey: stepKeySchema.nullable(),
+  channel: draftChannelSchema,
+  ungrounded: z78.boolean(),
+  checksPassed: z78.boolean(),
+  voiceVersion: z78.number().int().min(1).max(1e6),
+  createdAt: timestampSchema
+}));
+var APPROVAL_REASONS = ["ungrounded", "check_failed", "review_mode"];
+var draftApprovalRequiredEvent = defineEvent("draft.approved_required", 1, z78.strictObject({
+  draftId: draftIdSchema,
+  prospectId: prospectIdSchema,
+  campaignId: campaignIdSchema.nullable(),
+  reasons: z78.array(z78.enum(APPROVAL_REASONS)).min(1).max(APPROVAL_REASONS.length),
+  requiredAt: timestampSchema
+}));
+var MESSAGING_EVENTS = {
+  "draft.created": draftCreatedEvent,
+  "draft.approved_required": draftApprovalRequiredEvent
+};
+// src/messaging/preview.ts
+import { z as z80 } from "zod";
+
+// src/messaging/research.ts
+import { z as z79 } from "zod";
+var briefStatementSchema = z79.strictObject({
+  text: messagingTextSchema(MAX_BRIEF_STATEMENT_LENGTH),
+  source: citationSourceSchema
+});
+var ANGLE_ORIGINS = ["won_deals", "model_default"];
+var angleOriginSchema = z79.enum(ANGLE_ORIGINS);
+var briefAngleSchema = z79.strictObject({
+  text: messagingTextSchema(MAX_ANGLE_LENGTH),
+  origin: angleOriginSchema,
+  sources: z79.array(citationSourceSchema).max(MAX_BRIEF_STATEMENTS)
+}).refine((angle) => angle.origin === "won_deals" ? angle.sources.some((source) => source.kind === "moment") : angle.sources.length === 0, "An angle from won Deals cites a Moment; a default angle cites nothing");
+var researchBriefSchema = z79.strictObject({
+  id: briefIdSchema,
+  prospectId: prospectIdSchema,
+  statements: z79.array(briefStatementSchema).min(1).max(MAX_BRIEF_STATEMENTS),
+  angle: briefAngleSchema,
+  droppedCount: z79.number().int().min(0).max(1000),
+  prospectUpdatedAt: timestampSchema,
+  language: campaignLanguageSchema,
+  model: z79.string().min(1).max(100),
+  createdAt: timestampSchema,
+  expiresAt: timestampSchema
+});
+var createBriefRequestSchema = z79.strictObject({
+  refresh: z79.boolean().default(false)
+});
+var listBriefsQuerySchema = pageQuerySchema;
+var listBriefsResponseSchema = pageSchema(researchBriefSchema);
+
+// src/messaging/preview.ts
+var PREVIEW_FAILURE_CODES = [
+  "draft.no_prospect_data",
+  "draft.model_unavailable",
+  "draft.budget_exceeded",
+  "research.timeout"
+];
+var previewFailureCodeSchema = z80.enum(PREVIEW_FAILURE_CODES);
+var previewRequestSchema = z80.strictObject({
+  sequenceVersion: z80.number().int().min(1).max(1e6),
+  stepKey: stepKeySchema.optional(),
+  prospectIds: z80.array(prospectIdSchema).min(1).max(MAX_PREVIEW_PROSPECTS).refine((ids) => new Set(ids).size === ids.length, "Each Prospect once")
+});
+var previewItemSchema = z80.strictObject({
+  prospectId: prospectIdSchema,
+  brief: researchBriefSchema.nullable(),
+  draft: outreachDraftSchema.nullable(),
+  failureCode: previewFailureCodeSchema.nullable()
+}).refine((item) => item.draft === null === (item.failureCode !== null), "A Draft or a failure");
+var previewResultSchema = z80.strictObject({
+  sequenceVersion: z80.number().int().min(1).max(1e6),
+  stepKey: stepKeySchema,
+  items: z80.array(previewItemSchema).min(1).max(MAX_PREVIEW_PROSPECTS)
+});
+var acceptPreviewRequestSchema = z80.strictObject({
+  sequenceVersion: z80.number().int().min(1).max(1e6)
+});
+// src/messaging/routes.ts
+var MESSAGING_ALL_ROLES = [
+  "owner",
+  "admin",
+  "manager",
+  "rep"
+];
+var MESSAGING_ADMIN_ROLES = ["owner", "admin"];
+var VISIBILITY7 = "An Owner or Admin sees every Prospect; a Manager those owned by Reps on their Team; a Rep only their own. A Prospect (prospect.not_found), Campaign (campaign.not_found), Research Brief (research.not_found) or Draft (draft.not_found) outside the caller's view is its not_found code (404), never 403, and one of another Organization the same.";
+var KEY2 = "Requires an Idempotency-Key header: a replay answers the same result and does the work once.";
+var UNTRUSTED2 = "Model output is untrusted data: statements and Draft text are shown with their Citations, never run as instructions, and never put in a log or an event.";
+var NOTHING_SENT = "Nothing is sent, and no Contact Consent or suppression state changes; sending is checked by core at send time (ADR 0003).";
+var MESSAGING_ROUTES = Object.freeze({
+  createBrief: inboundRoute({
+    method: "POST",
+    path: "/v1/prospects/{prospectId}/briefs",
+    roles: MESSAGING_ALL_ROLES,
+    success: [201, 200],
+    idempotent: true,
+    keyRequired: true,
+    errors: [
+      "research.not_found",
+      "research.timeout",
+      "draft.no_prospect_data",
+      "draft.model_unavailable",
+      "draft.budget_exceeded"
+    ],
+    commonErrors: [...IDEMPOTENT_ERRORS],
+    description: `Makes a Research Brief for a Prospect: statements, each with exactly one Citation source, and a suggested angle that comes from the Organization's won Deals when it has any and says so when it does not. A statement the model proposed without a source that resolves is dropped and counted in droppedCount. A fresh cached Brief is returned (200) unless refresh is true; a new one is 201. ${KEY2} ${UNTRUSTED2} ${VISIBILITY7}`
+  }),
+  getBrief: inboundRoute({
+    method: "GET",
+    path: "/v1/briefs/{briefId}",
+    roles: MESSAGING_ALL_ROLES,
+    success: [200],
+    idempotent: false,
+    errors: ["research.not_found"],
+    commonErrors: [],
+    description: `Reads one Research Brief with its statements, their Citation sources, the angle and when it expires. ${UNTRUSTED2} ${VISIBILITY7}`
+  }),
+  listBriefs: inboundRoute({
+    method: "GET",
+    path: "/v1/prospects/{prospectId}/briefs",
+    roles: MESSAGING_ALL_ROLES,
+    success: [200],
+    idempotent: false,
+    errors: ["prospect.not_found"],
+    commonErrors: ["request.invalid"],
+    description: `Lists a Prospect's Research Briefs, newest first (by createdAt, then id), one cursor-paginated page at a time (at most 100). ${VISIBILITY7}`
+  }),
+  createDraft: inboundRoute({
+    method: "POST",
+    path: "/v1/outreach-drafts",
+    roles: MESSAGING_ALL_ROLES,
+    success: [201, 200],
+    idempotent: true,
+    keyRequired: true,
+    errors: [
+      "prospect.not_found",
+      "campaign.not_found",
+      "draft.no_prospect_data",
+      "draft.model_unavailable",
+      "draft.budget_exceeded",
+      "research.timeout",
+      "voice.not_found"
+    ],
+    commonErrors: [...IDEMPOTENT_ERRORS],
+    description: `Writes a Draft for a Prospect, optionally for a Step of a Campaign and with an angle, from a Research Brief and the current Brand Voice. The Draft carries its Citations, five checks (citations_resolve, claims_supported, banned_phrase, length, name_match), whether it is ungrounded (no Moment from a won Deal) and autoSendable (grounded and every check passed). It does not send. A stepKey the Campaign does not have is request.invalid (400). ${KEY2} A replay answers 200 with the same Draft. Publishes draft.created, and draft.approved_required when a person must approve it. ${UNTRUSTED2} ${VISIBILITY7}`
+  }),
+  getOutreachDraft: inboundRoute({
+    method: "GET",
+    path: "/v1/outreach-drafts/{draftId}",
+    roles: MESSAGING_ALL_ROLES,
+    success: [200],
+    idempotent: false,
+    errors: ["draft.not_found"],
+    commonErrors: [],
+    description: `Reads one Draft with its Citations (use the Playbook's citation resolve route for the text behind a Moment or document), checks, Brand Voice version and model. ${UNTRUSTED2} ${VISIBILITY7}`
+  }),
+  listOutreachDrafts: inboundRoute({
+    method: "GET",
+    path: "/v1/outreach-drafts",
+    roles: MESSAGING_ALL_ROLES,
+    success: [200],
+    idempotent: false,
+    errors: [],
+    commonErrors: ["request.invalid"],
+    description: `Lists Drafts, newest first (by createdAt, then id), one cursor-paginated page at a time (at most 100), optionally narrowed by prospectId, campaignId and whether the Draft is ungrounded. A filter never widens what the caller may see. ${VISIBILITY7}`
+  }),
+  editOutreachDraft: inboundRoute({
+    method: "PATCH",
+    path: "/v1/outreach-drafts/{draftId}",
+    roles: MESSAGING_ALL_ROLES,
+    success: [200],
+    idempotent: true,
+    keyRequired: true,
+    errors: ["draft.not_found", "draft.invalid_state"],
+    commonErrors: [...IDEMPOTENT_ERRORS],
+    description: `Changes the subject and/or body of a Draft by a person. The body names the expectedRevision the caller read; a stale one is draft.invalid_state (409). The text becomes source edited, the revision rises, the checks run again and a Citation whose sentence was removed gets applies false. ${KEY2} ${VISIBILITY7}`
+  }),
+  regenerateDraft: inboundRoute({
+    method: "POST",
+    path: "/v1/outreach-drafts/{draftId}/regenerate",
+    roles: MESSAGING_ALL_ROLES,
+    success: [200],
+    idempotent: true,
+    keyRequired: true,
+    errors: [
+      "draft.not_found",
+      "draft.invalid_state",
+      "draft.model_unavailable",
+      "draft.budget_exceeded",
+      "research.timeout"
+    ],
+    commonErrors: [...IDEMPOTENT_ERRORS],
+    description: `Writes the Draft again with a new angle and/or tone for the same Prospect and Step; the revision rises. ${KEY2} ${UNTRUSTED2} ${VISIBILITY7}`
+  }),
+  getBrandVoice: inboundRoute({
+    method: "GET",
+    path: "/v1/brand-voice",
+    roles: MESSAGING_ALL_ROLES,
+    success: [200],
+    idempotent: false,
+    errors: ["voice.not_found"],
+    commonErrors: [],
+    description: "Reads the Organization's current Brand Voice: tone, preferred words, banned phrases, sign-off and the longest message. Every role may read it; voice.not_found (404) when none was saved yet."
+  }),
+  setBrandVoice: inboundRoute({
+    method: "PUT",
+    path: "/v1/brand-voice",
+    roles: MESSAGING_ADMIN_ROLES,
+    success: [200],
+    idempotent: true,
+    keyRequired: true,
+    errors: ["voice.version_conflict", "voice.invalid"],
+    commonErrors: [...IDEMPOTENT_ERRORS],
+    description: `Saves a new Brand Voice version. The body is the settings and the expectedVersion the caller read (0 when none exists); a stale one is voice.version_conflict (409), a rule across fields that fails is voice.invalid (422). Owner and Admin only; any other is auth.forbidden. ${KEY2}`
+  }),
+  listBrandVoiceVersions: inboundRoute({
+    method: "GET",
+    path: "/v1/brand-voice/versions",
+    roles: MESSAGING_ADMIN_ROLES,
+    success: [200],
+    idempotent: false,
+    errors: [],
+    commonErrors: ["request.invalid"],
+    description: "Lists the saved Brand Voice versions, newest first, one cursor-paginated page at a time (at most 100). Owner and Admin only; any other is auth.forbidden."
+  }),
+  previewCampaign: inboundRoute({
+    method: "POST",
+    path: "/v1/campaigns/{campaignId}/preview",
+    roles: MESSAGING_ALL_ROLES,
+    success: [200],
+    idempotent: true,
+    keyRequired: true,
+    errors: [
+      "campaign.not_found",
+      "campaign.sequence_version_conflict",
+      "preview.too_many_prospects",
+      "prospect.not_found",
+      "voice.not_found"
+    ],
+    commonErrors: [...IDEMPOTENT_ERRORS],
+    description: `Shows what a Campaign's Step would send to one to five named Prospects, at the Sequence version given (the first email Step when stepKey is left out). More than five Prospects is preview.too_many_prospects (422); a stale Sequence version is campaign.sequence_version_conflict (409). Each row is a Research Brief and Draft, or the failure code that stopped that Prospect (draft.no_prospect_data, draft.model_unavailable, draft.budget_exceeded, research.timeout); one failing row does not fail the call. A named Prospect outside the caller's view fails the whole call with prospect.not_found (404). ${NOTHING_SENT} ${KEY2} ${UNTRUSTED2} ${VISIBILITY7}`
+  }),
+  acceptCampaignPreview: inboundRoute({
+    method: "POST",
+    path: "/v1/campaigns/{campaignId}/preview/accept",
+    roles: MESSAGING_ALL_ROLES,
+    success: [200],
+    idempotent: true,
+    keyRequired: true,
+    errors: [
+      "campaign.not_found",
+      "campaign.invalid_state",
+      "campaign.sequence_version_conflict"
+    ],
+    commonErrors: [...IDEMPOTENT_ERRORS],
+    description: `Marks the Campaign previewed at the Sequence version given, so the launch check stops reporting campaign.not_previewed for that version. It answers the Campaign with previewedVersion and previewedAt set. An archived Campaign is campaign.invalid_state (409); a Sequence saved since is campaign.sequence_version_conflict (409). ${KEY2} ${VISIBILITY7}`
+  })
+});
+// src/messaging/voice.ts
+import { z as z81 } from "zod";
+var termSchema = messagingTextSchema(MAX_VOICE_TERM_LENGTH);
+var brandVoiceSettingsSchema = z81.strictObject({
+  tone: messagingTextSchema(MAX_TONE_LENGTH, true),
+  preferredWords: z81.array(termSchema).max(MAX_PREFERRED_WORDS).default([]),
+  bannedPhrases: z81.array(termSchema).max(MAX_BANNED_PHRASES).default([]),
+  signOff: messagingTextSchema(MAX_SIGN_OFF_LENGTH, true).nullable().default(null),
+  maxLengthCharacters: z81.number().int().min(100).max(MAX_VOICE_LENGTH_CHARACTERS).default(1500)
+});
+var brandVoiceSchema = z81.strictObject({
+  id: brandVoiceIdSchema,
+  version: z81.number().int().min(1).max(1e6),
+  ...brandVoiceSettingsSchema.shape,
+  createdByMembershipId: membershipIdSchema,
+  createdAt: timestampSchema
+});
+var setBrandVoiceRequestSchema = z81.strictObject({
+  ...brandVoiceSettingsSchema.shape,
+  expectedVersion: z81.number().int().min(0).max(1e6)
+});
+var listBrandVoiceVersionsQuerySchema = pageQuerySchema;
+var listBrandVoiceVersionsResponseSchema = pageSchema(brandVoiceSchema);
+// src/playbook/citation.ts
+import { z as z82 } from "zod";
+var MAX_CITATION_REFS = 20;
+var citationRefSchema = z82.discriminatedUnion("kind", [
+  z82.strictObject({
+    kind: z82.literal("moment"),
+    callId: callIdSchema,
+    dealRecordId: dealRecordIdSchema
+  }),
+  z82.strictObject({
+    kind: z82.literal("document"),
+    documentId: documentIdSchema,
+    page: z82.number().int().min(1).max(MAX_DOCUMENT_PAGES).nullable()
+  })
+]);
+var resolveCitationsRequestSchema = z82.strictObject({
+  refs: z82.array(citationRefSchema).min(1).max(MAX_CITATION_REFS)
+});
+var resolvedCitationSchema = z82.union([
+  z82.object({
+    state: z82.literal("available"),
+    kind: z82.literal("moment"),
+    callId: callIdSchema,
+    dealRecordId: dealRecordIdSchema,
+    prospect: momentSnippetSchema,
+    repNext: momentSnippetSchema
+  }),
+  z82.object({
+    state: z82.literal("available"),
+    kind: z82.literal("document"),
+    documentId: documentIdSchema,
+    page: z82.number().int().min(1).max(MAX_DOCUMENT_PAGES).nullable(),
+    fileName: documentFileNameSchema,
+    snippet: momentSnippetSchema
+  }),
+  z82.object({
+    state: z82.literal("removed"),
+    kind: z82.literal("moment"),
+    callId: callIdSchema,
+    dealRecordId: dealRecordIdSchema
+  }),
+  z82.object({
+    state: z82.literal("removed"),
+    kind: z82.literal("document"),
+    documentId: documentIdSchema,
+    page: z82.number().int().min(1).max(MAX_DOCUMENT_PAGES).nullable()
+  })
+]);
+var resolveCitationsResponseSchema = z82.object({
+  items: z82.array(resolvedCitationSchema).min(1).max(MAX_CITATION_REFS)
+});
+var route10 = (definition) => Object.freeze(definition);
+var CITATION_ROUTES = Object.freeze({
+  resolveCitations: route10({
+    method: "POST",
+    path: "/playbook/citations/resolve",
+    internal: false,
+    roles: PLAYBOOK_READ_ROLES,
+    success: [200],
+    errors: [],
+    commonErrors: ["request.invalid", "server.timeout", "server.unavailable"],
+    description: "Resolves the Citations on a Draft back to the text they point at, so a Rep sees why a sentence was written. The body is refs: one to 20 references, each a Moment (callId, dealRecordId) or a document page (documentId, page or null). It answers one item per reference, in request order. An item is state available, with the snippets of at most 512 characters (what the Prospect said and the Rep said next for a Moment; the file name and passage for a document), or state removed, with the ids only and no text, when the Call, Deal or document was deleted, is no longer searchable, never existed or belongs to another Organization; none of those is an error, so existence is not revealed. It never returns the customer's dealId, name or amount. The snippets are tenant text and are never logged. It only reads, so it takes no Idempotency-Key and a repeat is harmless. request.invalid (400) for a body outside the bounds; server.timeout (504) when it takes too long; server.unavailable (503) with a Retry-After header when the store cannot answer. Every role that reads the Playbook (Owner, Admin, Manager and Rep) may call it; any other is auth.forbidden."
+  })
+});
+
 // src/playbook/errors.ts
 var PLAYBOOK_ERRORS = {
   ...defineErrors("document", {
@@ -8355,22 +8869,22 @@ var PLAYBOOK_ERRORS = {
 };
 
 // src/playbook/sales-history-errors.ts
-import { z as z77 } from "zod";
+import { z as z85 } from "zod";
 
 // src/playbook/rights.ts
-import { z as z76 } from "zod";
+import { z as z84 } from "zod";
 
 // src/playbook/rights-wording.ts
-import { z as z75 } from "zod";
+import { z as z83 } from "zod";
 var MAX_RIGHTS_HEADING_LENGTH = 200;
 var MAX_RIGHTS_PARAGRAPHS = 10;
 var MAX_RIGHTS_TEXT_LENGTH = 2000;
-var textSchema = (max) => z75.string().min(1).max(max).refine(isWellFormedText, "Well-formed text only").refine((text) => !hasStrippableCharacter(text), "No control or direction characters").refine((text) => text.trim() === text, "No surrounding spaces");
-var rightsWordingSchema = z75.strictObject({
+var textSchema = (max) => z83.string().min(1).max(max).refine(isWellFormedText, "Well-formed text only").refine((text) => !hasStrippableCharacter(text), "No control or direction characters").refine((text) => text.trim() === text, "No surrounding spaces");
+var rightsWordingSchema = z83.strictObject({
   heading: textSchema(MAX_RIGHTS_HEADING_LENGTH),
-  paragraphs: z75.array(textSchema(MAX_RIGHTS_TEXT_LENGTH)).min(1).max(MAX_RIGHTS_PARAGRAPHS),
+  paragraphs: z83.array(textSchema(MAX_RIGHTS_TEXT_LENGTH)).min(1).max(MAX_RIGHTS_PARAGRAPHS),
   checkbox: textSchema(MAX_RIGHTS_TEXT_LENGTH),
-  draft: z75.literal(true).optional()
+  draft: z83.literal(true).optional()
 });
 function freeze(wording) {
   return Object.freeze({
@@ -8396,19 +8910,19 @@ function rightsWordingFor(version) {
 
 // src/playbook/rights.ts
 var MAX_RIGHTS_WORDING_VERSION = 1e6;
-var rightsWordingVersionSchema = z76.number().int().min(1).max(MAX_RIGHTS_WORDING_VERSION);
-var rightsConfirmationSchema = z76.object({
+var rightsWordingVersionSchema = z84.number().int().min(1).max(MAX_RIGHTS_WORDING_VERSION);
+var rightsConfirmationSchema = z84.object({
   wordingVersion: rightsWordingVersionSchema,
   confirmedByUserId: userIdSchema,
   confirmedAt: timestampSchema
 });
-var rightsStatusSchema = z76.object({
+var rightsStatusSchema = z84.object({
   currentWordingVersion: rightsWordingVersionSchema,
   confirmation: rightsConfirmationSchema.nullable(),
-  confirmed: z76.boolean(),
+  confirmed: z84.boolean(),
   currentWording: rightsWordingSchema.optional()
 }).refine((status) => status.confirmed === (status.confirmation !== null && status.confirmation.wordingVersion === status.currentWordingVersion), { message: "Confirmed exactly when the stored version is the current one", path: ["confirmed"] });
-var confirmRightsRequestSchema = z76.strictObject({
+var confirmRightsRequestSchema = z84.strictObject({
   wordingVersion: rightsWordingVersionSchema
 });
 
@@ -8463,31 +8977,36 @@ var SALES_HISTORY_ERRORS = {
     }
   })
 };
-var rightsRequiredDetailsSchema = z77.strictObject({
-  wordingVersion: z77.number().int().min(1).max(MAX_RIGHTS_WORDING_VERSION)
+var rightsRequiredDetailsSchema = z85.strictObject({
+  wordingVersion: z85.number().int().min(1).max(MAX_RIGHTS_WORDING_VERSION)
 });
 
 // src/playbook/all.ts
-var ALL_PLAYBOOK_ROUTES = Object.freeze({ ...PLAYBOOK_ROUTES, ...SALES_HISTORY_ROUTES, ...SEARCH_ROUTES });
+var ALL_PLAYBOOK_ROUTES = Object.freeze({
+  ...PLAYBOOK_ROUTES,
+  ...SALES_HISTORY_ROUTES,
+  ...SEARCH_ROUTES,
+  ...CITATION_ROUTES
+});
 var ALL_PLAYBOOK_ERRORS = Object.freeze({ ...PLAYBOOK_ERRORS, ...SALES_HISTORY_ERRORS });
 // src/playbook/call.ts
-import { z as z78 } from "zod";
-var callShape = z78.object({
+import { z as z86 } from "zod";
+var callShape = z86.object({
   id: callIdSchema,
   dealId: dealIdSchema,
   dealRecordId: dealRecordIdSchema,
   dealOutcome: outcomeSchema,
-  inSearch: z78.boolean(),
+  inSearch: z86.boolean(),
   kind: callKindSchema,
   fileName: documentFileNameSchema,
   mediaType: callMediaTypeSchema,
-  sizeBytes: z78.number().int().min(1).max(MAX_RECORDING_BYTES),
-  durationSeconds: z78.number().int().min(1).max(MAX_RECORDING_SECONDS).nullable(),
+  sizeBytes: z86.number().int().min(1).max(MAX_RECORDING_BYTES),
+  durationSeconds: z86.number().int().min(1).max(MAX_RECORDING_SECONDS).nullable(),
   state: callStateSchema,
   failureReason: callFailureReasonSchema.nullable(),
   rep: repChoiceSchema.nullable(),
-  speakerLabels: z78.array(speakerLabelSchema).max(MAX_CALL_SPEAKERS),
-  speakers: z78.array(speakerExcerptSchema).max(MAX_CALL_SPEAKERS).optional(),
+  speakerLabels: z86.array(speakerLabelSchema).max(MAX_CALL_SPEAKERS),
+  speakers: z86.array(speakerExcerptSchema).max(MAX_CALL_SPEAKERS).optional(),
   deletedAt: timestampSchema.nullable(),
   purgeAt: timestampSchema.nullable(),
   uploadedByUserId: userIdSchema,
@@ -8548,9 +9067,9 @@ function refineCall(call, context) {
 }
 var callSchema = callShape.superRefine(refineCall);
 var MAX_REP_FIELD_LENGTH = 512;
-var uploadCallFieldsSchema = z78.strictObject({
+var uploadCallFieldsSchema = z86.strictObject({
   dealId: dealIdSchema,
-  rep: z78.string().max(MAX_REP_FIELD_LENGTH).optional()
+  rep: z86.string().max(MAX_REP_FIELD_LENGTH).optional()
 });
 function parseRepField(text) {
   if (text === undefined) {
@@ -8567,16 +9086,16 @@ function parseRepField(text) {
     return invalid;
   }
 }
-var callParamsSchema = z78.strictObject({ callId: callIdSchema });
+var callParamsSchema = z86.strictObject({ callId: callIdSchema });
 var listCallsQuerySchema = pageQuerySchema.extend({ state: callStateSchema.optional(), dealRecordId: dealRecordIdSchema.optional() }).strict();
 var callListItemSchema = callShape.omit({ speakers: true }).strict().superRefine(refineCall);
 var listCallsResponseSchema = pageSchema(callListItemSchema);
-var setCallRepRequestSchema = z78.strictObject({ rep: repChoiceSchema });
+var setCallRepRequestSchema = z86.strictObject({ rep: repChoiceSchema });
 var CALL_FILE_KEYS = ["fileName", "declaredMediaType", "sizeBytes"];
-var uploadCallFileSchema = z78.strictObject({
+var uploadCallFileSchema = z86.strictObject({
   fileName: documentFileNameSchema,
-  declaredMediaType: z78.string().max(255).nullable(),
-  sizeBytes: z78.number().int().min(1)
+  declaredMediaType: z86.string().max(255).nullable(),
+  sizeBytes: z86.number().int().min(1)
 });
 function callKindOf(fileName) {
   const lower = fileName.toLowerCase();
@@ -8619,10 +9138,10 @@ function checkCallFile(input) {
   const parsed = uploadCallFileSchema.safeParse(copy);
   return parsed.success ? { ok: true, kind, file: parsed.data } : invalid;
 }
-var callCursorSchema = z78.strictObject({ createdAt: timestampSchema, id: callIdSchema });
+var callCursorSchema = z86.strictObject({ createdAt: timestampSchema, id: callIdSchema });
 // src/playbook/deal.ts
-import { z as z79 } from "zod";
-var dealSchema = z79.object({
+import { z as z87 } from "zod";
+var dealSchema = z87.object({
   id: dealRecordIdSchema,
   dealId: dealIdSchema,
   name: dealNameSchema.nullable(),
@@ -8630,42 +9149,42 @@ var dealSchema = z79.object({
   closedAt: calendarDateSchema.nullable(),
   amount: dealAmountSchema.nullable(),
   currency: dealCurrencySchema.nullable(),
-  callCount: z79.number().int().min(0),
-  appearedInImport: z79.boolean(),
+  callCount: z87.number().int().min(0),
+  appearedInImport: z87.boolean(),
   createdAt: timestampSchema,
   updatedAt: timestampSchema
 }).refine((deal) => deal.amount === null || deal.currency !== null, {
   message: "An amount comes with a currency",
   path: ["currency"]
 });
-var dealParamsSchema = z79.strictObject({ dealRecordId: dealRecordIdSchema });
+var dealParamsSchema = z87.strictObject({ dealRecordId: dealRecordIdSchema });
 var listDealsQuerySchema = pageQuerySchema.extend({
   outcome: outcomeSchema.optional(),
-  appearedInImport: z79.enum(["true", "false"]).transform((value) => value === "true").optional()
+  appearedInImport: z87.enum(["true", "false"]).transform((value) => value === "true").optional()
 }).strict();
 var listDealsResponseSchema = pageSchema(dealSchema);
-var setDealOutcomeRequestSchema = z79.strictObject({
+var setDealOutcomeRequestSchema = z87.strictObject({
   outcome: outcomeSchema,
   closedAt: calendarDateSchema.nullable().optional()
 });
-var lookupDealRequestSchema = z79.strictObject({ dealId: dealIdSchema });
-var dealCursorSchema = z79.strictObject({
+var lookupDealRequestSchema = z87.strictObject({ dealId: dealIdSchema });
+var dealCursorSchema = z87.strictObject({
   createdAt: timestampSchema,
   id: dealRecordIdSchema
 });
-var dealImportCursorSchema = z79.strictObject({
+var dealImportCursorSchema = z87.strictObject({
   createdAt: timestampSchema,
   id: dealImportIdSchema
 });
-var dealImportRowCursorSchema = z79.strictObject({ rowNumber: z79.number().int().min(2) });
+var dealImportRowCursorSchema = z87.strictObject({ rowNumber: z87.number().int().min(2) });
 var DEAL_IMPORT_FILE_FIELD = "file";
-var dealImportSchema = z79.object({
+var dealImportSchema = z87.object({
   id: dealImportIdSchema,
   state: dealImportStateSchema,
   failureReason: dealImportFailureReasonSchema.nullable(),
-  rowCount: z79.number().int().min(0).max(MAX_DEAL_IMPORT_ROWS).nullable(),
-  appliedCount: z79.number().int().min(0).max(MAX_DEAL_IMPORT_ROWS).nullable(),
-  rejectedCount: z79.number().int().min(0).max(MAX_DEAL_IMPORT_ROWS).nullable(),
+  rowCount: z87.number().int().min(0).max(MAX_DEAL_IMPORT_ROWS).nullable(),
+  appliedCount: z87.number().int().min(0).max(MAX_DEAL_IMPORT_ROWS).nullable(),
+  rejectedCount: z87.number().int().min(0).max(MAX_DEAL_IMPORT_ROWS).nullable(),
   uploadedByUserId: userIdSchema,
   createdAt: timestampSchema,
   updatedAt: timestampSchema
@@ -8694,11 +9213,11 @@ var dealImportSchema = z79.object({
     });
   }
 });
-var dealImportParamsSchema = z79.strictObject({ importId: dealImportIdSchema });
+var dealImportParamsSchema = z87.strictObject({ importId: dealImportIdSchema });
 var listDealImportsQuerySchema = pageQuerySchema.strict();
 var listDealImportsResponseSchema = pageSchema(dealImportSchema);
-var dealImportRowSchema = z79.object({
-  rowNumber: z79.number().int().min(2).max(MAX_DEAL_IMPORT_ROWS + 1),
+var dealImportRowSchema = z87.object({
+  rowNumber: z87.number().int().min(2).max(MAX_DEAL_IMPORT_ROWS + 1),
   dealId: dealIdSchema.nullable(),
   result: dealImportRowResultSchema,
   reason: dealImportRowReasonSchema.nullable()
@@ -8728,13 +9247,13 @@ var dealImportRowSchema = z79.object({
 var listDealImportRowsQuerySchema = pageQuerySchema.extend({ result: dealImportRowResultSchema.optional() }).strict();
 var listDealImportRowsResponseSchema = pageSchema(dealImportRowSchema);
 // src/playbook/document.ts
-import { z as z80 } from "zod";
-var documentSchema = z80.object({
+import { z as z88 } from "zod";
+var documentSchema = z88.object({
   id: documentIdSchema,
   fileName: documentFileNameSchema,
   mediaType: documentMediaTypeSchema,
-  sizeBytes: z80.number().int().min(1).max(MAX_DOCUMENT_BYTES),
-  pageCount: z80.number().int().min(1).max(MAX_DOCUMENT_PAGES).nullable(),
+  sizeBytes: z88.number().int().min(1).max(MAX_DOCUMENT_BYTES),
+  pageCount: z88.number().int().min(1).max(MAX_DOCUMENT_PAGES).nullable(),
   state: documentStateSchema,
   failureReason: documentFailureReasonSchema.nullable(),
   deletedAt: timestampSchema.nullable(),
@@ -8761,23 +9280,23 @@ var documentSchema = z80.object({
 });
 var UPLOAD_FILE_FIELD = "file";
 var UPLOAD_CONTENT_TYPE = "multipart/form-data";
-var uploadDocumentFileSchema = z80.strictObject({
+var uploadDocumentFileSchema = z88.strictObject({
   fileName: documentFileNameSchema,
-  declaredMediaType: z80.string().max(255).nullable(),
-  sizeBytes: z80.number().int().min(1)
+  declaredMediaType: z88.string().max(255).nullable(),
+  sizeBytes: z88.number().int().min(1)
 });
-var documentParamsSchema = z80.strictObject({
+var documentParamsSchema = z88.strictObject({
   documentId: documentIdSchema
 });
 var listDocumentsQuerySchema = pageQuerySchema.extend({ state: documentStateSchema.optional() }).strict();
 var listDocumentsResponseSchema = pageSchema(documentSchema);
-var internalRemoveOrganizationDocumentsParamsSchema = z80.strictObject({
+var internalRemoveOrganizationDocumentsParamsSchema = z88.strictObject({
   organizationId: organizationIdSchema
 });
-var internalRemoveOrganizationDocumentsRequestSchema = z80.strictObject({});
-var internalRemoveOrganizationDocumentsResponseSchema = z80.object({
+var internalRemoveOrganizationDocumentsRequestSchema = z88.strictObject({});
+var internalRemoveOrganizationDocumentsResponseSchema = z88.object({
   organizationId: organizationIdSchema,
-  status: z80.literal("removed")
+  status: z88.literal("removed")
 });
 var UPLOAD_FILE_KEYS = ["fileName", "declaredMediaType", "sizeBytes"];
 function checkUploadFile(input) {
@@ -8809,8 +9328,8 @@ function checkUploadFile(input) {
   return parsed.success ? { ok: true, file: parsed.data } : invalid;
 }
 // src/playbook/messages.ts
-import { z as z81 } from "zod";
-var documentUploadedPayloadSchema = z81.strictObject({
+import { z as z89 } from "zod";
+var documentUploadedPayloadSchema = z89.strictObject({
   documentId: documentIdSchema
 });
 var DOCUMENT_UPLOADED_MESSAGE = {
@@ -8820,9 +9339,9 @@ var DOCUMENT_UPLOADED_MESSAGE = {
   payload: documentUploadedPayloadSchema
 };
 var MAX_DELETION_SEQ = 2147483647;
-var documentDeletedPayloadSchema = z81.strictObject({
+var documentDeletedPayloadSchema = z89.strictObject({
   documentId: documentIdSchema,
-  deletionSeq: z81.number().int().min(1).max(MAX_DELETION_SEQ)
+  deletionSeq: z89.number().int().min(1).max(MAX_DELETION_SEQ)
 });
 var DOCUMENT_DELETED_MESSAGE = {
   type: "playbook.document_deleted",
@@ -8831,24 +9350,24 @@ var DOCUMENT_DELETED_MESSAGE = {
   payload: documentDeletedPayloadSchema
 };
 // src/playbook/sales-history-messages.ts
-import { z as z82 } from "zod";
+import { z as z90 } from "zod";
 var MAX_SEQ = MAX_DELETION_SEQ;
-var seqSchema = z82.number().int().min(1).max(MAX_SEQ);
-var callUploadedPayloadSchema = z82.strictObject({ callId: callIdSchema });
+var seqSchema = z90.number().int().min(1).max(MAX_SEQ);
+var callUploadedPayloadSchema = z90.strictObject({ callId: callIdSchema });
 var CALL_UPLOADED_MESSAGE = {
   type: "playbook.call_uploaded",
   version: 1,
   scope: "organization",
   payload: callUploadedPayloadSchema
 };
-var callTranscribedPayloadSchema = z82.strictObject({ callId: callIdSchema });
+var callTranscribedPayloadSchema = z90.strictObject({ callId: callIdSchema });
 var CALL_TRANSCRIBED_MESSAGE = {
   type: "playbook.call_transcribed",
   version: 1,
   scope: "organization",
   payload: callTranscribedPayloadSchema
 };
-var callRepChangedPayloadSchema = z82.strictObject({
+var callRepChangedPayloadSchema = z90.strictObject({
   callId: callIdSchema,
   repSeq: seqSchema
 });
@@ -8858,7 +9377,7 @@ var CALL_REP_CHANGED_MESSAGE = {
   scope: "organization",
   payload: callRepChangedPayloadSchema
 };
-var callDeletedPayloadSchema = z82.strictObject({
+var callDeletedPayloadSchema = z90.strictObject({
   callId: callIdSchema,
   deletionSeq: seqSchema
 });
@@ -8868,7 +9387,7 @@ var CALL_DELETED_MESSAGE = {
   scope: "organization",
   payload: callDeletedPayloadSchema
 };
-var dealOutcomeChangedPayloadSchema = z82.strictObject({
+var dealOutcomeChangedPayloadSchema = z90.strictObject({
   dealRecordId: dealRecordIdSchema,
   outcomeSeq: seqSchema
 });
@@ -8878,7 +9397,7 @@ var DEAL_OUTCOME_CHANGED_MESSAGE = {
   scope: "organization",
   payload: dealOutcomeChangedPayloadSchema
 };
-var dealImportUploadedPayloadSchema = z82.strictObject({ importId: dealImportIdSchema });
+var dealImportUploadedPayloadSchema = z90.strictObject({ importId: dealImportIdSchema });
 var DEAL_IMPORT_UPLOADED_MESSAGE = {
   type: "playbook.deal_import_uploaded",
   version: 1,
@@ -8918,10 +9437,10 @@ var VOICE_ERRORS = {
   })
 };
 // src/voice/events.ts
-import { z as z83 } from "zod";
+import { z as z91 } from "zod";
 var MAX_RECORDING_KEY_LENGTH = 512;
-var recordingKeySchema = z83.string().min(1).max(MAX_RECORDING_KEY_LENGTH).regex(/^[A-Za-z0-9][A-Za-z0-9/_.-]*$/);
-var voiceCallStartedEvent = defineEvent("voice.call.started", 1, z83.strictObject({
+var recordingKeySchema = z91.string().min(1).max(MAX_RECORDING_KEY_LENGTH).regex(/^[A-Za-z0-9][A-Za-z0-9/_.-]*$/);
+var voiceCallStartedEvent = defineEvent("voice.call.started", 1, z91.strictObject({
   callId: callIdSchema,
   direction: voiceCallDirectionSchema,
   lineId: lineIdSchema,
@@ -8931,8 +9450,8 @@ var voiceCallStartedEvent = defineEvent("voice.call.started", 1, z83.strictObjec
   startedAt: timestampSchema
 }));
 var VOICE_CALL_OUTCOMES = ["completed", "failed", "missed"];
-var voiceCallOutcomeSchema = z83.enum(VOICE_CALL_OUTCOMES);
-var voiceCallEndedEvent = defineEvent("voice.call.ended", 1, z83.strictObject({
+var voiceCallOutcomeSchema = z91.enum(VOICE_CALL_OUTCOMES);
+var voiceCallEndedEvent = defineEvent("voice.call.ended", 1, z91.strictObject({
   callId: callIdSchema,
   direction: voiceCallDirectionSchema,
   lineId: lineIdSchema,
@@ -8944,8 +9463,8 @@ var voiceCallEndedEvent = defineEvent("voice.call.ended", 1, z83.strictObject({
   startedAt: timestampSchema,
   answeredAt: timestampSchema.nullable(),
   endedAt: timestampSchema,
-  durationSeconds: z83.number().int().min(0).max(MAX_CALL_DURATION_SECONDS).nullable(),
-  disclosureWordingVersion: z83.number().int().min(1).nullable(),
+  durationSeconds: z91.number().int().min(0).max(MAX_CALL_DURATION_SECONDS).nullable(),
+  disclosureWordingVersion: z91.number().int().min(1).nullable(),
   recordingKey: recordingKeySchema.nullable(),
   dealId: dealIdSchema.nullable()
 }).superRefine((data, ctx) => {
@@ -8974,15 +9493,15 @@ var VOICE_EVENTS = {
   "voice.call.ended": voiceCallEndedEvent
 };
 // src/voice/line.ts
-import { z as z84 } from "zod";
+import { z as z92 } from "zod";
 var LINE_STATES = ["porting", "active", "released"];
-var lineStateSchema = z84.enum(LINE_STATES);
-var lineAssignmentSchema = z84.discriminatedUnion("kind", [
-  z84.strictObject({ kind: z84.literal("unassigned") }),
-  z84.strictObject({ kind: z84.literal("team"), teamId: teamIdSchema }),
-  z84.strictObject({ kind: z84.literal("rep"), membershipId: membershipIdSchema })
+var lineStateSchema = z92.enum(LINE_STATES);
+var lineAssignmentSchema = z92.discriminatedUnion("kind", [
+  z92.strictObject({ kind: z92.literal("unassigned") }),
+  z92.strictObject({ kind: z92.literal("team"), teamId: teamIdSchema }),
+  z92.strictObject({ kind: z92.literal("rep"), membershipId: membershipIdSchema })
 ]);
-var lineSchema = z84.object({
+var lineSchema = z92.object({
   id: lineIdSchema,
   number: e164PhoneSchema,
   country: countryCodeSchema,
@@ -8996,33 +9515,33 @@ var lineSchema = z84.object({
 }).refine((line) => line.state !== "released" || line.assignment.kind === "unassigned", {
   message: "A released Line is unassigned"
 });
-var lineParamsSchema = z84.strictObject({ lineId: lineIdSchema });
-var lineCursorSchema = z84.strictObject({ createdAt: timestampSchema, id: lineIdSchema });
+var lineParamsSchema = z92.strictObject({ lineId: lineIdSchema });
+var lineCursorSchema = z92.strictObject({ createdAt: timestampSchema, id: lineIdSchema });
 var listLinesQuerySchema = pageQuerySchema.extend({ state: lineStateSchema.optional() }).strict();
 var linePageSchema = pageSchema(lineSchema);
-var addLineRequestSchema = z84.discriminatedUnion("method", [
-  z84.strictObject({
-    method: z84.literal("buy"),
+var addLineRequestSchema = z92.discriminatedUnion("method", [
+  z92.strictObject({
+    method: z92.literal("buy"),
     country: countryCodeSchema,
-    areaCode: z84.string().regex(/^[0-9]{2,6}$/).optional(),
+    areaCode: z92.string().regex(/^[0-9]{2,6}$/).optional(),
     label: lineLabelSchema.optional()
   }),
-  z84.strictObject({
-    method: z84.literal("port"),
+  z92.strictObject({
+    method: z92.literal("port"),
     number: rawPhoneSchema,
     label: lineLabelSchema.optional()
   })
 ]);
 var assignLineRequestSchema = lineAssignmentSchema;
 // src/voice/softphone.ts
-import { z as z85 } from "zod";
+import { z as z93 } from "zod";
 var MIN_SOFTPHONE_TOKEN_TTL_SECONDS = 60;
 var MAX_SOFTPHONE_TOKEN_TTL_SECONDS = 3600;
 var MAX_SOFTPHONE_TOKEN_LENGTH = 4096;
-var softphoneTokenSchema = z85.strictObject({
-  token: z85.string().min(1).max(MAX_SOFTPHONE_TOKEN_LENGTH),
+var softphoneTokenSchema = z93.strictObject({
+  token: z93.string().min(1).max(MAX_SOFTPHONE_TOKEN_LENGTH),
   identity: membershipIdSchema,
-  ttlSeconds: z85.number().int().min(MIN_SOFTPHONE_TOKEN_TTL_SECONDS).max(MAX_SOFTPHONE_TOKEN_TTL_SECONDS),
+  ttlSeconds: z93.number().int().min(MIN_SOFTPHONE_TOKEN_TTL_SECONDS).max(MAX_SOFTPHONE_TOKEN_TTL_SECONDS),
   expiresAt: timestampSchema
 });
 // src/index.ts
@@ -9047,7 +9566,9 @@ export {
   ALL_PLAYBOOK_ERRORS,
   ALL_PLAYBOOK_ROUTES,
   ALWAYS_HELD_REASONS,
+  ANGLE_ORIGINS,
   APPROVAL_MODES,
+  APPROVAL_REASONS,
   AUDIENCE_CHECK_STATES,
   AUTH_ERRORS,
   AUTH_OPTIONS_PATH,
@@ -9087,6 +9608,7 @@ export {
   CHAT_ERRORS,
   CHAT_ROUTES,
   CHAT_STATES,
+  CITATION_ROUTES,
   COMPANY_SIZE_BANDS,
   CONSENT_ADMIN_ROLES,
   CONSENT_ALL_ROLES,
@@ -9156,6 +9678,8 @@ export {
   DOMAIN_CHECK_RECORDS,
   DOMAIN_CHECK_STATUSES,
   DRAFT_AUTHORS,
+  DRAFT_CHANNELS,
+  DRAFT_CHECKS,
   DRAFT_HOLD_REASONS,
   DRAFT_SOURCE_KINDS,
   DRAFT_STATUSES,
@@ -9228,22 +9752,28 @@ export {
   MAX_AGENT_CONCURRENCY,
   MAX_AGENT_GREETING_LENGTH,
   MAX_ALLOWED_ORIGINS,
+  MAX_ANGLE_LENGTH,
   MAX_ANSWER_LENGTH,
   MAX_ATTEMPT_EPOCH,
   MAX_AUDIENCE_PROSPECTS,
   MAX_AUTHORIZATION_URL_LENGTH,
   MAX_AWAY_DAYS,
+  MAX_BANNED_PHRASES,
   MAX_BOOKING_BUFFER_MINUTES,
   MAX_BOOKING_LENGTH_MINUTES,
   MAX_BOOKING_NAME_LENGTH,
   MAX_BOOKING_NOTICE_MINUTES,
   MAX_BRANCH_ARMS,
+  MAX_BRIEF_STATEMENTS,
+  MAX_BRIEF_STATEMENT_LENGTH,
   MAX_BULK_ASSIGN_PROSPECTS,
   MAX_CALLBACK_ATTEMPTS,
   MAX_CALL_DURATION_SECONDS,
   MAX_CALL_SPEAKERS,
   MAX_CAMPAIGN_DAILY_CAP,
   MAX_CAMPAIGN_NAME_LENGTH,
+  MAX_CITATION_REFS,
+  MAX_CITATION_URL_LENGTH,
   MAX_CONDITION_VALUES,
   MAX_CONSENT_FORM_NAME_LENGTH,
   MAX_CONSENT_WORDING_LENGTH,
@@ -9272,7 +9802,10 @@ export {
   MAX_DOCUMENT_FILE_NAME_LENGTH,
   MAX_DOCUMENT_PAGES,
   MAX_DOMAIN_CHECK_TEXT_LENGTH,
+  MAX_DRAFT_BODY_LENGTH,
+  MAX_DRAFT_CITATIONS,
   MAX_DRAFT_SOURCES,
+  MAX_DRAFT_SUBJECT_LENGTH,
   MAX_ELIGIBLE_REPS,
   MAX_EMAIL_LENGTH,
   MAX_EVIDENCE_REF_LENGTH,
@@ -9294,6 +9827,8 @@ export {
   MAX_PERSON_NAME_LENGTH,
   MAX_PLAYBACK_URL_LENGTH,
   MAX_PLAY_CITATIONS,
+  MAX_PREFERRED_WORDS,
+  MAX_PREVIEW_PROSPECTS,
   MAX_PROMOTION_SAMPLE,
   MAX_PROPOSED_PLAYS,
   MAX_PROSPECTS_PER_REQUEST,
@@ -9337,6 +9872,7 @@ export {
   MAX_SEQUENCE_PROBLEMS,
   MAX_SEQUENCE_STEP,
   MAX_SEQUENCE_STEPS,
+  MAX_SIGN_OFF_LENGTH,
   MAX_SKIP_CONDITIONS,
   MAX_SLOT_RANGE_DAYS,
   MAX_SOFTPHONE_TOKEN_LENGTH,
@@ -9352,12 +9888,15 @@ export {
   MAX_SUPPRESSION_IMPORT_BYTES,
   MAX_SUPPRESSION_IMPORT_ROWS,
   MAX_SUPPRESSION_NOTE_LENGTH,
+  MAX_TONE_LENGTH,
   MAX_TRANSCRIPT_BYTES,
   MAX_TRANSCRIPT_TURN_LENGTH,
   MAX_TURN_SOURCES,
   MAX_TURN_TEXT_LENGTH,
   MAX_UTF8_BYTES_PER_CODE_POINT,
   MAX_VARIANTS,
+  MAX_VOICE_LENGTH_CHARACTERS,
+  MAX_VOICE_TERM_LENGTH,
   MAX_WAIT_HOURS,
   MAX_WINDOWS_PER_DAY,
   MAX_WRAP_UP_NOTE_LENGTH,
@@ -9366,6 +9905,11 @@ export {
   MESSAGE_AUTHOR_KINDS,
   MESSAGE_DIRECTIONS,
   MESSAGE_FAILURE_REASONS,
+  MESSAGING_ADMIN_ROLES,
+  MESSAGING_ALL_ROLES,
+  MESSAGING_ERRORS,
+  MESSAGING_EVENTS,
+  MESSAGING_ROUTES,
   MIN_COPILOT_MIN_EVIDENCE,
   MIN_QUESTION_CHOICES,
   MIN_SOFTPHONE_TOKEN_TTL_SECONDS,
@@ -9385,6 +9929,7 @@ export {
   PLAY_INTENTS,
   PLAY_SOURCES,
   PLAY_STATUSES,
+  PREVIEW_FAILURE_CODES,
   PROMOTION_SOURCES,
   PROSPECT_ADMIN_ROLES,
   PROSPECT_ALL_ROLES,
@@ -9457,6 +10002,7 @@ export {
   WEEKDAYS,
   WINDOW_ZONES,
   acceptPlayRequestSchema,
+  acceptPreviewRequestSchema,
   addLineRequestSchema,
   addSuppressionRequestSchema,
   addTeamMemberRequestSchema,
@@ -9471,6 +10017,7 @@ export {
   agentTurnSchema,
   agentVoiceStyleSchema,
   allowedOriginSchema,
+  angleOriginSchema,
   answerHandoffRequestSchema,
   approvalPoliciesSchema,
   approvalPolicySchema,
@@ -9514,6 +10061,12 @@ export {
   branchArmSchema,
   branchConditionSchema,
   branchStepSchema,
+  brandVoiceIdSchema,
+  brandVoiceSchema,
+  brandVoiceSettingsSchema,
+  briefAngleSchema,
+  briefIdSchema,
+  briefStatementSchema,
   browserSessionTokensSchema,
   bulkAssignProspectsRequestSchema,
   bulkAssignProspectsResponseSchema,
@@ -9565,6 +10118,9 @@ export {
   checkDealImportHeaderText,
   checkDealImportRow,
   checkUploadFile,
+  citationRefSchema,
+  citationSourceSchema,
+  citationUrlSchema,
   classificationSchema,
   companySizeBandSchema,
   completeCalendarConnectionRequestSchema,
@@ -9645,11 +10201,13 @@ export {
   countSchema2 as countSchema,
   countryCodeSchema,
   createBookingTypeRequestSchema,
+  createBriefRequestSchema,
   createCampaignRequestSchema,
   createConsentFormRequestSchema,
   createConsentWordingRequestSchema,
   createDemoRequestRequestSchema,
   createDemoRequestResponseSchema,
+  createDraftRequestSchema,
   createInvitationRequestSchema,
   createPlayRequestSchema,
   createProspectCompanyRequestSchema,
@@ -9709,8 +10267,13 @@ export {
   domainCheckResultSchema,
   domainCheckSchema,
   domainCheckStatusSchema,
+  draftApprovalRequiredEvent,
   draftAuthorSchema,
+  draftChannelSchema,
+  draftCheckNameSchema,
   draftCheckSchema,
+  draftCitationSchema,
+  draftCreatedEvent,
   draftHoldReasonSchema,
   draftIdSchema,
   draftParamsSchema,
@@ -9718,11 +10281,13 @@ export {
   draftReleaseSchema,
   draftSchema,
   draftSourceKindSchema,
+  draftSourceSchema,
   draftSourcesSchema,
   draftStatusSchema,
   duplicateCampaignRequestSchema,
   duplicateIdentityDetailsSchema,
   e164PhoneSchema,
+  editDraftRequestSchema,
   editPlayRequestSchema,
   effectiveLimitsSchema,
   emailSchema,
@@ -9859,6 +10424,10 @@ export {
   listApprovalQueueQuerySchema,
   listBookingTypesQuerySchema,
   listBookingsQuerySchema,
+  listBrandVoiceVersionsQuerySchema,
+  listBrandVoiceVersionsResponseSchema,
+  listBriefsQuerySchema,
+  listBriefsResponseSchema,
   listCallsQuerySchema,
   listCallsResponseSchema,
   listCampaignsQuerySchema,
@@ -9880,6 +10449,8 @@ export {
   listDecisionsQuerySchema,
   listDocumentsQuerySchema,
   listDocumentsResponseSchema,
+  listDraftsQuerySchema,
+  listDraftsResponseSchema,
   listEnrollmentActivityResponseSchema,
   listEnrollmentsQuerySchema,
   listEnrollmentsResponseSchema,
@@ -9967,6 +10538,7 @@ export {
   messagePageSchema,
   messageSchema2 as messageSchema,
   messageSentEvent,
+  messagingTextSchema,
   minuteOfDaySchema,
   momentMatchSchema,
   momentQueryText,
@@ -9985,6 +10557,8 @@ export {
   organizationSchema,
   organizationStatusSchema,
   outcomeSchema,
+  outreachDraftCheckSchema,
+  outreachDraftSchema,
   pageQuerySchema,
   pageSchema,
   parseAmountCell,
@@ -10006,6 +10580,10 @@ export {
   playSchema,
   playSourceSchema,
   playStatusSchema,
+  previewFailureCodeSchema,
+  previewItemSchema,
+  previewRequestSchema,
+  previewResultSchema,
   promoteVariantResponseSchema,
   promotionPolicySchema,
   promotionRecordSchema,
@@ -10107,6 +10685,7 @@ export {
   recordedSuppressionSchema,
   recordingKeySchema,
   recordingPlaybackSchema,
+  regenerateDraftRequestSchema,
   regionSchema,
   rejectDraftRequestSchema,
   removeEnrollmentRequestSchema,
@@ -10125,6 +10704,10 @@ export {
   replyRequestSchema,
   requestIdSchema,
   rescheduleBookingRequestSchema,
+  researchBriefSchema,
+  resolveCitationsRequestSchema,
+  resolveCitationsResponseSchema,
+  resolvedCitationSchema,
   retryAfterDetailsSchema,
   returnToSchema,
   rightsConfirmationSchema,
@@ -10171,6 +10754,7 @@ export {
   sequenceStepsSchema,
   setAgentSettingsRequestSchema,
   setApprovalPolicyRequestSchema,
+  setBrandVoiceRequestSchema,
   setCallRepRequestSchema,
   setCopilotSettingsRequestSchema,
   setDealOutcomeRequestSchema,
@@ -10178,6 +10762,7 @@ export {
   setMailboxLimitsRequestSchema,
   setProspectOwnerRequestSchema,
   setSequenceRequestSchema,
+  signalIdSchema,
   skipConditionSchema,
   skipOperatorSchema,
   slotPageSchema,
