@@ -180,11 +180,18 @@ var MAX_PROSPECT_NOTES_LENGTH = 5000;
 var MAX_PROSPECT_TAG_LENGTH = 50;
 var MAX_PROSPECT_TAGS = 20;
 var MAX_PROSPECT_SEARCH_LENGTH = 100;
-var MAX_PROSPECT_FIELD_VALUE_LENGTH = 320;
+var MAX_PROSPECT_FIELD_VALUE_LENGTH = 5300;
 var MAX_SOURCE_REF_LENGTH = 200;
 var prospectNamePartSchema = boundedTextSchema(MAX_PROSPECT_NAME_PART_LENGTH);
 var prospectJobTitleSchema = boundedTextSchema(MAX_PROSPECT_JOB_TITLE_LENGTH);
 var prospectCompanyNameSchema = boundedTextSchema(MAX_PROSPECT_COMPANY_NAME_LENGTH);
+var MAX_PROSPECT_COMPANY_TECHNOLOGIES = 50;
+var MAX_PROSPECT_COMPANY_TECHNOLOGY_LENGTH = 100;
+var MAX_PROSPECT_COMPANY_EMPLOYEE_COUNT = 999999999;
+var prospectCompanyIndustrySchema = boundedTextSchema(MAX_PROSPECT_COMPANY_NAME_LENGTH);
+var prospectCompanyRegionSchema = boundedTextSchema(MAX_PROSPECT_COMPANY_NAME_LENGTH);
+var prospectCompanyEmployeeCountSchema = z4.number().int().min(0).max(MAX_PROSPECT_COMPANY_EMPLOYEE_COUNT);
+var prospectCompanyTechnologiesSchema = z4.array(boundedTextSchema(MAX_PROSPECT_COMPANY_TECHNOLOGY_LENGTH)).max(MAX_PROSPECT_COMPANY_TECHNOLOGIES);
 var prospectNotesSchema = z4.string().max(MAX_PROSPECT_NOTES_LENGTH * 2).trim().pipe(z4.string().min(1).max(MAX_PROSPECT_NOTES_LENGTH).refine((text) => !hasControlCharacter2(text, true), "No control characters"));
 var prospectTagsSchema = z4.array(boundedTextSchema(MAX_PROSPECT_TAG_LENGTH)).max(MAX_PROSPECT_TAGS).refine((tags) => new Set(tags).size === tags.length, "No duplicate tags");
 var rawPhoneSchema = z4.string().max(MAX_RAW_LENGTH).trim().pipe(z4.string().min(3).max(40).regex(/^\+?[0-9 ().-]+$/));
@@ -202,7 +209,14 @@ var PROSPECT_FIELD_NAMES = [
   "linkedinUrl"
 ];
 var prospectFieldNameSchema = z4.enum(PROSPECT_FIELD_NAMES);
-var PROSPECT_COMPANY_FIELD_NAMES = ["name", "domain"];
+var PROSPECT_COMPANY_FIELD_NAMES = [
+  "name",
+  "domain",
+  "industry",
+  "employeeCount",
+  "region",
+  "technologies"
+];
 var prospectCompanyFieldNameSchema = z4.enum(PROSPECT_COMPANY_FIELD_NAMES);
 var MAX_FIELD_HISTORY_ENTRIES = 50;
 var FIXED_SOURCE_KINDS = [
@@ -4616,7 +4630,11 @@ var prospectCompanySchema = z45.object({
   id: prospectCompanyIdSchema,
   fields: z45.object({
     name: fieldValueSchema,
-    domain: fieldValueSchema.optional()
+    domain: fieldValueSchema.optional(),
+    industry: fieldValueSchema.optional(),
+    employeeCount: fieldValueSchema.optional(),
+    region: fieldValueSchema.optional(),
+    technologies: fieldValueSchema.optional()
   }),
   createdAt: timestampSchema,
   updatedAt: timestampSchema
@@ -4628,12 +4646,20 @@ var prospectCompanyFieldParamsSchema = z45.strictObject({
 });
 var createProspectCompanyRequestSchema = z45.strictObject({
   name: prospectCompanyNameSchema,
-  domain: prospectCompanyDomainSchema.optional()
+  domain: prospectCompanyDomainSchema.optional(),
+  industry: prospectCompanyIndustrySchema.optional(),
+  region: prospectCompanyRegionSchema.optional(),
+  employeeCount: prospectCompanyEmployeeCountSchema.optional(),
+  technologies: prospectCompanyTechnologiesSchema.optional()
 });
 var updateProspectCompanyRequestSchema = z45.strictObject({
   name: prospectCompanyNameSchema.optional(),
-  domain: prospectCompanyDomainSchema.nullable().optional()
-}).refine((body) => body.name !== undefined || body.domain !== undefined, "Send a change");
+  domain: prospectCompanyDomainSchema.nullable().optional(),
+  industry: prospectCompanyIndustrySchema.nullable().optional(),
+  region: prospectCompanyRegionSchema.nullable().optional(),
+  employeeCount: prospectCompanyEmployeeCountSchema.nullable().optional(),
+  technologies: prospectCompanyTechnologiesSchema.nullable().optional()
+}).refine((body) => Object.values(body).some((value) => value !== undefined), "Send a change");
 var listProspectCompaniesQuerySchema = pageQuerySchema.extend({ q: prospectSearchSchema.optional() }).strict();
 var listProspectCompaniesResponseSchema = pageSchema(prospectCompanySchema);
 var prospectCompanyCursorSchema = z45.strictObject({
@@ -4750,7 +4776,7 @@ var PROSPECT_ROUTES = Object.freeze({
     idempotent: true,
     errors: ["prospect.company_domain_taken"],
     commonErrors: [...IDEMPOTENT_ERRORS3],
-    description: "Creates a Prospect Company with the Source manual. Every role may. A domain another Prospect Company of the Organization already has is prospect.company_domain_taken (409). Answers 201, or 200 with the original record for a replay of the same Idempotency-Key."
+    description: "Creates a Prospect Company with the Source manual; it may also carry industry, region, employeeCount and technologies. Every role may. A domain another Prospect Company of the Organization already has is prospect.company_domain_taken (409). Answers 201, or 200 with the original record for a replay of the same Idempotency-Key."
   }),
   listProspectCompanies: route7({
     method: "GET",
@@ -4783,7 +4809,7 @@ var PROSPECT_ROUTES = Object.freeze({
     idempotent: false,
     errors: ["prospect.not_found", "prospect.company_domain_taken"],
     commonErrors: ["request.invalid"],
-    description: "Edits a Prospect Company; each field sent is written with the Source manual (ADR 0020). null clears the domain. A domain another Prospect Company of the Organization already has is prospect.company_domain_taken (409)."
+    description: "Edits a Prospect Company; each field sent is written with the Source manual (ADR 0020). null clears the domain, industry, region, employeeCount or technologies. A domain another Prospect Company of the Organization already has is prospect.company_domain_taken (409)."
   }),
   listProspectCompanyFieldHistory: route7({
     method: "GET",
@@ -12518,7 +12544,10 @@ export {
   MAX_PROMOTION_SAMPLE,
   MAX_PROPOSED_PLAYS,
   MAX_PROSPECTS_PER_REQUEST,
+  MAX_PROSPECT_COMPANY_EMPLOYEE_COUNT,
   MAX_PROSPECT_COMPANY_NAME_LENGTH,
+  MAX_PROSPECT_COMPANY_TECHNOLOGIES,
+  MAX_PROSPECT_COMPANY_TECHNOLOGY_LENGTH,
   MAX_PROSPECT_FIELD_VALUE_LENGTH,
   MAX_PROSPECT_IMPORT_BYTES,
   MAX_PROSPECT_IMPORT_ROWS,
@@ -13486,12 +13515,16 @@ export {
   proposePlaysResponseSchema,
   prospectCompanyCursorSchema,
   prospectCompanyDomainSchema,
+  prospectCompanyEmployeeCountSchema,
   prospectCompanyFieldNameSchema,
   prospectCompanyFieldParamsSchema,
   prospectCompanyIdSchema,
+  prospectCompanyIndustrySchema,
   prospectCompanyNameSchema,
   prospectCompanyParamsSchema,
+  prospectCompanyRegionSchema,
   prospectCompanySchema,
+  prospectCompanyTechnologiesSchema,
   prospectConsentSchema,
   prospectCreatedEvent,
   prospectCursorSchema,
