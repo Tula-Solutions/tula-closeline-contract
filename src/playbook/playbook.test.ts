@@ -38,6 +38,8 @@ import {
   type PlaybookRoute,
   SALES_HISTORY_ERRORS,
   SALES_HISTORY_ROUTES,
+  SUGGESTION_ERRORS,
+  SUGGESTION_ROUTES,
   uploadDocumentFileSchema,
 } from './index'
 
@@ -678,10 +680,15 @@ describe('0.7.0 types are not widened (code written against them still compiles)
         'searchMoments',
         'searchDocuments',
         'resolveCitations',
+        ...Object.keys(SUGGESTION_ROUTES),
       ].sort()
     )
     expect(Object.keys(ALL_PLAYBOOK_ERRORS).sort()).toEqual(
-      [...Object.keys(PLAYBOOK_ERRORS), ...Object.keys(SALES_HISTORY_ERRORS)].sort()
+      [
+        ...Object.keys(PLAYBOOK_ERRORS),
+        ...Object.keys(SALES_HISTORY_ERRORS),
+        ...Object.keys(SUGGESTION_ERRORS),
+      ].sort()
     )
     for (const route of Object.values(ALL_PLAYBOOK_ROUTES)) {
       for (const code of route.errors) {

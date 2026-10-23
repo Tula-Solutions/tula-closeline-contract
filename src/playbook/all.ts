@@ -8,6 +8,12 @@ import {
   type SalesHistoryRouteName,
 } from './sales-history-routes'
 import { SEARCH_ROUTES, type SearchRouteName } from './search'
+import {
+  SUGGESTION_ERRORS,
+  SUGGESTION_ROUTES,
+  type SuggestionRoute,
+  type SuggestionRouteName,
+} from './suggestion'
 
 /** Every Playbook route name: the document routes of 0.7.0, the sales-history routes, the search routes and the citation route. */
 export type AllPlaybookRouteName =
@@ -15,6 +21,7 @@ export type AllPlaybookRouteName =
   | SalesHistoryRouteName
   | SearchRouteName
   | CitationRouteName
+  | SuggestionRouteName
 
 /**
  * Every Playbook route in one map, for a service that builds one OpenAPI document. `PLAYBOOK_ROUTES`
@@ -22,13 +29,18 @@ export type AllPlaybookRouteName =
  * this map and `ALL_PLAYBOOK_ERRORS` when you want both areas.
  */
 export const ALL_PLAYBOOK_ROUTES: Readonly<
-  Record<AllPlaybookRouteName, PlaybookRoute | SalesHistoryRoute>
+  Record<AllPlaybookRouteName, PlaybookRoute | SalesHistoryRoute | SuggestionRoute>
 > = Object.freeze({
   ...PLAYBOOK_ROUTES,
   ...SALES_HISTORY_ROUTES,
   ...SEARCH_ROUTES,
   ...CITATION_ROUTES,
+  ...SUGGESTION_ROUTES,
 })
 
-/** Every Playbook error code in one registry: the document codes of 0.7.0 and the sales-history codes. */
-export const ALL_PLAYBOOK_ERRORS = Object.freeze({ ...PLAYBOOK_ERRORS, ...SALES_HISTORY_ERRORS })
+/** Every Playbook error code in one registry: the document codes of 0.7.0, the sales-history codes and the Suggestion codes. */
+export const ALL_PLAYBOOK_ERRORS = Object.freeze({
+  ...PLAYBOOK_ERRORS,
+  ...SALES_HISTORY_ERRORS,
+  ...SUGGESTION_ERRORS,
+})

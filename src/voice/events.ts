@@ -1,7 +1,9 @@
 import { z } from 'zod'
+import { agentKindSchema } from '../agent/instruction'
 import { timestampSchema } from '../core/values'
 import { defineEvent } from '../events'
 import { callIdSchema, lineIdSchema, membershipIdSchema, prospectIdSchema } from '../ids'
+import { citationRefSchema, MAX_CITATION_REFS } from '../playbook/citation'
 import { dealIdSchema } from '../playbook/deal-values'
 import { MAX_CALL_DURATION_SECONDS } from './call'
 import { phoneHashSchema, voiceCallDirectionSchema, voiceCallFailureReasonSchema } from './values'
@@ -91,10 +93,30 @@ export const voiceCallEndedEvent = defineEvent(
     })
 )
 
+/**
+ * `call.turn_completed` (version 1): an Agent finished one turn of a Call. Core judges it afterwards
+ * (an Assessment). Ids, the Agent kind, the instruction version and the Playbook sources the turn
+ * cited: no Transcript text.
+ */
+export const callTurnCompletedEvent = defineEvent(
+  'call.turn_completed',
+  1,
+  z.strictObject({
+    callId: callIdSchema,
+    turnIndex: z.number().int().min(0).max(100_000),
+    agentKind: agentKindSchema,
+    instructionVersion: z.number().int().min(1).nullable(),
+    prospectId: prospectIdSchema.nullable(),
+    citedSources: z.array(citationRefSchema).max(MAX_CITATION_REFS),
+    completedAt: timestampSchema,
+  })
+)
+
 /** Every voice event, by type. */
 export const VOICE_EVENTS = {
   'voice.call.started': voiceCallStartedEvent,
   'voice.call.ended': voiceCallEndedEvent,
+  'call.turn_completed': callTurnCompletedEvent,
 } as const
 
 /** The type of a voice event. */

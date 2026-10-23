@@ -126,9 +126,25 @@ export const agentInstructionVersionIdSchema = idSchema('ains')
 export const auditEventIdSchema = idSchema('aud')
 /** The id of a data export job (`exp_…`): one Organization-wide export, built in parts by the services. */
 export const exportJobIdSchema = idSchema('exp')
+/** The id of an Assessment (`asm_…`): the automatic check of one Agent turn. */
+export const assessmentIdSchema = idSchema('asm')
+/** The id of a finding (`fnd_…`): one problem an Assessment found in a Draft or a Call turn. */
+export const findingIdSchema = idSchema('fnd')
+/** The id of a Suggestion (`sgs_…`): a proposed Playbook addition derived from a won Deal. */
+export const suggestionIdSchema = idSchema('sgs')
+/** The id of a touch (`tch_…`): one Message or Call that Attribution links to a Deal's Outcome. */
+export const touchIdSchema = idSchema('tch')
 /** The id of an API key (`akey_…`): a secret an Admin creates so a program can call Closeline. The secret is not the id. */
 export const apiKeyIdSchema = idSchema('akey')
 
+/** The id of an Assessment. */
+export type AssessmentId = z.infer<typeof assessmentIdSchema>
+/** The id of a finding. */
+export type FindingId = z.infer<typeof findingIdSchema>
+/** The id of a Suggestion. */
+export type SuggestionId = z.infer<typeof suggestionIdSchema>
+/** The id of a touch. */
+export type TouchId = z.infer<typeof touchIdSchema>
 /** The id of an Organization. */
 export type OrganizationId = z.infer<typeof organizationIdSchema>
 /** The id of a user. */

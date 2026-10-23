@@ -289,7 +289,11 @@ describe('events', () => {
       true
     )
     expect(voiceCallEndedEvent.safeParse(envelope('voice.call.ended', ended)).success).toBe(true)
-    expect(Object.keys(VOICE_EVENTS)).toEqual(['voice.call.started', 'voice.call.ended'])
+    expect(Object.keys(VOICE_EVENTS)).toEqual([
+      'voice.call.started',
+      'voice.call.ended',
+      'call.turn_completed',
+    ])
     const { organizationId: _o, ...noOrg } = envelope('voice.call.started', started)
     expect(voiceCallStartedEvent.safeParse(noOrg).success).toBe(false)
   })
