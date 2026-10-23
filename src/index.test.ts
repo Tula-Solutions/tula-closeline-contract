@@ -48,3 +48,13 @@ test('the entry point exports the sales-history area', async () => {
   expect(api.normaliseDealId(' A ')).toBe('A')
   expect(api.callIdSchema.safeParse('call_0190a5e0b3c17d2a8f4e5b6c7d8e9f01').success).toBe(true)
 })
+
+test('the entry point exports the marketing area', async () => {
+  const api = await import('./index')
+  expect(api.MARKETING_ERRORS['marketing.rate_limited'].status).toBe(429)
+  expect(api.MARKETING_ROUTES.createDemoRequest.public).toBe(true)
+  expect(api.demoRequestIdSchema.safeParse('dreq_0190a5e0b3c17d2a8f4e5b6c7d8e9f01').success).toBe(
+    true
+  )
+  expect(typeof api.createDemoRequestRequestSchema.safeParse).toBe('function')
+})

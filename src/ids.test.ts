@@ -3,6 +3,7 @@ import {
   callIdSchema,
   dealImportIdSchema,
   dealRecordIdSchema,
+  demoRequestIdSchema,
   documentIdSchema,
   eventIdSchema,
   formatId,
@@ -31,6 +32,7 @@ const schemas = [
   ['dimp', dealImportIdSchema],
   ['evt', eventIdSchema],
   ['req', requestIdSchema],
+  ['dreq', demoRequestIdSchema],
 ] as const
 
 describe.each(schemas)('%s id schema', (prefix, schema) => {
