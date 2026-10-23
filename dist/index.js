@@ -241,6 +241,9 @@ var membershipIdSchema = idSchema("mem");
 var teamIdSchema = idSchema("team");
 var invitationIdSchema = idSchema("inv");
 var prospectIdSchema = idSchema("prs");
+var prospectCompanyIdSchema = idSchema("pco");
+var prospectImportIdSchema = idSchema("pimp");
+var prospectMergeIdSchema = idSchema("pmrg");
 var documentIdSchema = idSchema("doc");
 var dealRecordIdSchema = idSchema("deal");
 var callIdSchema = idSchema("call");
@@ -2291,6 +2294,680 @@ var DEAL_IMPORT_UPLOADED_MESSAGE = {
   scope: "organization",
   payload: dealImportUploadedPayloadSchema
 };
+// src/prospect/errors.ts
+import { z as z28 } from "zod";
+
+// src/prospect/values.ts
+import { z as z27 } from "zod";
+var MAX_RAW_LENGTH = 1000;
+function hasControlCharacter2(text, allowLineBreaks) {
+  for (let index = 0;index < text.length; index += 1) {
+    const code = text.charCodeAt(index);
+    if (allowLineBreaks && (code === 10 || code === 9)) {
+      continue;
+    }
+    if (code < 32 || code >= 127 && code <= 159) {
+      return true;
+    }
+  }
+  return false;
+}
+function boundedTextSchema(maxLength) {
+  return z27.string().max(Math.max(MAX_RAW_LENGTH, maxLength)).trim().pipe(z27.string().min(1).max(maxLength).refine((text) => !hasControlCharacter2(text, false), "No control characters"));
+}
+var MAX_PROSPECT_NAME_PART_LENGTH = 100;
+var MAX_PROSPECT_JOB_TITLE_LENGTH = 200;
+var MAX_PROSPECT_COMPANY_NAME_LENGTH = 200;
+var MAX_PROSPECT_NOTES_LENGTH = 5000;
+var MAX_PROSPECT_TAG_LENGTH = 50;
+var MAX_PROSPECT_TAGS = 20;
+var MAX_PROSPECT_SEARCH_LENGTH = 100;
+var MAX_PROSPECT_FIELD_VALUE_LENGTH = 320;
+var MAX_SOURCE_REF_LENGTH = 200;
+var prospectNamePartSchema = boundedTextSchema(MAX_PROSPECT_NAME_PART_LENGTH);
+var prospectJobTitleSchema = boundedTextSchema(MAX_PROSPECT_JOB_TITLE_LENGTH);
+var prospectCompanyNameSchema = boundedTextSchema(MAX_PROSPECT_COMPANY_NAME_LENGTH);
+var prospectNotesSchema = z27.string().max(MAX_PROSPECT_NOTES_LENGTH * 2).trim().pipe(z27.string().min(1).max(MAX_PROSPECT_NOTES_LENGTH).refine((text) => !hasControlCharacter2(text, true), "No control characters"));
+var prospectTagsSchema = z27.array(boundedTextSchema(MAX_PROSPECT_TAG_LENGTH)).max(MAX_PROSPECT_TAGS).refine((tags) => new Set(tags).size === tags.length, "No duplicate tags");
+var rawPhoneSchema = z27.string().max(MAX_RAW_LENGTH).trim().pipe(z27.string().min(3).max(40).regex(/^\+?[0-9 ().-]+$/));
+var e164PhoneSchema = z27.string().regex(/^\+[1-9][0-9]{6,14}$/);
+var rawLinkedinUrlSchema = z27.string().max(MAX_RAW_LENGTH).trim().pipe(z27.string().min(1).max(300).refine((text) => /linkedin\.com\//i.test(text), "A linkedin.com address").refine((text) => !hasControlCharacter2(text, false), "No control characters"));
+var prospectCompanyDomainSchema = z27.string().max(MAX_RAW_LENGTH).trim().transform(foldAscii).pipe(z27.string().min(3).max(253).regex(/^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/));
+var PROSPECT_IDENTITY_KINDS = ["email", "phone", "linkedin"];
+var prospectIdentityKindSchema = z27.enum(PROSPECT_IDENTITY_KINDS);
+var PROSPECT_FIELD_NAMES = [
+  "firstName",
+  "lastName",
+  "jobTitle",
+  "email",
+  "phone",
+  "linkedinUrl"
+];
+var prospectFieldNameSchema = z27.enum(PROSPECT_FIELD_NAMES);
+var PROSPECT_COMPANY_FIELD_NAMES = ["name", "domain"];
+var prospectCompanyFieldNameSchema = z27.enum(PROSPECT_COMPANY_FIELD_NAMES);
+var MAX_FIELD_HISTORY_ENTRIES = 50;
+var FIXED_SOURCE_KINDS = [
+  "manual",
+  "import",
+  "crm:hubspot",
+  "crm:salesforce",
+  "form"
+];
+var sourceKindSchema = z27.union([
+  z27.enum(FIXED_SOURCE_KINDS),
+  z27.string().regex(/^enrichment:[a-z][a-z0-9_]{0,31}$/)
+]);
+var fieldValueSchema = z27.object({
+  value: z27.string().min(1).max(MAX_PROSPECT_FIELD_VALUE_LENGTH),
+  source: sourceKindSchema,
+  sourceRef: z27.string().min(1).max(MAX_SOURCE_REF_LENGTH).nullable(),
+  setAt: timestampSchema,
+  setByUserId: userIdSchema.nullable()
+});
+var FIELD_HISTORY_STATES = ["current", "superseded", "suggested"];
+var fieldHistoryStateSchema = z27.enum(FIELD_HISTORY_STATES);
+var fieldHistoryEntrySchema = fieldValueSchema.extend({ state: fieldHistoryStateSchema });
+
+// src/prospect/errors.ts
+var PROSPECT_ERRORS = {
+  ...defineErrors("prospect", {
+    not_found: {
+      status: 404,
+      message: "The requested Prospect, Prospect Company, import or merge was not found."
+    },
+    duplicate_identity: {
+      status: 409,
+      message: "Another Prospect already has this email, phone or LinkedIn address."
+    },
+    import_invalid: { status: 422, message: "The import file cannot be accepted." },
+    merge_conflict: {
+      status: 409,
+      message: "These Prospects cannot be merged, or this merge cannot be undone."
+    },
+    forbidden_owner: { status: 403, message: "This member cannot own the Prospect." }
+  })
+};
+var prospectNotFoundDetailsSchema = z28.strictObject({
+  resource: z28.enum(["prospect", "company", "import", "merge"])
+});
+var duplicateIdentityDetailsSchema = z28.strictObject({
+  identityKind: prospectIdentityKindSchema,
+  prospectId: prospectIdSchema.optional()
+});
+// src/prospect/events.ts
+import { z as z30 } from "zod";
+
+// src/prospect/merge.ts
+import { z as z29 } from "zod";
+var PROSPECT_MERGE_UNDO_DAYS = 30;
+var MAX_MERGED_PROSPECTS = 5;
+var prospectMergeParamsSchema = z29.strictObject({ mergeId: prospectMergeIdSchema });
+var mergeProspectsRequestSchema = z29.strictObject({
+  mergedProspectIds: z29.array(prospectIdSchema).min(1).max(MAX_MERGED_PROSPECTS).refine((ids) => new Set(ids).size === ids.length, "No duplicate ids"),
+  fieldChoices: z29.partialRecord(prospectFieldNameSchema, prospectIdSchema).default({})
+});
+var PROSPECT_MERGE_STATES = ["merged", "undone"];
+var prospectMergeSchema = z29.object({
+  id: prospectMergeIdSchema,
+  survivorProspectId: prospectIdSchema,
+  mergedProspectIds: z29.array(prospectIdSchema).min(1).max(MAX_MERGED_PROSPECTS),
+  fieldChoices: z29.partialRecord(prospectFieldNameSchema, prospectIdSchema),
+  state: z29.enum(PROSPECT_MERGE_STATES),
+  mergedByUserId: userIdSchema,
+  createdAt: timestampSchema,
+  undoableUntil: timestampSchema,
+  undoneAt: timestampSchema.nullable()
+}).refine((merge) => merge.state === "undone" === (merge.undoneAt !== null), {
+  path: ["undoneAt"],
+  message: "undoneAt is set exactly when the state is undone"
+});
+var listProspectDuplicatesQuerySchema = pageQuerySchema.extend({ prospectId: prospectIdSchema.optional() }).strict();
+var prospectDuplicateSchema = z29.object({
+  prospectIds: z29.tuple([prospectIdSchema, prospectIdSchema]),
+  matchedOn: z29.array(prospectIdentityKindSchema).min(1).max(3)
+});
+var listProspectDuplicatesResponseSchema = pageSchema(prospectDuplicateSchema);
+var prospectDuplicateCursorSchema = z29.strictObject({
+  first: prospectIdSchema,
+  second: prospectIdSchema
+});
+
+// src/prospect/events.ts
+var prospectCreatedEvent = defineEvent("prospect.created", 1, z30.strictObject({
+  prospectId: prospectIdSchema,
+  companyId: prospectCompanyIdSchema.nullable(),
+  ownerMembershipId: membershipIdSchema.nullable(),
+  source: sourceKindSchema
+}));
+var prospectUpdatedEvent = defineEvent("prospect.updated", 1, z30.strictObject({
+  prospectId: prospectIdSchema,
+  changedFields: z30.array(prospectFieldNameSchema).max(6),
+  ownerChanged: z30.boolean(),
+  companyChanged: z30.boolean(),
+  statusChanged: z30.boolean(),
+  source: sourceKindSchema
+}));
+var prospectMergedEvent = defineEvent("prospect.merged", 1, z30.strictObject({
+  mergeId: prospectMergeIdSchema,
+  survivorProspectId: prospectIdSchema,
+  mergedProspectIds: z30.array(prospectIdSchema).min(1).max(MAX_MERGED_PROSPECTS)
+}));
+var prospectMergeUndoneEvent = defineEvent("prospect.merge_undone", 1, z30.strictObject({
+  mergeId: prospectMergeIdSchema,
+  survivorProspectId: prospectIdSchema,
+  restoredProspectIds: z30.array(prospectIdSchema).min(1).max(MAX_MERGED_PROSPECTS)
+}));
+var prospectErasedEvent = defineEvent("prospect.erased", 1, z30.strictObject({ prospectId: prospectIdSchema }));
+var PROSPECT_EVENTS = {
+  "prospect.created": prospectCreatedEvent,
+  "prospect.updated": prospectUpdatedEvent,
+  "prospect.merged": prospectMergedEvent,
+  "prospect.merge_undone": prospectMergeUndoneEvent,
+  "prospect.erased": prospectErasedEvent
+};
+// src/prospect/import.ts
+import { z as z31 } from "zod";
+var MAX_PROSPECT_IMPORT_BYTES = 10 * 1024 * 1024;
+var MAX_PROSPECT_IMPORT_ROWS = 50000;
+var PROSPECT_IMPORT_FILE_FIELD = "file";
+var PROSPECT_IMPORT_COLUMNS = [
+  "first_name",
+  "last_name",
+  "email",
+  "phone",
+  "linkedin_url",
+  "job_title",
+  "company_name",
+  "company_domain",
+  "owner_email",
+  "tags"
+];
+var PROSPECT_IMPORT_STATES = ["uploaded", "processing", "completed", "failed"];
+var prospectImportStateSchema = z31.enum(PROSPECT_IMPORT_STATES);
+var PROSPECT_IMPORT_FAILURE_REASONS = ["too_many_rows", "unreadable"];
+var prospectImportFailureReasonSchema = z31.enum(PROSPECT_IMPORT_FAILURE_REASONS);
+var PROSPECT_IMPORT_ROW_RESULTS = ["created", "updated", "skipped", "rejected"];
+var prospectImportRowResultSchema = z31.enum(PROSPECT_IMPORT_ROW_RESULTS);
+var PROSPECT_IMPORT_SKIP_REASONS = ["no_change", "manual_values_kept"];
+var PROSPECT_IMPORT_REJECT_REASONS = [
+  "wrong_column_count",
+  "blank_row",
+  "missing_identity",
+  "invalid_email",
+  "invalid_phone",
+  "invalid_linkedin_url",
+  "invalid_name",
+  "invalid_job_title",
+  "invalid_company",
+  "invalid_tags",
+  "owner_not_found",
+  "owner_not_allowed",
+  "duplicate_in_file",
+  "identity_conflict"
+];
+var prospectImportRowReasonSchema = z31.enum([
+  ...PROSPECT_IMPORT_SKIP_REASONS,
+  ...PROSPECT_IMPORT_REJECT_REASONS
+]);
+var countSchema = z31.number().int().min(0).max(MAX_PROSPECT_IMPORT_ROWS);
+var prospectImportSchema = z31.object({
+  id: prospectImportIdSchema,
+  state: prospectImportStateSchema,
+  failureReason: prospectImportFailureReasonSchema.nullable(),
+  rowCount: countSchema.nullable(),
+  createdCount: countSchema.nullable(),
+  updatedCount: countSchema.nullable(),
+  skippedCount: countSchema.nullable(),
+  rejectedCount: countSchema.nullable(),
+  uploadedByUserId: userIdSchema,
+  createdAt: timestampSchema,
+  updatedAt: timestampSchema
+}).superRefine((item, context) => {
+  if (item.state === "failed" !== (item.failureReason !== null)) {
+    context.addIssue({
+      code: "custom",
+      path: ["failureReason"],
+      message: "A failure reason is set exactly when the state is failed"
+    });
+  }
+  const counts = [
+    item.rowCount,
+    item.createdCount,
+    item.updatedCount,
+    item.skippedCount,
+    item.rejectedCount
+  ];
+  const allSet = counts.every((count) => count !== null);
+  const noneSet = counts.every((count) => count === null);
+  if (item.state === "completed" ? !allSet : !noneSet) {
+    context.addIssue({
+      code: "custom",
+      path: ["rowCount"],
+      message: "The counts are set exactly when the import is completed"
+    });
+  }
+  if (allSet && item.rowCount !== (item.createdCount ?? 0) + (item.updatedCount ?? 0) + (item.skippedCount ?? 0) + (item.rejectedCount ?? 0)) {
+    context.addIssue({
+      code: "custom",
+      path: ["rowCount"],
+      message: "The row count is the four result counts together"
+    });
+  }
+});
+var prospectImportParamsSchema = z31.strictObject({ importId: prospectImportIdSchema });
+var listProspectImportsQuerySchema = pageQuerySchema.strict();
+var listProspectImportsResponseSchema = pageSchema(prospectImportSchema);
+var prospectImportCursorSchema = z31.strictObject({
+  createdAt: timestampSchema,
+  id: prospectImportIdSchema
+});
+var prospectImportRowSchema = z31.object({
+  rowNumber: z31.number().int().min(2).max(MAX_PROSPECT_IMPORT_ROWS + 1),
+  result: prospectImportRowResultSchema,
+  reason: prospectImportRowReasonSchema.nullable(),
+  prospectId: prospectIdSchema.nullable()
+}).superRefine((row, context) => {
+  const wantsReason = row.result === "skipped" || row.result === "rejected";
+  if (wantsReason !== (row.reason !== null)) {
+    context.addIssue({
+      code: "custom",
+      path: ["reason"],
+      message: "A reason is set exactly when the row is skipped or rejected"
+    });
+  }
+  const isSkipReason = PROSPECT_IMPORT_SKIP_REASONS.includes(row.reason ?? "");
+  if (row.reason !== null && row.result === "skipped" !== isSkipReason) {
+    context.addIssue({
+      code: "custom",
+      path: ["reason"],
+      message: "A skip reason belongs to a skipped row and a reject reason to a rejected row"
+    });
+  }
+  if (row.result === "rejected" && row.prospectId !== null) {
+    context.addIssue({
+      code: "custom",
+      path: ["prospectId"],
+      message: "A rejected row has no Prospect"
+    });
+  }
+  if ((row.result === "created" || row.result === "updated") && row.prospectId === null) {
+    context.addIssue({
+      code: "custom",
+      path: ["prospectId"],
+      message: "A created or updated row names its Prospect"
+    });
+  }
+});
+var listProspectImportRowsQuerySchema = pageQuerySchema.extend({ result: prospectImportRowResultSchema.optional() }).strict();
+var listProspectImportRowsResponseSchema = pageSchema(prospectImportRowSchema);
+var prospectImportRowCursorSchema = z31.strictObject({
+  rowNumber: z31.number().int().min(2)
+});
+var PROSPECT_IMPORT_REPORT_COLUMNS = [
+  "row_number",
+  "result",
+  "reason",
+  "prospect_id"
+];
+var PROSPECT_IMPORT_INVALID_REASONS = [
+  "unsupported_type",
+  "too_large",
+  "header_invalid",
+  "too_many_rows"
+];
+var prospectImportInvalidDetailsSchema = z31.strictObject({
+  reason: z31.enum(PROSPECT_IMPORT_INVALID_REASONS)
+});
+// src/prospect/prospect.ts
+import { z as z32 } from "zod";
+var PROSPECT_STATUSES = ["active", "archived"];
+var prospectStatusSchema = z32.enum(PROSPECT_STATUSES);
+var prospectSchema = z32.object({
+  id: prospectIdSchema,
+  companyId: prospectCompanyIdSchema.nullable(),
+  ownerMembershipId: membershipIdSchema.nullable(),
+  status: prospectStatusSchema,
+  source: sourceKindSchema,
+  tags: prospectTagsSchema,
+  notes: z32.string().min(1).max(5000).nullable(),
+  fields: z32.partialRecord(prospectFieldNameSchema, fieldValueSchema),
+  createdAt: timestampSchema,
+  updatedAt: timestampSchema
+});
+var prospectParamsSchema = z32.strictObject({ prospectId: prospectIdSchema });
+var hasPersonalField = (body) => body.firstName !== undefined || body.lastName !== undefined || body.email !== undefined || body.phone !== undefined || body.linkedinUrl !== undefined;
+var createProspectRequestSchema = z32.strictObject({
+  firstName: prospectNamePartSchema.optional(),
+  lastName: prospectNamePartSchema.optional(),
+  jobTitle: prospectJobTitleSchema.optional(),
+  email: emailSchema.optional(),
+  phone: rawPhoneSchema.optional(),
+  linkedinUrl: rawLinkedinUrlSchema.optional(),
+  companyId: prospectCompanyIdSchema.optional(),
+  ownerMembershipId: membershipIdSchema.optional(),
+  tags: prospectTagsSchema.optional(),
+  notes: prospectNotesSchema.optional()
+}).refine(hasPersonalField, "Give at least a name, an email, a phone or a LinkedIn address");
+var updateProspectRequestSchema = z32.strictObject({
+  firstName: prospectNamePartSchema.nullable().optional(),
+  lastName: prospectNamePartSchema.nullable().optional(),
+  jobTitle: prospectJobTitleSchema.nullable().optional(),
+  email: emailSchema.nullable().optional(),
+  phone: rawPhoneSchema.nullable().optional(),
+  linkedinUrl: rawLinkedinUrlSchema.nullable().optional(),
+  companyId: prospectCompanyIdSchema.nullable().optional(),
+  status: prospectStatusSchema.optional(),
+  tags: prospectTagsSchema.optional(),
+  notes: prospectNotesSchema.nullable().optional()
+}).refine((body) => Object.values(body).some((value) => value !== undefined), "Send a change");
+var prospectSearchSchema = boundedTextSchema(MAX_PROSPECT_SEARCH_LENGTH);
+var listProspectsQuerySchema = pageQuerySchema.extend({
+  ownerMembershipId: membershipIdSchema.optional(),
+  source: sourceKindSchema.optional(),
+  companyId: prospectCompanyIdSchema.optional(),
+  status: prospectStatusSchema.optional(),
+  q: prospectSearchSchema.optional()
+}).strict();
+var listProspectsResponseSchema = pageSchema(prospectSchema);
+var prospectCursorSchema = z32.strictObject({
+  createdAt: timestampSchema,
+  id: prospectIdSchema
+});
+var prospectFieldParamsSchema = z32.strictObject({
+  prospectId: prospectIdSchema,
+  field: prospectFieldNameSchema
+});
+var listFieldHistoryQuerySchema = pageQuerySchema.strict();
+var listFieldHistoryResponseSchema = pageSchema(fieldHistoryEntrySchema);
+var fieldHistoryCursorSchema = z32.strictObject({
+  setAt: timestampSchema,
+  seq: z32.number().int().min(0)
+});
+var setProspectOwnerRequestSchema = z32.strictObject({
+  ownerMembershipId: membershipIdSchema
+});
+var MAX_BULK_ASSIGN_PROSPECTS = 5000;
+var BULK_ASSIGN_SYNC_LIMIT = 500;
+var bulkAssignProspectsRequestSchema = z32.strictObject({
+  prospectIds: z32.array(prospectIdSchema).min(1).max(MAX_BULK_ASSIGN_PROSPECTS).refine((ids) => new Set(ids).size === ids.length, "No duplicate ids"),
+  ownerMembershipId: membershipIdSchema
+});
+var bulkAssignProspectsResponseSchema = z32.object({
+  state: z32.enum(["applied", "queued"]),
+  requested: z32.number().int().min(1).max(MAX_BULK_ASSIGN_PROSPECTS),
+  assigned: z32.number().int().min(0).max(MAX_BULK_ASSIGN_PROSPECTS).nullable(),
+  skipped: z32.number().int().min(0).max(MAX_BULK_ASSIGN_PROSPECTS).nullable()
+}).refine((body) => body.state === "applied" ? body.assigned !== null && body.skipped !== null : body.assigned === null && body.skipped === null, "The counts are set exactly when the assignment was applied");
+var eraseProspectResponseSchema = z32.object({
+  prospectId: prospectIdSchema,
+  state: z32.literal("queued")
+});
+var prospectCompanySchema = z32.object({
+  id: prospectCompanyIdSchema,
+  fields: z32.object({
+    name: fieldValueSchema,
+    domain: fieldValueSchema.optional()
+  }),
+  createdAt: timestampSchema,
+  updatedAt: timestampSchema
+});
+var prospectCompanyParamsSchema = z32.strictObject({ companyId: prospectCompanyIdSchema });
+var prospectCompanyFieldParamsSchema = z32.strictObject({
+  companyId: prospectCompanyIdSchema,
+  field: prospectCompanyFieldNameSchema
+});
+var createProspectCompanyRequestSchema = z32.strictObject({
+  name: prospectCompanyNameSchema,
+  domain: prospectCompanyDomainSchema.optional()
+});
+var updateProspectCompanyRequestSchema = z32.strictObject({
+  name: prospectCompanyNameSchema.optional(),
+  domain: prospectCompanyDomainSchema.nullable().optional()
+}).refine((body) => body.name !== undefined || body.domain !== undefined, "Send a change");
+var listProspectCompaniesQuerySchema = pageQuerySchema.extend({ q: prospectSearchSchema.optional() }).strict();
+var listProspectCompaniesResponseSchema = pageSchema(prospectCompanySchema);
+var prospectCompanyCursorSchema = z32.strictObject({
+  createdAt: timestampSchema,
+  id: prospectCompanyIdSchema
+});
+// src/prospect/routes.ts
+var PROSPECT_ADMIN_ROLES = ["owner", "admin"];
+var PROSPECT_ALL_ROLES = [
+  "owner",
+  "admin",
+  "manager",
+  "rep"
+];
+var route5 = (definition) => Object.freeze(definition);
+var IDEMPOTENT_ERRORS = [
+  "request.invalid",
+  "request.idempotency_key_reused",
+  "request.idempotency_in_progress"
+];
+var VISIBILITY = "Visibility is decided from the token: Owner and Admin see every Prospect, a Manager those owned by Reps on their Team, a Rep those they own; anything else is prospect.not_found (404), as is a record of another Organization.";
+var PROSPECT_ROUTES = Object.freeze({
+  createProspect: route5({
+    method: "POST",
+    path: "/v1/prospects",
+    roles: PROSPECT_ALL_ROLES,
+    success: [201, 200],
+    idempotent: true,
+    errors: ["prospect.duplicate_identity", "prospect.forbidden_owner", "prospect.not_found"],
+    commonErrors: [...IDEMPOTENT_ERRORS],
+    description: "Creates a Prospect by hand with the Source manual. Every role may; a Rep becomes its owner and only Owner and Admin may name another owner (else prospect.forbidden_owner). An email, phone or LinkedIn address another Prospect already has is prospect.duplicate_identity; the answer names that Prospect only if the caller may see it. A Prospect Company that does not exist is prospect.not_found. Answers 201, or 200 with the original Prospect for a replay of the same Idempotency-Key."
+  }),
+  listProspects: route5({
+    method: "GET",
+    path: "/v1/prospects",
+    roles: PROSPECT_ALL_ROLES,
+    success: [200],
+    idempotent: false,
+    errors: [],
+    commonErrors: ["request.invalid"],
+    description: `Lists Prospects, newest first (by createdAt, then id), one cursor-paginated page at a time (at most 100). Filters: ownerMembershipId, source, companyId, status and q (a search on name, email and company). ${VISIBILITY} A filter can narrow what the caller sees, never widen it.`
+  }),
+  getProspect: route5({
+    method: "GET",
+    path: "/v1/prospects/{prospectId}",
+    roles: PROSPECT_ALL_ROLES,
+    success: [200],
+    idempotent: false,
+    errors: ["prospect.not_found"],
+    commonErrors: ["request.invalid"],
+    description: `Reads one Prospect with every current field and its Source, time and actor. ${VISIBILITY}`
+  }),
+  updateProspect: route5({
+    method: "PATCH",
+    path: "/v1/prospects/{prospectId}",
+    roles: PROSPECT_ALL_ROLES,
+    success: [200],
+    idempotent: false,
+    errors: ["prospect.not_found", "prospect.duplicate_identity"],
+    commonErrors: ["request.invalid"],
+    description: `Edits a Prospect; each field sent is written with the Source manual, which beats every other Source (ADR 0020). null clears a field. Changing an identity to one another Prospect has is prospect.duplicate_identity. Owner is changed by setProspectOwner. Publishes prospect.updated once per change. ${VISIBILITY}`
+  }),
+  setProspectOwner: route5({
+    method: "PUT",
+    path: "/v1/prospects/{prospectId}/owner",
+    roles: PROSPECT_ADMIN_ROLES,
+    success: [200],
+    idempotent: false,
+    errors: ["prospect.not_found", "prospect.forbidden_owner"],
+    commonErrors: ["request.invalid"],
+    description: "Assigns or reassigns the owner Rep. Owner and Admin only. The new owner must be a Rep or Manager of the same Organization, else prospect.forbidden_owner. Idempotent by end state. Publishes prospect.updated."
+  }),
+  bulkAssignProspects: route5({
+    method: "POST",
+    path: "/v1/prospects/assign",
+    roles: PROSPECT_ADMIN_ROLES,
+    success: [200, 202],
+    idempotent: true,
+    errors: ["prospect.forbidden_owner"],
+    commonErrors: [...IDEMPOTENT_ERRORS],
+    description: "Assigns up to 5,000 Prospects to one owner. Owner and Admin only. Up to 500 are applied at once (200); more are queued (202) and finish in the background. The owner rules of setProspectOwner apply (prospect.forbidden_owner). Prospects that do not exist are counted as skipped, not named. A retry with the same Idempotency-Key changes nothing twice."
+  }),
+  eraseProspect: route5({
+    method: "DELETE",
+    path: "/v1/prospects/{prospectId}",
+    roles: PROSPECT_ADMIN_ROLES,
+    success: [202],
+    idempotent: false,
+    errors: ["prospect.not_found"],
+    commonErrors: ["request.invalid"],
+    description: "Erases a Prospect on request: a queued job deletes its fields, identities and notes, writes a salted-hash suppression entry and publishes prospect.erased, which carries no personal data. Owner and Admin only; a Rep or Manager gets auth.forbidden. Answers 202 at once; the Prospect is then prospect.not_found, and a retry after acceptance that gets prospect.not_found means the erasure was accepted."
+  }),
+  listProspectFieldHistory: route5({
+    method: "GET",
+    path: "/v1/prospects/{prospectId}/fields/{field}/history",
+    roles: PROSPECT_ALL_ROLES,
+    success: [200],
+    idempotent: false,
+    errors: ["prospect.not_found"],
+    commonErrors: ["request.invalid"],
+    description: `Lists one field's history, newest first, cursor-paginated (at most 100): the current value, earlier values and enrichment values kept as suggestions, each with Source, time and actor. At most 50 entries are kept per field. ${VISIBILITY}`
+  }),
+  createProspectCompany: route5({
+    method: "POST",
+    path: "/v1/prospect-companies",
+    roles: PROSPECT_ALL_ROLES,
+    success: [201, 200],
+    idempotent: true,
+    errors: [],
+    commonErrors: [...IDEMPOTENT_ERRORS],
+    description: "Creates a Prospect Company with the Source manual. Every role may. Answers 201, or 200 with the original record for a replay of the same Idempotency-Key."
+  }),
+  listProspectCompanies: route5({
+    method: "GET",
+    path: "/v1/prospect-companies",
+    roles: PROSPECT_ALL_ROLES,
+    success: [200],
+    idempotent: false,
+    errors: [],
+    commonErrors: ["request.invalid"],
+    description: "Lists the Organization’s Prospect Companies, newest first, cursor-paginated (at most 100), with an optional q search on name and domain. Every role sees every Prospect Company; a Company carries no Prospect."
+  }),
+  getProspectCompany: route5({
+    method: "GET",
+    path: "/v1/prospect-companies/{companyId}",
+    roles: PROSPECT_ALL_ROLES,
+    success: [200],
+    idempotent: false,
+    errors: ["prospect.not_found"],
+    commonErrors: ["request.invalid"],
+    description: "Reads one Prospect Company with its fields and their Sources."
+  }),
+  updateProspectCompany: route5({
+    method: "PATCH",
+    path: "/v1/prospect-companies/{companyId}",
+    roles: PROSPECT_ALL_ROLES,
+    success: [200],
+    idempotent: false,
+    errors: ["prospect.not_found"],
+    commonErrors: ["request.invalid"],
+    description: "Edits a Prospect Company; each field sent is written with the Source manual (ADR 0020). null clears the domain."
+  }),
+  listProspectCompanyFieldHistory: route5({
+    method: "GET",
+    path: "/v1/prospect-companies/{companyId}/fields/{field}/history",
+    roles: PROSPECT_ALL_ROLES,
+    success: [200],
+    idempotent: false,
+    errors: ["prospect.not_found"],
+    commonErrors: ["request.invalid"],
+    description: "Lists one Prospect Company field’s history, newest first, cursor-paginated (at most 100), with Source, time and actor."
+  }),
+  listProspectDuplicates: route5({
+    method: "GET",
+    path: "/v1/prospect-duplicates",
+    roles: PROSPECT_ADMIN_ROLES,
+    success: [200],
+    idempotent: false,
+    errors: ["prospect.not_found"],
+    commonErrors: ["request.invalid"],
+    description: "Lists suspected duplicate pairs: Prospects that share a normalised email, phone or LinkedIn address, found from the indexed identities and bounded per request (at most 100 per page, cursor-paginated). Optionally for one prospectId. Owner and Admin only."
+  }),
+  mergeProspects: route5({
+    method: "POST",
+    path: "/v1/prospects/{prospectId}/merges",
+    roles: PROSPECT_ADMIN_ROLES,
+    success: [201, 200],
+    idempotent: true,
+    errors: ["prospect.not_found", "prospect.merge_conflict"],
+    commonErrors: [...IDEMPOTENT_ERRORS],
+    description: "Merges up to 5 Prospects into the survivor in the path, with a value chosen per field; both histories are kept and links move to the survivor. Owner and Admin only. A Prospect already merged or named twice is prospect.merge_conflict. Publishes prospect.merged. Undo is possible for 30 days."
+  }),
+  getProspectMerge: route5({
+    method: "GET",
+    path: "/v1/prospect-merges/{mergeId}",
+    roles: PROSPECT_ADMIN_ROLES,
+    success: [200],
+    idempotent: false,
+    errors: ["prospect.not_found"],
+    commonErrors: ["request.invalid"],
+    description: "Reads one merge record, including until when it can be undone. Owner and Admin only."
+  }),
+  undoProspectMerge: route5({
+    method: "POST",
+    path: "/v1/prospect-merges/{mergeId}/undo",
+    roles: PROSPECT_ADMIN_ROLES,
+    success: [200],
+    idempotent: false,
+    errors: ["prospect.not_found", "prospect.merge_conflict"],
+    commonErrors: ["request.invalid"],
+    description: "Reverses a merge, restoring both records exactly as the snapshot holds them. Owner and Admin only. After the 30-day window, or when a record has been merged again, it is prospect.merge_conflict. Undoing an undone merge answers 200 with the record as it is. Publishes prospect.merge_undone. Takes no body."
+  }),
+  uploadProspectImport: route5({
+    method: "POST",
+    path: "/v1/prospect-imports",
+    roles: PROSPECT_ADMIN_ROLES,
+    success: [202],
+    idempotent: true,
+    errors: ["prospect.import_invalid"],
+    commonErrors: ["request.too_large", "request.unsupported_media_type", ...IDEMPOTENT_ERRORS],
+    description: 'Uploads the CSV template (PROSPECT_IMPORT_COLUMNS; up to 10 MB and 50,000 rows) as multipart/form-data with one file part named "file". Owner and Admin only. The type, size and header are checked before anything is stored; a refusal is prospect.import_invalid with details.reason. The rows are processed in a queued, resumable job that matches a row to an existing Prospect on any normalised identity (email, phone or LinkedIn address), writes the Source import and never replaces a manual value. Bad rows are reported, never dropped. Answers 202 with the import; the same Idempotency-Key creates nothing new.'
+  }),
+  listProspectImports: route5({
+    method: "GET",
+    path: "/v1/prospect-imports",
+    roles: PROSPECT_ADMIN_ROLES,
+    success: [200],
+    idempotent: false,
+    errors: [],
+    commonErrors: ["request.invalid"],
+    description: "Lists the Organization’s imports, newest first, cursor-paginated (at most 100). Owner and Admin only."
+  }),
+  getProspectImport: route5({
+    method: "GET",
+    path: "/v1/prospect-imports/{importId}",
+    roles: PROSPECT_ADMIN_ROLES,
+    success: [200],
+    idempotent: false,
+    errors: ["prospect.not_found"],
+    commonErrors: ["request.invalid"],
+    description: "Reads one import: its state, failure reason and counts, so a page opened mid-job shows live status. Owner and Admin only."
+  }),
+  listProspectImportRows: route5({
+    method: "GET",
+    path: "/v1/prospect-imports/{importId}/rows",
+    roles: PROSPECT_ADMIN_ROLES,
+    success: [200],
+    idempotent: false,
+    errors: ["prospect.not_found"],
+    commonErrors: ["request.invalid"],
+    description: "Reads the report in CSV order, cursor-paginated (at most 100), optionally only one result. Each row has its number, result, reason and Prospect id; no cell of the file is returned. Owner and Admin only."
+  }),
+  downloadProspectImportReport: route5({
+    method: "GET",
+    path: "/v1/prospect-imports/{importId}/report.csv",
+    roles: PROSPECT_ADMIN_ROLES,
+    success: [200],
+    idempotent: false,
+    errors: ["prospect.not_found"],
+    commonErrors: ["request.invalid"],
+    description: "Downloads the report as text/csv with the columns PROSPECT_IMPORT_REPORT_COLUMNS, streamed in pages and never held whole. Owner and Admin only. Contains no cell of the uploaded file."
+  })
+});
 // src/index.ts
 var PACKAGE = "tula-closeline-contract";
 export {
@@ -2304,6 +2981,7 @@ export {
   AUTH_ERRORS,
   AUTH_OPTIONS_PATH,
   AUTH_OPTIONS_ROUTE,
+  BULK_ASSIGN_SYNC_LIMIT,
   CALL_CHANNELS,
   CALL_DELETED_MESSAGE,
   CALL_FAILURE_FIXES,
@@ -2346,6 +3024,8 @@ export {
   DOCUMENT_STATES,
   DOCUMENT_UPLOADED_MESSAGE,
   ERRORS,
+  FIELD_HISTORY_STATES,
+  FIXED_SOURCE_KINDS,
   GOOGLE_ERROR_PARAM,
   GOOGLE_ERROR_PATH,
   GOOGLE_ROUTES,
@@ -2362,6 +3042,7 @@ export {
   MARKETING_ERRORS,
   MARKETING_ROUTES,
   MAX_AUTHORIZATION_URL_LENGTH,
+  MAX_BULK_ASSIGN_PROSPECTS,
   MAX_CALL_SPEAKERS,
   MAX_CURSOR_LENGTH,
   MAX_DEAL_ID_BYTES,
@@ -2380,10 +3061,22 @@ export {
   MAX_DOCUMENT_FILE_NAME_LENGTH,
   MAX_DOCUMENT_PAGES,
   MAX_EMAIL_LENGTH,
+  MAX_FIELD_HISTORY_ENTRIES,
+  MAX_MERGED_PROSPECTS,
   MAX_MOMENT_SNIPPET_CHARACTERS,
   MAX_NAME_LENGTH,
   MAX_PAGE_SIZE,
   MAX_PERSON_NAME_LENGTH,
+  MAX_PROSPECT_COMPANY_NAME_LENGTH,
+  MAX_PROSPECT_FIELD_VALUE_LENGTH,
+  MAX_PROSPECT_IMPORT_BYTES,
+  MAX_PROSPECT_IMPORT_ROWS,
+  MAX_PROSPECT_JOB_TITLE_LENGTH,
+  MAX_PROSPECT_NAME_PART_LENGTH,
+  MAX_PROSPECT_NOTES_LENGTH,
+  MAX_PROSPECT_SEARCH_LENGTH,
+  MAX_PROSPECT_TAGS,
+  MAX_PROSPECT_TAG_LENGTH,
   MAX_QUEUED_DEAL_IMPORTS,
   MAX_RECORDING_BYTES,
   MAX_RECORDING_SECONDS,
@@ -2400,6 +3093,7 @@ export {
   MAX_SEARCH_TEXT_CHARACTERS,
   MAX_SEARCH_TURNS,
   MAX_SEQ,
+  MAX_SOURCE_REF_LENGTH,
   MAX_SPEAKER_EXCERPT_LENGTH,
   MAX_SPEAKER_LABEL_BYTES,
   MAX_SPEAKER_LABEL_LENGTH,
@@ -2416,6 +3110,26 @@ export {
   PLAYBOOK_READ_ROLES,
   PLAYBOOK_ROUTES,
   PLAYBOOK_WRITE_ROLES,
+  PROSPECT_ADMIN_ROLES,
+  PROSPECT_ALL_ROLES,
+  PROSPECT_COMPANY_FIELD_NAMES,
+  PROSPECT_ERRORS,
+  PROSPECT_EVENTS,
+  PROSPECT_FIELD_NAMES,
+  PROSPECT_IDENTITY_KINDS,
+  PROSPECT_IMPORT_COLUMNS,
+  PROSPECT_IMPORT_FAILURE_REASONS,
+  PROSPECT_IMPORT_FILE_FIELD,
+  PROSPECT_IMPORT_INVALID_REASONS,
+  PROSPECT_IMPORT_REJECT_REASONS,
+  PROSPECT_IMPORT_REPORT_COLUMNS,
+  PROSPECT_IMPORT_ROW_RESULTS,
+  PROSPECT_IMPORT_SKIP_REASONS,
+  PROSPECT_IMPORT_STATES,
+  PROSPECT_MERGE_STATES,
+  PROSPECT_MERGE_UNDO_DAYS,
+  PROSPECT_ROUTES,
+  PROSPECT_STATUSES,
   REGIONS,
   RIGHTS_WORDINGS,
   ROLES,
@@ -2431,7 +3145,10 @@ export {
   authOptionsResponseSchema,
   authProvidersSchema,
   authorizationUrlSchema,
+  boundedTextSchema,
   browserSessionTokensSchema,
+  bulkAssignProspectsRequestSchema,
+  bulkAssignProspectsResponseSchema,
   calendarDateSchema,
   callChannelSchema,
   callCursorSchema,
@@ -2458,6 +3175,8 @@ export {
   createDemoRequestRequestSchema,
   createDemoRequestResponseSchema,
   createInvitationRequestSchema,
+  createProspectCompanyRequestSchema,
+  createProspectRequestSchema,
   createTeamRequestSchema,
   dealAmountSchema,
   dealCurrencySchema,
@@ -2500,14 +3219,21 @@ export {
   documentStateSchema,
   documentTypeCheckSchema,
   documentUploadedPayloadSchema,
+  duplicateIdentityDetailsSchema,
+  e164PhoneSchema,
   emailSchema,
   encodeCursor,
+  eraseProspectResponseSchema,
   errorBodySchema,
   errorCodeSchema,
   eventEnvelopeSchema,
   eventIdSchema,
   eventTypeSchema,
   excerptText,
+  fieldHistoryCursorSchema,
+  fieldHistoryEntrySchema,
+  fieldHistoryStateSchema,
+  fieldValueSchema,
   firstCsvRecord,
   foldAscii,
   formatId,
@@ -2554,10 +3280,22 @@ export {
   listDealsResponseSchema,
   listDocumentsQuerySchema,
   listDocumentsResponseSchema,
+  listFieldHistoryQuerySchema,
+  listFieldHistoryResponseSchema,
   listInvitationsQuerySchema,
   listInvitationsResponseSchema,
   listMembersQuerySchema,
   listMembersResponseSchema,
+  listProspectCompaniesQuerySchema,
+  listProspectCompaniesResponseSchema,
+  listProspectDuplicatesQuerySchema,
+  listProspectDuplicatesResponseSchema,
+  listProspectImportRowsQuerySchema,
+  listProspectImportRowsResponseSchema,
+  listProspectImportsQuerySchema,
+  listProspectImportsResponseSchema,
+  listProspectsQuerySchema,
+  listProspectsResponseSchema,
   listTeamMembersQuerySchema,
   listTeamMembersResponseSchema,
   listTeamsQuerySchema,
@@ -2566,6 +3304,7 @@ export {
   memberParamsSchema,
   memberSchema,
   membershipIdSchema,
+  mergeProspectsRequestSchema,
   momentMatchSchema,
   momentQueryText,
   momentSnippet,
@@ -2588,7 +3327,51 @@ export {
   parseOutcomeCell,
   parseRepField,
   personNameSchema,
+  prospectCompanyCursorSchema,
+  prospectCompanyDomainSchema,
+  prospectCompanyFieldNameSchema,
+  prospectCompanyFieldParamsSchema,
+  prospectCompanyIdSchema,
+  prospectCompanyNameSchema,
+  prospectCompanyParamsSchema,
+  prospectCompanySchema,
+  prospectCreatedEvent,
+  prospectCursorSchema,
+  prospectDuplicateCursorSchema,
+  prospectDuplicateSchema,
+  prospectErasedEvent,
+  prospectFieldNameSchema,
+  prospectFieldParamsSchema,
   prospectIdSchema,
+  prospectIdentityKindSchema,
+  prospectImportCursorSchema,
+  prospectImportFailureReasonSchema,
+  prospectImportIdSchema,
+  prospectImportInvalidDetailsSchema,
+  prospectImportParamsSchema,
+  prospectImportRowCursorSchema,
+  prospectImportRowReasonSchema,
+  prospectImportRowResultSchema,
+  prospectImportRowSchema,
+  prospectImportSchema,
+  prospectImportStateSchema,
+  prospectJobTitleSchema,
+  prospectMergeIdSchema,
+  prospectMergeParamsSchema,
+  prospectMergeSchema,
+  prospectMergeUndoneEvent,
+  prospectMergedEvent,
+  prospectNamePartSchema,
+  prospectNotFoundDetailsSchema,
+  prospectNotesSchema,
+  prospectParamsSchema,
+  prospectSchema,
+  prospectSearchSchema,
+  prospectStatusSchema,
+  prospectTagsSchema,
+  prospectUpdatedEvent,
+  rawLinkedinUrlSchema,
+  rawPhoneSchema,
   regionSchema,
   renameOrganizationRequestSchema,
   renameTeamRequestSchema,
@@ -2614,6 +3397,8 @@ export {
   searchTurnSchema,
   setCallRepRequestSchema,
   setDealOutcomeRequestSchema,
+  setProspectOwnerRequestSchema,
+  sourceKindSchema,
   speakerExcerpt,
   speakerExcerptSchema,
   speakerLabelSchema,
@@ -2625,6 +3410,8 @@ export {
   teamParamsSchema,
   teamSchema,
   timestampSchema,
+  updateProspectCompanyRequestSchema,
+  updateProspectRequestSchema,
   uploadCallFieldsSchema,
   uploadCallFileSchema,
   uploadDocumentFileSchema,

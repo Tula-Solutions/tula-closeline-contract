@@ -1048,6 +1048,12 @@ declare const teamIdSchema: z11.core.$ZodBranded<z11.ZodString, "team", "out">;
 declare const invitationIdSchema: z11.core.$ZodBranded<z11.ZodString, "inv", "out">;
 /** The id of a Prospect (`prs_…`). */
 declare const prospectIdSchema: z11.core.$ZodBranded<z11.ZodString, "prs", "out">;
+/** The id of a Prospect Company (`pco_…`). */
+declare const prospectCompanyIdSchema: z11.core.$ZodBranded<z11.ZodString, "pco", "out">;
+/** The id of a Prospect import (`pimp_…`). */
+declare const prospectImportIdSchema: z11.core.$ZodBranded<z11.ZodString, "pimp", "out">;
+/** The id of a Prospect merge record (`pmrg_…`). */
+declare const prospectMergeIdSchema: z11.core.$ZodBranded<z11.ZodString, "pmrg", "out">;
 /** The id of a Playbook document (`doc_…`). */
 declare const documentIdSchema: z11.core.$ZodBranded<z11.ZodString, "doc", "out">;
 /** The opaque id of a Deal record (`deal_…`), used in every URL path; the customer's own deal id never travels in a path. */
@@ -1074,6 +1080,12 @@ type TeamId = z11.infer<typeof teamIdSchema>;
 type InvitationId = z11.infer<typeof invitationIdSchema>;
 /** The id of a Prospect. */
 type ProspectId = z11.infer<typeof prospectIdSchema>;
+/** The id of a Prospect Company. */
+type ProspectCompanyId = z11.infer<typeof prospectCompanyIdSchema>;
+/** The id of a Prospect import. */
+type ProspectImportId = z11.infer<typeof prospectImportIdSchema>;
+/** The id of a Prospect merge record. */
+type ProspectMergeId = z11.infer<typeof prospectMergeIdSchema>;
 /** The id of a Playbook document. */
 type DocumentId = z11.infer<typeof documentIdSchema>;
 /** The opaque id of a Deal record. */
@@ -3229,6 +3241,1534 @@ declare function normaliseMediaType(mediaType: string): string;
 declare function hasStrippableCharacter(text: string): boolean;
 /** Whether text is well-formed UTF-16: no lone surrogate. */
 declare function isWellFormedText(text: string): boolean;
+import { z as z27 } from "zod";
+import { ErrorDefinition as ErrorDefinition_8gwh457 } from "..";
+/**
+* The errors the Prospect routes return, as `area.reason` codes. A role that is not allowed is the
+* common `auth.forbidden`. A record of another Organization, or one the caller may not see (a
+* Rep's view of another Rep's Prospect), is `prospect.not_found` (404, never 403), so existence is
+* not revealed; `details.resource` names which kind of record it was.
+*
+* - `prospect.duplicate_identity` (409): another Prospect of the Organization already has this
+*   normalised email, phone or LinkedIn address. `details` is {@link duplicateIdentityDetailsSchema};
+*   `prospectId` is present only when the caller may see that Prospect.
+* - `prospect.import_invalid` (422): the upload was refused before anything was stored;
+*   `details.reason` is one of `PROSPECT_IMPORT_INVALID_REASONS`. A bad row is never an HTTP error:
+*   it is a row in the report.
+* - `prospect.merge_conflict` (409): the merge cannot be made or undone, for example a Prospect is
+*   already merged, the same Prospect is named twice, or the thirty-day undo window has passed.
+* - `prospect.forbidden_owner` (403): the named owner is not allowed: a member of another
+*   Organization, someone who is not a Rep or Manager, or a Rep naming someone other than themselves.
+*/
+declare const PROSPECT_ERRORS: {
+	readonly "prospect.duplicate_identity": ErrorDefinition_8gwh457<"prospect.duplicate_identity">;
+	readonly "prospect.forbidden_owner": ErrorDefinition_8gwh457<"prospect.forbidden_owner">;
+	readonly "prospect.import_invalid": ErrorDefinition_8gwh457<"prospect.import_invalid">;
+	readonly "prospect.merge_conflict": ErrorDefinition_8gwh457<"prospect.merge_conflict">;
+	readonly "prospect.not_found": ErrorDefinition_8gwh457<"prospect.not_found">;
+};
+/** A code from the {@link PROSPECT_ERRORS} registry. */
+type ProspectErrorCode = keyof typeof PROSPECT_ERRORS;
+/** The `details` of `prospect.not_found`: which kind of record was not found. */
+declare const prospectNotFoundDetailsSchema: z27.ZodObject<{
+	resource: z27.ZodEnum<{
+		company: "company";
+		import: "import";
+		merge: "merge";
+		prospect: "prospect";
+	}>;
+}, z27.core.$strict>;
+/** The `details` of `prospect.not_found`. */
+type ProspectNotFoundDetails = z27.infer<typeof prospectNotFoundDetailsSchema>;
+/** The `details` of `prospect.duplicate_identity`: which kind of identity clashed and, when the caller may see it, the other Prospect. */
+declare const duplicateIdentityDetailsSchema: z27.ZodObject<{
+	identityKind: z27.ZodEnum<{
+		email: "email";
+		linkedin: "linkedin";
+		phone: "phone";
+	}>;
+	prospectId: z27.ZodOptional<z27.core.$ZodBranded<z27.ZodString, "prs", "out">>;
+}, z27.core.$strict>;
+/** The `details` of `prospect.duplicate_identity`. */
+type DuplicateIdentityDetails = z27.infer<typeof duplicateIdentityDetailsSchema>;
+import { z as z28 } from "zod";
+/**
+* `prospect.created` (version 1): a Prospect was created. Carries ids and the Source kind, no
+* personal data; a consumer that needs the person reads the Prospect from core.
+*/
+declare const prospectCreatedEvent: {
+	type: "prospect.created";
+	version: 1;
+	schema: z28.ZodObject<{
+		id: z28.core.$ZodBranded<z28.ZodString, "evt", "out">;
+		occurredAt: z28.ZodISODateTime;
+		organizationId: z28.core.$ZodBranded<z28.ZodString, "org", "out">;
+		region: z28.ZodEnum<{
+			eu: "eu";
+			us: "us";
+		}>;
+		type: z28.ZodLiteral<"prospect.created">;
+		version: z28.ZodLiteral<1>;
+		data: z28.ZodObject<{
+			prospectId: z28.core.$ZodBranded<z28.ZodString, "prs", "out">;
+			companyId: z28.ZodNullable<z28.core.$ZodBranded<z28.ZodString, "pco", "out">>;
+			ownerMembershipId: z28.ZodNullable<z28.core.$ZodBranded<z28.ZodString, "mem", "out">>;
+			source: z28.ZodUnion<readonly [z28.ZodEnum<{
+				"crm:hubspot": "crm:hubspot";
+				"crm:salesforce": "crm:salesforce";
+				form: "form";
+				import: "import";
+				manual: "manual";
+			}>, z28.ZodString]>;
+		}, z28.core.$strict>;
+	}, z28.core.$strip>;
+	parse: (input: unknown) => {
+		id: string & z28.$brand<"evt">;
+		occurredAt: string;
+		organizationId: string & z28.$brand<"org">;
+		region: "eu" | "us";
+		type: "prospect.created";
+		version: 1;
+		data: {
+			prospectId: string & z28.$brand<"prs">;
+			companyId: (string & z28.$brand<"pco">) | null;
+			ownerMembershipId: (string & z28.$brand<"mem">) | null;
+			source: string;
+		};
+	};
+	safeParse: (input: unknown) => z28.ZodSafeParseResult<{
+		id: string & z28.$brand<"evt">;
+		occurredAt: string;
+		organizationId: string & z28.$brand<"org">;
+		region: "eu" | "us";
+		type: "prospect.created";
+		version: 1;
+		data: {
+			prospectId: string & z28.$brand<"prs">;
+			companyId: (string & z28.$brand<"pco">) | null;
+			ownerMembershipId: (string & z28.$brand<"mem">) | null;
+			source: string;
+		};
+	}>;
+};
+/**
+* `prospect.updated` (version 1): a Prospect changed. `changedFields` names the fields whose
+* current value changed (names only, never values); `ownerChanged`, `companyChanged` and
+* `statusChanged` flag the other attributes. Published once per change.
+*/
+declare const prospectUpdatedEvent: {
+	type: "prospect.updated";
+	version: 1;
+	schema: z28.ZodObject<{
+		id: z28.core.$ZodBranded<z28.ZodString, "evt", "out">;
+		occurredAt: z28.ZodISODateTime;
+		organizationId: z28.core.$ZodBranded<z28.ZodString, "org", "out">;
+		region: z28.ZodEnum<{
+			eu: "eu";
+			us: "us";
+		}>;
+		type: z28.ZodLiteral<"prospect.updated">;
+		version: z28.ZodLiteral<1>;
+		data: z28.ZodObject<{
+			prospectId: z28.core.$ZodBranded<z28.ZodString, "prs", "out">;
+			changedFields: z28.ZodArray<z28.ZodEnum<{
+				email: "email";
+				firstName: "firstName";
+				jobTitle: "jobTitle";
+				lastName: "lastName";
+				linkedinUrl: "linkedinUrl";
+				phone: "phone";
+			}>>;
+			ownerChanged: z28.ZodBoolean;
+			companyChanged: z28.ZodBoolean;
+			statusChanged: z28.ZodBoolean;
+			source: z28.ZodUnion<readonly [z28.ZodEnum<{
+				"crm:hubspot": "crm:hubspot";
+				"crm:salesforce": "crm:salesforce";
+				form: "form";
+				import: "import";
+				manual: "manual";
+			}>, z28.ZodString]>;
+		}, z28.core.$strict>;
+	}, z28.core.$strip>;
+	parse: (input: unknown) => {
+		id: string & z28.$brand<"evt">;
+		occurredAt: string;
+		organizationId: string & z28.$brand<"org">;
+		region: "eu" | "us";
+		type: "prospect.updated";
+		version: 1;
+		data: {
+			prospectId: string & z28.$brand<"prs">;
+			changedFields: ("email" | "firstName" | "jobTitle" | "lastName" | "linkedinUrl" | "phone")[];
+			ownerChanged: boolean;
+			companyChanged: boolean;
+			statusChanged: boolean;
+			source: string;
+		};
+	};
+	safeParse: (input: unknown) => z28.ZodSafeParseResult<{
+		id: string & z28.$brand<"evt">;
+		occurredAt: string;
+		organizationId: string & z28.$brand<"org">;
+		region: "eu" | "us";
+		type: "prospect.updated";
+		version: 1;
+		data: {
+			prospectId: string & z28.$brand<"prs">;
+			changedFields: ("email" | "firstName" | "jobTitle" | "lastName" | "linkedinUrl" | "phone")[];
+			ownerChanged: boolean;
+			companyChanged: boolean;
+			statusChanged: boolean;
+			source: string;
+		};
+	}>;
+};
+/** `prospect.merged` (version 1): Prospects were merged into a survivor; links (such as Deal links) move to the survivor. Ids only. */
+declare const prospectMergedEvent: {
+	type: "prospect.merged";
+	version: 1;
+	schema: z28.ZodObject<{
+		id: z28.core.$ZodBranded<z28.ZodString, "evt", "out">;
+		occurredAt: z28.ZodISODateTime;
+		organizationId: z28.core.$ZodBranded<z28.ZodString, "org", "out">;
+		region: z28.ZodEnum<{
+			eu: "eu";
+			us: "us";
+		}>;
+		type: z28.ZodLiteral<"prospect.merged">;
+		version: z28.ZodLiteral<1>;
+		data: z28.ZodObject<{
+			mergeId: z28.core.$ZodBranded<z28.ZodString, "pmrg", "out">;
+			survivorProspectId: z28.core.$ZodBranded<z28.ZodString, "prs", "out">;
+			mergedProspectIds: z28.ZodArray<z28.core.$ZodBranded<z28.ZodString, "prs", "out">>;
+		}, z28.core.$strict>;
+	}, z28.core.$strip>;
+	parse: (input: unknown) => {
+		id: string & z28.$brand<"evt">;
+		occurredAt: string;
+		organizationId: string & z28.$brand<"org">;
+		region: "eu" | "us";
+		type: "prospect.merged";
+		version: 1;
+		data: {
+			mergeId: string & z28.$brand<"pmrg">;
+			survivorProspectId: string & z28.$brand<"prs">;
+			mergedProspectIds: (string & z28.$brand<"prs">)[];
+		};
+	};
+	safeParse: (input: unknown) => z28.ZodSafeParseResult<{
+		id: string & z28.$brand<"evt">;
+		occurredAt: string;
+		organizationId: string & z28.$brand<"org">;
+		region: "eu" | "us";
+		type: "prospect.merged";
+		version: 1;
+		data: {
+			mergeId: string & z28.$brand<"pmrg">;
+			survivorProspectId: string & z28.$brand<"prs">;
+			mergedProspectIds: (string & z28.$brand<"prs">)[];
+		};
+	}>;
+};
+/** `prospect.merge_undone` (version 1): a merge was reversed and the merged Prospects restored; links move back. Ids only. */
+declare const prospectMergeUndoneEvent: {
+	type: "prospect.merge_undone";
+	version: 1;
+	schema: z28.ZodObject<{
+		id: z28.core.$ZodBranded<z28.ZodString, "evt", "out">;
+		occurredAt: z28.ZodISODateTime;
+		organizationId: z28.core.$ZodBranded<z28.ZodString, "org", "out">;
+		region: z28.ZodEnum<{
+			eu: "eu";
+			us: "us";
+		}>;
+		type: z28.ZodLiteral<"prospect.merge_undone">;
+		version: z28.ZodLiteral<1>;
+		data: z28.ZodObject<{
+			mergeId: z28.core.$ZodBranded<z28.ZodString, "pmrg", "out">;
+			survivorProspectId: z28.core.$ZodBranded<z28.ZodString, "prs", "out">;
+			restoredProspectIds: z28.ZodArray<z28.core.$ZodBranded<z28.ZodString, "prs", "out">>;
+		}, z28.core.$strict>;
+	}, z28.core.$strip>;
+	parse: (input: unknown) => {
+		id: string & z28.$brand<"evt">;
+		occurredAt: string;
+		organizationId: string & z28.$brand<"org">;
+		region: "eu" | "us";
+		type: "prospect.merge_undone";
+		version: 1;
+		data: {
+			mergeId: string & z28.$brand<"pmrg">;
+			survivorProspectId: string & z28.$brand<"prs">;
+			restoredProspectIds: (string & z28.$brand<"prs">)[];
+		};
+	};
+	safeParse: (input: unknown) => z28.ZodSafeParseResult<{
+		id: string & z28.$brand<"evt">;
+		occurredAt: string;
+		organizationId: string & z28.$brand<"org">;
+		region: "eu" | "us";
+		type: "prospect.merge_undone";
+		version: 1;
+		data: {
+			mergeId: string & z28.$brand<"pmrg">;
+			survivorProspectId: string & z28.$brand<"prs">;
+			restoredProspectIds: (string & z28.$brand<"prs">)[];
+		};
+	}>;
+};
+/**
+* `prospect.erased` (version 1): a Prospect was erased. The Playbook consumes it to drop its
+* links; it is idempotent on redelivery. It carries the opaque id and nothing about the person.
+*/
+declare const prospectErasedEvent: {
+	type: "prospect.erased";
+	version: 1;
+	schema: z28.ZodObject<{
+		id: z28.core.$ZodBranded<z28.ZodString, "evt", "out">;
+		occurredAt: z28.ZodISODateTime;
+		organizationId: z28.core.$ZodBranded<z28.ZodString, "org", "out">;
+		region: z28.ZodEnum<{
+			eu: "eu";
+			us: "us";
+		}>;
+		type: z28.ZodLiteral<"prospect.erased">;
+		version: z28.ZodLiteral<1>;
+		data: z28.ZodObject<{
+			prospectId: z28.core.$ZodBranded<z28.ZodString, "prs", "out">;
+		}, z28.core.$strict>;
+	}, z28.core.$strip>;
+	parse: (input: unknown) => {
+		id: string & z28.$brand<"evt">;
+		occurredAt: string;
+		organizationId: string & z28.$brand<"org">;
+		region: "eu" | "us";
+		type: "prospect.erased";
+		version: 1;
+		data: {
+			prospectId: string & z28.$brand<"prs">;
+		};
+	};
+	safeParse: (input: unknown) => z28.ZodSafeParseResult<{
+		id: string & z28.$brand<"evt">;
+		occurredAt: string;
+		organizationId: string & z28.$brand<"org">;
+		region: "eu" | "us";
+		type: "prospect.erased";
+		version: 1;
+		data: {
+			prospectId: string & z28.$brand<"prs">;
+		};
+	}>;
+};
+/** Every Prospect event, by type. */
+declare const PROSPECT_EVENTS: {
+	readonly "prospect.created": {
+		type: "prospect.created";
+		version: 1;
+		schema: z28.ZodObject<{
+			id: z28.core.$ZodBranded<z28.ZodString, "evt", "out">;
+			occurredAt: z28.ZodISODateTime;
+			organizationId: z28.core.$ZodBranded<z28.ZodString, "org", "out">;
+			region: z28.ZodEnum<{
+				eu: "eu";
+				us: "us";
+			}>;
+			type: z28.ZodLiteral<"prospect.created">;
+			version: z28.ZodLiteral<1>;
+			data: z28.ZodObject<{
+				prospectId: z28.core.$ZodBranded<z28.ZodString, "prs", "out">;
+				companyId: z28.ZodNullable<z28.core.$ZodBranded<z28.ZodString, "pco", "out">>;
+				ownerMembershipId: z28.ZodNullable<z28.core.$ZodBranded<z28.ZodString, "mem", "out">>;
+				source: z28.ZodUnion<readonly [z28.ZodEnum<{
+					"crm:hubspot": "crm:hubspot";
+					"crm:salesforce": "crm:salesforce";
+					form: "form";
+					import: "import";
+					manual: "manual";
+				}>, z28.ZodString]>;
+			}, z28.core.$strict>;
+		}, z28.core.$strip>;
+		parse: (input: unknown) => {
+			id: string & z28.$brand<"evt">;
+			occurredAt: string;
+			organizationId: string & z28.$brand<"org">;
+			region: "eu" | "us";
+			type: "prospect.created";
+			version: 1;
+			data: {
+				prospectId: string & z28.$brand<"prs">;
+				companyId: (string & z28.$brand<"pco">) | null;
+				ownerMembershipId: (string & z28.$brand<"mem">) | null;
+				source: string;
+			};
+		};
+		safeParse: (input: unknown) => z28.ZodSafeParseResult<{
+			id: string & z28.$brand<"evt">;
+			occurredAt: string;
+			organizationId: string & z28.$brand<"org">;
+			region: "eu" | "us";
+			type: "prospect.created";
+			version: 1;
+			data: {
+				prospectId: string & z28.$brand<"prs">;
+				companyId: (string & z28.$brand<"pco">) | null;
+				ownerMembershipId: (string & z28.$brand<"mem">) | null;
+				source: string;
+			};
+		}>;
+	};
+	readonly "prospect.updated": {
+		type: "prospect.updated";
+		version: 1;
+		schema: z28.ZodObject<{
+			id: z28.core.$ZodBranded<z28.ZodString, "evt", "out">;
+			occurredAt: z28.ZodISODateTime;
+			organizationId: z28.core.$ZodBranded<z28.ZodString, "org", "out">;
+			region: z28.ZodEnum<{
+				eu: "eu";
+				us: "us";
+			}>;
+			type: z28.ZodLiteral<"prospect.updated">;
+			version: z28.ZodLiteral<1>;
+			data: z28.ZodObject<{
+				prospectId: z28.core.$ZodBranded<z28.ZodString, "prs", "out">;
+				changedFields: z28.ZodArray<z28.ZodEnum<{
+					email: "email";
+					firstName: "firstName";
+					jobTitle: "jobTitle";
+					lastName: "lastName";
+					linkedinUrl: "linkedinUrl";
+					phone: "phone";
+				}>>;
+				ownerChanged: z28.ZodBoolean;
+				companyChanged: z28.ZodBoolean;
+				statusChanged: z28.ZodBoolean;
+				source: z28.ZodUnion<readonly [z28.ZodEnum<{
+					"crm:hubspot": "crm:hubspot";
+					"crm:salesforce": "crm:salesforce";
+					form: "form";
+					import: "import";
+					manual: "manual";
+				}>, z28.ZodString]>;
+			}, z28.core.$strict>;
+		}, z28.core.$strip>;
+		parse: (input: unknown) => {
+			id: string & z28.$brand<"evt">;
+			occurredAt: string;
+			organizationId: string & z28.$brand<"org">;
+			region: "eu" | "us";
+			type: "prospect.updated";
+			version: 1;
+			data: {
+				prospectId: string & z28.$brand<"prs">;
+				changedFields: ("email" | "firstName" | "jobTitle" | "lastName" | "linkedinUrl" | "phone")[];
+				ownerChanged: boolean;
+				companyChanged: boolean;
+				statusChanged: boolean;
+				source: string;
+			};
+		};
+		safeParse: (input: unknown) => z28.ZodSafeParseResult<{
+			id: string & z28.$brand<"evt">;
+			occurredAt: string;
+			organizationId: string & z28.$brand<"org">;
+			region: "eu" | "us";
+			type: "prospect.updated";
+			version: 1;
+			data: {
+				prospectId: string & z28.$brand<"prs">;
+				changedFields: ("email" | "firstName" | "jobTitle" | "lastName" | "linkedinUrl" | "phone")[];
+				ownerChanged: boolean;
+				companyChanged: boolean;
+				statusChanged: boolean;
+				source: string;
+			};
+		}>;
+	};
+	readonly "prospect.merged": {
+		type: "prospect.merged";
+		version: 1;
+		schema: z28.ZodObject<{
+			id: z28.core.$ZodBranded<z28.ZodString, "evt", "out">;
+			occurredAt: z28.ZodISODateTime;
+			organizationId: z28.core.$ZodBranded<z28.ZodString, "org", "out">;
+			region: z28.ZodEnum<{
+				eu: "eu";
+				us: "us";
+			}>;
+			type: z28.ZodLiteral<"prospect.merged">;
+			version: z28.ZodLiteral<1>;
+			data: z28.ZodObject<{
+				mergeId: z28.core.$ZodBranded<z28.ZodString, "pmrg", "out">;
+				survivorProspectId: z28.core.$ZodBranded<z28.ZodString, "prs", "out">;
+				mergedProspectIds: z28.ZodArray<z28.core.$ZodBranded<z28.ZodString, "prs", "out">>;
+			}, z28.core.$strict>;
+		}, z28.core.$strip>;
+		parse: (input: unknown) => {
+			id: string & z28.$brand<"evt">;
+			occurredAt: string;
+			organizationId: string & z28.$brand<"org">;
+			region: "eu" | "us";
+			type: "prospect.merged";
+			version: 1;
+			data: {
+				mergeId: string & z28.$brand<"pmrg">;
+				survivorProspectId: string & z28.$brand<"prs">;
+				mergedProspectIds: (string & z28.$brand<"prs">)[];
+			};
+		};
+		safeParse: (input: unknown) => z28.ZodSafeParseResult<{
+			id: string & z28.$brand<"evt">;
+			occurredAt: string;
+			organizationId: string & z28.$brand<"org">;
+			region: "eu" | "us";
+			type: "prospect.merged";
+			version: 1;
+			data: {
+				mergeId: string & z28.$brand<"pmrg">;
+				survivorProspectId: string & z28.$brand<"prs">;
+				mergedProspectIds: (string & z28.$brand<"prs">)[];
+			};
+		}>;
+	};
+	readonly "prospect.merge_undone": {
+		type: "prospect.merge_undone";
+		version: 1;
+		schema: z28.ZodObject<{
+			id: z28.core.$ZodBranded<z28.ZodString, "evt", "out">;
+			occurredAt: z28.ZodISODateTime;
+			organizationId: z28.core.$ZodBranded<z28.ZodString, "org", "out">;
+			region: z28.ZodEnum<{
+				eu: "eu";
+				us: "us";
+			}>;
+			type: z28.ZodLiteral<"prospect.merge_undone">;
+			version: z28.ZodLiteral<1>;
+			data: z28.ZodObject<{
+				mergeId: z28.core.$ZodBranded<z28.ZodString, "pmrg", "out">;
+				survivorProspectId: z28.core.$ZodBranded<z28.ZodString, "prs", "out">;
+				restoredProspectIds: z28.ZodArray<z28.core.$ZodBranded<z28.ZodString, "prs", "out">>;
+			}, z28.core.$strict>;
+		}, z28.core.$strip>;
+		parse: (input: unknown) => {
+			id: string & z28.$brand<"evt">;
+			occurredAt: string;
+			organizationId: string & z28.$brand<"org">;
+			region: "eu" | "us";
+			type: "prospect.merge_undone";
+			version: 1;
+			data: {
+				mergeId: string & z28.$brand<"pmrg">;
+				survivorProspectId: string & z28.$brand<"prs">;
+				restoredProspectIds: (string & z28.$brand<"prs">)[];
+			};
+		};
+		safeParse: (input: unknown) => z28.ZodSafeParseResult<{
+			id: string & z28.$brand<"evt">;
+			occurredAt: string;
+			organizationId: string & z28.$brand<"org">;
+			region: "eu" | "us";
+			type: "prospect.merge_undone";
+			version: 1;
+			data: {
+				mergeId: string & z28.$brand<"pmrg">;
+				survivorProspectId: string & z28.$brand<"prs">;
+				restoredProspectIds: (string & z28.$brand<"prs">)[];
+			};
+		}>;
+	};
+	readonly "prospect.erased": {
+		type: "prospect.erased";
+		version: 1;
+		schema: z28.ZodObject<{
+			id: z28.core.$ZodBranded<z28.ZodString, "evt", "out">;
+			occurredAt: z28.ZodISODateTime;
+			organizationId: z28.core.$ZodBranded<z28.ZodString, "org", "out">;
+			region: z28.ZodEnum<{
+				eu: "eu";
+				us: "us";
+			}>;
+			type: z28.ZodLiteral<"prospect.erased">;
+			version: z28.ZodLiteral<1>;
+			data: z28.ZodObject<{
+				prospectId: z28.core.$ZodBranded<z28.ZodString, "prs", "out">;
+			}, z28.core.$strict>;
+		}, z28.core.$strip>;
+		parse: (input: unknown) => {
+			id: string & z28.$brand<"evt">;
+			occurredAt: string;
+			organizationId: string & z28.$brand<"org">;
+			region: "eu" | "us";
+			type: "prospect.erased";
+			version: 1;
+			data: {
+				prospectId: string & z28.$brand<"prs">;
+			};
+		};
+		safeParse: (input: unknown) => z28.ZodSafeParseResult<{
+			id: string & z28.$brand<"evt">;
+			occurredAt: string;
+			organizationId: string & z28.$brand<"org">;
+			region: "eu" | "us";
+			type: "prospect.erased";
+			version: 1;
+			data: {
+				prospectId: string & z28.$brand<"prs">;
+			};
+		}>;
+	};
+};
+/** The type of a Prospect event. */
+type ProspectEventType = keyof typeof PROSPECT_EVENTS;
+import { z as z29 } from "zod";
+/** The largest import file, in bytes (10 MB). */
+declare const MAX_PROSPECT_IMPORT_BYTES: number;
+/** The most data rows an import may hold. */
+declare const MAX_PROSPECT_IMPORT_ROWS = 5e4;
+/** The name of the one file part of the multipart upload; the request carries an `Idempotency-Key` header. */
+declare const PROSPECT_IMPORT_FILE_FIELD = "file";
+/**
+* The columns of the CSV template, in order. A row needs an email, a phone or a LinkedIn address.
+* `owner_email` names a member (Rep or Manager) of the Organization; `tags` is separated by `;`.
+* Values are written with the Source `import` and never replace a manual value (ADR 0020).
+*/
+declare const PROSPECT_IMPORT_COLUMNS: readonly ["first_name", "last_name", "email", "phone", "linkedin_url", "job_title", "company_name", "company_domain", "owner_email", "tags"];
+/** The states of an import; `completed` and `failed` are final. */
+declare const PROSPECT_IMPORT_STATES: readonly ["uploaded", "processing", "completed", "failed"];
+/** The state of an import. */
+declare const prospectImportStateSchema: z29.ZodEnum<{
+	completed: "completed";
+	failed: "failed";
+	processing: "processing";
+	uploaded: "uploaded";
+}>;
+/** The state of an import. */
+type ProspectImportState = z29.infer<typeof prospectImportStateSchema>;
+/** Why a whole import failed after it was accepted. */
+declare const PROSPECT_IMPORT_FAILURE_REASONS: readonly ["too_many_rows", "unreadable"];
+/** Why a whole import failed. */
+declare const prospectImportFailureReasonSchema: z29.ZodEnum<{
+	too_many_rows: "too_many_rows";
+	unreadable: "unreadable";
+}>;
+/** Why a whole import failed. */
+type ProspectImportFailureReason = z29.infer<typeof prospectImportFailureReasonSchema>;
+/** What happened to one row. */
+declare const PROSPECT_IMPORT_ROW_RESULTS: readonly ["created", "updated", "skipped", "rejected"];
+/** What happened to one row. */
+declare const prospectImportRowResultSchema: z29.ZodEnum<{
+	created: "created";
+	rejected: "rejected";
+	skipped: "skipped";
+	updated: "updated";
+}>;
+/** What happened to one row. */
+type ProspectImportRowResult = z29.infer<typeof prospectImportRowResultSchema>;
+/** Why a row was skipped: the file changes nothing for it. */
+declare const PROSPECT_IMPORT_SKIP_REASONS: readonly ["no_change", "manual_values_kept"];
+/** Why a row was rejected: the row is not applied and the file needs fixing. */
+declare const PROSPECT_IMPORT_REJECT_REASONS: readonly ["wrong_column_count", "blank_row", "missing_identity", "invalid_email", "invalid_phone", "invalid_linkedin_url", "invalid_name", "invalid_job_title", "invalid_company", "invalid_tags", "owner_not_found", "owner_not_allowed", "duplicate_in_file", "identity_conflict"];
+/** Why a row was skipped or rejected. */
+declare const prospectImportRowReasonSchema: z29.ZodEnum<{
+	blank_row: "blank_row";
+	duplicate_in_file: "duplicate_in_file";
+	identity_conflict: "identity_conflict";
+	invalid_company: "invalid_company";
+	invalid_email: "invalid_email";
+	invalid_job_title: "invalid_job_title";
+	invalid_linkedin_url: "invalid_linkedin_url";
+	invalid_name: "invalid_name";
+	invalid_phone: "invalid_phone";
+	invalid_tags: "invalid_tags";
+	manual_values_kept: "manual_values_kept";
+	missing_identity: "missing_identity";
+	no_change: "no_change";
+	owner_not_allowed: "owner_not_allowed";
+	owner_not_found: "owner_not_found";
+	wrong_column_count: "wrong_column_count";
+}>;
+/** Why a row was skipped or rejected. */
+type ProspectImportRowReason = z29.infer<typeof prospectImportRowReasonSchema>;
+/**
+* A Prospect import as core returns it. It carries no file name and no cell. The counts are
+* `null` until `completed`, then `rowCount` is the sum of the other four; `failureReason` is set
+* exactly when `state` is `failed`. The report is the paginated rows. An import is a queued,
+* idempotent and resumable job, so the page can be closed and the import read again by id.
+*/
+declare const prospectImportSchema: z29.ZodObject<{
+	id: z29.core.$ZodBranded<z29.ZodString, "pimp", "out">;
+	state: z29.ZodEnum<{
+		completed: "completed";
+		failed: "failed";
+		processing: "processing";
+		uploaded: "uploaded";
+	}>;
+	failureReason: z29.ZodNullable<z29.ZodEnum<{
+		too_many_rows: "too_many_rows";
+		unreadable: "unreadable";
+	}>>;
+	rowCount: z29.ZodNullable<z29.ZodNumber>;
+	createdCount: z29.ZodNullable<z29.ZodNumber>;
+	updatedCount: z29.ZodNullable<z29.ZodNumber>;
+	skippedCount: z29.ZodNullable<z29.ZodNumber>;
+	rejectedCount: z29.ZodNullable<z29.ZodNumber>;
+	uploadedByUserId: z29.core.$ZodBranded<z29.ZodString, "usr", "out">;
+	createdAt: z29.ZodISODateTime;
+	updatedAt: z29.ZodISODateTime;
+}, z29.core.$strip>;
+/** A Prospect import as core returns it. */
+type ProspectImport = z29.infer<typeof prospectImportSchema>;
+/** The path parameters of a request about one import. */
+declare const prospectImportParamsSchema: z29.ZodObject<{
+	importId: z29.core.$ZodBranded<z29.ZodString, "pimp", "out">;
+}, z29.core.$strict>;
+/** The path parameters of a request about one import. */
+type ProspectImportParams = z29.infer<typeof prospectImportParamsSchema>;
+/** The query parameters of a request to list imports: a page. */
+declare const listProspectImportsQuerySchema: z29.ZodObject<{
+	cursor: z29.ZodOptional<z29.ZodString>;
+	limit: z29.ZodDefault<z29.ZodPipe<z29.ZodPipe<z29.ZodUnion<readonly [z29.ZodNumber, z29.ZodString]>, z29.ZodTransform<number, string | number>>, z29.ZodNumber>>;
+}, z29.core.$strict>;
+/** The query parameters of a request to list imports. */
+type ListProspectImportsQuery = z29.infer<typeof listProspectImportsQuerySchema>;
+/** One page of imports, newest first (by `createdAt`, then id, both descending). */
+declare const listProspectImportsResponseSchema: z29.ZodObject<{
+	items: z29.ZodArray<z29.ZodObject<{
+		id: z29.core.$ZodBranded<z29.ZodString, "pimp", "out">;
+		state: z29.ZodEnum<{
+			completed: "completed";
+			failed: "failed";
+			processing: "processing";
+			uploaded: "uploaded";
+		}>;
+		failureReason: z29.ZodNullable<z29.ZodEnum<{
+			too_many_rows: "too_many_rows";
+			unreadable: "unreadable";
+		}>>;
+		rowCount: z29.ZodNullable<z29.ZodNumber>;
+		createdCount: z29.ZodNullable<z29.ZodNumber>;
+		updatedCount: z29.ZodNullable<z29.ZodNumber>;
+		skippedCount: z29.ZodNullable<z29.ZodNumber>;
+		rejectedCount: z29.ZodNullable<z29.ZodNumber>;
+		uploadedByUserId: z29.core.$ZodBranded<z29.ZodString, "usr", "out">;
+		createdAt: z29.ZodISODateTime;
+		updatedAt: z29.ZodISODateTime;
+	}, z29.core.$strip>>;
+	nextCursor: z29.ZodNullable<z29.ZodString>;
+}, z29.core.$strip>;
+/** One page of imports. */
+type ListProspectImportsResponse = z29.infer<typeof listProspectImportsResponseSchema>;
+/** The position in an import list. */
+declare const prospectImportCursorSchema: z29.ZodObject<{
+	createdAt: z29.ZodISODateTime;
+	id: z29.core.$ZodBranded<z29.ZodString, "pimp", "out">;
+}, z29.core.$strict>;
+/** The position in an import list. */
+type ProspectImportCursor = z29.infer<typeof prospectImportCursorSchema>;
+/**
+* One row of the report: the record number (the header is record 1, so the first data row is 2),
+* the `result` and, for a skipped or rejected row, the `reason`. `prospectId` is the Prospect the
+* row created or updated (or matched, when skipped) and is `null` for a rejected row. No cell of
+* the file is echoed, so a report carries no personal data.
+*/
+declare const prospectImportRowSchema: z29.ZodObject<{
+	rowNumber: z29.ZodNumber;
+	result: z29.ZodEnum<{
+		created: "created";
+		rejected: "rejected";
+		skipped: "skipped";
+		updated: "updated";
+	}>;
+	reason: z29.ZodNullable<z29.ZodEnum<{
+		blank_row: "blank_row";
+		duplicate_in_file: "duplicate_in_file";
+		identity_conflict: "identity_conflict";
+		invalid_company: "invalid_company";
+		invalid_email: "invalid_email";
+		invalid_job_title: "invalid_job_title";
+		invalid_linkedin_url: "invalid_linkedin_url";
+		invalid_name: "invalid_name";
+		invalid_phone: "invalid_phone";
+		invalid_tags: "invalid_tags";
+		manual_values_kept: "manual_values_kept";
+		missing_identity: "missing_identity";
+		no_change: "no_change";
+		owner_not_allowed: "owner_not_allowed";
+		owner_not_found: "owner_not_found";
+		wrong_column_count: "wrong_column_count";
+	}>>;
+	prospectId: z29.ZodNullable<z29.core.$ZodBranded<z29.ZodString, "prs", "out">>;
+}, z29.core.$strip>;
+/** One row of an import report. */
+type ProspectImportRow = z29.infer<typeof prospectImportRowSchema>;
+/** The query parameters of a request to read an import's rows: a page and optionally one `result`. Rows are in CSV order. An unknown parameter is refused. */
+declare const listProspectImportRowsQuerySchema: z29.ZodObject<{
+	cursor: z29.ZodOptional<z29.ZodString>;
+	limit: z29.ZodDefault<z29.ZodPipe<z29.ZodPipe<z29.ZodUnion<readonly [z29.ZodNumber, z29.ZodString]>, z29.ZodTransform<number, string | number>>, z29.ZodNumber>>;
+	result: z29.ZodOptional<z29.ZodEnum<{
+		created: "created";
+		rejected: "rejected";
+		skipped: "skipped";
+		updated: "updated";
+	}>>;
+}, z29.core.$strict>;
+/** The query parameters of a request to read an import's rows. */
+type ListProspectImportRowsQuery = z29.infer<typeof listProspectImportRowsQuerySchema>;
+/** One page of an import report. */
+declare const listProspectImportRowsResponseSchema: z29.ZodObject<{
+	items: z29.ZodArray<z29.ZodObject<{
+		rowNumber: z29.ZodNumber;
+		result: z29.ZodEnum<{
+			created: "created";
+			rejected: "rejected";
+			skipped: "skipped";
+			updated: "updated";
+		}>;
+		reason: z29.ZodNullable<z29.ZodEnum<{
+			blank_row: "blank_row";
+			duplicate_in_file: "duplicate_in_file";
+			identity_conflict: "identity_conflict";
+			invalid_company: "invalid_company";
+			invalid_email: "invalid_email";
+			invalid_job_title: "invalid_job_title";
+			invalid_linkedin_url: "invalid_linkedin_url";
+			invalid_name: "invalid_name";
+			invalid_phone: "invalid_phone";
+			invalid_tags: "invalid_tags";
+			manual_values_kept: "manual_values_kept";
+			missing_identity: "missing_identity";
+			no_change: "no_change";
+			owner_not_allowed: "owner_not_allowed";
+			owner_not_found: "owner_not_found";
+			wrong_column_count: "wrong_column_count";
+		}>>;
+		prospectId: z29.ZodNullable<z29.core.$ZodBranded<z29.ZodString, "prs", "out">>;
+	}, z29.core.$strip>>;
+	nextCursor: z29.ZodNullable<z29.ZodString>;
+}, z29.core.$strip>;
+/** One page of an import report. */
+type ListProspectImportRowsResponse = z29.infer<typeof listProspectImportRowsResponseSchema>;
+/** The position in an import report: the record number of the last row of the page. */
+declare const prospectImportRowCursorSchema: z29.ZodObject<{
+	rowNumber: z29.ZodNumber;
+}, z29.core.$strict>;
+/** The position in an import report. */
+type ProspectImportRowCursor = z29.infer<typeof prospectImportRowCursorSchema>;
+/** The columns of the downloadable report CSV, in order. */
+declare const PROSPECT_IMPORT_REPORT_COLUMNS: readonly ["row_number", "result", "reason", "prospect_id"];
+/** Why an upload is refused with `prospect.import_invalid`, carried in `details.reason`. */
+declare const PROSPECT_IMPORT_INVALID_REASONS: readonly ["unsupported_type", "too_large", "header_invalid", "too_many_rows"];
+/** The `details` of `prospect.import_invalid`: which check the upload failed. */
+declare const prospectImportInvalidDetailsSchema: z29.ZodObject<{
+	reason: z29.ZodEnum<{
+		header_invalid: "header_invalid";
+		too_large: "too_large";
+		too_many_rows: "too_many_rows";
+		unsupported_type: "unsupported_type";
+	}>;
+}, z29.core.$strict>;
+/** The `details` of `prospect.import_invalid`. */
+type ProspectImportInvalidDetails = z29.infer<typeof prospectImportInvalidDetailsSchema>;
+import { z as z30 } from "zod";
+/** How many days after a merge it can be undone (spec M2, story 13). */
+declare const PROSPECT_MERGE_UNDO_DAYS = 30;
+/** The most Prospects one merge folds into the survivor. */
+declare const MAX_MERGED_PROSPECTS = 5;
+/** The path parameters of a request about one merge. */
+declare const prospectMergeParamsSchema: z30.ZodObject<{
+	mergeId: z30.core.$ZodBranded<z30.ZodString, "pmrg", "out">;
+}, z30.core.$strict>;
+/** The path parameters of a request about one merge. */
+type ProspectMergeParams = z30.infer<typeof prospectMergeParamsSchema>;
+/**
+* The body of a request to merge Prospects into the survivor named in the path (`prospectId`).
+* `fieldChoices` says, per field, which of the merging Prospects' value to keep, by Prospect id
+* (the survivor's or one of `mergedProspectIds`); a field not named keeps the value that ADR 0020
+* would choose across all the records. Every merged Prospect's history is kept, with the
+* survivor's. Owner and Admin only. A Prospect that is not visible, or already merged, is
+* `prospect.merge_conflict` or `prospect.not_found`. Accepts an `Idempotency-Key` header.
+*/
+declare const mergeProspectsRequestSchema: z30.ZodObject<{
+	mergedProspectIds: z30.ZodArray<z30.core.$ZodBranded<z30.ZodString, "prs", "out">>;
+	fieldChoices: z30.ZodDefault<z30.ZodRecord<z30.ZodEnum<{
+		email: "email";
+		firstName: "firstName";
+		jobTitle: "jobTitle";
+		lastName: "lastName";
+		linkedinUrl: "linkedinUrl";
+		phone: "phone";
+	}> & z30.core.$partial, z30.core.$ZodBranded<z30.ZodString, "prs", "out">>>;
+}, z30.core.$strict>;
+/** The body of a request to merge Prospects. */
+type MergeProspectsRequest = z30.infer<typeof mergeProspectsRequestSchema>;
+/** The states of a merge: `merged`, or `undone` once reversed. */
+declare const PROSPECT_MERGE_STATES: readonly ["merged", "undone"];
+/**
+* A merge record. Undo is possible while `state` is `merged` and now is before `undoableUntil`
+* (thirty days after `createdAt`); later it is `prospect.merge_conflict`. `undoneAt` is set exactly
+* when the state is `undone`. The snapshot that restores both records stays in core and is not returned.
+*/
+declare const prospectMergeSchema: z30.ZodObject<{
+	id: z30.core.$ZodBranded<z30.ZodString, "pmrg", "out">;
+	survivorProspectId: z30.core.$ZodBranded<z30.ZodString, "prs", "out">;
+	mergedProspectIds: z30.ZodArray<z30.core.$ZodBranded<z30.ZodString, "prs", "out">>;
+	fieldChoices: z30.ZodRecord<z30.ZodEnum<{
+		email: "email";
+		firstName: "firstName";
+		jobTitle: "jobTitle";
+		lastName: "lastName";
+		linkedinUrl: "linkedinUrl";
+		phone: "phone";
+	}> & z30.core.$partial, z30.core.$ZodBranded<z30.ZodString, "prs", "out">>;
+	state: z30.ZodEnum<{
+		merged: "merged";
+		undone: "undone";
+	}>;
+	mergedByUserId: z30.core.$ZodBranded<z30.ZodString, "usr", "out">;
+	createdAt: z30.ZodISODateTime;
+	undoableUntil: z30.ZodISODateTime;
+	undoneAt: z30.ZodNullable<z30.ZodISODateTime>;
+}, z30.core.$strip>;
+/** A merge record. */
+type ProspectMerge = z30.infer<typeof prospectMergeSchema>;
+/**
+* The query parameters of a request to list suspected duplicates: a page and optionally the
+* `prospectId` whose duplicates to list. Matching runs on the indexed normalised identities.
+*/
+declare const listProspectDuplicatesQuerySchema: z30.ZodObject<{
+	cursor: z30.ZodOptional<z30.ZodString>;
+	limit: z30.ZodDefault<z30.ZodPipe<z30.ZodPipe<z30.ZodUnion<readonly [z30.ZodNumber, z30.ZodString]>, z30.ZodTransform<number, string | number>>, z30.ZodNumber>>;
+	prospectId: z30.ZodOptional<z30.core.$ZodBranded<z30.ZodString, "prs", "out">>;
+}, z30.core.$strict>;
+/** The query parameters of a request to list suspected duplicates. */
+type ListProspectDuplicatesQuery = z30.infer<typeof listProspectDuplicatesQuerySchema>;
+/** One suspected duplicate: two Prospects (in id order) and the identity kinds they share. */
+declare const prospectDuplicateSchema: z30.ZodObject<{
+	prospectIds: z30.ZodTuple<[z30.core.$ZodBranded<z30.ZodString, "prs", "out">, z30.core.$ZodBranded<z30.ZodString, "prs", "out">], null>;
+	matchedOn: z30.ZodArray<z30.ZodEnum<{
+		email: "email";
+		linkedin: "linkedin";
+		phone: "phone";
+	}>>;
+}, z30.core.$strip>;
+/** One suspected duplicate. */
+type ProspectDuplicate = z30.infer<typeof prospectDuplicateSchema>;
+/** One page of suspected duplicates. */
+declare const listProspectDuplicatesResponseSchema: z30.ZodObject<{
+	items: z30.ZodArray<z30.ZodObject<{
+		prospectIds: z30.ZodTuple<[z30.core.$ZodBranded<z30.ZodString, "prs", "out">, z30.core.$ZodBranded<z30.ZodString, "prs", "out">], null>;
+		matchedOn: z30.ZodArray<z30.ZodEnum<{
+			email: "email";
+			linkedin: "linkedin";
+			phone: "phone";
+		}>>;
+	}, z30.core.$strip>>;
+	nextCursor: z30.ZodNullable<z30.ZodString>;
+}, z30.core.$strip>;
+/** One page of suspected duplicates. */
+type ListProspectDuplicatesResponse = z30.infer<typeof listProspectDuplicatesResponseSchema>;
+/** The position in the suspected-duplicate list. */
+declare const prospectDuplicateCursorSchema: z30.ZodObject<{
+	first: z30.core.$ZodBranded<z30.ZodString, "prs", "out">;
+	second: z30.core.$ZodBranded<z30.ZodString, "prs", "out">;
+}, z30.core.$strict>;
+/** The position in the suspected-duplicate list. */
+type ProspectDuplicateCursor = z30.infer<typeof prospectDuplicateCursorSchema>;
+import { z as z31 } from "zod";
+/** The states of a Prospect: `active`, or `archived` to hide it from the default list without erasing it. */
+declare const PROSPECT_STATUSES: readonly ["active", "archived"];
+/** The state of a Prospect. */
+declare const prospectStatusSchema: z31.ZodEnum<{
+	active: "active";
+	archived: "archived";
+}>;
+/** The state of a Prospect. */
+type ProspectStatus = z31.infer<typeof prospectStatusSchema>;
+/**
+* A Prospect as core returns it. `fields` holds the current value of each field that has one, with
+* its Source, time and actor (ADR 0020); a field with no value is absent. `email`, `phone` and
+* `linkedinUrl` are the normalised identity values (ADR 0011: ASCII-folded email, E.164 phone,
+* normalised LinkedIn address). `source` is the Source kind that created the Prospect.
+* `ownerMembershipId` is the owner Rep's Membership, `null` while unassigned.
+*/
+declare const prospectSchema: z31.ZodObject<{
+	id: z31.core.$ZodBranded<z31.ZodString, "prs", "out">;
+	companyId: z31.ZodNullable<z31.core.$ZodBranded<z31.ZodString, "pco", "out">>;
+	ownerMembershipId: z31.ZodNullable<z31.core.$ZodBranded<z31.ZodString, "mem", "out">>;
+	status: z31.ZodEnum<{
+		active: "active";
+		archived: "archived";
+	}>;
+	source: z31.ZodUnion<readonly [z31.ZodEnum<{
+		"crm:hubspot": "crm:hubspot";
+		"crm:salesforce": "crm:salesforce";
+		form: "form";
+		import: "import";
+		manual: "manual";
+	}>, z31.ZodString]>;
+	tags: z31.ZodArray<z31.ZodPipe<z31.ZodString, z31.ZodString>>;
+	notes: z31.ZodNullable<z31.ZodString>;
+	fields: z31.ZodRecord<z31.ZodEnum<{
+		email: "email";
+		firstName: "firstName";
+		jobTitle: "jobTitle";
+		lastName: "lastName";
+		linkedinUrl: "linkedinUrl";
+		phone: "phone";
+	}> & z31.core.$partial, z31.ZodObject<{
+		value: z31.ZodString;
+		source: z31.ZodUnion<readonly [z31.ZodEnum<{
+			"crm:hubspot": "crm:hubspot";
+			"crm:salesforce": "crm:salesforce";
+			form: "form";
+			import: "import";
+			manual: "manual";
+		}>, z31.ZodString]>;
+		sourceRef: z31.ZodNullable<z31.ZodString>;
+		setAt: z31.ZodISODateTime;
+		setByUserId: z31.ZodNullable<z31.core.$ZodBranded<z31.ZodString, "usr", "out">>;
+	}, z31.core.$strip>>;
+	createdAt: z31.ZodISODateTime;
+	updatedAt: z31.ZodISODateTime;
+}, z31.core.$strip>;
+/** A Prospect as core returns it. */
+type Prospect = z31.infer<typeof prospectSchema>;
+/** The path parameters of a request about one Prospect. */
+declare const prospectParamsSchema: z31.ZodObject<{
+	prospectId: z31.core.$ZodBranded<z31.ZodString, "prs", "out">;
+}, z31.core.$strict>;
+/** The path parameters of a request about one Prospect. */
+type ProspectParams = z31.infer<typeof prospectParamsSchema>;
+/**
+* The body of a request to create a Prospect by hand. It must carry at least one of a name, an
+* email, a phone or a LinkedIn address. The Source is `manual` and the actor the caller, both set
+* by core, never read from the body, so an unknown field such as `source` is refused. A Rep is the
+* owner of the Prospect they create; only Owner and Admin may name another `ownerMembershipId`,
+* and anyone else gets `prospect.forbidden_owner`. An identity another Prospect of the
+* Organization already has is `prospect.duplicate_identity`. The call accepts an `Idempotency-Key`
+* header (`idempotencyKeySchema`): a replay returns the original Prospect.
+*/
+declare const createProspectRequestSchema: z31.ZodObject<{
+	firstName: z31.ZodOptional<z31.ZodPipe<z31.ZodString, z31.ZodString>>;
+	lastName: z31.ZodOptional<z31.ZodPipe<z31.ZodString, z31.ZodString>>;
+	jobTitle: z31.ZodOptional<z31.ZodPipe<z31.ZodString, z31.ZodString>>;
+	email: z31.ZodOptional<z31.ZodPipe<z31.ZodPipe<z31.ZodString, z31.ZodTransform<string, string>>, z31.ZodString>>;
+	phone: z31.ZodOptional<z31.ZodPipe<z31.ZodString, z31.ZodString>>;
+	linkedinUrl: z31.ZodOptional<z31.ZodPipe<z31.ZodString, z31.ZodString>>;
+	companyId: z31.ZodOptional<z31.core.$ZodBranded<z31.ZodString, "pco", "out">>;
+	ownerMembershipId: z31.ZodOptional<z31.core.$ZodBranded<z31.ZodString, "mem", "out">>;
+	tags: z31.ZodOptional<z31.ZodArray<z31.ZodPipe<z31.ZodString, z31.ZodString>>>;
+	notes: z31.ZodOptional<z31.ZodPipe<z31.ZodString, z31.ZodString>>;
+}, z31.core.$strict>;
+/** The body of a request to create a Prospect. */
+type CreateProspectRequest = z31.infer<typeof createProspectRequestSchema>;
+/**
+* The body of a request to edit a Prospect. Only the fields sent change; each is written with the
+* Source `manual`, which beats every other Source (ADR 0020). A `null` clears a field or the
+* Prospect Company, the explicit Rep or Admin action that is the only way to remove a manual
+* value. At least one field is required. Ownership is changed by the owner routes, not here.
+*/
+declare const updateProspectRequestSchema: z31.ZodObject<{
+	firstName: z31.ZodOptional<z31.ZodNullable<z31.ZodPipe<z31.ZodString, z31.ZodString>>>;
+	lastName: z31.ZodOptional<z31.ZodNullable<z31.ZodPipe<z31.ZodString, z31.ZodString>>>;
+	jobTitle: z31.ZodOptional<z31.ZodNullable<z31.ZodPipe<z31.ZodString, z31.ZodString>>>;
+	email: z31.ZodOptional<z31.ZodNullable<z31.ZodPipe<z31.ZodPipe<z31.ZodString, z31.ZodTransform<string, string>>, z31.ZodString>>>;
+	phone: z31.ZodOptional<z31.ZodNullable<z31.ZodPipe<z31.ZodString, z31.ZodString>>>;
+	linkedinUrl: z31.ZodOptional<z31.ZodNullable<z31.ZodPipe<z31.ZodString, z31.ZodString>>>;
+	companyId: z31.ZodOptional<z31.ZodNullable<z31.core.$ZodBranded<z31.ZodString, "pco", "out">>>;
+	status: z31.ZodOptional<z31.ZodEnum<{
+		active: "active";
+		archived: "archived";
+	}>>;
+	tags: z31.ZodOptional<z31.ZodArray<z31.ZodPipe<z31.ZodString, z31.ZodString>>>;
+	notes: z31.ZodOptional<z31.ZodNullable<z31.ZodPipe<z31.ZodString, z31.ZodString>>>;
+}, z31.core.$strict>;
+/** The body of a request to edit a Prospect. */
+type UpdateProspectRequest = z31.infer<typeof updateProspectRequestSchema>;
+/** The search text of a list request: trimmed, 1 to 100 characters, matched against name, email and company. */
+declare const prospectSearchSchema: z31.ZodPipe<z31.ZodString, z31.ZodString>;
+/**
+* The query parameters of a request to list Prospects: a cursor and a limit of at most 100, and
+* optionally `ownerMembershipId`, `source` (the Source kind that created it), `companyId`,
+* `status` and `q`. An unknown parameter is refused. Who sees which Prospect is decided from the
+* token's role and Team membership (a Rep sees what they own, a Manager what their Team's Reps
+* own, Owner and Admin all); a filter can narrow that, never widen it.
+*/
+declare const listProspectsQuerySchema: z31.ZodObject<{
+	cursor: z31.ZodOptional<z31.ZodString>;
+	limit: z31.ZodDefault<z31.ZodPipe<z31.ZodPipe<z31.ZodUnion<readonly [z31.ZodNumber, z31.ZodString]>, z31.ZodTransform<number, string | number>>, z31.ZodNumber>>;
+	ownerMembershipId: z31.ZodOptional<z31.core.$ZodBranded<z31.ZodString, "mem", "out">>;
+	source: z31.ZodOptional<z31.ZodUnion<readonly [z31.ZodEnum<{
+		"crm:hubspot": "crm:hubspot";
+		"crm:salesforce": "crm:salesforce";
+		form: "form";
+		import: "import";
+		manual: "manual";
+	}>, z31.ZodString]>>;
+	companyId: z31.ZodOptional<z31.core.$ZodBranded<z31.ZodString, "pco", "out">>;
+	status: z31.ZodOptional<z31.ZodEnum<{
+		active: "active";
+		archived: "archived";
+	}>>;
+	q: z31.ZodOptional<z31.ZodPipe<z31.ZodString, z31.ZodString>>;
+}, z31.core.$strict>;
+/** The query parameters of a request to list Prospects. */
+type ListProspectsQuery = z31.infer<typeof listProspectsQuerySchema>;
+/** One page of Prospects, newest first (by `createdAt`, then id, both descending). */
+declare const listProspectsResponseSchema: z31.ZodObject<{
+	items: z31.ZodArray<z31.ZodObject<{
+		id: z31.core.$ZodBranded<z31.ZodString, "prs", "out">;
+		companyId: z31.ZodNullable<z31.core.$ZodBranded<z31.ZodString, "pco", "out">>;
+		ownerMembershipId: z31.ZodNullable<z31.core.$ZodBranded<z31.ZodString, "mem", "out">>;
+		status: z31.ZodEnum<{
+			active: "active";
+			archived: "archived";
+		}>;
+		source: z31.ZodUnion<readonly [z31.ZodEnum<{
+			"crm:hubspot": "crm:hubspot";
+			"crm:salesforce": "crm:salesforce";
+			form: "form";
+			import: "import";
+			manual: "manual";
+		}>, z31.ZodString]>;
+		tags: z31.ZodArray<z31.ZodPipe<z31.ZodString, z31.ZodString>>;
+		notes: z31.ZodNullable<z31.ZodString>;
+		fields: z31.ZodRecord<z31.ZodEnum<{
+			email: "email";
+			firstName: "firstName";
+			jobTitle: "jobTitle";
+			lastName: "lastName";
+			linkedinUrl: "linkedinUrl";
+			phone: "phone";
+		}> & z31.core.$partial, z31.ZodObject<{
+			value: z31.ZodString;
+			source: z31.ZodUnion<readonly [z31.ZodEnum<{
+				"crm:hubspot": "crm:hubspot";
+				"crm:salesforce": "crm:salesforce";
+				form: "form";
+				import: "import";
+				manual: "manual";
+			}>, z31.ZodString]>;
+			sourceRef: z31.ZodNullable<z31.ZodString>;
+			setAt: z31.ZodISODateTime;
+			setByUserId: z31.ZodNullable<z31.core.$ZodBranded<z31.ZodString, "usr", "out">>;
+		}, z31.core.$strip>>;
+		createdAt: z31.ZodISODateTime;
+		updatedAt: z31.ZodISODateTime;
+	}, z31.core.$strip>>;
+	nextCursor: z31.ZodNullable<z31.ZodString>;
+}, z31.core.$strip>;
+/** One page of Prospects. */
+type ListProspectsResponse = z31.infer<typeof listProspectsResponseSchema>;
+/** The position in a Prospect list: where the last item of the page was. */
+declare const prospectCursorSchema: z31.ZodObject<{
+	createdAt: z31.ZodISODateTime;
+	id: z31.core.$ZodBranded<z31.ZodString, "prs", "out">;
+}, z31.core.$strict>;
+/** The position in a Prospect list. */
+type ProspectCursor = z31.infer<typeof prospectCursorSchema>;
+/** The path parameters of a request for the history of one Prospect field. */
+declare const prospectFieldParamsSchema: z31.ZodObject<{
+	prospectId: z31.core.$ZodBranded<z31.ZodString, "prs", "out">;
+	field: z31.ZodEnum<{
+		email: "email";
+		firstName: "firstName";
+		jobTitle: "jobTitle";
+		lastName: "lastName";
+		linkedinUrl: "linkedinUrl";
+		phone: "phone";
+	}>;
+}, z31.core.$strict>;
+/** The path parameters of a request for the history of one Prospect field. */
+type ProspectFieldParams = z31.infer<typeof prospectFieldParamsSchema>;
+/** The query parameters of a request for a field's history: a page. */
+declare const listFieldHistoryQuerySchema: z31.ZodObject<{
+	cursor: z31.ZodOptional<z31.ZodString>;
+	limit: z31.ZodDefault<z31.ZodPipe<z31.ZodPipe<z31.ZodUnion<readonly [z31.ZodNumber, z31.ZodString]>, z31.ZodTransform<number, string | number>>, z31.ZodNumber>>;
+}, z31.core.$strict>;
+/** The query parameters of a request for a field's history. */
+type ListFieldHistoryQuery = z31.infer<typeof listFieldHistoryQuerySchema>;
+/** One page of a field's history, newest first; the current value, earlier values and enrichment suggestions all appear, each with its Source. */
+declare const listFieldHistoryResponseSchema: z31.ZodObject<{
+	items: z31.ZodArray<z31.ZodObject<{
+		value: z31.ZodString;
+		source: z31.ZodUnion<readonly [z31.ZodEnum<{
+			"crm:hubspot": "crm:hubspot";
+			"crm:salesforce": "crm:salesforce";
+			form: "form";
+			import: "import";
+			manual: "manual";
+		}>, z31.ZodString]>;
+		sourceRef: z31.ZodNullable<z31.ZodString>;
+		setAt: z31.ZodISODateTime;
+		setByUserId: z31.ZodNullable<z31.core.$ZodBranded<z31.ZodString, "usr", "out">>;
+		state: z31.ZodEnum<{
+			current: "current";
+			suggested: "suggested";
+			superseded: "superseded";
+		}>;
+	}, z31.core.$strip>>;
+	nextCursor: z31.ZodNullable<z31.ZodString>;
+}, z31.core.$strip>;
+/** One page of a field's history. */
+type ListFieldHistoryResponse = z31.infer<typeof listFieldHistoryResponseSchema>;
+/** The position in a field's history. */
+declare const fieldHistoryCursorSchema: z31.ZodObject<{
+	setAt: z31.ZodISODateTime;
+	seq: z31.ZodNumber;
+}, z31.core.$strict>;
+/** The position in a field's history. */
+type FieldHistoryCursor = z31.infer<typeof fieldHistoryCursorSchema>;
+/**
+* The body of a request to change a Prospect's owner Rep. The new owner must be a Rep or Manager
+* of the same Organization, else `prospect.forbidden_owner`. Owner and Admin only.
+*/
+declare const setProspectOwnerRequestSchema: z31.ZodObject<{
+	ownerMembershipId: z31.core.$ZodBranded<z31.ZodString, "mem", "out">;
+}, z31.core.$strict>;
+/** The body of a request to change a Prospect's owner. */
+type SetProspectOwnerRequest = z31.infer<typeof setProspectOwnerRequestSchema>;
+/** The most Prospects one bulk assignment may name. */
+declare const MAX_BULK_ASSIGN_PROSPECTS = 5e3;
+/** Up to this many Prospects of a bulk assignment are applied before the call answers; more are queued and answered 202. */
+declare const BULK_ASSIGN_SYNC_LIMIT = 500;
+/**
+* The body of a request to assign many Prospects to one owner: 1 to 5,000 distinct ids. Up to 500
+* are applied at once (200); more are queued (202). A Prospect that does not exist or is not
+* visible is not named in the answer, only counted as `skipped`. Accepts an `Idempotency-Key`
+* header: a retry changes nothing twice.
+*/
+declare const bulkAssignProspectsRequestSchema: z31.ZodObject<{
+	prospectIds: z31.ZodArray<z31.core.$ZodBranded<z31.ZodString, "prs", "out">>;
+	ownerMembershipId: z31.core.$ZodBranded<z31.ZodString, "mem", "out">;
+}, z31.core.$strict>;
+/** The body of a request to assign many Prospects. */
+type BulkAssignProspectsRequest = z31.infer<typeof bulkAssignProspectsRequestSchema>;
+/** The answer to a bulk assignment: `applied` counts when it ran at once, `queued` when it was handed to a job (then the counts are `null`). */
+declare const bulkAssignProspectsResponseSchema: z31.ZodObject<{
+	state: z31.ZodEnum<{
+		applied: "applied";
+		queued: "queued";
+	}>;
+	requested: z31.ZodNumber;
+	assigned: z31.ZodNullable<z31.ZodNumber>;
+	skipped: z31.ZodNullable<z31.ZodNumber>;
+}, z31.core.$strip>;
+/** The answer to a bulk assignment. */
+type BulkAssignProspectsResponse = z31.infer<typeof bulkAssignProspectsResponseSchema>;
+/** The answer to an erasure request: it is a queued job, so the Prospect is gone once `prospect.erased` is published. Carries no personal data. */
+declare const eraseProspectResponseSchema: z31.ZodObject<{
+	prospectId: z31.core.$ZodBranded<z31.ZodString, "prs", "out">;
+	state: z31.ZodLiteral<"queued">;
+}, z31.core.$strip>;
+/** The answer to an erasure request. */
+type EraseProspectResponse = z31.infer<typeof eraseProspectResponseSchema>;
+/**
+* A Prospect Company as core returns it: the name and domain with their Source, time and actor.
+* `domain` is the normalised domain (ASCII-folded host). `name` is always present.
+*/
+declare const prospectCompanySchema: z31.ZodObject<{
+	id: z31.core.$ZodBranded<z31.ZodString, "pco", "out">;
+	fields: z31.ZodObject<{
+		name: z31.ZodObject<{
+			value: z31.ZodString;
+			source: z31.ZodUnion<readonly [z31.ZodEnum<{
+				"crm:hubspot": "crm:hubspot";
+				"crm:salesforce": "crm:salesforce";
+				form: "form";
+				import: "import";
+				manual: "manual";
+			}>, z31.ZodString]>;
+			sourceRef: z31.ZodNullable<z31.ZodString>;
+			setAt: z31.ZodISODateTime;
+			setByUserId: z31.ZodNullable<z31.core.$ZodBranded<z31.ZodString, "usr", "out">>;
+		}, z31.core.$strip>;
+		domain: z31.ZodOptional<z31.ZodObject<{
+			value: z31.ZodString;
+			source: z31.ZodUnion<readonly [z31.ZodEnum<{
+				"crm:hubspot": "crm:hubspot";
+				"crm:salesforce": "crm:salesforce";
+				form: "form";
+				import: "import";
+				manual: "manual";
+			}>, z31.ZodString]>;
+			sourceRef: z31.ZodNullable<z31.ZodString>;
+			setAt: z31.ZodISODateTime;
+			setByUserId: z31.ZodNullable<z31.core.$ZodBranded<z31.ZodString, "usr", "out">>;
+		}, z31.core.$strip>>;
+	}, z31.core.$strip>;
+	createdAt: z31.ZodISODateTime;
+	updatedAt: z31.ZodISODateTime;
+}, z31.core.$strip>;
+/** A Prospect Company as core returns it. */
+type ProspectCompany = z31.infer<typeof prospectCompanySchema>;
+/** The path parameters of a request about one Prospect Company. */
+declare const prospectCompanyParamsSchema: z31.ZodObject<{
+	companyId: z31.core.$ZodBranded<z31.ZodString, "pco", "out">;
+}, z31.core.$strict>;
+/** The path parameters of a request about one Prospect Company. */
+type ProspectCompanyParams = z31.infer<typeof prospectCompanyParamsSchema>;
+/** The path parameters of a request for the history of one Prospect Company field. */
+declare const prospectCompanyFieldParamsSchema: z31.ZodObject<{
+	companyId: z31.core.$ZodBranded<z31.ZodString, "pco", "out">;
+	field: z31.ZodEnum<{
+		domain: "domain";
+		name: "name";
+	}>;
+}, z31.core.$strict>;
+/** The path parameters of a request for the history of one Prospect Company field. */
+type ProspectCompanyFieldParams = z31.infer<typeof prospectCompanyFieldParamsSchema>;
+/**
+* The body of a request to create a Prospect Company, written with the Source `manual`. Accepts an
+* `Idempotency-Key` header: a replay returns the original record.
+*/
+declare const createProspectCompanyRequestSchema: z31.ZodObject<{
+	name: z31.ZodPipe<z31.ZodString, z31.ZodString>;
+	domain: z31.ZodOptional<z31.ZodPipe<z31.ZodPipe<z31.ZodString, z31.ZodTransform<string, string>>, z31.ZodString>>;
+}, z31.core.$strict>;
+/** The body of a request to create a Prospect Company. */
+type CreateProspectCompanyRequest = z31.infer<typeof createProspectCompanyRequestSchema>;
+/** The body of a request to edit a Prospect Company: only the fields sent change, written with the Source `manual`; `null` clears the domain. At least one field is required. */
+declare const updateProspectCompanyRequestSchema: z31.ZodObject<{
+	name: z31.ZodOptional<z31.ZodPipe<z31.ZodString, z31.ZodString>>;
+	domain: z31.ZodOptional<z31.ZodNullable<z31.ZodPipe<z31.ZodPipe<z31.ZodString, z31.ZodTransform<string, string>>, z31.ZodString>>>;
+}, z31.core.$strict>;
+/** The body of a request to edit a Prospect Company. */
+type UpdateProspectCompanyRequest = z31.infer<typeof updateProspectCompanyRequestSchema>;
+/** The query parameters of a request to list Prospect Companies: a page and optionally a `q` search on name and domain. An unknown parameter is refused. */
+declare const listProspectCompaniesQuerySchema: z31.ZodObject<{
+	cursor: z31.ZodOptional<z31.ZodString>;
+	limit: z31.ZodDefault<z31.ZodPipe<z31.ZodPipe<z31.ZodUnion<readonly [z31.ZodNumber, z31.ZodString]>, z31.ZodTransform<number, string | number>>, z31.ZodNumber>>;
+	q: z31.ZodOptional<z31.ZodPipe<z31.ZodString, z31.ZodString>>;
+}, z31.core.$strict>;
+/** The query parameters of a request to list Prospect Companies. */
+type ListProspectCompaniesQuery = z31.infer<typeof listProspectCompaniesQuerySchema>;
+/** One page of Prospect Companies, newest first (by `createdAt`, then id, both descending). */
+declare const listProspectCompaniesResponseSchema: z31.ZodObject<{
+	items: z31.ZodArray<z31.ZodObject<{
+		id: z31.core.$ZodBranded<z31.ZodString, "pco", "out">;
+		fields: z31.ZodObject<{
+			name: z31.ZodObject<{
+				value: z31.ZodString;
+				source: z31.ZodUnion<readonly [z31.ZodEnum<{
+					"crm:hubspot": "crm:hubspot";
+					"crm:salesforce": "crm:salesforce";
+					form: "form";
+					import: "import";
+					manual: "manual";
+				}>, z31.ZodString]>;
+				sourceRef: z31.ZodNullable<z31.ZodString>;
+				setAt: z31.ZodISODateTime;
+				setByUserId: z31.ZodNullable<z31.core.$ZodBranded<z31.ZodString, "usr", "out">>;
+			}, z31.core.$strip>;
+			domain: z31.ZodOptional<z31.ZodObject<{
+				value: z31.ZodString;
+				source: z31.ZodUnion<readonly [z31.ZodEnum<{
+					"crm:hubspot": "crm:hubspot";
+					"crm:salesforce": "crm:salesforce";
+					form: "form";
+					import: "import";
+					manual: "manual";
+				}>, z31.ZodString]>;
+				sourceRef: z31.ZodNullable<z31.ZodString>;
+				setAt: z31.ZodISODateTime;
+				setByUserId: z31.ZodNullable<z31.core.$ZodBranded<z31.ZodString, "usr", "out">>;
+			}, z31.core.$strip>>;
+		}, z31.core.$strip>;
+		createdAt: z31.ZodISODateTime;
+		updatedAt: z31.ZodISODateTime;
+	}, z31.core.$strip>>;
+	nextCursor: z31.ZodNullable<z31.ZodString>;
+}, z31.core.$strip>;
+/** One page of Prospect Companies. */
+type ListProspectCompaniesResponse = z31.infer<typeof listProspectCompaniesResponseSchema>;
+/** The position in a Prospect Company list. */
+declare const prospectCompanyCursorSchema: z31.ZodObject<{
+	createdAt: z31.ZodISODateTime;
+	id: z31.core.$ZodBranded<z31.ZodString, "pco", "out">;
+}, z31.core.$strict>;
+/** The position in a Prospect Company list. */
+type ProspectCompanyCursor = z31.infer<typeof prospectCompanyCursorSchema>;
+/** The roles that may do everything to every Prospect: merge, import, erase, assign in bulk. */
+declare const PROSPECT_ADMIN_ROLES: readonly ["owner", "admin"];
+/** The roles that may create, read and edit Prospects, each within what they may see (a Rep their own, a Manager their Team's Reps', Owner and Admin all). */
+declare const PROSPECT_ALL_ROLES: readonly ["owner", "admin", "manager", "rep"];
+/** The Prospect routes, by name. */
+type ProspectRouteName = "createProspect" | "listProspects" | "getProspect" | "updateProspect" | "setProspectOwner" | "bulkAssignProspects" | "eraseProspect" | "listProspectFieldHistory" | "createProspectCompany" | "listProspectCompanies" | "getProspectCompany" | "updateProspectCompany" | "listProspectCompanyFieldHistory" | "listProspectDuplicates" | "mergeProspects" | "getProspectMerge" | "undoProspectMerge" | "uploadProspectImport" | "listProspectImports" | "getProspectImport" | "listProspectImportRows" | "downloadProspectImportReport";
+/** What the service needs to describe one route: method, path, who may call it, what it answers. */
+type ProspectRoute = {
+	readonly method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+	readonly path: string;
+	/** The roles allowed. Any other role is the common `auth.forbidden`. */
+	readonly roles: readonly Role[];
+	/** The success statuses, the first being the usual one. */
+	readonly success: readonly number[];
+	/** True when the route accepts an `Idempotency-Key` header. */
+	readonly idempotent: boolean;
+	/** The domain codes the route may return, beyond the common ones. */
+	readonly errors: readonly ProspectErrorCode[];
+	/** The common codes the route may return, beyond those every route may. */
+	readonly commonErrors: readonly CommonErrorCode[];
+	/** The description for the OpenAPI document, role rules included. */
+	readonly description: string;
+};
+/**
+* The Prospect routes (spec M2), described as `SALES_HISTORY_ROUTES` describes its routes. Every
+* route may also return the common `auth.*`, `rate.limited` and `server.*` codes. Every list is
+* cursor-paginated with at most 100 items per page. A record of another Organization is always
+* `prospect.not_found`. Source and actor are set by core from the route and the token, never read
+* from a body.
+*/
+declare const PROSPECT_ROUTES: Readonly<Record<ProspectRouteName, ProspectRoute>>;
+import { z as z32 } from "zod";
+/** Trimmed text of 1 to `maxLength` characters with no control character; a request value is untrusted text for display code. */
+declare function boundedTextSchema(maxLength: number): z32.ZodPipe<z32.ZodString, z32.ZodString>;
+/** The longest first or last name, in characters. */
+declare const MAX_PROSPECT_NAME_PART_LENGTH = 100;
+/** The longest job title, in characters. */
+declare const MAX_PROSPECT_JOB_TITLE_LENGTH = 200;
+/** The longest Prospect Company name, in characters. */
+declare const MAX_PROSPECT_COMPANY_NAME_LENGTH = 200;
+/** The longest Prospect note, in characters. */
+declare const MAX_PROSPECT_NOTES_LENGTH = 5e3;
+/** The longest tag, in characters. */
+declare const MAX_PROSPECT_TAG_LENGTH = 50;
+/** The most tags one Prospect carries. */
+declare const MAX_PROSPECT_TAGS = 20;
+/** The longest search text of a list request, in characters. */
+declare const MAX_PROSPECT_SEARCH_LENGTH = 100;
+/** The longest value a stored field returns, in characters. */
+declare const MAX_PROSPECT_FIELD_VALUE_LENGTH = 320;
+/** The longest Source reference (an import job id, a CRM record id), in characters. */
+declare const MAX_SOURCE_REF_LENGTH = 200;
+/** A first or last name in a request: trimmed, 1 to 100 characters, no control character. */
+declare const prospectNamePartSchema: z32.ZodPipe<z32.ZodString, z32.ZodString>;
+/** A job title in a request: trimmed, 1 to 200 characters, no control character. */
+declare const prospectJobTitleSchema: z32.ZodPipe<z32.ZodString, z32.ZodString>;
+/** A Prospect Company name in a request: trimmed, 1 to 200 characters, no control character. */
+declare const prospectCompanyNameSchema: z32.ZodPipe<z32.ZodString, z32.ZodString>;
+/** Free-text notes on a Prospect: trimmed, 1 to 5,000 characters; line breaks and tabs are allowed, other control characters are not. */
+declare const prospectNotesSchema: z32.ZodPipe<z32.ZodString, z32.ZodString>;
+/** The tags of a Prospect in a request: at most 20, each trimmed and 1 to 50 characters, no duplicates. */
+declare const prospectTagsSchema: z32.ZodArray<z32.ZodPipe<z32.ZodString, z32.ZodString>>;
+/**
+* A phone number as typed in a request: 3 to 40 characters of digits, spaces, `+`, `(`, `)`, `.`
+* and `-`. Core normalises it to E.164 (ADR 0011) and refuses what it cannot, as `request.invalid`.
+*/
+declare const rawPhoneSchema: z32.ZodPipe<z32.ZodString, z32.ZodString>;
+/** A phone number in E.164 form, as a response carries a normalised one: `+` and 7 to 15 digits. */
+declare const e164PhoneSchema: z32.ZodString;
+/**
+* A LinkedIn profile address as typed in a request: 1 to 300 characters naming `linkedin.com`.
+* Core normalises it (ADR 0011) and refuses what it cannot, as `request.invalid`.
+*/
+declare const rawLinkedinUrlSchema: z32.ZodPipe<z32.ZodString, z32.ZodString>;
+/**
+* A company web domain in a request: folded to lower case, 3 to 253 characters, dotted ASCII
+* labels of letters, digits and hyphens (an internationalised domain is sent in punycode).
+*/
+declare const prospectCompanyDomainSchema: z32.ZodPipe<z32.ZodPipe<z32.ZodString, z32.ZodTransform<string, string>>, z32.ZodString>;
+/** The kinds of identity a Prospect is matched on (ADR 0011). */
+declare const PROSPECT_IDENTITY_KINDS: readonly ["email", "phone", "linkedin"];
+/** The kind of identity a Prospect is matched on. */
+declare const prospectIdentityKindSchema: z32.ZodEnum<{
+	email: "email";
+	linkedin: "linkedin";
+	phone: "phone";
+}>;
+/** The kind of identity a Prospect is matched on. */
+type ProspectIdentityKind = z32.infer<typeof prospectIdentityKindSchema>;
+/** The fields of a Prospect that carry a Source, in the camelCase the API uses. Email, phone and LinkedIn are also its identities. */
+declare const PROSPECT_FIELD_NAMES: readonly ["firstName", "lastName", "jobTitle", "email", "phone", "linkedinUrl"];
+/** The name of a Prospect field that carries a Source. */
+declare const prospectFieldNameSchema: z32.ZodEnum<{
+	email: "email";
+	firstName: "firstName";
+	jobTitle: "jobTitle";
+	lastName: "lastName";
+	linkedinUrl: "linkedinUrl";
+	phone: "phone";
+}>;
+/** The name of a Prospect field that carries a Source. */
+type ProspectFieldName = z32.infer<typeof prospectFieldNameSchema>;
+/** The fields of a Prospect Company that carry a Source. */
+declare const PROSPECT_COMPANY_FIELD_NAMES: readonly ["name", "domain"];
+/** The name of a Prospect Company field that carries a Source. */
+declare const prospectCompanyFieldNameSchema: z32.ZodEnum<{
+	domain: "domain";
+	name: "name";
+}>;
+/** The name of a Prospect Company field that carries a Source. */
+type ProspectCompanyFieldName = z32.infer<typeof prospectCompanyFieldNameSchema>;
+/** The most history entries kept per field (ADR 0020 bounds the history); the oldest non-current entries go first. */
+declare const MAX_FIELD_HISTORY_ENTRIES = 50;
+/** The Source kinds that are fixed words; `enrichment:<provider>` is the open one. */
+declare const FIXED_SOURCE_KINDS: readonly ["manual", "import", "crm:hubspot", "crm:salesforce", "form"];
+/**
+* A Source kind (ADR 0020): `manual`, `import`, `crm:hubspot`, `crm:salesforce`, `form` or
+* `enrichment:<provider>` with a provider of 1 to 32 lower-case letters, digits and underscores.
+* Writers never choose it in a request body: core sets it from the route and the token.
+*/
+declare const sourceKindSchema: z32.ZodUnion<readonly [z32.ZodEnum<{
+	"crm:hubspot": "crm:hubspot";
+	"crm:salesforce": "crm:salesforce";
+	form: "form";
+	import: "import";
+	manual: "manual";
+}>, z32.ZodString]>;
+/** A Source kind. */
+type SourceKind = z32.infer<typeof sourceKindSchema>;
+/**
+* A stored value with where it came from, when and who set it (ADR 0020). `sourceRef` names the
+* import job or CRM record and is `null` for manual entry; `setByUserId` is `null` when a system
+* (an import job, a sync, a provider) set the value rather than a person.
+*/
+declare const fieldValueSchema: z32.ZodObject<{
+	value: z32.ZodString;
+	source: z32.ZodUnion<readonly [z32.ZodEnum<{
+		"crm:hubspot": "crm:hubspot";
+		"crm:salesforce": "crm:salesforce";
+		form: "form";
+		import: "import";
+		manual: "manual";
+	}>, z32.ZodString]>;
+	sourceRef: z32.ZodNullable<z32.ZodString>;
+	setAt: z32.ZodISODateTime;
+	setByUserId: z32.ZodNullable<z32.core.$ZodBranded<z32.ZodString, "usr", "out">>;
+}, z32.core.$strip>;
+/** A stored value with its Source, time and actor. */
+type FieldValue = z32.infer<typeof fieldValueSchema>;
+/** The states of a history entry: `current` is the value in force, `superseded` an earlier one, `suggested` an enrichment value kept beside an own value (ADR 0020). */
+declare const FIELD_HISTORY_STATES: readonly ["current", "superseded", "suggested"];
+/** The state of a history entry. */
+declare const fieldHistoryStateSchema: z32.ZodEnum<{
+	current: "current";
+	suggested: "suggested";
+	superseded: "superseded";
+}>;
+/** One entry of a field's history: the value with its Source, time and actor, and whether it is current, superseded or only suggested. */
+declare const fieldHistoryEntrySchema: z32.ZodObject<{
+	value: z32.ZodString;
+	source: z32.ZodUnion<readonly [z32.ZodEnum<{
+		"crm:hubspot": "crm:hubspot";
+		"crm:salesforce": "crm:salesforce";
+		form: "form";
+		import: "import";
+		manual: "manual";
+	}>, z32.ZodString]>;
+	sourceRef: z32.ZodNullable<z32.ZodString>;
+	setAt: z32.ZodISODateTime;
+	setByUserId: z32.ZodNullable<z32.core.$ZodBranded<z32.ZodString, "usr", "out">>;
+	state: z32.ZodEnum<{
+		current: "current";
+		suggested: "suggested";
+		superseded: "superseded";
+	}>;
+}, z32.core.$strip>;
+/** One entry of a field's history. */
+type FieldHistoryEntry = z32.infer<typeof fieldHistoryEntrySchema>;
 /** This library's package name, so a consumer can report which shared libraries it resolved. */
 declare const PACKAGE = "tula-closeline-contract";
-export { ABANDON_MAX_AGE_HOURS, ACCEPTED_DOCUMENT_EXTENSIONS, ACCEPTED_DOCUMENT_MEDIA_TYPES, ACCEPTED_RECORDING_EXTENSIONS, ACCEPTED_TRANSCRIPT_EXTENSIONS, ALL_PLAYBOOK_ERRORS, ALL_PLAYBOOK_ROUTES, AUTH_ERRORS, AUTH_OPTIONS_PATH, AUTH_OPTIONS_ROUTE, AcceptedCallExtension, AcceptedDocumentExtension, AddTeamMemberRequest, AllPlaybookRouteName, AuthErrorCode, AuthOptionsResponse, AuthProviders, AuthRoute, BrowserSessionTokens, CALL_CHANNELS, CALL_DELETED_MESSAGE, CALL_FAILURE_FIXES, CALL_FAILURE_REASONS, CALL_KINDS, CALL_MEDIA_TYPES, CALL_REP_CHANGED_MESSAGE, CALL_STATES, CALL_TRANSCRIBED_MESSAGE, CALL_UPLOADED_MESSAGE, CORE_ERRORS, CREATE_DEMO_REQUEST_ERROR_CODES, CREATE_INVITATION_ERROR_CODES, CSV_FAILURES, CURRENT_RIGHTS_WORDING_VERSION, Call, CallCursor, CallDeletedPayload, CallFailureFix, CallFailureReason, CallId, CallKind, CallMediaType, CallParams, CallRepChangedPayload, CallState, CallTranscribedPayload, CallUploadedPayload, CellResult, ChangeMemberRoleRequest, CheckCallFileResult, CheckDealImportHeaderResult, CheckDealImportHeaderTextResult, CheckDealImportRowResult, CheckUploadFileResult, CommonErrorCode, ConfirmRightsRequest, CoreErrorCode, CreateDemoRequestRequest, CreateDemoRequestResponse, CreateInvitationRequest, CreateTeamRequest, CsvFailure, CsvOptions, CsvResult, DAILY_LIMIT_DETAILS_SCHEMA, DEAL_CLOSED_AT_MAX_YEAR, DEAL_CLOSED_AT_MIN_YEAR, DEAL_IMPORT_FAILURE_REASONS, DEAL_IMPORT_FILE_FIELD, DEAL_IMPORT_HEADER_PREFIX_CHARS, DEAL_IMPORT_HEADER_PROBLEMS, DEAL_IMPORT_OPTIONAL_COLUMN, DEAL_IMPORT_REQUIRED_COLUMNS, DEAL_IMPORT_ROW_REASONS, DEAL_IMPORT_ROW_RESULTS, DEAL_IMPORT_STATES, DEAL_IMPORT_UPLOADED_MESSAGE, DEAL_OUTCOME_CHANGED_MESSAGE, DEFAULT_MAX_CALLS, DEFAULT_MAX_DEALS, DEFAULT_MAX_DOCUMENTS, DEFAULT_MAX_DOCUMENT_BYTES_TOTAL, DEFAULT_MAX_RECORDING_BYTES_TOTAL, DEFAULT_PAGE_SIZE, DEFAULT_SEARCH_LIMIT, DOCUMENT_DELETED_MESSAGE, DOCUMENT_FAILURE_REASONS, DOCUMENT_RETENTION_DAYS, DOCUMENT_STATES, DOCUMENT_UPLOADED_MESSAGE, Deal, DealCursor, DealId, DealImport, DealImportCursor, DealImportFailureReason, DealImportHeaderProblem, DealImportId, DealImportParams, DealImportRow, DealImportRowCursor, DealImportRowReason, DealImportRowResult, DealImportState, DealImportUploadedPayload, DealOutcomeChangedPayload, DealParams, DealRecordId, DemoRequestId, DocumentDeletedPayload, DocumentFailureReason, DocumentFileName, DocumentId, DocumentMatch, DocumentMediaType, DocumentParams, DocumentSearchEvidence, DocumentState, DocumentUploadedPayload, ERRORS, Email, ErrorBody, ErrorDefinition, ErrorInput, EventId, EventType, FirstCsvRecordResult, GOOGLE_ERROR_PARAM, GOOGLE_ERROR_PATH, GOOGLE_ROUTES, GOOGLE_SIGN_UP_ATTEMPT_PARAM, GOOGLE_SIGN_UP_PATH, GoogleCompleteRequest, GoogleCompleteResponse, GoogleIntent, GoogleStartRequest, GoogleStartResponse, IDEMPOTENCY_KEY_HEADER, INCOMPLETE_UPLOAD_PARTS_TTL_HOURS, INTERNAL_CALL_ERRORS, INVITABLE_ROLES, INVITATION_STATES, Id, IdempotencyKey, InternalAbandonOrganizationParams, InternalAbandonOrganizationRequest, InternalAbandonOrganizationResponse, InternalAcceptInvitationRequest, InternalAcceptInvitationResponse, InternalCallName, InternalCreateOrganizationRequest, InternalCreateOrganizationResponse, InternalMembershipRequest, InternalMembershipResponse, InternalRemoveOrganizationDocumentsParams, InternalRemoveOrganizationDocumentsRequest, InternalRemoveOrganizationDocumentsResponse, InternalUpdateMemberProfileParams, InternalUpdateMemberProfileRequest, InternalUpdateMemberProfileResponse, InvitableRole, Invitation, InvitationId, InvitationParams, InvitationState, LIST_MEMBERS_MIN_ROLE, LIST_TEAM_MEMBERS_ERROR_CODES, LIST_TEAM_MEMBERS_MIN_ROLE, ListCallsQuery, ListCallsResponse, ListDealImportRowsQuery, ListDealImportRowsResponse, ListDealImportsQuery, ListDealImportsResponse, ListDealsQuery, ListDealsResponse, ListDocumentsQuery, ListDocumentsResponse, ListInvitationsQuery, ListInvitationsResponse, ListMembersQuery, ListMembersResponse, ListTeamMembersQuery, ListTeamMembersResponse, ListTeamsQuery, ListTeamsResponse, LookupDealRequest, MARKETING_ERRORS, MARKETING_ROUTES, MAX_AUTHORIZATION_URL_LENGTH, MAX_CALL_SPEAKERS, MAX_CURSOR_LENGTH, MAX_DEAL_ID_BYTES, MAX_DEAL_ID_LENGTH, MAX_DEAL_IMPORT_BYTES, MAX_DEAL_IMPORT_CELL_LENGTH, MAX_DEAL_IMPORT_HEADER_LENGTH, MAX_DEAL_IMPORT_ROWS, MAX_DEAL_NAME_BYTES, MAX_DEAL_NAME_LENGTH, MAX_DELETION_SEQ, MAX_DEMO_REQUEST_FIELD_LENGTH, MAX_DEMO_REQUEST_MESSAGE_LENGTH, MAX_DOCUMENT_BYTES, MAX_DOCUMENT_FILE_NAME_BYTES, MAX_DOCUMENT_FILE_NAME_LENGTH, MAX_DOCUMENT_PAGES, MAX_EMAIL_LENGTH, MAX_MOMENT_SNIPPET_CHARACTERS, MAX_NAME_LENGTH, MAX_PAGE_SIZE, MAX_PERSON_NAME_LENGTH, MAX_QUEUED_DEAL_IMPORTS, MAX_RECORDING_BYTES, MAX_RECORDING_SECONDS, MAX_REP_FIELD_LENGTH, MAX_REP_FOLLOWING_CHARACTERS, MAX_REP_FOLLOWING_TURNS, MAX_RETURN_TO_LENGTH, MAX_RIGHTS_HEADING_LENGTH, MAX_RIGHTS_PARAGRAPHS, MAX_RIGHTS_TEXT_LENGTH, MAX_RIGHTS_WORDING_VERSION, MAX_SEARCH_CANDIDATES, MAX_SEARCH_LIMIT, MAX_SEARCH_TEXT_CHARACTERS, MAX_SEARCH_TURNS, MAX_SEQ, MAX_SPEAKER_EXCERPT_LENGTH, MAX_SPEAKER_LABEL_BYTES, MAX_SPEAKER_LABEL_LENGTH, MAX_TRANSCRIPT_BYTES, MAX_UTF8_BYTES_PER_CODE_POINT, MEDIA_TYPE_BY_CALL_EXTENSION, MEDIA_TYPE_BY_EXTENSION, MarketingErrorCode, MarketingRoute, MarketingRouteName, Member, MemberParams, MembershipId, MomentMatch, OIDC_COOKIE_BASE_NAME, OIDC_COOKIE_SECURE_PREFIX, ORGANIZATION_STATUSES, OUTCOMES, Organization, OrganizationId, OrganizationStatus, Outcome, PACKAGE, PLAYBOOK_ERRORS, PLAYBOOK_READ_ROLES, PLAYBOOK_ROUTES, PLAYBOOK_WRITE_ROLES, Page, PageQuery, ParseRepFieldResult, ParsedDealImportRow, PlaybookDocument, PlaybookErrorCode, PlaybookRoute, PlaybookRouteName, ProspectId, REGIONS, RIGHTS_WORDINGS, ROLES, Region, RenameOrganizationRequest, RenameTeamRequest, RepChoice, RequestId, RetryAfterDetails, RightsConfirmation, RightsRequiredDetails, RightsStatus, RightsWording, Role, SALES_HISTORY_ERRORS, SALES_HISTORY_READ_ROLES, SALES_HISTORY_ROUTES, SEARCH_ROUTES, SIGNUP_ERRORS, SalesHistoryErrorCode, SalesHistoryRoute, SalesHistoryRouteName, SearchDocumentsRequest, SearchDocumentsResponse, SearchEvidence, SearchMomentsRequest, SearchMomentsResponse, SearchRouteName, SearchTurn, SetCallRepRequest, SetDealOutcomeRequest, SignupErrorCode, SpeakerExcerpt, Team, TeamId, TeamMember, TeamMemberParams, TeamParams, UPLOAD_CONTENT_TYPE, UPLOAD_FILE_FIELD, UploadCallFields, UploadDocumentFile, UserId, addTeamMemberRequestSchema, attemptIdSchema, authOptionsResponseSchema, authProvidersSchema, authorizationUrlSchema, browserSessionTokensSchema, calendarDateSchema, callChannelSchema, callCursorSchema, callDeletedPayloadSchema, callFailureReasonSchema, callIdSchema, callKindSchema, callListItemSchema, callMediaTypeSchema, callParamsSchema, callRepChangedPayloadSchema, callReuploadRequeues, callSchema, callStateSchema, callTranscribedPayloadSchema, callUploadedPayloadSchema, changeMemberRoleRequestSchema, checkCallFile, checkDealImportHeader, checkDealImportHeaderText, checkDealImportRow, checkUploadFile, confirmRightsRequestSchema, createDemoRequestRequestSchema, createDemoRequestResponseSchema, createInvitationRequestSchema, createTeamRequestSchema, dealAmountSchema, dealCurrencySchema, dealCursorSchema, dealIdSchema, dealImportCursorSchema, dealImportFailureReasonSchema, dealImportIdSchema, dealImportParamsSchema, dealImportRowCursorSchema, dealImportRowReasonSchema, dealImportRowResultSchema, dealImportRowSchema, dealImportSchema, dealImportStateSchema, dealImportUploadedPayloadSchema, dealNameSchema, dealOutcomeChangedPayloadSchema, dealParamsSchema, dealRecordIdSchema, dealSchema, decodeCursor, defineErrors, defineEvent, demoRequestIdSchema, demoRequestMessageSchema, demoRequestSourcePageSchema, documentDeletedPayloadSchema, documentExtension, documentFailureReasonSchema, documentFileNameSchema, documentIdSchema, documentMatchSchema, documentMediaTypeSchema, documentParamsSchema, documentQueryText, documentSchema, documentSearchEvidenceSchema, documentSizeCheckSchema, documentStateSchema, documentTypeCheckSchema, documentUploadedPayloadSchema, emailSchema, encodeCursor, errorBodySchema, errorCodeSchema, eventEnvelopeSchema, eventIdSchema, eventTypeSchema, excerptText, firstCsvRecord, foldAscii, formatId, googleCompleteRequestSchema, googleCompleteResponseSchema, googleErrorQuerySchema, googleIntentSchema, googleSignUpQuerySchema, googleStartRequestSchema, googleStartResponseSchema, hasStrippableCharacter, idSchema, idempotencyKeySchema, internalAbandonOrganizationParamsSchema, internalAbandonOrganizationRequestSchema, internalAbandonOrganizationResponseSchema, internalAcceptInvitationRequestSchema, internalAcceptInvitationResponseSchema, internalCreateOrganizationRequestSchema, internalCreateOrganizationResponseSchema, internalMembershipRequestSchema, internalMembershipResponseSchema, internalRemoveOrganizationDocumentsParamsSchema, internalRemoveOrganizationDocumentsRequestSchema, internalRemoveOrganizationDocumentsResponseSchema, internalUpdateMemberProfileParamsSchema, internalUpdateMemberProfileRequestSchema, internalUpdateMemberProfileResponseSchema, invitableRoleSchema, invitationIdSchema, invitationParamsSchema, invitationSchema, invitationStateSchema, invitationTokenSchema, isBlankCsvRecord, isWellFormedText, listCallsQuerySchema, listCallsResponseSchema, listDealImportRowsQuerySchema, listDealImportRowsResponseSchema, listDealImportsQuerySchema, listDealImportsResponseSchema, listDealsQuerySchema, listDealsResponseSchema, listDocumentsQuerySchema, listDocumentsResponseSchema, listInvitationsQuerySchema, listInvitationsResponseSchema, listMembersQuerySchema, listMembersResponseSchema, listTeamMembersQuerySchema, listTeamMembersResponseSchema, listTeamsQuerySchema, listTeamsResponseSchema, lookupDealRequestSchema, memberParamsSchema, memberSchema, membershipIdSchema, momentMatchSchema, momentQueryText, momentSnippet, momentSnippetSchema, normaliseDealId, normaliseFileName, normaliseMediaType, normaliseSpeakerLabel, organizationIdSchema, organizationNameSchema, organizationSchema, organizationStatusSchema, outcomeSchema, pageQuerySchema, pageSchema, parseAmountCell, parseClosedAtCell, parseCsv, parseCurrencyCell, parseOutcomeCell, parseRepField, personNameSchema, prospectIdSchema, regionSchema, renameOrganizationRequestSchema, renameTeamRequestSchema, repChangeAllowed, repChoiceSchema, repChoiceSuits, requestIdSchema, retryAfterDetailsSchema, returnToSchema, rightsConfirmationSchema, rightsRequiredDetailsSchema, rightsStatusSchema, rightsWordingFor, rightsWordingSchema, rightsWordingVersionSchema, roleAtLeast, roleSchema, searchDocumentsRequestSchema, searchDocumentsResponseSchema, searchEvidenceSchema, searchMomentsRequestSchema, searchMomentsResponseSchema, searchTurnSchema, setCallRepRequestSchema, setDealOutcomeRequestSchema, speakerExcerpt, speakerExcerptSchema, speakerLabelSchema, storedNameSchema, teamIdSchema, teamMemberParamsSchema, teamMemberSchema, teamNameSchema, teamParamsSchema, teamSchema, timestampSchema, uploadCallFieldsSchema, uploadCallFileSchema, uploadDocumentFileSchema, userIdSchema };
+export { ABANDON_MAX_AGE_HOURS, ACCEPTED_DOCUMENT_EXTENSIONS, ACCEPTED_DOCUMENT_MEDIA_TYPES, ACCEPTED_RECORDING_EXTENSIONS, ACCEPTED_TRANSCRIPT_EXTENSIONS, ALL_PLAYBOOK_ERRORS, ALL_PLAYBOOK_ROUTES, AUTH_ERRORS, AUTH_OPTIONS_PATH, AUTH_OPTIONS_ROUTE, AcceptedCallExtension, AcceptedDocumentExtension, AddTeamMemberRequest, AllPlaybookRouteName, AuthErrorCode, AuthOptionsResponse, AuthProviders, AuthRoute, BULK_ASSIGN_SYNC_LIMIT, BrowserSessionTokens, BulkAssignProspectsRequest, BulkAssignProspectsResponse, CALL_CHANNELS, CALL_DELETED_MESSAGE, CALL_FAILURE_FIXES, CALL_FAILURE_REASONS, CALL_KINDS, CALL_MEDIA_TYPES, CALL_REP_CHANGED_MESSAGE, CALL_STATES, CALL_TRANSCRIBED_MESSAGE, CALL_UPLOADED_MESSAGE, CORE_ERRORS, CREATE_DEMO_REQUEST_ERROR_CODES, CREATE_INVITATION_ERROR_CODES, CSV_FAILURES, CURRENT_RIGHTS_WORDING_VERSION, Call, CallCursor, CallDeletedPayload, CallFailureFix, CallFailureReason, CallId, CallKind, CallMediaType, CallParams, CallRepChangedPayload, CallState, CallTranscribedPayload, CallUploadedPayload, CellResult, ChangeMemberRoleRequest, CheckCallFileResult, CheckDealImportHeaderResult, CheckDealImportHeaderTextResult, CheckDealImportRowResult, CheckUploadFileResult, CommonErrorCode, ConfirmRightsRequest, CoreErrorCode, CreateDemoRequestRequest, CreateDemoRequestResponse, CreateInvitationRequest, CreateProspectCompanyRequest, CreateProspectRequest, CreateTeamRequest, CsvFailure, CsvOptions, CsvResult, DAILY_LIMIT_DETAILS_SCHEMA, DEAL_CLOSED_AT_MAX_YEAR, DEAL_CLOSED_AT_MIN_YEAR, DEAL_IMPORT_FAILURE_REASONS, DEAL_IMPORT_FILE_FIELD, DEAL_IMPORT_HEADER_PREFIX_CHARS, DEAL_IMPORT_HEADER_PROBLEMS, DEAL_IMPORT_OPTIONAL_COLUMN, DEAL_IMPORT_REQUIRED_COLUMNS, DEAL_IMPORT_ROW_REASONS, DEAL_IMPORT_ROW_RESULTS, DEAL_IMPORT_STATES, DEAL_IMPORT_UPLOADED_MESSAGE, DEAL_OUTCOME_CHANGED_MESSAGE, DEFAULT_MAX_CALLS, DEFAULT_MAX_DEALS, DEFAULT_MAX_DOCUMENTS, DEFAULT_MAX_DOCUMENT_BYTES_TOTAL, DEFAULT_MAX_RECORDING_BYTES_TOTAL, DEFAULT_PAGE_SIZE, DEFAULT_SEARCH_LIMIT, DOCUMENT_DELETED_MESSAGE, DOCUMENT_FAILURE_REASONS, DOCUMENT_RETENTION_DAYS, DOCUMENT_STATES, DOCUMENT_UPLOADED_MESSAGE, Deal, DealCursor, DealId, DealImport, DealImportCursor, DealImportFailureReason, DealImportHeaderProblem, DealImportId, DealImportParams, DealImportRow, DealImportRowCursor, DealImportRowReason, DealImportRowResult, DealImportState, DealImportUploadedPayload, DealOutcomeChangedPayload, DealParams, DealRecordId, DemoRequestId, DocumentDeletedPayload, DocumentFailureReason, DocumentFileName, DocumentId, DocumentMatch, DocumentMediaType, DocumentParams, DocumentSearchEvidence, DocumentState, DocumentUploadedPayload, DuplicateIdentityDetails, ERRORS, Email, EraseProspectResponse, ErrorBody, ErrorDefinition, ErrorInput, EventId, EventType, FIELD_HISTORY_STATES, FIXED_SOURCE_KINDS, FieldHistoryCursor, FieldHistoryEntry, FieldValue, FirstCsvRecordResult, GOOGLE_ERROR_PARAM, GOOGLE_ERROR_PATH, GOOGLE_ROUTES, GOOGLE_SIGN_UP_ATTEMPT_PARAM, GOOGLE_SIGN_UP_PATH, GoogleCompleteRequest, GoogleCompleteResponse, GoogleIntent, GoogleStartRequest, GoogleStartResponse, IDEMPOTENCY_KEY_HEADER, INCOMPLETE_UPLOAD_PARTS_TTL_HOURS, INTERNAL_CALL_ERRORS, INVITABLE_ROLES, INVITATION_STATES, Id, IdempotencyKey, InternalAbandonOrganizationParams, InternalAbandonOrganizationRequest, InternalAbandonOrganizationResponse, InternalAcceptInvitationRequest, InternalAcceptInvitationResponse, InternalCallName, InternalCreateOrganizationRequest, InternalCreateOrganizationResponse, InternalMembershipRequest, InternalMembershipResponse, InternalRemoveOrganizationDocumentsParams, InternalRemoveOrganizationDocumentsRequest, InternalRemoveOrganizationDocumentsResponse, InternalUpdateMemberProfileParams, InternalUpdateMemberProfileRequest, InternalUpdateMemberProfileResponse, InvitableRole, Invitation, InvitationId, InvitationParams, InvitationState, LIST_MEMBERS_MIN_ROLE, LIST_TEAM_MEMBERS_ERROR_CODES, LIST_TEAM_MEMBERS_MIN_ROLE, ListCallsQuery, ListCallsResponse, ListDealImportRowsQuery, ListDealImportRowsResponse, ListDealImportsQuery, ListDealImportsResponse, ListDealsQuery, ListDealsResponse, ListDocumentsQuery, ListDocumentsResponse, ListFieldHistoryQuery, ListFieldHistoryResponse, ListInvitationsQuery, ListInvitationsResponse, ListMembersQuery, ListMembersResponse, ListProspectCompaniesQuery, ListProspectCompaniesResponse, ListProspectDuplicatesQuery, ListProspectDuplicatesResponse, ListProspectImportRowsQuery, ListProspectImportRowsResponse, ListProspectImportsQuery, ListProspectImportsResponse, ListProspectsQuery, ListProspectsResponse, ListTeamMembersQuery, ListTeamMembersResponse, ListTeamsQuery, ListTeamsResponse, LookupDealRequest, MARKETING_ERRORS, MARKETING_ROUTES, MAX_AUTHORIZATION_URL_LENGTH, MAX_BULK_ASSIGN_PROSPECTS, MAX_CALL_SPEAKERS, MAX_CURSOR_LENGTH, MAX_DEAL_ID_BYTES, MAX_DEAL_ID_LENGTH, MAX_DEAL_IMPORT_BYTES, MAX_DEAL_IMPORT_CELL_LENGTH, MAX_DEAL_IMPORT_HEADER_LENGTH, MAX_DEAL_IMPORT_ROWS, MAX_DEAL_NAME_BYTES, MAX_DEAL_NAME_LENGTH, MAX_DELETION_SEQ, MAX_DEMO_REQUEST_FIELD_LENGTH, MAX_DEMO_REQUEST_MESSAGE_LENGTH, MAX_DOCUMENT_BYTES, MAX_DOCUMENT_FILE_NAME_BYTES, MAX_DOCUMENT_FILE_NAME_LENGTH, MAX_DOCUMENT_PAGES, MAX_EMAIL_LENGTH, MAX_FIELD_HISTORY_ENTRIES, MAX_MERGED_PROSPECTS, MAX_MOMENT_SNIPPET_CHARACTERS, MAX_NAME_LENGTH, MAX_PAGE_SIZE, MAX_PERSON_NAME_LENGTH, MAX_PROSPECT_COMPANY_NAME_LENGTH, MAX_PROSPECT_FIELD_VALUE_LENGTH, MAX_PROSPECT_IMPORT_BYTES, MAX_PROSPECT_IMPORT_ROWS, MAX_PROSPECT_JOB_TITLE_LENGTH, MAX_PROSPECT_NAME_PART_LENGTH, MAX_PROSPECT_NOTES_LENGTH, MAX_PROSPECT_SEARCH_LENGTH, MAX_PROSPECT_TAGS, MAX_PROSPECT_TAG_LENGTH, MAX_QUEUED_DEAL_IMPORTS, MAX_RECORDING_BYTES, MAX_RECORDING_SECONDS, MAX_REP_FIELD_LENGTH, MAX_REP_FOLLOWING_CHARACTERS, MAX_REP_FOLLOWING_TURNS, MAX_RETURN_TO_LENGTH, MAX_RIGHTS_HEADING_LENGTH, MAX_RIGHTS_PARAGRAPHS, MAX_RIGHTS_TEXT_LENGTH, MAX_RIGHTS_WORDING_VERSION, MAX_SEARCH_CANDIDATES, MAX_SEARCH_LIMIT, MAX_SEARCH_TEXT_CHARACTERS, MAX_SEARCH_TURNS, MAX_SEQ, MAX_SOURCE_REF_LENGTH, MAX_SPEAKER_EXCERPT_LENGTH, MAX_SPEAKER_LABEL_BYTES, MAX_SPEAKER_LABEL_LENGTH, MAX_TRANSCRIPT_BYTES, MAX_UTF8_BYTES_PER_CODE_POINT, MEDIA_TYPE_BY_CALL_EXTENSION, MEDIA_TYPE_BY_EXTENSION, MarketingErrorCode, MarketingRoute, MarketingRouteName, Member, MemberParams, MembershipId, MergeProspectsRequest, MomentMatch, OIDC_COOKIE_BASE_NAME, OIDC_COOKIE_SECURE_PREFIX, ORGANIZATION_STATUSES, OUTCOMES, Organization, OrganizationId, OrganizationStatus, Outcome, PACKAGE, PLAYBOOK_ERRORS, PLAYBOOK_READ_ROLES, PLAYBOOK_ROUTES, PLAYBOOK_WRITE_ROLES, PROSPECT_ADMIN_ROLES, PROSPECT_ALL_ROLES, PROSPECT_COMPANY_FIELD_NAMES, PROSPECT_ERRORS, PROSPECT_EVENTS, PROSPECT_FIELD_NAMES, PROSPECT_IDENTITY_KINDS, PROSPECT_IMPORT_COLUMNS, PROSPECT_IMPORT_FAILURE_REASONS, PROSPECT_IMPORT_FILE_FIELD, PROSPECT_IMPORT_INVALID_REASONS, PROSPECT_IMPORT_REJECT_REASONS, PROSPECT_IMPORT_REPORT_COLUMNS, PROSPECT_IMPORT_ROW_RESULTS, PROSPECT_IMPORT_SKIP_REASONS, PROSPECT_IMPORT_STATES, PROSPECT_MERGE_STATES, PROSPECT_MERGE_UNDO_DAYS, PROSPECT_ROUTES, PROSPECT_STATUSES, Page, PageQuery, ParseRepFieldResult, ParsedDealImportRow, PlaybookDocument, PlaybookErrorCode, PlaybookRoute, PlaybookRouteName, Prospect, ProspectCompany, ProspectCompanyCursor, ProspectCompanyFieldName, ProspectCompanyFieldParams, ProspectCompanyId, ProspectCompanyParams, ProspectCursor, ProspectDuplicate, ProspectDuplicateCursor, ProspectErrorCode, ProspectEventType, ProspectFieldName, ProspectFieldParams, ProspectId, ProspectIdentityKind, ProspectImport, ProspectImportCursor, ProspectImportFailureReason, ProspectImportId, ProspectImportInvalidDetails, ProspectImportParams, ProspectImportRow, ProspectImportRowCursor, ProspectImportRowReason, ProspectImportRowResult, ProspectImportState, ProspectMerge, ProspectMergeId, ProspectMergeParams, ProspectNotFoundDetails, ProspectParams, ProspectRoute, ProspectRouteName, ProspectStatus, REGIONS, RIGHTS_WORDINGS, ROLES, Region, RenameOrganizationRequest, RenameTeamRequest, RepChoice, RequestId, RetryAfterDetails, RightsConfirmation, RightsRequiredDetails, RightsStatus, RightsWording, Role, SALES_HISTORY_ERRORS, SALES_HISTORY_READ_ROLES, SALES_HISTORY_ROUTES, SEARCH_ROUTES, SIGNUP_ERRORS, SalesHistoryErrorCode, SalesHistoryRoute, SalesHistoryRouteName, SearchDocumentsRequest, SearchDocumentsResponse, SearchEvidence, SearchMomentsRequest, SearchMomentsResponse, SearchRouteName, SearchTurn, SetCallRepRequest, SetDealOutcomeRequest, SetProspectOwnerRequest, SignupErrorCode, SourceKind, SpeakerExcerpt, Team, TeamId, TeamMember, TeamMemberParams, TeamParams, UPLOAD_CONTENT_TYPE, UPLOAD_FILE_FIELD, UpdateProspectCompanyRequest, UpdateProspectRequest, UploadCallFields, UploadDocumentFile, UserId, addTeamMemberRequestSchema, attemptIdSchema, authOptionsResponseSchema, authProvidersSchema, authorizationUrlSchema, boundedTextSchema, browserSessionTokensSchema, bulkAssignProspectsRequestSchema, bulkAssignProspectsResponseSchema, calendarDateSchema, callChannelSchema, callCursorSchema, callDeletedPayloadSchema, callFailureReasonSchema, callIdSchema, callKindSchema, callListItemSchema, callMediaTypeSchema, callParamsSchema, callRepChangedPayloadSchema, callReuploadRequeues, callSchema, callStateSchema, callTranscribedPayloadSchema, callUploadedPayloadSchema, changeMemberRoleRequestSchema, checkCallFile, checkDealImportHeader, checkDealImportHeaderText, checkDealImportRow, checkUploadFile, confirmRightsRequestSchema, createDemoRequestRequestSchema, createDemoRequestResponseSchema, createInvitationRequestSchema, createProspectCompanyRequestSchema, createProspectRequestSchema, createTeamRequestSchema, dealAmountSchema, dealCurrencySchema, dealCursorSchema, dealIdSchema, dealImportCursorSchema, dealImportFailureReasonSchema, dealImportIdSchema, dealImportParamsSchema, dealImportRowCursorSchema, dealImportRowReasonSchema, dealImportRowResultSchema, dealImportRowSchema, dealImportSchema, dealImportStateSchema, dealImportUploadedPayloadSchema, dealNameSchema, dealOutcomeChangedPayloadSchema, dealParamsSchema, dealRecordIdSchema, dealSchema, decodeCursor, defineErrors, defineEvent, demoRequestIdSchema, demoRequestMessageSchema, demoRequestSourcePageSchema, documentDeletedPayloadSchema, documentExtension, documentFailureReasonSchema, documentFileNameSchema, documentIdSchema, documentMatchSchema, documentMediaTypeSchema, documentParamsSchema, documentQueryText, documentSchema, documentSearchEvidenceSchema, documentSizeCheckSchema, documentStateSchema, documentTypeCheckSchema, documentUploadedPayloadSchema, duplicateIdentityDetailsSchema, e164PhoneSchema, emailSchema, encodeCursor, eraseProspectResponseSchema, errorBodySchema, errorCodeSchema, eventEnvelopeSchema, eventIdSchema, eventTypeSchema, excerptText, fieldHistoryCursorSchema, fieldHistoryEntrySchema, fieldHistoryStateSchema, fieldValueSchema, firstCsvRecord, foldAscii, formatId, googleCompleteRequestSchema, googleCompleteResponseSchema, googleErrorQuerySchema, googleIntentSchema, googleSignUpQuerySchema, googleStartRequestSchema, googleStartResponseSchema, hasStrippableCharacter, idSchema, idempotencyKeySchema, internalAbandonOrganizationParamsSchema, internalAbandonOrganizationRequestSchema, internalAbandonOrganizationResponseSchema, internalAcceptInvitationRequestSchema, internalAcceptInvitationResponseSchema, internalCreateOrganizationRequestSchema, internalCreateOrganizationResponseSchema, internalMembershipRequestSchema, internalMembershipResponseSchema, internalRemoveOrganizationDocumentsParamsSchema, internalRemoveOrganizationDocumentsRequestSchema, internalRemoveOrganizationDocumentsResponseSchema, internalUpdateMemberProfileParamsSchema, internalUpdateMemberProfileRequestSchema, internalUpdateMemberProfileResponseSchema, invitableRoleSchema, invitationIdSchema, invitationParamsSchema, invitationSchema, invitationStateSchema, invitationTokenSchema, isBlankCsvRecord, isWellFormedText, listCallsQuerySchema, listCallsResponseSchema, listDealImportRowsQuerySchema, listDealImportRowsResponseSchema, listDealImportsQuerySchema, listDealImportsResponseSchema, listDealsQuerySchema, listDealsResponseSchema, listDocumentsQuerySchema, listDocumentsResponseSchema, listFieldHistoryQuerySchema, listFieldHistoryResponseSchema, listInvitationsQuerySchema, listInvitationsResponseSchema, listMembersQuerySchema, listMembersResponseSchema, listProspectCompaniesQuerySchema, listProspectCompaniesResponseSchema, listProspectDuplicatesQuerySchema, listProspectDuplicatesResponseSchema, listProspectImportRowsQuerySchema, listProspectImportRowsResponseSchema, listProspectImportsQuerySchema, listProspectImportsResponseSchema, listProspectsQuerySchema, listProspectsResponseSchema, listTeamMembersQuerySchema, listTeamMembersResponseSchema, listTeamsQuerySchema, listTeamsResponseSchema, lookupDealRequestSchema, memberParamsSchema, memberSchema, membershipIdSchema, mergeProspectsRequestSchema, momentMatchSchema, momentQueryText, momentSnippet, momentSnippetSchema, normaliseDealId, normaliseFileName, normaliseMediaType, normaliseSpeakerLabel, organizationIdSchema, organizationNameSchema, organizationSchema, organizationStatusSchema, outcomeSchema, pageQuerySchema, pageSchema, parseAmountCell, parseClosedAtCell, parseCsv, parseCurrencyCell, parseOutcomeCell, parseRepField, personNameSchema, prospectCompanyCursorSchema, prospectCompanyDomainSchema, prospectCompanyFieldNameSchema, prospectCompanyFieldParamsSchema, prospectCompanyIdSchema, prospectCompanyNameSchema, prospectCompanyParamsSchema, prospectCompanySchema, prospectCreatedEvent, prospectCursorSchema, prospectDuplicateCursorSchema, prospectDuplicateSchema, prospectErasedEvent, prospectFieldNameSchema, prospectFieldParamsSchema, prospectIdSchema, prospectIdentityKindSchema, prospectImportCursorSchema, prospectImportFailureReasonSchema, prospectImportIdSchema, prospectImportInvalidDetailsSchema, prospectImportParamsSchema, prospectImportRowCursorSchema, prospectImportRowReasonSchema, prospectImportRowResultSchema, prospectImportRowSchema, prospectImportSchema, prospectImportStateSchema, prospectJobTitleSchema, prospectMergeIdSchema, prospectMergeParamsSchema, prospectMergeSchema, prospectMergeUndoneEvent, prospectMergedEvent, prospectNamePartSchema, prospectNotFoundDetailsSchema, prospectNotesSchema, prospectParamsSchema, prospectSchema, prospectSearchSchema, prospectStatusSchema, prospectTagsSchema, prospectUpdatedEvent, rawLinkedinUrlSchema, rawPhoneSchema, regionSchema, renameOrganizationRequestSchema, renameTeamRequestSchema, repChangeAllowed, repChoiceSchema, repChoiceSuits, requestIdSchema, retryAfterDetailsSchema, returnToSchema, rightsConfirmationSchema, rightsRequiredDetailsSchema, rightsStatusSchema, rightsWordingFor, rightsWordingSchema, rightsWordingVersionSchema, roleAtLeast, roleSchema, searchDocumentsRequestSchema, searchDocumentsResponseSchema, searchEvidenceSchema, searchMomentsRequestSchema, searchMomentsResponseSchema, searchTurnSchema, setCallRepRequestSchema, setDealOutcomeRequestSchema, setProspectOwnerRequestSchema, sourceKindSchema, speakerExcerpt, speakerExcerptSchema, speakerLabelSchema, storedNameSchema, teamIdSchema, teamMemberParamsSchema, teamMemberSchema, teamNameSchema, teamParamsSchema, teamSchema, timestampSchema, updateProspectCompanyRequestSchema, updateProspectRequestSchema, uploadCallFieldsSchema, uploadCallFileSchema, uploadDocumentFileSchema, userIdSchema };

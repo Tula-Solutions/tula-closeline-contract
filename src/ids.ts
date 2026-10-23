@@ -28,6 +28,12 @@ export const teamIdSchema = idSchema('team')
 export const invitationIdSchema = idSchema('inv')
 /** The id of a Prospect (`prs_…`). */
 export const prospectIdSchema = idSchema('prs')
+/** The id of a Prospect Company (`pco_…`). */
+export const prospectCompanyIdSchema = idSchema('pco')
+/** The id of a Prospect import (`pimp_…`). */
+export const prospectImportIdSchema = idSchema('pimp')
+/** The id of a Prospect merge record (`pmrg_…`). */
+export const prospectMergeIdSchema = idSchema('pmrg')
 /** The id of a Playbook document (`doc_…`). */
 export const documentIdSchema = idSchema('doc')
 /** The opaque id of a Deal record (`deal_…`), used in every URL path; the customer's own deal id never travels in a path. */
@@ -56,6 +62,12 @@ export type TeamId = z.infer<typeof teamIdSchema>
 export type InvitationId = z.infer<typeof invitationIdSchema>
 /** The id of a Prospect. */
 export type ProspectId = z.infer<typeof prospectIdSchema>
+/** The id of a Prospect Company. */
+export type ProspectCompanyId = z.infer<typeof prospectCompanyIdSchema>
+/** The id of a Prospect import. */
+export type ProspectImportId = z.infer<typeof prospectImportIdSchema>
+/** The id of a Prospect merge record. */
+export type ProspectMergeId = z.infer<typeof prospectMergeIdSchema>
 /** The id of a Playbook document. */
 export type DocumentId = z.infer<typeof documentIdSchema>
 /** The opaque id of a Deal record. */
