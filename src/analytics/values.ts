@@ -53,9 +53,6 @@ export const MAX_ANALYTICS_RANGE_MONTHS = 13
 /** The most points one series holds: 13 months of days is at most 396. */
 export const MAX_SERIES_POINTS = 400
 
-/** The most groups one series response holds. */
-export const MAX_SERIES_GROUPS = 400
-
 /** The most lines (groups) one page of a series holds; further groups come on the next page. */
 export const MAX_SERIES_GROUPS_PER_PAGE = 20
 
