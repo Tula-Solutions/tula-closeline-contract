@@ -503,6 +503,12 @@ describe('routes', () => {
       expect(PROSPECT_ROUTES[name].roles).toEqual(['owner', 'admin'])
     }
   })
+  test('the import description names every identity kind it matches on', () => {
+    const text = PROSPECT_ROUTES.uploadProspectImport.description
+    for (const kind of ['email', 'phone', 'LinkedIn']) {
+      expect(text).toContain(kind)
+    }
+  })
   test('routes with an Idempotency-Key list its error codes', () => {
     for (const route of Object.values(PROSPECT_ROUTES)) {
       if (route.idempotent) {
