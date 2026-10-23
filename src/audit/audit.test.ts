@@ -50,6 +50,15 @@ describe('metadata', () => {
       expect(auditMetadataSchema.safeParse({ [key]: 'hello' }).success).toBe(false)
     }
   )
+  test.each(['textbody', 'messagebody', 'replytext', 'emailbody'])(
+    'refuses a lower-case run-together key %s',
+    (key) => {
+      expect(auditMetadataSchema.safeParse({ [key]: 'hello' }).success).toBe(false)
+    }
+  )
+  test.each(['instructionVersion', 'fromLevel', 'toLevel', 'channel'])('accepts %s', (key) => {
+    expect(auditMetadataSchema.safeParse({ [key]: 'x' }).success).toBe(true)
+  })
   test('refuses a string over 200 characters, a control character and nested values', () => {
     expect(auditMetadataSchema.safeParse({ note: 'x'.repeat(201) }).success).toBe(false)
     expect(auditMetadataSchema.safeParse({ note: 'a\nb' }).success).toBe(false)

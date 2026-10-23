@@ -27,6 +27,9 @@ export const DEFAULT_CONTROL_LEVEL = 'supervised' as const satisfies ControlLeve
 /** The channels an Agent can act on, as the channels of Contact Consent. */
 export const agentChannelSchema = consentChannelSchema
 
+/** The `{channel}` path parameter of the controls routes: a channel, or `default` for the kind's fallback. */
+export const agentControlChannelParamSchema = z.union([agentChannelSchema, z.literal('default')])
+
 /**
  * The reasons an Agent must hand over to a person. A closed list: an Admin turns each on or off for
  * the level and channel, and cannot add a free-text rule. A Prospect asking for a person is always

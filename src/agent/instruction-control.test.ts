@@ -5,6 +5,7 @@ import {
   AGENT_CONTROL_ROUTES,
   AGENT_ERRORS,
   AGENT_KINDS,
+  agentControlChannelParamSchema,
   agentControlSchema,
   agentKindSchema,
   CONTROL_LEVELS,
@@ -170,6 +171,14 @@ describe('control settings', () => {
     expect(setAgentsPausedRequestSchema.safeParse({ paused: 'yes' }).success).toBe(false)
     expect(setAgentsPausedRequestSchema.safeParse({ paused: true, x: 1 }).success).toBe(false)
     expect(listAgentControlsQuerySchema.safeParse({ limit: '101' }).success).toBe(false)
+  })
+})
+
+describe('control channel path parameter', () => {
+  test('accepts a channel or default and nothing else', () => {
+    expect(agentControlChannelParamSchema.safeParse('default').success).toBe(true)
+    expect(agentControlChannelParamSchema.safeParse('phone').success).toBe(true)
+    expect(agentControlChannelParamSchema.safeParse('foo').success).toBe(false)
   })
 })
 

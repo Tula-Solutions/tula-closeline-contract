@@ -79,7 +79,7 @@ export const MAX_AUDIT_METADATA_VALUE_LENGTH = 200
 
 /**
  * The words that may not appear in a metadata key, whether the key is `body`, `messageBody` or
- * `reply_text`: they name free text, recordings or secrets, which the log never holds.
+ * `reply_text`, or run together as `replytext`: they name free text, recordings or secrets, which the log never holds.
  */
 export const FORBIDDEN_AUDIT_METADATA_WORDS = [
   'body',
@@ -107,10 +107,10 @@ export const auditMetadataKeySchema = z
   .max(40)
   .regex(/^[a-z][A-Za-z0-9_]*$/)
   .refine(
-    (key) =>
-      !keyWords(key).some((word) =>
-        (FORBIDDEN_AUDIT_METADATA_WORDS as readonly string[]).includes(word)
-      ),
+    (key) => {
+      const squashed = keyWords(key).join('')
+      return !FORBIDDEN_AUDIT_METADATA_WORDS.some((word) => squashed.includes(word))
+    },
     { message: 'A metadata key may not name free text, a recording or a secret' }
   )
 
@@ -178,7 +178,10 @@ export const auditEventSchema = z.object({
 /** One audit event. */
 export type AuditEvent = z.infer<typeof auditEventSchema>
 
-/** The most days one filtered read or CSV may span. A wider range is `audit.range_too_large`. */
+/**
+ * The most days one filtered read or CSV may span. Core enforces it and answers a wider range
+ * with `audit.range_too_large`; the query schemas do not, so the caller gets the domain code.
+ */
 export const MAX_AUDIT_RANGE_DAYS = 366
 
 /** The most rows one CSV page holds. */

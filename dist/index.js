@@ -444,6 +444,7 @@ var CONTROL_LEVELS = ["supervised", "assisted", "autonomous"];
 var controlLevelSchema = z10.enum(CONTROL_LEVELS);
 var DEFAULT_CONTROL_LEVEL = "supervised";
 var agentChannelSchema = consentChannelSchema;
+var agentControlChannelParamSchema = z10.union([agentChannelSchema, z10.literal("default")]);
 var ESCALATION_TRIGGERS = [
   "pricing_question",
   "contract_or_legal",
@@ -2216,7 +2217,10 @@ var FORBIDDEN_AUDIT_METADATA_WORDS = [
   "html"
 ];
 var keyWords = (key) => key.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
-var auditMetadataKeySchema = z27.string().max(40).regex(/^[a-z][A-Za-z0-9_]*$/).refine((key) => !keyWords(key).some((word) => FORBIDDEN_AUDIT_METADATA_WORDS.includes(word)), { message: "A metadata key may not name free text, a recording or a secret" });
+var auditMetadataKeySchema = z27.string().max(40).regex(/^[a-z][A-Za-z0-9_]*$/).refine((key) => {
+  const squashed = keyWords(key).join("");
+  return !FORBIDDEN_AUDIT_METADATA_WORDS.some((word) => squashed.includes(word));
+}, { message: "A metadata key may not name free text, a recording or a secret" });
 var auditMetadataValueSchema = z27.union([
   z27.string().max(MAX_AUDIT_METADATA_VALUE_LENGTH).refine((value) => ![...value].some((c) => (c.codePointAt(0) ?? 0) < 32 || c === ""), "No control characters"),
   z27.number().finite(),
@@ -11600,6 +11604,7 @@ export {
   agentCallOutcomeSchema,
   agentCallParamsSchema,
   agentChannelSchema,
+  agentControlChannelParamSchema,
   agentControlSchema,
   agentInstructionVersionIdSchema,
   agentKindSchema,
