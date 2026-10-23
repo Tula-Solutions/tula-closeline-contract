@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { emailSchema } from '../email'
 import { membershipIdSchema, userIdSchema } from '../ids'
 import { pageQuerySchema, pageSchema } from '../pagination'
+import { boundedTextSchema } from '../prospect/values'
 import { type Role, roleSchema } from '../tenancy'
 import { storedNameSchema, timestampSchema } from './values'
 
@@ -10,7 +11,7 @@ import { storedNameSchema, timestampSchema } from './values'
  * `name` are core's copy of what the auth service holds for the person: given at sign-up and kept
  * current by the internal profile change. `name` is the display name auth composes from the first
  * and last names, and is `null` when the person gave neither at sign-up (both are optional
- * there). Neither is a search key or a filter in this version.
+ * there). `name` is matched by the `q` filter of a members list; `email` is not a search key or a filter.
  */
 export const memberSchema = z.object({
   id: membershipIdSchema,
@@ -31,8 +32,13 @@ export type Member = z.infer<typeof memberSchema>
  */
 export const LIST_MEMBERS_MIN_ROLE = 'manager' as const satisfies Role
 
-/** The query parameters of a request to list members: a cursor and a limit of at most the maximum page size. */
-export const listMembersQuerySchema = pageQuerySchema.strict()
+/** The longest `q` name filter of a members list. */
+export const MAX_MEMBER_QUERY_LENGTH = 100
+
+/** The query parameters of a request to list members: a cursor, a limit of at most the maximum page size, and optionally `q`, a case-insensitive filter on name. An unknown parameter is refused. */
+export const listMembersQuerySchema = pageQuerySchema
+  .extend({ q: boundedTextSchema(MAX_MEMBER_QUERY_LENGTH).optional() })
+  .strict()
 
 /** The query parameters of a request to list members. */
 export type ListMembersQuery = z.infer<typeof listMembersQuerySchema>
