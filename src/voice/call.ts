@@ -114,19 +114,24 @@ export const voiceCallCursorSchema = z.strictObject({
 })
 
 /**
- * The body of a request to place a Call to a number from the Rep's browser. `idempotencyKey` is
- * required: a retry of the same key answers the original Call and dials once, and the same key with
- * a different body is `request.idempotency_key_reused`. `to` is as typed; voice normalises it to
+ * The body of a request to place a Call to a number from the Rep's browser. The idempotency key is
+ * not in the body: see `placeCallHeadersSchema`. `to` is as typed; voice normalises it to
  * E.164 and refuses what it cannot as `call.number_invalid`. `lineId` is the caller identity, the
  * Rep's own Line when absent. `prospectId` links the Call to a Prospect the caller may see. There is
  * no field that turns off the Disclosure or the Recording.
  */
 export const placeCallRequestSchema = z.strictObject({
-  idempotencyKey: idempotencyKeySchema,
   to: rawPhoneSchema,
   lineId: lineIdSchema.optional(),
   prospectId: prospectIdSchema.optional(),
 })
+
+/**
+ * The headers of a request to place a Call. The `Idempotency-Key` header is required (header names
+ * arrive lower-cased): a retry of the same key answers the original Call and dials once, and the
+ * same key with a different body is `request.idempotency_key_reused`.
+ */
+export const placeCallHeadersSchema = z.object({ 'idempotency-key': idempotencyKeySchema })
 
 /** The body of a request to place a Call. */
 export type PlaceCallRequest = z.infer<typeof placeCallRequestSchema>

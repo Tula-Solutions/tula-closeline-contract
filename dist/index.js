@@ -3925,11 +3925,11 @@ var voiceCallCursorSchema = z42.strictObject({
   id: callIdSchema
 });
 var placeCallRequestSchema = z42.strictObject({
-  idempotencyKey: idempotencyKeySchema,
   to: rawPhoneSchema,
   lineId: lineIdSchema.optional(),
   prospectId: prospectIdSchema.optional()
 });
+var placeCallHeadersSchema = z42.object({ "idempotency-key": idempotencyKeySchema });
 var contactWarningSchema = z42.strictObject({
   code: contactDenialCodeSchema,
   suppressionReason: suppressionReasonSchema.nullable()
@@ -4182,6 +4182,7 @@ var VOICE_ROUTES = Object.freeze({
     roles: VOICE_ALL_ROLES,
     success: [201, 200],
     idempotent: true,
+    keyRequired: true,
     errors: [
       "call.number_invalid",
       "call.line_unavailable",
@@ -4191,7 +4192,7 @@ var VOICE_ROUTES = Object.freeze({
       "prospect.not_found"
     ],
     commonErrors: [...IDEMPOTENT_ERRORS3],
-    description: "Places a Call from the caller's browser to a number. The body's idempotencyKey is required: a retry of the same key answers the original Call and dials once; the same key with another body is request.idempotency_key_reused. The number is normalised to E.164 (call.number_invalid, 422, when it cannot be). The Call is recorded and a Disclosure plays before the two sides are bridged; a Call whose Disclosure fails ends failed and never goes live (call.disclosure_failed, 502, with the Call id in details). A Rep may call any Prospect (ADR 0003): the Contact Check on the number is a warning in the answer, never a refusal. A Line the caller may not use is line.not_found; a prospectId the caller may not see is prospect.not_found. At the Organization's cap of concurrent Calls it is call.limit_reached (429). Answers 201, or 200 for a replay."
+    description: "Places a Call from the caller's browser to a number. The Idempotency-Key header is required (a request without it is request.invalid): a retry of the same key answers the original Call and dials once; the same key with another body is request.idempotency_key_reused. The number is normalised to E.164 (call.number_invalid, 422, when it cannot be). The Call is recorded and a Disclosure plays before the two sides are bridged; a Call whose Disclosure fails ends failed and never goes live (call.disclosure_failed, 502, with the Call id in details). A Rep may call any Prospect (ADR 0003): the Contact Check on the number is a warning in the answer, never a refusal. A Line the caller may not use is line.not_found; a prospectId the caller may not see is prospect.not_found. At the Organization's cap of concurrent Calls it is call.limit_reached (429). Answers 201, or 200 for a replay."
   }),
   listCalls: route7({
     method: "GET",
@@ -4762,6 +4763,7 @@ export {
   parseRepField,
   personNameSchema,
   phoneHashSchema,
+  placeCallHeadersSchema,
   placeCallRequestSchema,
   placedCallSchema,
   prospectCompanyCursorSchema,

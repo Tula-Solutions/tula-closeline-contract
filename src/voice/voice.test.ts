@@ -12,6 +12,7 @@ import {
   lineSchema,
   listLinesQuerySchema,
   listVoiceCallsQuerySchema,
+  placeCallHeadersSchema,
   placeCallRequestSchema,
   placedCallSchema,
   recordingPlaybackSchema,
@@ -59,16 +60,19 @@ const endedCall = {
 }
 
 describe('place a Call', () => {
-  const valid = { idempotencyKey: 'place-call-0000001', to: '(415) 555-0123' }
-  test('requires an idempotency key', () => {
-    expect(placeCallRequestSchema.safeParse(valid).success).toBe(true)
-    expect(placeCallRequestSchema.safeParse({ to: valid.to }).success).toBe(false)
-    expect(placeCallRequestSchema.safeParse({ ...valid, idempotencyKey: 'short' }).success).toBe(
-      false
-    )
+  const valid = { to: '(415) 555-0123' }
+  const key = 'place-call-0000001'
+  test('requires the Idempotency-Key header', () => {
+    expect(placeCallHeadersSchema.safeParse({ 'idempotency-key': key }).success).toBe(true)
+    expect(placeCallHeadersSchema.safeParse({}).success).toBe(false)
+    expect(placeCallHeadersSchema.safeParse({ 'idempotency-key': 'short' }).success).toBe(false)
     expect(
-      placeCallRequestSchema.safeParse({ ...valid, idempotencyKey: 'bad key!!!!!!!!!!!' }).success
+      placeCallHeadersSchema.safeParse({ 'idempotency-key': 'bad key!!!!!!!!!!!' }).success
     ).toBe(false)
+  })
+  test('the key is not in the body', () => {
+    expect(placeCallRequestSchema.safeParse(valid).success).toBe(true)
+    expect(placeCallRequestSchema.safeParse({ ...valid, idempotencyKey: key }).success).toBe(false)
   })
   test('refuses unknown fields such as a switch for the Disclosure or consent', () => {
     for (const extra of ['skipDisclosure', 'consent', 'record', 'force']) {
@@ -373,7 +377,7 @@ describe('routes', () => {
       expect(VOICE_ROUTES[name].description).toContain('100')
     }
   })
-  test('idempotent routes take the key and place-a-Call says where', () => {
+  test('idempotent routes take the Idempotency-Key header and place-a-Call requires it', () => {
     expect(VOICE_ROUTES.placeCall.idempotent).toBe(true)
     expect(VOICE_ROUTES.addLine.idempotent).toBe(true)
     for (const [, r] of routes) {
@@ -381,7 +385,9 @@ describe('routes', () => {
         expect(r.commonErrors).toContain('request.idempotency_key_reused')
       }
     }
-    expect(VOICE_ROUTES.placeCall.description).toContain('idempotencyKey')
+    expect(VOICE_ROUTES.placeCall.keyRequired).toBe(true)
+    expect(VOICE_ROUTES.addLine.keyRequired).toBeUndefined()
+    expect(VOICE_ROUTES.placeCall.description).toContain('Idempotency-Key header is required')
   })
   test('adding a Line lists only Line codes', () => {
     expect(VOICE_ROUTES.addLine.errors).toEqual(['line.number_unavailable'])

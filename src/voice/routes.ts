@@ -39,8 +39,10 @@ export type VoiceRoute = {
   readonly roles: readonly Role[]
   /** The success statuses, the first being the usual one. */
   readonly success: readonly number[]
-  /** True when a retry of the route is safe by an idempotency key: the `Idempotency-Key` header, or for `placeCall` the required `idempotencyKey` in the body. */
+  /** True when a retry of the route is safe by the `Idempotency-Key` header. */
   readonly idempotent: boolean
+  /** True when the `Idempotency-Key` header is required, not just accepted; see `placeCallHeadersSchema`. */
+  readonly keyRequired?: true
   /** The domain codes the route may return, beyond the common ones. */
   readonly errors: readonly (
     | VoiceErrorCode
@@ -133,6 +135,7 @@ export const VOICE_ROUTES: Readonly<Record<VoiceRouteName, VoiceRoute>> = Object
     roles: VOICE_ALL_ROLES,
     success: [201, 200],
     idempotent: true,
+    keyRequired: true,
     errors: [
       'call.number_invalid',
       'call.line_unavailable',
@@ -143,7 +146,7 @@ export const VOICE_ROUTES: Readonly<Record<VoiceRouteName, VoiceRoute>> = Object
     ],
     commonErrors: [...IDEMPOTENT_ERRORS],
     description:
-      "Places a Call from the caller's browser to a number. The body's idempotencyKey is required: a retry of the same key answers the original Call and dials once; the same key with another body is request.idempotency_key_reused. The number is normalised to E.164 (call.number_invalid, 422, when it cannot be). The Call is recorded and a Disclosure plays before the two sides are bridged; a Call whose Disclosure fails ends failed and never goes live (call.disclosure_failed, 502, with the Call id in details). A Rep may call any Prospect (ADR 0003): the Contact Check on the number is a warning in the answer, never a refusal. A Line the caller may not use is line.not_found; a prospectId the caller may not see is prospect.not_found. At the Organization's cap of concurrent Calls it is call.limit_reached (429). Answers 201, or 200 for a replay.",
+      "Places a Call from the caller's browser to a number. The Idempotency-Key header is required (a request without it is request.invalid): a retry of the same key answers the original Call and dials once; the same key with another body is request.idempotency_key_reused. The number is normalised to E.164 (call.number_invalid, 422, when it cannot be). The Call is recorded and a Disclosure plays before the two sides are bridged; a Call whose Disclosure fails ends failed and never goes live (call.disclosure_failed, 502, with the Call id in details). A Rep may call any Prospect (ADR 0003): the Contact Check on the number is a warning in the answer, never a refusal. A Line the caller may not use is line.not_found; a prospectId the caller may not see is prospect.not_found. At the Organization's cap of concurrent Calls it is call.limit_reached (429). Answers 201, or 200 for a replay.",
   }),
   listCalls: route({
     method: 'GET',
