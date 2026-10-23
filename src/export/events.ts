@@ -29,7 +29,7 @@ export const exportRequestedEvent = defineEvent(
 
 /**
  * `export.enriched_prospects_requested` (version 1): an Owner or Admin asked for an enriched
- * Prospect export. Only core, which owns Prospects and their Sources, writes it: one CSV file, paged
+ * Prospect export. Only core, which owns Prospects and their Sources, writes it: one file (CSV or JSON Lines), paged
  * internally, then `export.part_ready` (or `export.part_failed`) for `core`. Ids, a format and the
  * bounded filter only; never exported data.
  */
@@ -47,7 +47,7 @@ export const exportEnrichedProspectsRequestedEvent = defineEvent(
 
 /**
  * `export.part_ready` (version 1): one service finished writing its slice (newline-delimited JSON and
- * files, or the one CSV of an enriched Prospect export) under `prefix`. A redelivery for the same `exportId` and `service` changes nothing.
+ * files, or the one file of an enriched Prospect export) under `prefix`. A redelivery for the same `exportId` and `service` changes nothing.
  * Counts and a path only; never any exported data.
  */
 export const exportPartReadyEvent = defineEvent(

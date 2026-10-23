@@ -9350,7 +9350,7 @@ var MAX_EXPORT_PART_BYTES = 50000000000;
 var exportPrefixSchema = z83.string().max(300).regex(/^[A-Za-z0-9_][A-Za-z0-9_\-./]*$/).refine((prefix) => !prefix.split("/").includes(".."), "No parent directory in a prefix");
 var EXPORT_KINDS = ["organization", "enriched_prospects"];
 var exportKindSchema = z83.enum(EXPORT_KINDS);
-var ENRICHED_EXPORT_FORMATS = ["csv"];
+var ENRICHED_EXPORT_FORMATS = ["csv", "jsonl"];
 var enrichedExportFormatSchema = z83.enum(ENRICHED_EXPORT_FORMATS);
 var enrichedProspectsFilterSchema = z83.strictObject({
   ownerMembershipId: membershipIdSchema.optional(),
@@ -9468,6 +9468,20 @@ var exportDownloadSchema = z83.object({
   url: z83.url({ protocol: /^https$/ }).max(2048),
   expiresAt: timestampSchema
 });
+var CSV_FORMULA_TRIGGER_CHARS = ["=", "+", "-", "@", "\t", "\r"];
+function escapeCsvCell(value) {
+  if (value === null || value === undefined) {
+    return "";
+  }
+  if (typeof value === "number") {
+    return String(value);
+  }
+  const guarded = CSV_FORMULA_TRIGGER_CHARS.includes(value.charAt(0)) ? `'${value}` : value;
+  return /[",\r\n]/.test(guarded) ? `"${guarded.replaceAll('"', '""')}"` : guarded;
+}
+function jsonlLine(row) {
+  return JSON.stringify(row);
+}
 
 // src/export/events.ts
 var exportRequestedEvent = defineEvent("export.requested", 1, z84.strictObject({
@@ -9518,7 +9532,7 @@ var EXPORT_ROUTES = Object.freeze({
     keyRequired: true,
     errors: ["export.already_running", "export.daily_limit"],
     commonErrors: [...IDEMPOTENT_ERRORS],
-    description: `Starts an export of the Organization's data and answers 202 with the job; nothing is built on the request. It publishes export.requested, each service writes its slice and publishes export.part_ready (or export.part_failed, which fails the job at once; the timeout is the backstop), and core builds the manifest. Recordings are included as links on request, never copied inline. With kind enriched_prospects it exports only enriched Prospect and Prospect Company data as one CSV (ENRICHED_EXPORT_COLUMNS, each sourced field beside its Source), narrowed by an optional bounded filter; the body has no cursor, core pages through the Prospects itself, and it publishes export.enriched_prospects_requested instead of export.requested. Only core writes that slice, and the CSV holds no consent evidence, IP address, user agent, transcript or message body. The one-running and daily-limit rules and the download link are the same for both kinds. ${SAFE} Only one export runs at a time (export.already_running, 409) and at most two are requested in 24 hours (export.daily_limit, 429). ${KEY6} The same key twice answers 200 with the same job. Owner and Admin only. ${ORG_ONLY4}`
+    description: `Starts an export of the Organization's data and answers 202 with the job; nothing is built on the request. It publishes export.requested, each service writes its slice and publishes export.part_ready (or export.part_failed, which fails the job at once; the timeout is the backstop), and core builds the manifest. Recordings are included as links on request, never copied inline. With kind enriched_prospects it exports only enriched Prospect and Prospect Company data as one file, CSV or JSON Lines by format (ENRICHED_EXPORT_COLUMNS, each sourced field beside its Source; a CSV text cell that starts with =, +, -, @, tab or carriage return is prefixed with a quote, see escapeCsvCell), for the Prospects the caller can see, narrowed by an optional bounded filter; the body has no cursor, core pages through the Prospects itself, and it publishes export.enriched_prospects_requested instead of export.requested. Only core writes that slice, and the CSV holds no consent evidence, IP address, user agent, transcript or message body. The one-running and daily-limit rules and the download link are the same for both kinds. ${SAFE} Only one export runs at a time (export.already_running, 409) and at most two are requested in 24 hours (export.daily_limit, 429). ${KEY6} The same key twice answers 200 with the same job. Owner and Admin only. ${ORG_ONLY4}`
   }),
   listExports: inboundRoute({
     method: "GET",
@@ -12854,6 +12868,7 @@ export {
   CRM_STATUS_STATES,
   CRM_WEBHOOK_WINDOW_SECONDS,
   CSV_FAILURES,
+  CSV_FORMULA_TRIGGER_CHARS,
   CURRENT_RIGHTS_WORDING_VERSION,
   DAILY_LIMIT_DETAILS_SCHEMA,
   DEAL_CLOSED_AT_MAX_YEAR,
@@ -13762,6 +13777,7 @@ export {
   escalationRuleSchema,
   escalationRulesSchema,
   escalationTriggerSchema,
+  escapeCsvCell,
   eventEnvelopeSchema,
   eventIdSchema,
   eventTypeSchema,
@@ -13901,6 +13917,7 @@ export {
   isWellFormedText,
   isoWeekSchema,
   joinUrlSchema,
+  jsonlLine,
   lastAllowedAnalyticsDay,
   launchCheckItemSchema,
   launchCheckNameSchema,
