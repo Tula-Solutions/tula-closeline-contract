@@ -284,6 +284,11 @@ describe('lists', () => {
       expect(schema.safeParse({ items: [], nextCursor: null }).success).toBe(true)
     }
   })
+  test('previewCampaign lists prospect.not_found for a Prospect outside the caller view', () => {
+    const route = MESSAGING_ROUTES.previewCampaign
+    expect(route.errors).toContain('prospect.not_found' as never)
+    expect(route.description).toContain('prospect.not_found')
+  })
   test('createDraft names the not_found codes its visibility text promises', () => {
     const route = MESSAGING_ROUTES.createDraft
     for (const code of ['prospect.not_found', 'campaign.not_found']) {

@@ -8741,10 +8741,11 @@ var MESSAGING_ROUTES = Object.freeze({
       "campaign.not_found",
       "campaign.sequence_version_conflict",
       "preview.too_many_prospects",
+      "prospect.not_found",
       "voice.not_found"
     ],
     commonErrors: [...IDEMPOTENT_ERRORS],
-    description: `Shows what a Campaign's Step would send to one to five named Prospects, at the Sequence version given (the first email Step when stepKey is left out). More than five Prospects is preview.too_many_prospects (422); a stale Sequence version is campaign.sequence_version_conflict (409). Each row is a Research Brief and Draft, or the failure code that stopped that Prospect (draft.no_prospect_data, draft.model_unavailable, draft.budget_exceeded, research.timeout); one failing row does not fail the call. ${NOTHING_SENT} ${KEY2} ${UNTRUSTED2} ${VISIBILITY7}`
+    description: `Shows what a Campaign's Step would send to one to five named Prospects, at the Sequence version given (the first email Step when stepKey is left out). More than five Prospects is preview.too_many_prospects (422); a stale Sequence version is campaign.sequence_version_conflict (409). Each row is a Research Brief and Draft, or the failure code that stopped that Prospect (draft.no_prospect_data, draft.model_unavailable, draft.budget_exceeded, research.timeout); one failing row does not fail the call. A named Prospect outside the caller's view fails the whole call with prospect.not_found (404). ${NOTHING_SENT} ${KEY2} ${UNTRUSTED2} ${VISIBILITY7}`
   }),
   acceptCampaignPreview: inboundRoute({
     method: "POST",
