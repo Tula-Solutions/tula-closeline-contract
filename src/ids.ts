@@ -94,6 +94,17 @@ export const draftIdSchema = idSchema('drf')
 /** The id of an approval Decision (`dcs_…`): one recorded decision about a Draft or a Conversation. */
 export const decisionIdSchema = idSchema('dcs')
 
+/** The id of a Mailbox (`mbx_…`): an email account a Rep or Admin connected so the Outbound Agent can send from it. */
+export const mailboxIdSchema = idSchema('mbx')
+/** The id of a send decision record (`snd_…`): one attempt to send one Step of an Enrollment, sent or refused. */
+export const sendIdSchema = idSchema('snd')
+/** The id of a mail event (`mev_…`): a bounce, complaint, reply, out-of-office or unsubscribe seen on a Mailbox. */
+export const mailEventIdSchema = idSchema('mev')
+/** The id of a Campaign (`cpg_…`): a run of outreach to a set of Prospects. */
+export const campaignIdSchema = idSchema('cpg')
+/** The id of an Enrollment (`enr_…`): one Prospect's place in a Campaign's Sequence. */
+export const enrollmentIdSchema = idSchema('enr')
+
 /** The id of an Organization. */
 export type OrganizationId = z.infer<typeof organizationIdSchema>
 /** The id of a user. */
@@ -160,6 +171,16 @@ export type ChatId = z.infer<typeof chatIdSchema>
 export type HandoffId = z.infer<typeof handoffIdSchema>
 /** The id of a try-it session. */
 export type TrySessionId = z.infer<typeof trySessionIdSchema>
+/** The id of a Mailbox. */
+export type MailboxId = z.infer<typeof mailboxIdSchema>
+/** The id of a send decision record. */
+export type SendId = z.infer<typeof sendIdSchema>
+/** The id of a mail event. */
+export type MailEventId = z.infer<typeof mailEventIdSchema>
+/** The id of a Campaign. */
+export type CampaignId = z.infer<typeof campaignIdSchema>
+/** The id of an Enrollment. */
+export type EnrollmentId = z.infer<typeof enrollmentIdSchema>
 
 const UUID_PATTERN =
   /^(?:[0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i
