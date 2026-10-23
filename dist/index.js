@@ -7911,7 +7911,7 @@ var internalDirectoryMembershipResponseSchema = z69.discriminatedUnion("found", 
     found: z69.literal(true),
     membershipId: membershipIdSchema,
     role: roleSchema,
-    status: organizationStatusSchema
+    organizationStatus: organizationStatusSchema
   }),
   z69.object({ found: z69.literal(false) })
 ]);

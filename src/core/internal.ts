@@ -254,8 +254,8 @@ export type InternalDirectoryMembershipRequest = z.infer<
 >
 
 /**
- * Internal: the Membership of a user in an Organization, or `{ found: false }` for none. `status`
- * is the Organization's status (a Membership has none of its own), so a suspended Organization is
+ * Internal: the Membership of a user in an Organization, or `{ found: false }` for none. `organizationStatus`
+ * is the Organization's status, so a suspended Organization is
  * found and the caller decides what to do. The lookup returns no domain error.
  */
 export const internalDirectoryMembershipResponseSchema = z.discriminatedUnion('found', [
@@ -263,7 +263,7 @@ export const internalDirectoryMembershipResponseSchema = z.discriminatedUnion('f
     found: z.literal(true),
     membershipId: membershipIdSchema,
     role: roleSchema,
-    status: organizationStatusSchema,
+    organizationStatus: organizationStatusSchema,
   }),
   z.object({ found: z.literal(false) }),
 ])

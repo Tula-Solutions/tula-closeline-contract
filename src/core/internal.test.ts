@@ -378,7 +378,7 @@ describe('directory calls', () => {
   })
 
   test('membership response is found with a role and status, or not found', () => {
-    const found = { found: true, membershipId, role: 'rep', status: 'active' }
+    const found = { found: true, membershipId, role: 'rep', organizationStatus: 'active' }
     expect(internalDirectoryMembershipResponseSchema.parse(found)).toEqual(found as never)
     expect(internalDirectoryMembershipResponseSchema.parse({ found: false })).toEqual({
       found: false,

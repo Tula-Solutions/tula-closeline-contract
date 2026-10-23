@@ -11671,8 +11671,8 @@ declare const internalDirectoryMembershipRequestSchema: z48.ZodObject<{
 /** Internal: the body of a directory membership lookup. */
 type InternalDirectoryMembershipRequest = z48.infer<typeof internalDirectoryMembershipRequestSchema>;
 /**
-* Internal: the Membership of a user in an Organization, or `{ found: false }` for none. `status`
-* is the Organization's status (a Membership has none of its own), so a suspended Organization is
+* Internal: the Membership of a user in an Organization, or `{ found: false }` for none. `organizationStatus`
+* is the Organization's status, so a suspended Organization is
 * found and the caller decides what to do. The lookup returns no domain error.
 */
 declare const internalDirectoryMembershipResponseSchema: z48.ZodDiscriminatedUnion<[z48.ZodObject<{
@@ -11684,7 +11684,7 @@ declare const internalDirectoryMembershipResponseSchema: z48.ZodDiscriminatedUni
 		owner: "owner";
 		rep: "rep";
 	}>;
-	status: z48.ZodEnum<{
+	organizationStatus: z48.ZodEnum<{
 		active: "active";
 		deleted: "deleted";
 		suspended: "suspended";
