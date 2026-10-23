@@ -253,6 +253,7 @@ var suppressionImportIdSchema = idSchema("simp");
 var documentIdSchema = idSchema("doc");
 var dealRecordIdSchema = idSchema("deal");
 var callIdSchema = idSchema("call");
+var lineIdSchema = idSchema("line");
 var dealImportIdSchema = idSchema("dimp");
 var eventIdSchema = idSchema("evt");
 var requestIdSchema = idSchema("req");
@@ -730,7 +731,8 @@ import { z as z12 } from "zod";
 
 // src/events.ts
 import { z as z11 } from "zod";
-var eventTypeSchema = errorCodeSchema;
+var EVENT_TYPE_PATTERN = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*){1,2}$/;
+var eventTypeSchema = z11.string().max(100).regex(EVENT_TYPE_PATTERN);
 var versionSchema = z11.number().int().positive();
 var occurredAtSchema = z11.iso.datetime({ offset: true }).max(64);
 var envelopeShape = {
@@ -3808,6 +3810,468 @@ var PROSPECT_ROUTES = Object.freeze({
     description: "Downloads the report as text/csv with the columns PROSPECT_IMPORT_REPORT_COLUMNS, streamed in pages and never held whole. Owner and Admin only. Contains no cell of the uploaded file."
   })
 });
+// src/voice/call.ts
+import { z as z42 } from "zod";
+
+// src/voice/values.ts
+import { z as z41 } from "zod";
+var VOICE_CALL_DIRECTIONS = ["inbound", "outbound"];
+var voiceCallDirectionSchema = z41.enum(VOICE_CALL_DIRECTIONS);
+var VOICE_CALL_STATES = [
+  "ringing",
+  "connecting",
+  "disclosing",
+  "live",
+  "ended",
+  "failed",
+  "missed"
+];
+var voiceCallStateSchema = z41.enum(VOICE_CALL_STATES);
+var VOICE_CALL_FINAL_STATES = [
+  "ended",
+  "failed",
+  "missed"
+];
+var VOICE_CALL_FAILURE_REASONS = [
+  "disclosure_failed",
+  "carrier_dropped",
+  "carrier_rejected",
+  "busy",
+  "no_answer",
+  "rep_unreachable",
+  "provider_error",
+  "timeout"
+];
+var voiceCallFailureReasonSchema = z41.enum(VOICE_CALL_FAILURE_REASONS);
+var VOICE_CALL_ENDED_BY = ["rep", "prospect", "system"];
+var voiceCallEndedBySchema = z41.enum(VOICE_CALL_ENDED_BY);
+var VOICE_RECORDING_STATES = ["none", "storing", "stored", "deleted"];
+var voiceRecordingStateSchema = z41.enum(VOICE_RECORDING_STATES);
+var VOICE_TRANSCRIPT_STATES = ["pending", "ready", "deleted"];
+var voiceTranscriptStateSchema = z41.enum(VOICE_TRANSCRIPT_STATES);
+var MAX_WRAP_UP_NOTE_LENGTH = 2000;
+var wrapUpNoteSchema = boundedTextSchema(MAX_WRAP_UP_NOTE_LENGTH);
+var MAX_LINE_LABEL_LENGTH = 100;
+var lineLabelSchema = boundedTextSchema(MAX_LINE_LABEL_LENGTH);
+var countryCodeSchema = z41.string().regex(/^[A-Z]{2}$/);
+var phoneHashSchema = z41.string().regex(/^[0-9a-f]{64}$/);
+
+// src/voice/call.ts
+var MAX_CALL_DURATION_SECONDS = 43200;
+var callDisclosureSchema = z42.strictObject({
+  wordingVersion: z42.number().int().min(1).nullable(),
+  playedAt: timestampSchema.nullable(),
+  aiAssisted: z42.boolean()
+}).refine((d) => d.wordingVersion === null === (d.playedAt === null), {
+  message: "The wording version and the time are both set once the Disclosure has played"
+});
+var voiceCallSchema = z42.object({
+  id: callIdSchema,
+  direction: voiceCallDirectionSchema,
+  state: voiceCallStateSchema,
+  lineId: lineIdSchema,
+  repMembershipId: membershipIdSchema.nullable(),
+  prospectId: prospectIdSchema.nullable(),
+  prospectNumber: e164PhoneSchema,
+  disclosure: callDisclosureSchema,
+  createdAt: timestampSchema,
+  answeredAt: timestampSchema.nullable(),
+  endedAt: timestampSchema.nullable(),
+  durationSeconds: z42.number().int().min(0).max(MAX_CALL_DURATION_SECONDS).nullable(),
+  endedBy: voiceCallEndedBySchema.nullable(),
+  failureReason: voiceCallFailureReasonSchema.nullable(),
+  dealId: dealIdSchema.nullable(),
+  note: wrapUpNoteSchema.nullable(),
+  recordingState: voiceRecordingStateSchema,
+  transcriptState: voiceTranscriptStateSchema
+}).superRefine((call, ctx) => {
+  const issue = (path, message) => ctx.addIssue({ code: "custom", path: [path], message });
+  const played = call.disclosure.playedAt !== null;
+  const final = call.state === "ended" || call.state === "failed" || call.state === "missed";
+  if ((call.state === "live" || call.state === "ended") && !played) {
+    issue("disclosure", "A live or ended Call has played its Disclosure");
+  }
+  if (call.state === "failed" !== (call.failureReason !== null)) {
+    issue("failureReason", "Only a failed Call has a failure reason");
+  }
+  if (call.failureReason === "disclosure_failed" && played) {
+    issue("failureReason", "A Call whose Disclosure played did not fail on it");
+  }
+  if (final !== (call.endedAt !== null)) {
+    issue("endedAt", "Only a Call in a final state has an end time");
+  }
+  if ((call.state === "live" || call.state === "ended") !== (call.answeredAt !== null)) {
+    issue("answeredAt", "A Call is answered once it is live or ended, and not before");
+  }
+  if (call.state === "ended" !== (call.durationSeconds !== null)) {
+    issue("durationSeconds", "Only an ended Call has a duration");
+  }
+  if (call.endedBy !== null && !final) {
+    issue("endedBy", "Only a Call in a final state says who ended it");
+  }
+  if (call.state !== "ended" && (call.dealId !== null || call.note !== null)) {
+    issue("dealId", "Only an ended Call has a wrap-up");
+  }
+  if (call.recordingState !== "none" && !played) {
+    issue("recordingState", "A Recording starts after the Disclosure has played");
+  }
+  if (call.transcriptState === "ready" && call.recordingState !== "stored") {
+    issue("transcriptState", "A ready Transcript comes from a stored Recording");
+  }
+});
+var voiceCallParamsSchema = z42.strictObject({ callId: callIdSchema });
+var voiceCallCursorSchema = z42.strictObject({
+  createdAt: timestampSchema,
+  id: callIdSchema
+});
+var placeCallRequestSchema = z42.strictObject({
+  idempotencyKey: idempotencyKeySchema,
+  to: rawPhoneSchema,
+  lineId: lineIdSchema.optional(),
+  prospectId: prospectIdSchema.optional()
+});
+var contactWarningSchema = z42.strictObject({
+  code: contactDenialCodeSchema,
+  suppressionReason: suppressionReasonSchema.nullable()
+});
+var placedCallSchema = z42.strictObject({
+  call: voiceCallSchema,
+  warnings: z42.array(contactWarningSchema).max(4)
+});
+var MAX_FILTER_TIME_LENGTH = 64;
+var listVoiceCallsQuerySchema = pageQuerySchema.extend({
+  direction: voiceCallDirectionSchema.optional(),
+  state: voiceCallStateSchema.optional(),
+  repMembershipId: membershipIdSchema.optional(),
+  lineId: lineIdSchema.optional(),
+  prospectId: prospectIdSchema.optional(),
+  from: timestampSchema.max(MAX_FILTER_TIME_LENGTH).optional(),
+  to: timestampSchema.max(MAX_FILTER_TIME_LENGTH).optional()
+}).strict().refine((q) => q.from === undefined || q.to === undefined || Date.parse(q.from) < Date.parse(q.to), {
+  message: "from is before to"
+});
+var voiceCallPageSchema = pageSchema(voiceCallSchema);
+var transcriptSpeakerSchema = z42.enum(["rep", "prospect"]);
+var MAX_TRANSCRIPT_TURN_LENGTH = 4000;
+var transcriptTurnSchema = z42.strictObject({
+  speaker: transcriptSpeakerSchema,
+  startMs: z42.number().int().min(0).max(MAX_CALL_DURATION_SECONDS * 1000),
+  endMs: z42.number().int().min(0).max(MAX_CALL_DURATION_SECONDS * 1000),
+  text: z42.string().min(1).max(MAX_TRANSCRIPT_TURN_LENGTH)
+}).refine((turn) => turn.endMs >= turn.startMs, { message: "A turn ends after it starts" });
+var transcriptCursorSchema = z42.strictObject({ index: z42.number().int().min(0) });
+var getTranscriptQuerySchema = pageQuerySchema.strict();
+var transcriptPageSchema = pageSchema(transcriptTurnSchema).extend({ callId: callIdSchema, state: voiceTranscriptStateSchema }).refine((page) => page.state === "ready" || page.items.length === 0, {
+  message: "Only a ready Transcript has turns"
+});
+var RECORDING_MEDIA_TYPES = ["audio/mpeg", "audio/wav", "audio/ogg"];
+var MAX_PLAYBACK_URL_LENGTH = 2048;
+var recordingPlaybackSchema = z42.strictObject({
+  callId: callIdSchema,
+  url: z42.url({ protocol: /^https$/ }).max(MAX_PLAYBACK_URL_LENGTH),
+  expiresAt: timestampSchema,
+  mediaType: z42.enum(RECORDING_MEDIA_TYPES),
+  channels: z42.literal(2),
+  durationSeconds: z42.number().int().min(0).max(MAX_CALL_DURATION_SECONDS)
+});
+var wrapUpRequestSchema = z42.strictObject({
+  dealId: dealIdSchema.nullable().optional(),
+  note: wrapUpNoteSchema.nullable().optional()
+}).refine((body) => body.dealId !== undefined || body.note !== undefined, {
+  message: "Give a dealId or a note"
+});
+var deletedRecordingSchema = voiceCallSchema;
+// src/voice/errors.ts
+var VOICE_ERRORS = {
+  ...defineErrors("call", {
+    number_invalid: { status: 422, message: "The number is not valid for a Call." },
+    disclosure_failed: {
+      status: 502,
+      message: "The Disclosure could not be played, so the Call did not connect."
+    },
+    line_unavailable: {
+      status: 409,
+      message: "There is no active Line to place this Call from."
+    },
+    limit_reached: {
+      status: 429,
+      message: "The Organization has reached its limit of concurrent Calls."
+    },
+    not_ended: { status: 409, message: "The Call has not ended yet." }
+  }),
+  ...defineErrors("line", {
+    not_found: { status: 404, message: "The Line was not found." },
+    number_unavailable: { status: 409, message: "This number is not available." },
+    released: { status: 409, message: "The Line was released and cannot be changed." },
+    assignment_invalid: {
+      status: 422,
+      message: "The Team or Rep named for this Line is not valid."
+    }
+  }),
+  ...defineErrors("recording", {
+    not_found: { status: 404, message: "The Call has no Recording." },
+    not_ready: { status: 409, message: "The Recording is still being stored. Try again shortly." }
+  })
+};
+// src/voice/events.ts
+import { z as z43 } from "zod";
+var MAX_RECORDING_KEY_LENGTH = 512;
+var recordingKeySchema = z43.string().min(1).max(MAX_RECORDING_KEY_LENGTH).regex(/^[A-Za-z0-9][A-Za-z0-9/_.-]*$/);
+var voiceCallStartedEvent = defineEvent("voice.call.started", 1, z43.strictObject({
+  callId: callIdSchema,
+  direction: voiceCallDirectionSchema,
+  lineId: lineIdSchema,
+  repMembershipId: membershipIdSchema.nullable(),
+  prospectId: prospectIdSchema.nullable(),
+  prospectPhoneHash: phoneHashSchema,
+  startedAt: timestampSchema
+}));
+var VOICE_CALL_OUTCOMES = ["completed", "failed", "missed"];
+var voiceCallOutcomeSchema = z43.enum(VOICE_CALL_OUTCOMES);
+var voiceCallEndedEvent = defineEvent("voice.call.ended", 1, z43.strictObject({
+  callId: callIdSchema,
+  direction: voiceCallDirectionSchema,
+  lineId: lineIdSchema,
+  repMembershipId: membershipIdSchema.nullable(),
+  prospectId: prospectIdSchema.nullable(),
+  prospectPhoneHash: phoneHashSchema,
+  outcome: voiceCallOutcomeSchema,
+  failureReason: voiceCallFailureReasonSchema.nullable(),
+  startedAt: timestampSchema,
+  answeredAt: timestampSchema.nullable(),
+  endedAt: timestampSchema,
+  durationSeconds: z43.number().int().min(0).max(MAX_CALL_DURATION_SECONDS).nullable(),
+  disclosureWordingVersion: z43.number().int().min(1).nullable(),
+  recordingKey: recordingKeySchema.nullable(),
+  dealId: dealIdSchema.nullable()
+}).superRefine((data, ctx) => {
+  const issue = (path, message) => ctx.addIssue({ code: "custom", path: [path], message });
+  if (data.outcome === "failed" !== (data.failureReason !== null)) {
+    issue("failureReason", "Only a failed Call has a failure reason");
+  }
+  if (data.outcome === "completed" !== (data.durationSeconds !== null)) {
+    issue("durationSeconds", "Only a completed Call has a duration");
+  }
+  if (data.outcome === "completed" && data.disclosureWordingVersion === null) {
+    issue("disclosureWordingVersion", "A completed Call played its Disclosure");
+  }
+  if (data.recordingKey !== null && data.disclosureWordingVersion === null) {
+    issue("recordingKey", "A Recording exists only after the Disclosure");
+  }
+  if (data.outcome !== "completed" && data.dealId !== null) {
+    issue("dealId", "Only a completed Call has a Deal identifier");
+  }
+}));
+var VOICE_EVENTS = {
+  "voice.call.started": voiceCallStartedEvent,
+  "voice.call.ended": voiceCallEndedEvent
+};
+// src/voice/line.ts
+import { z as z44 } from "zod";
+var LINE_STATES = ["porting", "active", "released"];
+var lineStateSchema = z44.enum(LINE_STATES);
+var lineAssignmentSchema = z44.discriminatedUnion("kind", [
+  z44.strictObject({ kind: z44.literal("unassigned") }),
+  z44.strictObject({ kind: z44.literal("team"), teamId: teamIdSchema }),
+  z44.strictObject({ kind: z44.literal("rep"), membershipId: membershipIdSchema })
+]);
+var lineSchema = z44.object({
+  id: lineIdSchema,
+  number: e164PhoneSchema,
+  country: countryCodeSchema,
+  label: lineLabelSchema.nullable(),
+  state: lineStateSchema,
+  assignment: lineAssignmentSchema,
+  createdAt: timestampSchema,
+  releasedAt: timestampSchema.nullable()
+}).refine((line) => line.state === "released" === (line.releasedAt !== null), {
+  message: "Only a released Line has a release time"
+}).refine((line) => line.state !== "released" || line.assignment.kind === "unassigned", {
+  message: "A released Line is unassigned"
+});
+var lineParamsSchema = z44.strictObject({ lineId: lineIdSchema });
+var lineCursorSchema = z44.strictObject({ createdAt: timestampSchema, id: lineIdSchema });
+var listLinesQuerySchema = pageQuerySchema.extend({ state: lineStateSchema.optional() }).strict();
+var linePageSchema = pageSchema(lineSchema);
+var addLineRequestSchema = z44.discriminatedUnion("method", [
+  z44.strictObject({
+    method: z44.literal("buy"),
+    country: countryCodeSchema,
+    areaCode: z44.string().regex(/^[0-9]{2,6}$/).optional(),
+    label: lineLabelSchema.optional()
+  }),
+  z44.strictObject({
+    method: z44.literal("port"),
+    number: rawPhoneSchema,
+    label: lineLabelSchema.optional()
+  })
+]);
+var assignLineRequestSchema = lineAssignmentSchema;
+// src/voice/routes.ts
+var VOICE_ALL_ROLES = [
+  "owner",
+  "admin",
+  "manager",
+  "rep"
+];
+var VOICE_ADMIN_ROLES = ["owner", "admin"];
+var route7 = (definition) => Object.freeze(definition);
+var IDEMPOTENT_ERRORS3 = [
+  "request.invalid",
+  "request.idempotency_key_reused",
+  "request.idempotency_in_progress"
+];
+var CALL_VISIBILITY = "Visibility is decided from the token: a Rep sees the Calls they took, a Manager those of the Reps on their Team, Owner and Admin every Call; anything else is call.not_found (404), as is a Call of another Organization.";
+var VOICE_ROUTES = Object.freeze({
+  listLines: route7({
+    method: "GET",
+    path: "/v1/lines",
+    roles: VOICE_ALL_ROLES,
+    success: [200],
+    idempotent: false,
+    errors: [],
+    commonErrors: ["request.invalid"],
+    description: "Lists the Organization's Lines, newest first, one cursor-paginated page at a time (at most 100); optionally one state. Every role may read them, to choose a caller identity."
+  }),
+  addLine: route7({
+    method: "POST",
+    path: "/v1/lines",
+    roles: VOICE_ADMIN_ROLES,
+    success: [201, 200],
+    idempotent: true,
+    errors: ["line.number_unavailable", "call.limit_reached"],
+    commonErrors: [...IDEMPOTENT_ERRORS3],
+    description: "Adds a Line by buying a new number (country, optional area code) or porting one the Organization owns (the Line is porting until the carrier completes). A number that cannot be had is line.number_unavailable (409). Owner and Admin only. Answers 201, or 200 with the original Line for a replay of the same Idempotency-Key."
+  }),
+  getLine: route7({
+    method: "GET",
+    path: "/v1/lines/{lineId}",
+    roles: VOICE_ALL_ROLES,
+    success: [200],
+    idempotent: false,
+    errors: ["line.not_found"],
+    commonErrors: ["request.invalid"],
+    description: "Reads one Line. A Line of another Organization is line.not_found (404)."
+  }),
+  assignLine: route7({
+    method: "PUT",
+    path: "/v1/lines/{lineId}/assignment",
+    roles: VOICE_ADMIN_ROLES,
+    success: [200],
+    idempotent: false,
+    errors: ["line.not_found", "line.released", "line.assignment_invalid"],
+    commonErrors: ["request.invalid"],
+    description: "Sets who inbound Calls on a Line ring: a Team, one Rep, or nobody. Setting the assignment it already has answers 200 with the Line unchanged. A released Line is line.released (409); a Team or Rep that is not in the Organization, or is not a Rep, is line.assignment_invalid (422). Owner and Admin only."
+  }),
+  releaseLine: route7({
+    method: "POST",
+    path: "/v1/lines/{lineId}/release",
+    roles: VOICE_ADMIN_ROLES,
+    success: [200],
+    idempotent: false,
+    errors: ["line.not_found"],
+    commonErrors: ["request.invalid"],
+    description: "Gives a Line up: its number goes back to the carrier and its assignment is cleared. Calls already made on it stay. Idempotent by end state: releasing a released Line answers 200 with it. Takes no body. Owner and Admin only."
+  }),
+  placeCall: route7({
+    method: "POST",
+    path: "/v1/calls",
+    roles: VOICE_ALL_ROLES,
+    success: [201, 200],
+    idempotent: true,
+    errors: [
+      "call.number_invalid",
+      "call.line_unavailable",
+      "call.limit_reached",
+      "call.disclosure_failed",
+      "line.not_found",
+      "prospect.not_found"
+    ],
+    commonErrors: [...IDEMPOTENT_ERRORS3],
+    description: "Places a Call from the caller's browser to a number. The body's idempotencyKey is required: a retry of the same key answers the original Call and dials once; the same key with another body is request.idempotency_key_reused. The number is normalised to E.164 (call.number_invalid, 422, when it cannot be). The Call is recorded and a Disclosure plays before the two sides are bridged; a Call whose Disclosure fails ends failed and never goes live (call.disclosure_failed, 502, with the Call id in details). A Rep may call any Prospect (ADR 0003): the Contact Check on the number is a warning in the answer, never a refusal. A Line the caller may not use is line.not_found; a prospectId the caller may not see is prospect.not_found. At the Organization's cap of concurrent Calls it is call.limit_reached (429). Answers 201, or 200 for a replay."
+  }),
+  listCalls: route7({
+    method: "GET",
+    path: "/v1/calls",
+    roles: VOICE_ALL_ROLES,
+    success: [200],
+    idempotent: false,
+    errors: [],
+    commonErrors: ["request.invalid"],
+    description: `Lists Calls, newest first (by createdAt, then id), one cursor-paginated page at a time (at most 100). Filters: direction, state, repMembershipId, lineId, prospectId, and from and to on createdAt. ${CALL_VISIBILITY} A filter can narrow what the caller sees, never widen it.`
+  }),
+  getCall: route7({
+    method: "GET",
+    path: "/v1/calls/{callId}",
+    roles: VOICE_ALL_ROLES,
+    success: [200],
+    idempotent: false,
+    errors: ["call.not_found"],
+    commonErrors: ["request.invalid"],
+    description: `Reads one Call with its state, times, the wording version and time of its Disclosure, and the state of its Recording and Transcript. ${CALL_VISIBILITY}`
+  }),
+  getCallTranscript: route7({
+    method: "GET",
+    path: "/v1/calls/{callId}/transcript",
+    roles: VOICE_ALL_ROLES,
+    success: [200],
+    idempotent: false,
+    errors: ["call.not_found"],
+    commonErrors: ["request.invalid"],
+    description: `Reads the Transcript of a Call in time order, one cursor-paginated page of turns at a time (at most 100), each attributed to the Rep or the Prospect. The state says whether it is pending, ready or deleted; turns exist only when ready. The text is never logged. ${CALL_VISIBILITY}`
+  }),
+  getCallRecording: route7({
+    method: "GET",
+    path: "/v1/calls/{callId}/recording",
+    roles: VOICE_ALL_ROLES,
+    success: [200],
+    idempotent: false,
+    errors: ["call.not_found", "recording.not_found", "recording.not_ready"],
+    commonErrors: ["request.invalid"],
+    description: `Answers a short-lived signed URL to play the two-channel Recording of a Call. A Call with no Recording, or whose Recording was deleted, is recording.not_found (404); one still being stored is recording.not_ready (409). The URL is a credential and is never logged. ${CALL_VISIBILITY}`
+  }),
+  deleteCallRecording: route7({
+    method: "DELETE",
+    path: "/v1/calls/{callId}/recording",
+    roles: VOICE_ADMIN_ROLES,
+    success: [200],
+    idempotent: false,
+    errors: ["call.not_found", "call.not_ended"],
+    commonErrors: ["request.invalid"],
+    description: "Deletes the Recording of a Call and its Transcript, to honour a deletion request; the Call record stays with both states deleted. Idempotent by end state: a Call whose Recording is already deleted, or never existed, answers 200 with the Call. A Call that has not ended is call.not_ended (409). Owner and Admin only."
+  }),
+  wrapUpCall: route7({
+    method: "PUT",
+    path: "/v1/calls/{callId}/wrap-up",
+    roles: VOICE_ALL_ROLES,
+    success: [200],
+    idempotent: false,
+    errors: ["call.not_found", "call.not_ended"],
+    commonErrors: ["request.invalid"],
+    description: "Sets the wrap-up of an ended Call: the Deal identifier that joins it to a Deal in the Playbook, and a note. A field left out is left alone and null clears it. A Call that has not ended is call.not_ended (409). Only the Rep who took the Call, Owner and Admin may wrap it up; for any other caller the Call is call.not_found (404), a Manager of that Rep included."
+  }),
+  mintSoftphoneToken: route7({
+    method: "POST",
+    path: "/v1/softphone/token",
+    roles: VOICE_ALL_ROLES,
+    success: [200],
+    idempotent: false,
+    errors: [],
+    commonErrors: [],
+    description: "Mints a short-lived token (at most an hour) for the caller's browser to register the Softphone with the telephony provider. Each call mints a new one. The token is a credential for the caller alone and is never logged. If the provider cannot be reached it is server.unavailable. Takes no body."
+  })
+});
+// src/voice/softphone.ts
+import { z as z45 } from "zod";
+var MIN_SOFTPHONE_TOKEN_TTL_SECONDS = 60;
+var MAX_SOFTPHONE_TOKEN_TTL_SECONDS = 3600;
+var MAX_SOFTPHONE_TOKEN_LENGTH = 4096;
+var softphoneTokenSchema = z45.strictObject({
+  token: z45.string().min(1).max(MAX_SOFTPHONE_TOKEN_LENGTH),
+  identity: membershipIdSchema,
+  ttlSeconds: z45.number().int().min(MIN_SOFTPHONE_TOKEN_TTL_SECONDS).max(MAX_SOFTPHONE_TOKEN_TTL_SECONDS),
+  expiresAt: timestampSchema
+});
 // src/index.ts
 var PACKAGE = "tula-closeline-contract";
 export {
@@ -3893,6 +4357,7 @@ export {
   INTERNAL_CALL_ERRORS,
   INVITABLE_ROLES,
   INVITATION_STATES,
+  LINE_STATES,
   LIST_MEMBERS_MIN_ROLE,
   LIST_TEAM_MEMBERS_ERROR_CODES,
   LIST_TEAM_MEMBERS_MIN_ROLE,
@@ -3900,6 +4365,7 @@ export {
   MARKETING_ROUTES,
   MAX_AUTHORIZATION_URL_LENGTH,
   MAX_BULK_ASSIGN_PROSPECTS,
+  MAX_CALL_DURATION_SECONDS,
   MAX_CALL_SPEAKERS,
   MAX_CONSENT_FORM_NAME_LENGTH,
   MAX_CONSENT_WORDING_LENGTH,
@@ -3922,11 +4388,13 @@ export {
   MAX_EMAIL_LENGTH,
   MAX_EVIDENCE_REF_LENGTH,
   MAX_FIELD_HISTORY_ENTRIES,
+  MAX_LINE_LABEL_LENGTH,
   MAX_MERGED_PROSPECTS,
   MAX_MOMENT_SNIPPET_CHARACTERS,
   MAX_NAME_LENGTH,
   MAX_PAGE_SIZE,
   MAX_PERSON_NAME_LENGTH,
+  MAX_PLAYBACK_URL_LENGTH,
   MAX_PROSPECT_COMPANY_NAME_LENGTH,
   MAX_PROSPECT_FIELD_VALUE_LENGTH,
   MAX_PROSPECT_IMPORT_BYTES,
@@ -3939,6 +4407,7 @@ export {
   MAX_PROSPECT_TAG_LENGTH,
   MAX_QUEUED_DEAL_IMPORTS,
   MAX_RECORDING_BYTES,
+  MAX_RECORDING_KEY_LENGTH,
   MAX_RECORDING_SECONDS,
   MAX_REP_FIELD_LENGTH,
   MAX_REP_FOLLOWING_CHARACTERS,
@@ -3953,6 +4422,8 @@ export {
   MAX_SEARCH_TEXT_CHARACTERS,
   MAX_SEARCH_TURNS,
   MAX_SEQ,
+  MAX_SOFTPHONE_TOKEN_LENGTH,
+  MAX_SOFTPHONE_TOKEN_TTL_SECONDS,
   MAX_SOURCE_REF_LENGTH,
   MAX_SPEAKER_EXCERPT_LENGTH,
   MAX_SPEAKER_LABEL_BYTES,
@@ -3961,9 +4432,12 @@ export {
   MAX_SUPPRESSION_IMPORT_ROWS,
   MAX_SUPPRESSION_NOTE_LENGTH,
   MAX_TRANSCRIPT_BYTES,
+  MAX_TRANSCRIPT_TURN_LENGTH,
   MAX_UTF8_BYTES_PER_CODE_POINT,
+  MAX_WRAP_UP_NOTE_LENGTH,
   MEDIA_TYPE_BY_CALL_EXTENSION,
   MEDIA_TYPE_BY_EXTENSION,
+  MIN_SOFTPHONE_TOKEN_TTL_SECONDS,
   OIDC_COOKIE_BASE_NAME,
   OIDC_COOKIE_SECURE_PREFIX,
   ONE_ADDRESS_MESSAGE,
@@ -3994,6 +4468,7 @@ export {
   PROSPECT_MERGE_UNDO_DAYS,
   PROSPECT_ROUTES,
   PROSPECT_STATUSES,
+  RECORDING_MEDIA_TYPES,
   REGIONS,
   RIGHTS_WORDINGS,
   ROLES,
@@ -4012,9 +4487,24 @@ export {
   SUPPRESSION_REMOVABLE_REASONS,
   UPLOAD_CONTENT_TYPE,
   UPLOAD_FILE_FIELD,
+  VOICE_ADMIN_ROLES,
+  VOICE_ALL_ROLES,
+  VOICE_CALL_DIRECTIONS,
+  VOICE_CALL_ENDED_BY,
+  VOICE_CALL_FAILURE_REASONS,
+  VOICE_CALL_FINAL_STATES,
+  VOICE_CALL_OUTCOMES,
+  VOICE_CALL_STATES,
+  VOICE_ERRORS,
+  VOICE_EVENTS,
+  VOICE_RECORDING_STATES,
+  VOICE_ROUTES,
+  VOICE_TRANSCRIPT_STATES,
+  addLineRequestSchema,
   addSuppressionRequestSchema,
   addTeamMemberRequestSchema,
   addressFieldsShape,
+  assignLineRequestSchema,
   attemptIdSchema,
   authOptionsResponseSchema,
   authProvidersSchema,
@@ -4027,6 +4517,7 @@ export {
   callChannelSchema,
   callCursorSchema,
   callDeletedPayloadSchema,
+  callDisclosureSchema,
   callFailureReasonSchema,
   callIdSchema,
   callKindSchema,
@@ -4077,6 +4568,8 @@ export {
   contactCheckResultSchema,
   contactDenialCodeSchema,
   contactPurposeSchema,
+  contactWarningSchema,
+  countryCodeSchema,
   createConsentFormRequestSchema,
   createConsentWordingRequestSchema,
   createDemoRequestRequestSchema,
@@ -4108,6 +4601,7 @@ export {
   decodeCursor,
   defineErrors,
   defineEvent,
+  deletedRecordingSchema,
   demoRequestIdSchema,
   demoRequestMessageSchema,
   demoRequestSourcePageSchema,
@@ -4147,6 +4641,7 @@ export {
   firstCsvRecord,
   foldAscii,
   formatId,
+  getTranscriptQuerySchema,
   googleCompleteRequestSchema,
   googleCompleteResponseSchema,
   googleErrorQuerySchema,
@@ -4185,6 +4680,14 @@ export {
   invitationTokenSchema,
   isBlankCsvRecord,
   isWellFormedText,
+  lineAssignmentSchema,
+  lineCursorSchema,
+  lineIdSchema,
+  lineLabelSchema,
+  linePageSchema,
+  lineParamsSchema,
+  lineSchema,
+  lineStateSchema,
   listCallsQuerySchema,
   listCallsResponseSchema,
   listConsentEventsQuerySchema,
@@ -4204,6 +4707,7 @@ export {
   listFieldHistoryResponseSchema,
   listInvitationsQuerySchema,
   listInvitationsResponseSchema,
+  listLinesQuerySchema,
   listMembersQuerySchema,
   listMembersResponseSchema,
   listProspectCompaniesQuerySchema,
@@ -4223,6 +4727,7 @@ export {
   listTeamMembersResponseSchema,
   listTeamsQuerySchema,
   listTeamsResponseSchema,
+  listVoiceCallsQuerySchema,
   lookupDealRequestSchema,
   lookupSuppressionRequestSchema,
   maskedAddressSchema,
@@ -4253,6 +4758,9 @@ export {
   parseOutcomeCell,
   parseRepField,
   personNameSchema,
+  phoneHashSchema,
+  placeCallRequestSchema,
+  placedCallSchema,
   prospectCompanyCursorSchema,
   prospectCompanyDomainSchema,
   prospectCompanyFieldNameSchema,
@@ -4304,6 +4812,8 @@ export {
   recordWithdrawalRequestSchema,
   recordedConsentSchema,
   recordedSuppressionSchema,
+  recordingKeySchema,
+  recordingPlaybackSchema,
   regionSchema,
   removeSuppressionRequestSchema,
   renameOrganizationRequestSchema,
@@ -4331,6 +4841,7 @@ export {
   setCallRepRequestSchema,
   setDealOutcomeRequestSchema,
   setProspectOwnerRequestSchema,
+  softphoneTokenSchema,
   sourceKindSchema,
   speakerExcerpt,
   speakerExcerptSchema,
@@ -4359,6 +4870,10 @@ export {
   teamParamsSchema,
   teamSchema,
   timestampSchema,
+  transcriptCursorSchema,
+  transcriptPageSchema,
+  transcriptSpeakerSchema,
+  transcriptTurnSchema,
   unsubscribePreviewSchema,
   unsubscribeReceiptSchema,
   updateConsentWordingRequestSchema,
@@ -4368,5 +4883,20 @@ export {
   uploadCallFileSchema,
   uploadDocumentFileSchema,
   userIdSchema,
-  withdrawConsentRequestSchema
+  voiceCallCursorSchema,
+  voiceCallDirectionSchema,
+  voiceCallEndedBySchema,
+  voiceCallEndedEvent,
+  voiceCallFailureReasonSchema,
+  voiceCallOutcomeSchema,
+  voiceCallPageSchema,
+  voiceCallParamsSchema,
+  voiceCallSchema,
+  voiceCallStartedEvent,
+  voiceCallStateSchema,
+  voiceRecordingStateSchema,
+  voiceTranscriptStateSchema,
+  withdrawConsentRequestSchema,
+  wrapUpNoteSchema,
+  wrapUpRequestSchema
 };
