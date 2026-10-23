@@ -740,6 +740,13 @@ describe('routes', () => {
     expect(INBOX_ERRORS['inbox.prospect_not_found'].status).toBe(404)
     expect(INBOX_ROUTES.ingestMessage.errors).toContain('inbox.prospect_not_found')
     expect(INBOX_ROUTES.ingestMessage.description).toContain('never taken from the body')
+    const description = INBOX_ROUTES.ingestMessage.description
+    expect(description).toContain(
+      'looked up under the Organization the shared-secret caller states'
+    )
+    expect(description).toContain('a Prospect outside that scope')
+    expect(description).toContain('inbox.prospect_not_found (404)')
+    expect(description).toContain('nothing is stored')
   })
   test('every inbox code is returned by some route', () => {
     const used = new Set(routes.flatMap(([, r]) => r.errors))

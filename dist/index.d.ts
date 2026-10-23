@@ -3540,10 +3540,13 @@ import { ErrorDefinition as ErrorDefinition_8gwh457 } from "..";
 *   it is a row in the report.
 * - `prospect.merge_conflict` (409): the merge cannot be made or undone, for example a Prospect is
 *   already merged, the same Prospect is named twice, or the thirty-day undo window has passed.
+* - `prospect.company_domain_taken` (409): another Prospect Company of the Organization already has
+*   this normalised domain, so a Company cannot be created or edited to carry it.
 * - `prospect.forbidden_owner` (403): the named owner is not allowed: a member of another
 *   Organization, someone who is not a Rep or Manager, or a Rep naming someone other than themselves.
 */
 declare const PROSPECT_ERRORS: {
+	readonly "prospect.company_domain_taken": ErrorDefinition_8gwh457<"prospect.company_domain_taken">;
 	readonly "prospect.duplicate_identity": ErrorDefinition_8gwh457<"prospect.duplicate_identity">;
 	readonly "prospect.forbidden_owner": ErrorDefinition_8gwh457<"prospect.forbidden_owner">;
 	readonly "prospect.import_invalid": ErrorDefinition_8gwh457<"prospect.import_invalid">;

@@ -3284,7 +3284,11 @@ var PROSPECT_ERRORS = {
       status: 409,
       message: "These Prospects cannot be merged, or this merge cannot be undone."
     },
-    forbidden_owner: { status: 403, message: "This member cannot own the Prospect." }
+    forbidden_owner: { status: 403, message: "This member cannot own the Prospect." },
+    company_domain_taken: {
+      status: 409,
+      message: "Another Prospect Company already has this domain."
+    }
   })
 };
 var prospectNotFoundDetailsSchema = z34.strictObject({
@@ -3732,9 +3736,9 @@ var PROSPECT_ROUTES = Object.freeze({
     roles: PROSPECT_ALL_ROLES,
     success: [201, 200],
     idempotent: true,
-    errors: [],
+    errors: ["prospect.company_domain_taken"],
     commonErrors: [...IDEMPOTENT_ERRORS3],
-    description: "Creates a Prospect Company with the Source manual. Every role may. Answers 201, or 200 with the original record for a replay of the same Idempotency-Key."
+    description: "Creates a Prospect Company with the Source manual. Every role may. A domain another Prospect Company of the Organization already has is prospect.company_domain_taken (409). Answers 201, or 200 with the original record for a replay of the same Idempotency-Key."
   }),
   listProspectCompanies: route6({
     method: "GET",
@@ -3762,9 +3766,9 @@ var PROSPECT_ROUTES = Object.freeze({
     roles: PROSPECT_ALL_ROLES,
     success: [200],
     idempotent: false,
-    errors: ["prospect.not_found"],
+    errors: ["prospect.not_found", "prospect.company_domain_taken"],
     commonErrors: ["request.invalid"],
-    description: "Edits a Prospect Company; each field sent is written with the Source manual (ADR 0020). null clears the domain."
+    description: "Edits a Prospect Company; each field sent is written with the Source manual (ADR 0020). null clears the domain. A domain another Prospect Company of the Organization already has is prospect.company_domain_taken (409)."
   }),
   listProspectCompanyFieldHistory: route6({
     method: "GET",
@@ -8954,7 +8958,7 @@ var INBOX_ROUTES = Object.freeze({
     idempotent: true,
     errors: ["inbox.prospect_not_found"],
     commonErrors: ["request.invalid", "auth.unauthenticated", "server.unavailable"],
-    description: `Internal: a channel service posts every inbound and outbound Message with the shared secret (ADR 0013); no user token. The service derives the Organization from the Prospect id (never taken from the body); a Prospect id it does not know is inbox.prospect_not_found (404) and nothing is stored. The body is at most 20,000 characters; line endings are normalised and other control characters dropped. Idempotent on channel plus provider message id: the first post stores the Message and answers 201, any repeat answers 200 with the same Message and stores nothing. Core finds or creates the Conversation for the Prospect and channel, queues classification of an inbound Message, and never calls a vendor. ${SENSITIVE}`
+    description: `Internal: a channel service posts every inbound and outbound Message with the shared secret (ADR 0013); no user token. The Organization is never taken from the body: the Prospect id is looked up under the Organization the shared-secret caller states, and a Prospect outside that scope (unknown, or of another Organization) is inbox.prospect_not_found (404) and nothing is stored. The body is at most 20,000 characters; line endings are normalised and other control characters dropped. Idempotent on channel plus provider message id: the first post stores the Message and answers 201, any repeat answers 200 with the same Message and stores nothing. Core finds or creates the Conversation for the Prospect and channel, queues classification of an inbound Message, and never calls a vendor. ${SENSITIVE}`
   }),
   getDraftRelease: inboundRoute({
     method: "GET",
