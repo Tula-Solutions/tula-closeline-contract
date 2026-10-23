@@ -7955,7 +7955,13 @@ var memberSchema = z71.object({
 });
 var LIST_MEMBERS_MIN_ROLE = "manager";
 var MAX_MEMBER_QUERY_LENGTH = 100;
-var listMembersQuerySchema = pageQuerySchema.extend({ q: boundedTextSchema(MAX_MEMBER_QUERY_LENGTH).optional() }).strict();
+var MAX_MEMBER_IDS = 100;
+var memberIdsParamSchema = z71.string().max(MAX_MEMBER_IDS * 64).transform((value) => value.split(",")).pipe(z71.array(membershipIdSchema).min(1).max(MAX_MEMBER_IDS));
+var listMembersQuerySchema = pageQuerySchema.extend({
+  q: boundedTextSchema(MAX_MEMBER_QUERY_LENGTH).optional(),
+  role: roleSchema.optional(),
+  ids: memberIdsParamSchema.optional()
+}).strict();
 var listMembersResponseSchema = pageSchema(memberSchema);
 var memberParamsSchema = z71.strictObject({
   membershipId: membershipIdSchema
@@ -13134,6 +13140,7 @@ export {
   MAX_LINKEDIN_TYPED_NAME_LENGTH,
   MAX_MAILBOX_NAME_LENGTH,
   MAX_MAILBOX_TEAMS,
+  MAX_MEMBER_IDS,
   MAX_MEMBER_QUERY_LENGTH,
   MAX_MERGED_PROSPECTS,
   MAX_MESSAGE_BODY_LENGTH,
