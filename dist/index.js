@@ -6678,7 +6678,8 @@ var consentEventSchema = z60.object({
 }).superRefine((event, ctx) => {
   const issue = (message) => ctx.addIssue({ code: "custom", message });
   const grant = event.kind === "granted";
-  if (grant !== CONSENT_GRANT_SOURCES.includes(event.source)) {
+  const sources = grant ? CONSENT_GRANT_SOURCES : CONSENT_WITHDRAWAL_SOURCES;
+  if (!sources.includes(event.source)) {
     issue(grant ? "A grant has a grant source" : "A withdrawal has a withdrawal source");
   }
   if (grant && (event.wordingId === null || event.evidenceRef === null)) {
