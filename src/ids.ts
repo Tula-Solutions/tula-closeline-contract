@@ -136,6 +136,10 @@ export const suggestionIdSchema = idSchema('sgs')
 export const touchIdSchema = idSchema('tch')
 /** The id of an API key (`akey_…`): a secret an Admin creates so a program can call Closeline. The secret is not the id. */
 export const apiKeyIdSchema = idSchema('akey')
+/** The id of a LinkedIn account (`lia_…`): a Rep's own LinkedIn profile, connected so an Outbound Agent can send for them. */
+export const linkedinAccountIdSchema = idSchema('lia')
+/** The id of a LinkedIn risk acceptance (`lra_…`): an Admin's written record that the Organization accepts the chance of LinkedIn restricting its Reps' accounts. */
+export const linkedinRiskAcceptanceIdSchema = idSchema('lra')
 
 /** The id of an Assessment. */
 export type AssessmentId = z.infer<typeof assessmentIdSchema>
@@ -265,3 +269,7 @@ export type AuditEventId = z.infer<typeof auditEventIdSchema>
 export type ExportJobId = z.infer<typeof exportJobIdSchema>
 /** The id of an API key. */
 export type ApiKeyId = z.infer<typeof apiKeyIdSchema>
+/** The id of a LinkedIn account. */
+export type LinkedinAccountId = z.infer<typeof linkedinAccountIdSchema>
+/** The id of a LinkedIn risk acceptance. */
+export type LinkedinRiskAcceptanceId = z.infer<typeof linkedinRiskAcceptanceIdSchema>
