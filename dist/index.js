@@ -8906,9 +8906,67 @@ var EXPORT_LINK_HOURS = 24;
 var MAX_EXPORT_PART_FILES = 1e4;
 var MAX_EXPORT_PART_BYTES = 50000000000;
 var exportPrefixSchema = z81.string().max(300).regex(/^[A-Za-z0-9_][A-Za-z0-9_\-./]*$/).refine((prefix) => !prefix.split("/").includes(".."), "No parent directory in a prefix");
-var createExportRequestSchema = z81.strictObject({
-  includeRecordingLinks: z81.boolean().default(false)
+var EXPORT_KINDS = ["organization", "enriched_prospects"];
+var exportKindSchema = z81.enum(EXPORT_KINDS);
+var ENRICHED_EXPORT_FORMATS = ["csv"];
+var enrichedExportFormatSchema = z81.enum(ENRICHED_EXPORT_FORMATS);
+var enrichedProspectsFilterSchema = z81.strictObject({
+  ownerMembershipId: membershipIdSchema.optional(),
+  companyId: prospectCompanyIdSchema.optional(),
+  status: prospectStatusSchema.optional(),
+  source: sourceKindSchema.optional()
 });
+var ENRICHED_EXPORT_COLUMNS = [
+  "prospect_id",
+  "status",
+  "first_name",
+  "first_name_source",
+  "last_name",
+  "last_name_source",
+  "job_title",
+  "job_title_source",
+  "email",
+  "email_source",
+  "linkedin_url",
+  "linkedin_url_source",
+  "company_id",
+  "company_name",
+  "company_name_source",
+  "company_domain",
+  "company_domain_source",
+  "company_industry",
+  "company_industry_source",
+  "company_employee_count",
+  "company_employee_count_source",
+  "company_region",
+  "company_region_source",
+  "company_technologies",
+  "company_technologies_source"
+];
+var createExportRequestSchema = z81.strictObject({
+  kind: exportKindSchema.default("organization"),
+  includeRecordingLinks: z81.boolean().default(false),
+  format: enrichedExportFormatSchema.optional(),
+  filter: enrichedProspectsFilterSchema.optional()
+}).superRefine((body, ctx) => {
+  if (body.kind === "organization") {
+    for (const key of ["format", "filter"]) {
+      if (body[key] !== undefined) {
+        ctx.addIssue({
+          code: "custom",
+          path: [key],
+          message: `${key} applies only to an enriched_prospects export`
+        });
+      }
+    }
+  } else if (body.includeRecordingLinks) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["includeRecordingLinks"],
+      message: "An enriched_prospects export holds no recordings"
+    });
+  }
+}).transform((body) => body.kind === "enriched_prospects" ? { ...body, format: body.format ?? "csv" } : body);
 var exportPartSchema = z81.object({
   service: exportServiceSchema,
   state: exportPartStateSchema,
@@ -8918,6 +8976,9 @@ var exportPartSchema = z81.object({
 });
 var exportJobSchema = z81.object({
   id: exportJobIdSchema,
+  kind: exportKindSchema,
+  format: enrichedExportFormatSchema.nullable(),
+  filter: enrichedProspectsFilterSchema.nullable(),
   state: exportStateSchema,
   requestedByMembershipId: membershipIdSchema,
   includeRecordingLinks: z81.boolean(),
@@ -8927,6 +8988,29 @@ var exportJobSchema = z81.object({
   completedAt: timestampSchema.nullable(),
   expiresAt: timestampSchema.nullable()
 }).superRefine((job, ctx) => {
+  if (job.kind === "organization" && (job.format !== null || job.filter !== null)) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["format"],
+      message: "An organization export has no format or filter"
+    });
+  }
+  if (job.kind === "enriched_prospects") {
+    if (job.format === null) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["format"],
+        message: "An enriched export has a format"
+      });
+    }
+    if (job.parts.some((part) => part.service !== "core")) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["parts"],
+        message: "An enriched export has only the core slice"
+      });
+    }
+  }
   if (job.state === "failed" !== (job.failureReason !== null)) {
     ctx.addIssue({
       code: "custom",
@@ -8950,6 +9034,13 @@ var exportRequestedEvent = defineEvent("export.requested", 1, z82.strictObject({
   includeRecordingLinks: z82.boolean(),
   requestedAt: timestampSchema
 }));
+var exportEnrichedProspectsRequestedEvent = defineEvent("export.enriched_prospects_requested", 1, z82.strictObject({
+  exportId: exportJobIdSchema,
+  requestedByMembershipId: membershipIdSchema,
+  format: enrichedExportFormatSchema,
+  filter: enrichedProspectsFilterSchema.nullable(),
+  requestedAt: timestampSchema
+}));
 var exportPartReadyEvent = defineEvent("export.part_ready", 1, z82.strictObject({
   exportId: exportJobIdSchema,
   service: exportServiceSchema,
@@ -8966,6 +9057,7 @@ var exportPartFailedEvent = defineEvent("export.part_failed", 1, z82.strictObjec
 }));
 var EXPORT_EVENTS = {
   "export.requested": exportRequestedEvent,
+  "export.enriched_prospects_requested": exportEnrichedProspectsRequestedEvent,
   "export.part_ready": exportPartReadyEvent,
   "export.part_failed": exportPartFailedEvent
 };
@@ -8984,7 +9076,7 @@ var EXPORT_ROUTES = Object.freeze({
     keyRequired: true,
     errors: ["export.already_running", "export.daily_limit"],
     commonErrors: [...IDEMPOTENT_ERRORS],
-    description: `Starts an export of the Organization's data and answers 202 with the job; nothing is built on the request. It publishes export.requested, each service writes its slice and publishes export.part_ready (or export.part_failed, which fails the job at once; the timeout is the backstop), and core builds the manifest. Recordings are included as links on request, never copied inline. ${SAFE} Only one export runs at a time (export.already_running, 409) and at most two are requested in 24 hours (export.daily_limit, 429). ${KEY5} The same key twice answers 200 with the same job. Owner and Admin only. ${ORG_ONLY3}`
+    description: `Starts an export of the Organization's data and answers 202 with the job; nothing is built on the request. It publishes export.requested, each service writes its slice and publishes export.part_ready (or export.part_failed, which fails the job at once; the timeout is the backstop), and core builds the manifest. Recordings are included as links on request, never copied inline. With kind enriched_prospects it exports only enriched Prospect and Prospect Company data as one CSV (ENRICHED_EXPORT_COLUMNS, each sourced field beside its Source), narrowed by an optional bounded filter; the body has no cursor, core pages through the Prospects itself, and it publishes export.enriched_prospects_requested instead of export.requested. Only core writes that slice, and the CSV holds no consent evidence, IP address, user agent, transcript or message body. The one-running and daily-limit rules and the download link are the same for both kinds. ${SAFE} Only one export runs at a time (export.already_running, 409) and at most two are requested in 24 hours (export.daily_limit, 429). ${KEY5} The same key twice answers 200 with the same job. Owner and Admin only. ${ORG_ONLY3}`
   }),
   listExports: inboundRoute({
     method: "GET",
@@ -12321,6 +12413,8 @@ export {
   DRAFT_HOLD_REASONS,
   DRAFT_SOURCE_KINDS,
   DRAFT_STATUSES,
+  ENRICHED_EXPORT_COLUMNS,
+  ENRICHED_EXPORT_FORMATS,
   ENRICHED_FIELDS,
   ENRICHMENT_ADMIN_ROLES,
   ENRICHMENT_ALL_ROLES,
@@ -12341,6 +12435,7 @@ export {
   EXPORT_ERRORS,
   EXPORT_EVENTS,
   EXPORT_FAILURE_REASONS,
+  EXPORT_KINDS,
   EXPORT_LINK_HOURS,
   EXPORT_PART_FAILURE_REASONS,
   EXPORT_PART_STATES,
@@ -13105,7 +13200,9 @@ export {
   emailVerificationSchema,
   encodeCursor,
   endStepSchema,
+  enrichedExportFormatSchema,
   enrichedFieldNameSchema,
+  enrichedProspectsFilterSchema,
   enrichmentAttemptSchema,
   enrichmentBudgetSchema,
   enrichmentCompletedEvent,
@@ -13144,9 +13241,11 @@ export {
   evidenceRefSchema,
   excerptText,
   exportDownloadSchema,
+  exportEnrichedProspectsRequestedEvent,
   exportFailureReasonSchema,
   exportJobIdSchema,
   exportJobSchema,
+  exportKindSchema,
   exportPartFailedEvent,
   exportPartFailureReasonSchema,
   exportPartReadyEvent,

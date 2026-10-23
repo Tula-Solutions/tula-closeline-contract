@@ -21,6 +21,9 @@ const id = (prefix: string, n: number) => formatId(prefix as never, hex(n))
 const NOW = '2026-10-22T10:00:00.000Z'
 
 const job = {
+  kind: 'organization',
+  format: null,
+  filter: null,
   id: id('exp', 1),
   state: 'running',
   requestedByMembershipId: id('mem', 1),
