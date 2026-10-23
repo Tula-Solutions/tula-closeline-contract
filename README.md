@@ -268,6 +268,24 @@ cancelled at Google; any other `error=` from Google is `oidc.provider_unavailabl
   Rollout order: the portal moves to 0.15.0 first, then auth starts sending `userId` on sign-in,
   refresh and Google completion. A payload without it still parses.
 
+### Marketing: Demo Requests (0.16.0, hub issue 125)
+
+A Demo Request is a Visitor's submitted wish to see Closeline, held by core as a platform-level
+record with no `organization_id`. One public route, `POST /v1/marketing/demo-requests`
+(`MARKETING_ROUTES.createDemoRequest`, no token):
+
+- Body `createDemoRequestRequestSchema` (strict): `name`, `workEmail` (folded), `companyName`,
+  optional `message` (at most `MAX_DEMO_REQUEST_MESSAGE_LENGTH`, 2,000), `sourcePage` (an absolute
+  path) and the honeypot `website` (empty or omitted for a person). A filled honeypot parses; the
+  service answers as for a real request and stores nothing.
+- The idempotency key is the `Idempotency-Key` header (`idempotencyKeySchema`), required, as on
+  every other public POST in this library; it is not a body field.
+- Answers 201 `{ id }` (`createDemoRequestResponseSchema`, id `dreq_…` via `demoRequestIdSchema`),
+  or 200 with the same id on a replay.
+- Errors: `MARKETING_ERRORS` (`marketing.invalid_request` 400, `marketing.rate_limited` 429 with
+  `details.retryAfter` of `retryAfterDetailsSchema` and a `Retry-After` header);
+  `CREATE_DEMO_REQUEST_ERROR_CODES` lists every code the route may answer with.
+
 ### Rights confirmation wording (0.9.0)
 
 The text of each wording version is in the contract: `RIGHTS_WORDINGS` (frozen, keyed by version,

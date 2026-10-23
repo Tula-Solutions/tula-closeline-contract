@@ -41,6 +41,9 @@ export const eventIdSchema = idSchema('evt')
 /** The id of a request, for tracing (`req_…`). */
 export const requestIdSchema = idSchema('req')
 
+/** The id of a Demo Request (`dreq_…`), a Visitor's submitted wish to see Closeline. */
+export const demoRequestIdSchema = idSchema('dreq')
+
 /** The id of an Organization. */
 export type OrganizationId = z.infer<typeof organizationIdSchema>
 /** The id of a user. */
@@ -65,6 +68,8 @@ export type DealImportId = z.infer<typeof dealImportIdSchema>
 export type EventId = z.infer<typeof eventIdSchema>
 /** The id of a request. */
 export type RequestId = z.infer<typeof requestIdSchema>
+/** The id of a Demo Request. */
+export type DemoRequestId = z.infer<typeof demoRequestIdSchema>
 
 const UUID_PATTERN =
   /^(?:[0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i
