@@ -302,7 +302,8 @@ export type DecisionKind = z.infer<typeof decisionKindSchema>
 /**
  * A Decision: one approval, edit, rejection, automatic release, takeover or hand-back, with who
  * and when. It names its Draft except for a takeover or hand-back. Only an automatic release has
- * no member. The edited text is the Message that was sent, not stored here.
+ * no member. `acknowledgedUngrounded` is true when a person approved an ungrounded Draft knowing
+ * it cites no Source. The edited text is the Message that was sent, not stored here.
  */
 export const decisionSchema = z
   .strictObject({
@@ -312,6 +313,7 @@ export const decisionSchema = z
     kind: decisionKindSchema,
     decidedByMembershipId: membershipIdSchema.nullable(),
     note: decisionNoteSchema.nullable(),
+    acknowledgedUngrounded: z.boolean(),
     decidedAt: timestampSchema,
   })
   .superRefine((d, ctx) => {
@@ -322,6 +324,9 @@ export const decisionSchema = z
     }
     if ((d.kind === 'auto_release') !== (d.decidedByMembershipId === null)) {
       issue('decidedByMembershipId', 'Only an automatic release has no member')
+    }
+    if (d.acknowledgedUngrounded && d.kind !== 'approve' && d.kind !== 'edit_approve') {
+      issue('acknowledgedUngrounded', 'Only an approval can acknowledge an ungrounded Draft')
     }
     if (d.note !== null && d.kind !== 'reject') {
       issue('note', 'Only a rejection carries a note')
@@ -567,11 +572,11 @@ export const setApprovalPolicyRequestSchema = z.strictObject({ rule: approvalRul
 /**
  * An ingested body: a Prospect's text as the channel gave it. Line endings become `\n` and other
  * control characters are dropped, so an ordinary CRLF reply is never refused (a lost reply could be
- * a lost unsubscribe); the result must still be 1 to 20,000 characters and not blank.
+ * a lost unsubscribe); the raw text is capped at 20,000 characters, so the normalised body never exceeds that, and it must not be blank.
  */
 const ingestBodySchema = z
   .string()
-  .max(MAX_MESSAGE_BODY_LENGTH * 2)
+  .max(MAX_MESSAGE_BODY_LENGTH)
   .transform((text) =>
     text
       .replace(/\r\n?/g, '\n')

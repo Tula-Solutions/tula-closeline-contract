@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { z } from 'zod'
 import { AGENT_ERRORS } from '../agent'
 import { CORE_ERRORS } from '../core'
 import { ERRORS } from '../errors'
@@ -409,6 +410,7 @@ describe('Decision', () => {
     kind: 'approve',
     decidedByMembershipId: mem,
     note: null,
+    acknowledgedUngrounded: false,
     decidedAt: NOW,
   }
   test('parses a Draft decision and a takeover', () => {
@@ -428,6 +430,25 @@ describe('Decision', () => {
         .success
     ).toBe(true)
     expect(decisionSchema.safeParse({ ...base, kind: 'auto_release' }).success).toBe(false)
+  })
+  test('only an approval can acknowledge an ungrounded Draft, and the field is required', () => {
+    const { acknowledgedUngrounded: _omit, ...without } = base
+    expect(decisionSchema.safeParse(without).success).toBe(false)
+    expect(decisionSchema.safeParse({ ...base, acknowledgedUngrounded: true }).success).toBe(true)
+    expect(
+      decisionSchema.safeParse({ ...base, kind: 'edit_approve', acknowledgedUngrounded: true })
+        .success
+    ).toBe(true)
+    for (const kind of ['reject', 'auto_release'] as const) {
+      expect(
+        decisionSchema.safeParse({
+          ...base,
+          kind,
+          decidedByMembershipId: kind === 'reject' ? mem : null,
+          acknowledgedUngrounded: true,
+        }).success
+      ).toBe(false)
+    }
   })
   test('only a rejection carries a note', () => {
     expect(decisionSchema.safeParse({ ...base, note: 'too pushy' }).success).toBe(false)
@@ -524,6 +545,11 @@ describe('lists and ingest', () => {
       false
     )
   })
+  test('the ingest body cap in the OpenAPI input schema is the real 20,000', () => {
+    const json = JSON.stringify(z.toJSONSchema(ingestMessageRequestSchema, { io: 'input' }))
+    expect(json).toContain('"maxLength":20000')
+    expect(json).not.toContain('40000')
+  })
   test('an outbound ingest without a Draft parses and its stored Message validates', () => {
     const request = ingestMessageRequestSchema.parse({
       channel: 'email',
@@ -603,6 +629,7 @@ describe('events', () => {
       draftId: drf,
       approvedByMembershipId: mem,
       edited: false,
+      acknowledgedUngrounded: false,
       approvedAt: NOW,
     },
     'message.sent': { ...ids, draftId: drf, messageId: msg, sentAt: NOW },
@@ -697,6 +724,11 @@ describe('routes', () => {
         expect(known.has(code)).toBe(true)
       }
     }
+  })
+  test('ingest names the unknown Prospect error and says the Organization is never in the body', () => {
+    expect(INBOX_ERRORS['inbox.prospect_not_found'].status).toBe(404)
+    expect(INBOX_ROUTES.ingestMessage.errors).toContain('inbox.prospect_not_found')
+    expect(INBOX_ROUTES.ingestMessage.description).toContain('never taken from the body')
   })
   test('every inbox code is returned by some route', () => {
     const used = new Set(routes.flatMap(([, r]) => r.errors))

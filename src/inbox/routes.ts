@@ -188,7 +188,7 @@ export const INBOX_ROUTES: Readonly<Record<InboxRouteName, InboxRoute>> = Object
       'inbox.conversation_closed',
     ],
     commonErrors: [...IDEMPOTENT_ERRORS],
-    description: `Approves a pending Draft, optionally with edited text (the edited text is what is sent; the Decision is recorded as edit_approve with who and when), and publishes exactly one message.approved. Requires an Idempotency-Key header: a replay answers the same result and publishes once. A Draft already decided, sent, superseded or voided is inbox.draft_not_pending (409). A Draft with no Source is inbox.draft_ungrounded (422) unless the body sets acknowledgeUngrounded to true. Only the Rep who owns the Conversation, a Manager for their Team's, or an Admin or Owner may approve; another caller who can see it gets inbox.not_conversation_owner (403). A Prospect who asked to stop on the channel is inbox.prospect_suppressed (409). ${SENSITIVE} ${VISIBILITY}`,
+    description: `Approves a pending Draft, optionally with edited text (the edited text is what is sent; the Decision is recorded as edit_approve with who and when), and publishes exactly one message.approved. The Decision and the event both record acknowledgedUngrounded. Requires an Idempotency-Key header: a replay answers the same result and publishes once. A Draft already decided, sent, superseded or voided is inbox.draft_not_pending (409). A Draft with no Source is inbox.draft_ungrounded (422) unless the body sets acknowledgeUngrounded to true. Only the Rep who owns the Conversation, a Manager for their Team's, or an Admin or Owner may approve; another caller who can see it gets inbox.not_conversation_owner (403). A Prospect who asked to stop on the channel is inbox.prospect_suppressed (409). ${SENSITIVE} ${VISIBILITY}`,
   }),
   rejectDraft: inboundRoute({
     method: 'POST',
@@ -240,9 +240,9 @@ export const INBOX_ROUTES: Readonly<Record<InboxRouteName, InboxRoute>> = Object
     internal: true,
     success: [201, 200],
     idempotent: true,
-    errors: [],
+    errors: ['inbox.prospect_not_found'],
     commonErrors: ['request.invalid', 'auth.unauthenticated', 'server.unavailable'],
-    description: `Internal: a channel service posts every inbound and outbound Message with the shared secret (ADR 0013); no user token. Idempotent on channel plus provider message id: the first post stores the Message and answers 201, any repeat answers 200 with the same Message and stores nothing. Core finds or creates the Conversation for the Prospect and channel, queues classification of an inbound Message, and never calls a vendor. ${SENSITIVE}`,
+    description: `Internal: a channel service posts every inbound and outbound Message with the shared secret (ADR 0013); no user token. The service derives the Organization from the Prospect id (never taken from the body); a Prospect id it does not know is inbox.prospect_not_found (404) and nothing is stored. The body is at most 20,000 characters; line endings are normalised and other control characters dropped. Idempotent on channel plus provider message id: the first post stores the Message and answers 201, any repeat answers 200 with the same Message and stores nothing. Core finds or creates the Conversation for the Prospect and channel, queues classification of an inbound Message, and never calls a vendor. ${SENSITIVE}`,
   }),
   getDraftRelease: inboundRoute({
     method: 'GET',

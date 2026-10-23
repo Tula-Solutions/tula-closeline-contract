@@ -7509,7 +7509,8 @@ type DecisionKind = z41.infer<typeof decisionKindSchema>;
 /**
 * A Decision: one approval, edit, rejection, automatic release, takeover or hand-back, with who
 * and when. It names its Draft except for a takeover or hand-back. Only an automatic release has
-* no member. The edited text is the Message that was sent, not stored here.
+* no member. `acknowledgedUngrounded` is true when a person approved an ungrounded Draft knowing
+* it cites no Source. The edited text is the Message that was sent, not stored here.
 */
 declare const decisionSchema: z41.ZodObject<{
 	id: z41.core.$ZodBranded<z41.ZodString, "dcs", "out">;
@@ -7525,6 +7526,7 @@ declare const decisionSchema: z41.ZodObject<{
 	}>;
 	decidedByMembershipId: z41.ZodNullable<z41.core.$ZodBranded<z41.ZodString, "mem", "out">>;
 	note: z41.ZodNullable<z41.ZodString>;
+	acknowledgedUngrounded: z41.ZodBoolean;
 	decidedAt: z41.ZodISODateTime;
 }, z41.core.$strict>;
 /** A Decision. */
@@ -8038,6 +8040,7 @@ declare const decisionPageSchema: z41.ZodObject<{
 		}>;
 		decidedByMembershipId: z41.ZodNullable<z41.core.$ZodBranded<z41.ZodString, "mem", "out">>;
 		note: z41.ZodNullable<z41.ZodString>;
+		acknowledgedUngrounded: z41.ZodBoolean;
 		decidedAt: z41.ZodISODateTime;
 	}, z41.core.$strict>>;
 	nextCursor: z41.ZodNullable<z41.ZodString>;
@@ -8198,6 +8201,8 @@ import { ErrorDefinition as ErrorDefinition_8gwh4510 } from "..";
 * - `inbox.not_taken_over` (409): the Conversation is not under a Rep's control.
 * - `inbox.conversation_closed` (409): the Conversation is closed.
 * - `inbox.message_not_inbound` (409): only an inbound Message has a label.
+* - `inbox.prospect_not_found` (404): an ingested Message names a Prospect the caller's scope does
+*   not know.
 * - `inbox.prospect_suppressed` (409): the Prospect asked to stop on this channel, so nothing is
 *   sent.
 */
@@ -8212,6 +8217,7 @@ declare const INBOX_ERRORS: {
 	readonly "inbox.message_not_inbound": ErrorDefinition_8gwh4510<"inbox.message_not_inbound">;
 	readonly "inbox.not_conversation_owner": ErrorDefinition_8gwh4510<"inbox.not_conversation_owner">;
 	readonly "inbox.not_taken_over": ErrorDefinition_8gwh4510<"inbox.not_taken_over">;
+	readonly "inbox.prospect_not_found": ErrorDefinition_8gwh4510<"inbox.prospect_not_found">;
 	readonly "inbox.prospect_suppressed": ErrorDefinition_8gwh4510<"inbox.prospect_suppressed">;
 	readonly "inbox.takeover_required": ErrorDefinition_8gwh4510<"inbox.takeover_required">;
 };
@@ -8247,6 +8253,7 @@ declare const messageApprovedEvent: {
 			}>;
 			approvedByMembershipId: z42.ZodNullable<z42.core.$ZodBranded<z42.ZodString, "mem", "out">>;
 			edited: z42.ZodBoolean;
+			acknowledgedUngrounded: z42.ZodBoolean;
 			approvedAt: z42.ZodISODateTime;
 		}, z42.core.$strict>;
 	}, z42.core.$strip>;
@@ -8264,6 +8271,7 @@ declare const messageApprovedEvent: {
 			channel: "chat" | "email" | "linkedin";
 			approvedByMembershipId: (string & z42.$brand<"mem">) | null;
 			edited: boolean;
+			acknowledgedUngrounded: boolean;
 			approvedAt: string;
 		};
 	};
@@ -8281,6 +8289,7 @@ declare const messageApprovedEvent: {
 			channel: "chat" | "email" | "linkedin";
 			approvedByMembershipId: (string & z42.$brand<"mem">) | null;
 			edited: boolean;
+			acknowledgedUngrounded: boolean;
 			approvedAt: string;
 		};
 	}>;
@@ -8636,6 +8645,7 @@ declare const INBOX_EVENTS: {
 				}>;
 				approvedByMembershipId: z42.ZodNullable<z42.core.$ZodBranded<z42.ZodString, "mem", "out">>;
 				edited: z42.ZodBoolean;
+				acknowledgedUngrounded: z42.ZodBoolean;
 				approvedAt: z42.ZodISODateTime;
 			}, z42.core.$strict>;
 		}, z42.core.$strip>;
@@ -8653,6 +8663,7 @@ declare const INBOX_EVENTS: {
 				channel: "chat" | "email" | "linkedin";
 				approvedByMembershipId: (string & z42.$brand<"mem">) | null;
 				edited: boolean;
+				acknowledgedUngrounded: boolean;
 				approvedAt: string;
 			};
 		};
@@ -8670,6 +8681,7 @@ declare const INBOX_EVENTS: {
 				channel: "chat" | "email" | "linkedin";
 				approvedByMembershipId: (string & z42.$brand<"mem">) | null;
 				edited: boolean;
+				acknowledgedUngrounded: boolean;
 				approvedAt: string;
 			};
 		}>;

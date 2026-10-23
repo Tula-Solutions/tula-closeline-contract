@@ -30,6 +30,7 @@ export const messageApprovedEvent = defineEvent(
     channel: inboxChannelSchema,
     approvedByMembershipId: membershipIdSchema.nullable(),
     edited: z.boolean(),
+    acknowledgedUngrounded: z.boolean(),
     approvedAt: timestampSchema,
   })
 )

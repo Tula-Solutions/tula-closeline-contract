@@ -4983,6 +4983,7 @@ var decisionSchema = z49.strictObject({
   kind: decisionKindSchema,
   decidedByMembershipId: membershipIdSchema.nullable(),
   note: decisionNoteSchema.nullable(),
+  acknowledgedUngrounded: z49.boolean(),
   decidedAt: timestampSchema
 }).superRefine((d, ctx) => {
   const issue = issueAt(ctx);
@@ -4992,6 +4993,9 @@ var decisionSchema = z49.strictObject({
   }
   if (d.kind === "auto_release" !== (d.decidedByMembershipId === null)) {
     issue("decidedByMembershipId", "Only an automatic release has no member");
+  }
+  if (d.acknowledgedUngrounded && d.kind !== "approve" && d.kind !== "edit_approve") {
+    issue("acknowledgedUngrounded", "Only an approval can acknowledge an ungrounded Draft");
   }
   if (d.note !== null && d.kind !== "reject") {
     issue("note", "Only a rejection carries a note");
@@ -5107,7 +5111,7 @@ var approvalPoliciesSchema = z49.strictObject({
   items: z49.array(approvalPolicySchema).max(3)
 });
 var setApprovalPolicyRequestSchema = z49.strictObject({ rule: approvalRuleSchema });
-var ingestBodySchema = z49.string().max(MAX_MESSAGE_BODY_LENGTH * 2).transform((text) => text.replace(/\r\n?/g, `
+var ingestBodySchema = z49.string().max(MAX_MESSAGE_BODY_LENGTH).transform((text) => text.replace(/\r\n?/g, `
 `).split("").filter((ch) => !hasControlCharacter2(ch, true)).join("")).pipe(messageBodySchema);
 var ingestMessageRequestSchema = z49.strictObject({
   channel: inboxChannelSchema,
@@ -5156,6 +5160,7 @@ var INBOX_ERRORS = {
     not_taken_over: { status: 409, message: "The Conversation is not taken over." },
     conversation_closed: { status: 409, message: "The Conversation is closed." },
     message_not_inbound: { status: 409, message: "Only a reply from a Prospect has a label." },
+    prospect_not_found: { status: 404, message: "The Prospect was not found." },
     prospect_suppressed: {
       status: 409,
       message: "The Prospect asked not to be contacted on this channel."
@@ -5171,6 +5176,7 @@ var messageApprovedEvent = defineEvent("message.approved", 1, z50.strictObject({
   channel: inboxChannelSchema,
   approvedByMembershipId: membershipIdSchema.nullable(),
   edited: z50.boolean(),
+  acknowledgedUngrounded: z50.boolean(),
   approvedAt: timestampSchema
 }));
 var messageSentEvent = defineEvent("message.sent", 1, z50.strictObject({
@@ -5371,7 +5377,7 @@ var INBOX_ROUTES = Object.freeze({
       "inbox.conversation_closed"
     ],
     commonErrors: [...IDEMPOTENT_ERRORS],
-    description: `Approves a pending Draft, optionally with edited text (the edited text is what is sent; the Decision is recorded as edit_approve with who and when), and publishes exactly one message.approved. Requires an Idempotency-Key header: a replay answers the same result and publishes once. A Draft already decided, sent, superseded or voided is inbox.draft_not_pending (409). A Draft with no Source is inbox.draft_ungrounded (422) unless the body sets acknowledgeUngrounded to true. Only the Rep who owns the Conversation, a Manager for their Team's, or an Admin or Owner may approve; another caller who can see it gets inbox.not_conversation_owner (403). A Prospect who asked to stop on the channel is inbox.prospect_suppressed (409). ${SENSITIVE} ${VISIBILITY2}`
+    description: `Approves a pending Draft, optionally with edited text (the edited text is what is sent; the Decision is recorded as edit_approve with who and when), and publishes exactly one message.approved. The Decision and the event both record acknowledgedUngrounded. Requires an Idempotency-Key header: a replay answers the same result and publishes once. A Draft already decided, sent, superseded or voided is inbox.draft_not_pending (409). A Draft with no Source is inbox.draft_ungrounded (422) unless the body sets acknowledgeUngrounded to true. Only the Rep who owns the Conversation, a Manager for their Team's, or an Admin or Owner may approve; another caller who can see it gets inbox.not_conversation_owner (403). A Prospect who asked to stop on the channel is inbox.prospect_suppressed (409). ${SENSITIVE} ${VISIBILITY2}`
   }),
   rejectDraft: inboundRoute({
     method: "POST",
@@ -5421,9 +5427,9 @@ var INBOX_ROUTES = Object.freeze({
     internal: true,
     success: [201, 200],
     idempotent: true,
-    errors: [],
+    errors: ["inbox.prospect_not_found"],
     commonErrors: ["request.invalid", "auth.unauthenticated", "server.unavailable"],
-    description: `Internal: a channel service posts every inbound and outbound Message with the shared secret (ADR 0013); no user token. Idempotent on channel plus provider message id: the first post stores the Message and answers 201, any repeat answers 200 with the same Message and stores nothing. Core finds or creates the Conversation for the Prospect and channel, queues classification of an inbound Message, and never calls a vendor. ${SENSITIVE}`
+    description: `Internal: a channel service posts every inbound and outbound Message with the shared secret (ADR 0013); no user token. The service derives the Organization from the Prospect id (never taken from the body); a Prospect id it does not know is inbox.prospect_not_found (404) and nothing is stored. The body is at most 20,000 characters; line endings are normalised and other control characters dropped. Idempotent on channel plus provider message id: the first post stores the Message and answers 201, any repeat answers 200 with the same Message and stores nothing. Core finds or creates the Conversation for the Prospect and channel, queues classification of an inbound Message, and never calls a vendor. ${SENSITIVE}`
   }),
   getDraftRelease: inboundRoute({
     method: "GET",

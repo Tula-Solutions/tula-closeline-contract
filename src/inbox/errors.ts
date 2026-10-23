@@ -19,6 +19,8 @@ import { defineErrors } from '../errors'
  * - `inbox.not_taken_over` (409): the Conversation is not under a Rep's control.
  * - `inbox.conversation_closed` (409): the Conversation is closed.
  * - `inbox.message_not_inbound` (409): only an inbound Message has a label.
+ * - `inbox.prospect_not_found` (404): an ingested Message names a Prospect the caller's scope does
+ *   not know.
  * - `inbox.prospect_suppressed` (409): the Prospect asked to stop on this channel, so nothing is
  *   sent.
  */
@@ -44,6 +46,7 @@ export const INBOX_ERRORS = {
     not_taken_over: { status: 409, message: 'The Conversation is not taken over.' },
     conversation_closed: { status: 409, message: 'The Conversation is closed.' },
     message_not_inbound: { status: 409, message: 'Only a reply from a Prospect has a label.' },
+    prospect_not_found: { status: 404, message: 'The Prospect was not found.' },
     prospect_suppressed: {
       status: 409,
       message: 'The Prospect asked not to be contacted on this channel.',
