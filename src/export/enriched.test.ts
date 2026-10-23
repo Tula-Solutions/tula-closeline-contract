@@ -233,6 +233,12 @@ describe('CSV cell escaping', () => {
     expect(escapeCsvCell('a\nb')).toBe('"a\nb"')
     expect(escapeCsvCell('=HYPERLINK("x","y")')).toBe('"\'=HYPERLINK(""x"",""y"")"')
   })
+  test('writes a list as one cell joined with "; " and escapes the joined text', () => {
+    expect(escapeCsvCell(['a', 'b'])).toBe('a; b')
+    expect(escapeCsvCell(['=cmd', 'b'])).toBe("'=cmd; b")
+    expect(escapeCsvCell(['a,b', 'c'])).toBe('"a,b; c"')
+    expect(escapeCsvCell([])).toBe('')
+  })
   test('writes null and undefined as an empty cell, numbers as digits', () => {
     expect(escapeCsvCell(null)).toBe('')
     expect(escapeCsvCell(undefined)).toBe('')

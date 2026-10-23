@@ -15724,7 +15724,7 @@ declare const enrichedProspectsFilterSchema: z65.ZodObject<{
 /** Which Prospects an enriched holds. */
 type EnrichedProspectsFilter = z65.infer<typeof enrichedProspectsFilterSchema>;
 /**
-* The columns of an enriched Prospect CSV, in order: one row per Prospect with its Prospect
+* The columns of an enriched Prospect file, in order: one row per Prospect with its Prospect
 * Company. Each sourced field is followed by `<field>_source`, the Source kind of its current
 * value (`import`, `manual`, `enrichment:<provider>` and so on). Phone numbers are not enriched
 * and are left out. There is no consent evidence, IP address, user agent, transcript, message
@@ -15948,11 +15948,11 @@ declare const CSV_FORMULA_TRIGGER_CHARS: readonly ["=", "+", "-", "@", "	", "\r"
 /**
 * Writes one CSV cell of an enriched export. A string that starts with a formula trigger gets a
 * leading `'` so a spreadsheet shows it as text; a string with a comma, quote or line break is
-* quoted with quotes doubled; `null` and `undefined` are an empty cell. A number is written as
+* quoted with quotes doubled; a list (`company_technologies`) is joined with `; ` into one cell and then escaped as a whole; `null` and `undefined` are an empty cell. A number is written as
 * digits and is not escaped, so a negative number stays a number. Core must write every text cell
 * through this, because Prospect data from imports and enrichment is untrusted.
 */
-declare function escapeCsvCell(value: string | number | null | undefined): string;
+declare function escapeCsvCell(value: string | number | readonly string[] | null | undefined): string;
 /**
 * Writes one line of a `jsonl` enriched export: the row as a single JSON object with no line
 * break inside it. Values are verbatim; JSON is not read as a formula, so nothing is prefixed.
