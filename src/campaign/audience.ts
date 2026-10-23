@@ -144,6 +144,13 @@ const launchFailureCodeSchema = z.enum([
   'campaign.no_healthy_mailbox',
 ])
 
+const LAUNCH_CHECK_CODES: Record<(typeof LAUNCH_CHECKS)[number], readonly string[]> = {
+  sequence: ['campaign.invalid_sequence'],
+  preview: ['campaign.not_previewed'],
+  audience: ['campaign.audience_empty', 'campaign.audience_check_pending'],
+  mailbox: ['campaign.no_healthy_mailbox'],
+}
+
 /**
  * One launch check: its result, and for a check that did not pass the error code a launch would
  * return (null for a pass).
@@ -156,6 +163,10 @@ export const launchCheckItemSchema = z
   })
   .refine((c) => (c.result === 'pass') === (c.code === null), {
     message: 'Exactly a check that did not pass names a code',
+    path: ['code'],
+  })
+  .refine((c) => c.code === null || LAUNCH_CHECK_CODES[c.check].includes(c.code), {
+    message: 'The code belongs to the check',
     path: ['code'],
   })
 

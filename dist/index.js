@@ -3413,12 +3413,21 @@ var launchFailureCodeSchema = z35.enum([
   "campaign.audience_check_pending",
   "campaign.no_healthy_mailbox"
 ]);
+var LAUNCH_CHECK_CODES = {
+  sequence: ["campaign.invalid_sequence"],
+  preview: ["campaign.not_previewed"],
+  audience: ["campaign.audience_empty", "campaign.audience_check_pending"],
+  mailbox: ["campaign.no_healthy_mailbox"]
+};
 var launchCheckItemSchema = z35.strictObject({
   check: launchCheckNameSchema,
   result: launchCheckResultSchema,
   code: launchFailureCodeSchema.nullable()
 }).refine((c) => c.result === "pass" === (c.code === null), {
   message: "Exactly a check that did not pass names a code",
+  path: ["code"]
+}).refine((c) => c.code === null || LAUNCH_CHECK_CODES[c.check].includes(c.code), {
+  message: "The code belongs to the check",
   path: ["code"]
 });
 var launchCheckSchema = z35.strictObject({
@@ -3791,6 +3800,13 @@ var enrollResultSchema = z39.strictObject({
       code: "custom",
       path: ["refusal"],
       message: "Exactly a refused Prospect has a reason"
+    });
+  }
+  if (r.outcome === "refused" && r.refusal !== "already_active" && r.enrollmentId !== null) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["enrollmentId"],
+      message: "Only an already_active refusal names an Enrollment"
     });
   }
   if (r.outcome === "enrolled" && r.enrollmentId === null) {

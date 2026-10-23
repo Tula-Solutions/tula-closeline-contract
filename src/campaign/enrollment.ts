@@ -151,6 +151,13 @@ export const enrollResultSchema = z
         message: 'Exactly a refused Prospect has a reason',
       })
     }
+    if (r.outcome === 'refused' && r.refusal !== 'already_active' && r.enrollmentId !== null) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['enrollmentId'],
+        message: 'Only an already_active refusal names an Enrollment',
+      })
+    }
     if (r.outcome === 'enrolled' && r.enrollmentId === null) {
       ctx.addIssue({
         code: 'custom',

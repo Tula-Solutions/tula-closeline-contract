@@ -466,6 +466,11 @@ describe('audience check and launch check', () => {
       }).success
     ).toBe(false)
   })
+  test('a code belongs to its check', () => {
+    const bad = launch(['fail', 'pass', 'pass', 'pass'], false)
+    bad.checks[0] = { check: 'sequence', result: 'fail', code: 'campaign.no_healthy_mailbox' }
+    expect(launchCheckSchema.safeParse(bad).success).toBe(false)
+  })
   test('each check appears once', () => {
     const dup = launch(['pass', 'pass', 'pass', 'pass'], true)
     dup.checks[3] = { ...dup.checks[3], check: 'sequence' } as (typeof dup.checks)[number]
@@ -521,6 +526,11 @@ describe('Enrollment', () => {
     expect(enrollProspectsRequestSchema.safeParse({ prospectIds: [prs, prs] }).success).toBe(false)
     const many = Array.from({ length: 101 }, (_, i) => formatId('prs', hex(2000 + i)))
     expect(enrollProspectsRequestSchema.safeParse({ prospectIds: many }).success).toBe(false)
+  })
+  test('only an already_active refusal names an Enrollment', () => {
+    const base = { prospectId: prs, outcome: 'refused', enrollmentId: enr }
+    expect(enrollResultSchema.safeParse({ ...base, refusal: 'not_found' }).success).toBe(false)
+    expect(enrollResultSchema.safeParse({ ...base, refusal: 'already_active' }).success).toBe(true)
   })
   test('a refused Prospect has a reason and an enrolled one an Enrollment', () => {
     expect(
