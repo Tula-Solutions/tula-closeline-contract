@@ -430,6 +430,22 @@ describe('events', () => {
       ).success
     ).toBe(true)
   })
+  test('prospect.merge_undone: valid, unknown field, too many ids', () => {
+    const event = PROSPECT_EVENTS['prospect.merge_undone']
+    const data = (ids: number, extra: object = {}) => ({
+      mergeId: formatId('pmrg', hex(1)),
+      survivorProspectId: prs(1),
+      restoredProspectIds: Array.from({ length: ids }, (_, i) => prs(i + 2)),
+      ...extra,
+    })
+    expect(event.safeParse(envelope('prospect.merge_undone', data(5))).success).toBe(true)
+    expect(event.safeParse(envelope('prospect.merge_undone', data(6))).success).toBe(false)
+    expect(event.safeParse(envelope('prospect.merge_undone', data(0))).success).toBe(false)
+    expect(
+      event.safeParse(envelope('prospect.merge_undone', data(1, { email: 'a@b.co' }))).success
+    ).toBe(false)
+    expect(PROSPECT_ROUTES.undoProspectMerge.description).toContain('prospect.merge_undone')
+  })
   test('prospect.erased carries the id and nothing else', () => {
     expect(
       prospectErasedEvent.safeParse(envelope('prospect.erased', { prospectId: prs(1) })).success

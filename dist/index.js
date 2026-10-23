@@ -2453,11 +2453,17 @@ var prospectMergedEvent = defineEvent("prospect.merged", 1, z30.strictObject({
   survivorProspectId: prospectIdSchema,
   mergedProspectIds: z30.array(prospectIdSchema).min(1).max(MAX_MERGED_PROSPECTS)
 }));
+var prospectMergeUndoneEvent = defineEvent("prospect.merge_undone", 1, z30.strictObject({
+  mergeId: prospectMergeIdSchema,
+  survivorProspectId: prospectIdSchema,
+  restoredProspectIds: z30.array(prospectIdSchema).min(1).max(MAX_MERGED_PROSPECTS)
+}));
 var prospectErasedEvent = defineEvent("prospect.erased", 1, z30.strictObject({ prospectId: prospectIdSchema }));
 var PROSPECT_EVENTS = {
   "prospect.created": prospectCreatedEvent,
   "prospect.updated": prospectUpdatedEvent,
   "prospect.merged": prospectMergedEvent,
+  "prospect.merge_undone": prospectMergeUndoneEvent,
   "prospect.erased": prospectErasedEvent
 };
 // src/prospect/import.ts
@@ -2909,7 +2915,7 @@ var PROSPECT_ROUTES = Object.freeze({
     idempotent: false,
     errors: ["prospect.not_found", "prospect.merge_conflict"],
     commonErrors: ["request.invalid"],
-    description: "Reverses a merge, restoring both records exactly as the snapshot holds them. Owner and Admin only. After the 30-day window, or when a record has been merged again, it is prospect.merge_conflict. Undoing an undone merge answers 200 with the record as it is. Takes no body."
+    description: "Reverses a merge, restoring both records exactly as the snapshot holds them. Owner and Admin only. After the 30-day window, or when a record has been merged again, it is prospect.merge_conflict. Undoing an undone merge answers 200 with the record as it is. Publishes prospect.merge_undone. Takes no body."
   }),
   uploadProspectImport: route5({
     method: "POST",
@@ -3353,6 +3359,7 @@ export {
   prospectMergeIdSchema,
   prospectMergeParamsSchema,
   prospectMergeSchema,
+  prospectMergeUndoneEvent,
   prospectMergedEvent,
   prospectNamePartSchema,
   prospectNotFoundDetailsSchema,

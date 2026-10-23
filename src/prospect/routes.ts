@@ -255,7 +255,7 @@ export const PROSPECT_ROUTES: Readonly<Record<ProspectRouteName, ProspectRoute>>
     errors: ['prospect.not_found', 'prospect.merge_conflict'],
     commonErrors: ['request.invalid'],
     description:
-      'Reverses a merge, restoring both records exactly as the snapshot holds them. Owner and Admin only. After the 30-day window, or when a record has been merged again, it is prospect.merge_conflict. Undoing an undone merge answers 200 with the record as it is. Takes no body.',
+      'Reverses a merge, restoring both records exactly as the snapshot holds them. Owner and Admin only. After the 30-day window, or when a record has been merged again, it is prospect.merge_conflict. Undoing an undone merge answers 200 with the record as it is. Publishes prospect.merge_undone. Takes no body.',
   }),
   uploadProspectImport: route({
     method: 'POST',

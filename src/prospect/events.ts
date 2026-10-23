@@ -53,6 +53,17 @@ export const prospectMergedEvent = defineEvent(
   })
 )
 
+/** `prospect.merge_undone` (version 1): a merge was reversed and the merged Prospects restored; links move back. Ids only. */
+export const prospectMergeUndoneEvent = defineEvent(
+  'prospect.merge_undone',
+  1,
+  z.strictObject({
+    mergeId: prospectMergeIdSchema,
+    survivorProspectId: prospectIdSchema,
+    restoredProspectIds: z.array(prospectIdSchema).min(1).max(MAX_MERGED_PROSPECTS),
+  })
+)
+
 /**
  * `prospect.erased` (version 1): a Prospect was erased. The Playbook consumes it to drop its
  * links; it is idempotent on redelivery. It carries the opaque id and nothing about the person.
@@ -68,6 +79,7 @@ export const PROSPECT_EVENTS = {
   'prospect.created': prospectCreatedEvent,
   'prospect.updated': prospectUpdatedEvent,
   'prospect.merged': prospectMergedEvent,
+  'prospect.merge_undone': prospectMergeUndoneEvent,
   'prospect.erased': prospectErasedEvent,
 } as const
 
