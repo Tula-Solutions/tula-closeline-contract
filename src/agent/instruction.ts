@@ -12,15 +12,8 @@ export const agentKindSchema = z.enum(AGENT_KINDS)
 /** The kind of an Agent. */
 export type AgentKind = z.infer<typeof agentKindSchema>
 
-/** The longest Agent instructions, in characters. A longer text is `agent.instruction_too_long`. */
+/** The longest Agent instructions, in characters. The request schema refuses more; core maps that to `agent.instruction_too_long` (422). */
 export const MAX_AGENT_INSTRUCTION_LENGTH = 20_000
-
-/**
- * The longest instructions text a request may carry, in characters. It is a guard on the wire only:
- * a text between this limit and {@link MAX_AGENT_INSTRUCTION_LENGTH} is the domain error
- * `agent.instruction_too_long` (422), not a bad request.
- */
-export const MAX_AGENT_INSTRUCTION_REQUEST_LENGTH = 40_000
 
 /** The state of an instruction version: saved as a draft, or the one an Agent runs under. */
 export const INSTRUCTION_STATES = ['draft', 'published'] as const
@@ -47,10 +40,10 @@ const instructionTextSchema = z
 /**
  * The body of a request to save instructions as a new draft version. The text is plain; it sits
  * beneath the fixed rules (Contact Consent, disclosure, suppression) and cannot override them
- * (ADR 0003). More than 20,000 characters is `agent.instruction_too_long`. Unknown fields are refused.
+ * (ADR 0003). More than 20,000 characters fails the schema, which core answers as `agent.instruction_too_long`. Unknown fields are refused.
  */
 export const saveInstructionVersionRequestSchema = z.strictObject({
-  text: instructionTextSchema.max(MAX_AGENT_INSTRUCTION_REQUEST_LENGTH),
+  text: instructionTextSchema.max(MAX_AGENT_INSTRUCTION_LENGTH),
 })
 
 /** The body of a request to save instructions as a new draft version. */

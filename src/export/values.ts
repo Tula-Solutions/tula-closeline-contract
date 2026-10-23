@@ -39,6 +39,16 @@ export const exportFailureReasonSchema = z.enum(EXPORT_FAILURE_REASONS)
 /** Why an export failed. */
 export type ExportFailureReason = z.infer<typeof exportFailureReasonSchema>
 
+/** Why one service could not write its slice: a closed list, never a system message. */
+export const EXPORT_PART_FAILURE_REASONS = [
+  'write_failed',
+  'storage_unavailable',
+  'source_unavailable',
+] as const
+
+/** Why one service could not write its slice. */
+export const exportPartFailureReasonSchema = z.enum(EXPORT_PART_FAILURE_REASONS)
+
 /** The most exports one Organization may request in a day. A third is `export.daily_limit`. */
 export const MAX_EXPORTS_PER_DAY = 2
 

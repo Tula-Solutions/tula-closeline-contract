@@ -4,9 +4,12 @@ import { formatId } from '../ids'
 import {
   createExportRequestSchema,
   EXPORT_ERRORS,
+  EXPORT_EVENTS,
+  EXPORT_PART_FAILURE_REASONS,
   EXPORT_ROUTES,
   EXPORT_STATES,
   exportJobSchema,
+  exportPartFailedEvent,
   exportPartReadyEvent,
   exportRequestedEvent,
   exportStateSchema,
@@ -98,6 +101,36 @@ describe('events', () => {
     expect(
       exportPartReadyEvent.safeParse(envelope('export.part_ready', { ...ready, url: 'x' })).success
     ).toBe(false)
+  })
+  test('export.part_failed is version 1, carries a closed reason and no free text', () => {
+    const failed = {
+      exportId: id('exp', 1),
+      service: 'voice',
+      reason: 'write_failed',
+      failedAt: NOW,
+    }
+    expect(exportPartFailedEvent.version).toBe(1)
+    expect(exportPartFailedEvent.type).toBe('export.part_failed')
+    expect(EXPORT_EVENTS['export.part_failed']).toBe(exportPartFailedEvent)
+    expect(exportPartFailedEvent.safeParse(envelope('export.part_failed', failed)).success).toBe(
+      true
+    )
+    expect(exportPartFailedEvent.safeParse(envelope('export.part_failed', {})).success).toBe(false)
+    expect(
+      exportPartFailedEvent.safeParse(
+        envelope('export.part_failed', { ...failed, reason: 'disk is full' })
+      ).success
+    ).toBe(false)
+    expect(
+      exportPartFailedEvent.safeParse(
+        envelope('export.part_failed', { ...failed, message: 'boom' })
+      ).success
+    ).toBe(false)
+    expect(EXPORT_PART_FAILURE_REASONS.length).toBeGreaterThan(0)
+  })
+  test('the descriptions name the timeout as the backstop', () => {
+    expect(EXPORT_ROUTES.getExport.description).toContain('export.part_failed')
+    expect(EXPORT_ROUTES.getExport.description).toContain('backstop')
   })
   test('a prefix cannot climb out of the bucket', () => {
     for (const prefix of ['../x', '/abs', 'a/../b']) {

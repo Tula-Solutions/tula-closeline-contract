@@ -34,7 +34,7 @@ export const EXPORT_ROUTES: Readonly<Record<ExportRouteName, ExportRoute>> = Obj
     keyRequired: true,
     errors: ['export.already_running', 'export.daily_limit'],
     commonErrors: [...IDEMPOTENT_ERRORS],
-    description: `Starts an export of the Organization's data and answers 202 with the job; nothing is built on the request. It publishes export.requested, each service writes its slice and publishes export.part_ready, and core builds the manifest. Recordings are included as links on request, never copied inline. ${SAFE} Only one export runs at a time (export.already_running, 409) and at most two are requested in 24 hours (export.daily_limit, 429). ${KEY} The same key twice answers 200 with the same job. Owner and Admin only. ${ORG_ONLY}`,
+    description: `Starts an export of the Organization's data and answers 202 with the job; nothing is built on the request. It publishes export.requested, each service writes its slice and publishes export.part_ready (or export.part_failed, which fails the job at once; the timeout is the backstop), and core builds the manifest. Recordings are included as links on request, never copied inline. ${SAFE} Only one export runs at a time (export.already_running, 409) and at most two are requested in 24 hours (export.daily_limit, 429). ${KEY} The same key twice answers 200 with the same job. Owner and Admin only. ${ORG_ONLY}`,
   }),
   listExports: inboundRoute({
     method: 'GET',
@@ -54,7 +54,7 @@ export const EXPORT_ROUTES: Readonly<Record<ExportRouteName, ExportRoute>> = Obj
     idempotent: false,
     errors: ['export.not_found'],
     commonErrors: [],
-    description: `Reads one export job: its state, the state of each service's slice, the failure reason (part_failed, timed_out or storage_unavailable) and its expiry. Poll it, or wait for the notice that it finished or failed. Never carries a download link. Owner and Admin only. ${ORG_ONLY}`,
+    description: `Reads one export job: its state, the state of each service's slice, the failure reason (part_failed, timed_out or storage_unavailable) and its expiry. A service that cannot write its slice reports export.part_failed and the job fails at once; the timeout (timed_out) is only the backstop for a service that never answers. Poll it, or wait for the notice that it finished or failed. Never carries a download link. Owner and Admin only. ${ORG_ONLY}`,
   }),
   createExportDownload: inboundRoute({
     method: 'POST',

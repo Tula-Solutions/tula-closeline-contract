@@ -386,7 +386,6 @@ import { z as z9 } from "zod";
 var AGENT_KINDS = ["inbound", "outbound"];
 var agentKindSchema = z9.enum(AGENT_KINDS);
 var MAX_AGENT_INSTRUCTION_LENGTH = 20000;
-var MAX_AGENT_INSTRUCTION_REQUEST_LENGTH = 40000;
 var INSTRUCTION_STATES = ["draft", "published"];
 var instructionStateSchema = z9.enum(INSTRUCTION_STATES);
 function isBadControl(char) {
@@ -397,7 +396,7 @@ var instructionTextSchema = z9.string().min(1).refine((text) => ![...text].some(
   message: "No control characters other than line breaks and tabs"
 });
 var saveInstructionVersionRequestSchema = z9.strictObject({
-  text: instructionTextSchema.max(MAX_AGENT_INSTRUCTION_REQUEST_LENGTH)
+  text: instructionTextSchema.max(MAX_AGENT_INSTRUCTION_LENGTH)
 });
 var versionShape = {
   id: agentInstructionVersionIdSchema,
@@ -8111,6 +8110,12 @@ var EXPORT_PART_STATES = ["pending", "ready", "failed"];
 var exportPartStateSchema = z75.enum(EXPORT_PART_STATES);
 var EXPORT_FAILURE_REASONS = ["part_failed", "timed_out", "storage_unavailable"];
 var exportFailureReasonSchema = z75.enum(EXPORT_FAILURE_REASONS);
+var EXPORT_PART_FAILURE_REASONS = [
+  "write_failed",
+  "storage_unavailable",
+  "source_unavailable"
+];
+var exportPartFailureReasonSchema = z75.enum(EXPORT_PART_FAILURE_REASONS);
 var MAX_EXPORTS_PER_DAY = 2;
 var EXPORT_LINK_HOURS = 24;
 var MAX_EXPORT_PART_FILES = 1e4;
@@ -8168,9 +8173,16 @@ var exportPartReadyEvent = defineEvent("export.part_ready", 1, z76.strictObject(
   bytes: z76.number().int().min(0).max(MAX_EXPORT_PART_BYTES),
   readyAt: timestampSchema
 }));
+var exportPartFailedEvent = defineEvent("export.part_failed", 1, z76.strictObject({
+  exportId: exportJobIdSchema,
+  service: exportServiceSchema,
+  reason: exportPartFailureReasonSchema,
+  failedAt: timestampSchema
+}));
 var EXPORT_EVENTS = {
   "export.requested": exportRequestedEvent,
-  "export.part_ready": exportPartReadyEvent
+  "export.part_ready": exportPartReadyEvent,
+  "export.part_failed": exportPartFailedEvent
 };
 // src/export/routes.ts
 var EXPORT_ROLES = ["owner", "admin"];
@@ -8187,7 +8199,7 @@ var EXPORT_ROUTES = Object.freeze({
     keyRequired: true,
     errors: ["export.already_running", "export.daily_limit"],
     commonErrors: [...IDEMPOTENT_ERRORS],
-    description: `Starts an export of the Organization's data and answers 202 with the job; nothing is built on the request. It publishes export.requested, each service writes its slice and publishes export.part_ready, and core builds the manifest. Recordings are included as links on request, never copied inline. ${SAFE} Only one export runs at a time (export.already_running, 409) and at most two are requested in 24 hours (export.daily_limit, 429). ${KEY5} The same key twice answers 200 with the same job. Owner and Admin only. ${ORG_ONLY3}`
+    description: `Starts an export of the Organization's data and answers 202 with the job; nothing is built on the request. It publishes export.requested, each service writes its slice and publishes export.part_ready (or export.part_failed, which fails the job at once; the timeout is the backstop), and core builds the manifest. Recordings are included as links on request, never copied inline. ${SAFE} Only one export runs at a time (export.already_running, 409) and at most two are requested in 24 hours (export.daily_limit, 429). ${KEY5} The same key twice answers 200 with the same job. Owner and Admin only. ${ORG_ONLY3}`
   }),
   listExports: inboundRoute({
     method: "GET",
@@ -8207,7 +8219,7 @@ var EXPORT_ROUTES = Object.freeze({
     idempotent: false,
     errors: ["export.not_found"],
     commonErrors: [],
-    description: `Reads one export job: its state, the state of each service's slice, the failure reason (part_failed, timed_out or storage_unavailable) and its expiry. Poll it, or wait for the notice that it finished or failed. Never carries a download link. Owner and Admin only. ${ORG_ONLY3}`
+    description: `Reads one export job: its state, the state of each service's slice, the failure reason (part_failed, timed_out or storage_unavailable) and its expiry. A service that cannot write its slice reports export.part_failed and the job fails at once; the timeout (timed_out) is only the backstop for a service that never answers. Poll it, or wait for the notice that it finished or failed. Never carries a download link. Owner and Admin only. ${ORG_ONLY3}`
   }),
   createExportDownload: inboundRoute({
     method: "POST",
@@ -11234,6 +11246,7 @@ export {
   EXPORT_EVENTS,
   EXPORT_FAILURE_REASONS,
   EXPORT_LINK_HOURS,
+  EXPORT_PART_FAILURE_REASONS,
   EXPORT_PART_STATES,
   EXPORT_ROLES,
   EXPORT_ROUTES,
@@ -11309,7 +11322,6 @@ export {
   MAX_AGENT_CONCURRENCY,
   MAX_AGENT_GREETING_LENGTH,
   MAX_AGENT_INSTRUCTION_LENGTH,
-  MAX_AGENT_INSTRUCTION_REQUEST_LENGTH,
   MAX_ALLOWED_ORIGINS,
   MAX_ANGLE_LENGTH,
   MAX_ANSWER_LENGTH,
@@ -11968,6 +11980,8 @@ export {
   exportFailureReasonSchema,
   exportJobIdSchema,
   exportJobSchema,
+  exportPartFailedEvent,
+  exportPartFailureReasonSchema,
   exportPartReadyEvent,
   exportPartSchema,
   exportPartStateSchema,

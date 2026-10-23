@@ -17,7 +17,6 @@ import {
   listAgentControlsQuerySchema,
   listInstructionVersionsQuerySchema,
   MAX_AGENT_INSTRUCTION_LENGTH,
-  MAX_AGENT_INSTRUCTION_REQUEST_LENGTH,
   saveInstructionVersionRequestSchema,
   setAgentControlRequestSchema,
   setAgentsPausedRequestSchema,
@@ -57,14 +56,15 @@ describe('instruction versions', () => {
     expect(
       saveInstructionVersionRequestSchema.safeParse({ text: 'x', state: 'published' }).success
     ).toBe(false)
+    // The schema limit is the real cap: 20,000 passes, 20,001 is refused.
     expect(
       saveInstructionVersionRequestSchema.safeParse({
-        text: 'x'.repeat(MAX_AGENT_INSTRUCTION_LENGTH + 1),
+        text: 'x'.repeat(MAX_AGENT_INSTRUCTION_LENGTH),
       }).success
     ).toBe(true)
     expect(
       saveInstructionVersionRequestSchema.safeParse({
-        text: 'x'.repeat(MAX_AGENT_INSTRUCTION_REQUEST_LENGTH + 1),
+        text: 'x'.repeat(MAX_AGENT_INSTRUCTION_LENGTH + 1),
       }).success
     ).toBe(false)
     expect(saveInstructionVersionRequestSchema.safeParse({ text: 'a\u0000b' }).success).toBe(false)

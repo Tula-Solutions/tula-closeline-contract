@@ -3,6 +3,7 @@ import { timestampSchema } from '../core/values'
 import { defineEvent } from '../events'
 import { exportJobIdSchema, membershipIdSchema } from '../ids'
 import {
+  exportPartFailureReasonSchema,
   exportPrefixSchema,
   exportServiceSchema,
   MAX_EXPORT_PART_BYTES,
@@ -42,10 +43,27 @@ export const exportPartReadyEvent = defineEvent(
   })
 )
 
+/**
+ * `export.part_failed` (version 1): one service could not write its slice, so the job fails at
+ * once instead of waiting for the timeout, which stays as the backstop for a service that never
+ * answers. The reason is from a closed list; no message, path or exported data.
+ */
+export const exportPartFailedEvent = defineEvent(
+  'export.part_failed',
+  1,
+  z.strictObject({
+    exportId: exportJobIdSchema,
+    service: exportServiceSchema,
+    reason: exportPartFailureReasonSchema,
+    failedAt: timestampSchema,
+  })
+)
+
 /** Every export event, by type. */
 export const EXPORT_EVENTS = {
   'export.requested': exportRequestedEvent,
   'export.part_ready': exportPartReadyEvent,
+  'export.part_failed': exportPartFailedEvent,
 } as const
 
 /** The type of an export event. */
