@@ -34,6 +34,18 @@ export const prospectCompanyIdSchema = idSchema('pco')
 export const prospectImportIdSchema = idSchema('pimp')
 /** The id of a Prospect merge record (`pmrg_…`). */
 export const prospectMergeIdSchema = idSchema('pmrg')
+/** The id of a consent event in the ledger (`cev_…`). */
+export const consentEventIdSchema = idSchema('cev')
+/** The id of a Consent Wording version (`cwd_…`). */
+export const consentWordingIdSchema = idSchema('cwd')
+/** The id of a Suppression entry (`sup_…`). */
+export const suppressionEntryIdSchema = idSchema('sup')
+/** The id of a hosted consent form (`cfm_…`). */
+export const consentFormIdSchema = idSchema('cfm')
+/** The id of one Contact Check, as its audit row is named (`chk_…`). */
+export const contactCheckIdSchema = idSchema('chk')
+/** The id of a Suppression import (`simp_…`). */
+export const suppressionImportIdSchema = idSchema('simp')
 /** The id of a Playbook document (`doc_…`). */
 export const documentIdSchema = idSchema('doc')
 /** The opaque id of a Deal record (`deal_…`), used in every URL path; the customer's own deal id never travels in a path. */
@@ -60,6 +72,18 @@ export type MembershipId = z.infer<typeof membershipIdSchema>
 export type TeamId = z.infer<typeof teamIdSchema>
 /** The id of an Invitation. */
 export type InvitationId = z.infer<typeof invitationIdSchema>
+/** The id of a consent event. */
+export type ConsentEventId = z.infer<typeof consentEventIdSchema>
+/** The id of a Consent Wording version. */
+export type ConsentWordingId = z.infer<typeof consentWordingIdSchema>
+/** The id of a Suppression entry. */
+export type SuppressionEntryId = z.infer<typeof suppressionEntryIdSchema>
+/** The id of a hosted consent form. */
+export type ConsentFormId = z.infer<typeof consentFormIdSchema>
+/** The id of one Contact Check. */
+export type ContactCheckId = z.infer<typeof contactCheckIdSchema>
+/** The id of a Suppression import. */
+export type SuppressionImportId = z.infer<typeof suppressionImportIdSchema>
 /** The id of a Prospect. */
 export type ProspectId = z.infer<typeof prospectIdSchema>
 /** The id of a Prospect Company. */

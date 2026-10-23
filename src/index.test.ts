@@ -58,3 +58,14 @@ test('the entry point exports the marketing area', async () => {
   )
   expect(typeof api.createDemoRequestRequestSchema.safeParse).toBe('function')
 })
+
+test('the entry point exports the consent area', async () => {
+  const api = await import('./index')
+  expect(api.CONSENT_ERRORS['consent.wording_locked'].status).toBe(409)
+  expect(api.CONSENT_ROUTES.contactCheck.access).toBe('internal')
+  expect(api.CONTACT_DENIAL_CODES).toContain('consent.suppressed')
+  expect(api.consentEventIdSchema.safeParse('cev_0190a5e0b3c17d2a8f4e5b6c7d8e9f01').success).toBe(
+    true
+  )
+  expect(typeof api.contactCheckResultSchema.safeParse).toBe('function')
+})

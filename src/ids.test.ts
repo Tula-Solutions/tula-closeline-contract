@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'bun:test'
 import {
   callIdSchema,
+  consentEventIdSchema,
+  consentFormIdSchema,
+  consentWordingIdSchema,
+  contactCheckIdSchema,
   dealImportIdSchema,
   dealRecordIdSchema,
   demoRequestIdSchema,
@@ -16,6 +20,8 @@ import {
   prospectImportIdSchema,
   prospectMergeIdSchema,
   requestIdSchema,
+  suppressionEntryIdSchema,
+  suppressionImportIdSchema,
   teamIdSchema,
   userIdSchema,
 } from './ids'
@@ -39,6 +45,12 @@ const schemas = [
   ['evt', eventIdSchema],
   ['req', requestIdSchema],
   ['dreq', demoRequestIdSchema],
+  ['cev', consentEventIdSchema],
+  ['cwd', consentWordingIdSchema],
+  ['cfm', consentFormIdSchema],
+  ['chk', contactCheckIdSchema],
+  ['sup', suppressionEntryIdSchema],
+  ['simp', suppressionImportIdSchema],
 ] as const
 
 describe.each(schemas)('%s id schema', (prefix, schema) => {
