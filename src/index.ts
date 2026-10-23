@@ -3,6 +3,7 @@ export const PACKAGE = 'tula-closeline-contract'
 
 export * from './auth'
 export * from './consent'
+export * from './copilot'
 export * from './core'
 export * from './email'
 export * from './errors'
