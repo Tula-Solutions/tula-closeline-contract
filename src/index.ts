@@ -2,7 +2,9 @@
 export const PACKAGE = 'tula-closeline-contract'
 
 export * from './agent'
+export * from './analytics'
 export * from './apikey'
+export * from './assessment'
 export * from './audit'
 export * from './auth'
 export * from './booking'

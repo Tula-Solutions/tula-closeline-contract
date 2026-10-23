@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import {
   agentInstructionVersionIdSchema,
   apiKeyIdSchema,
+  assessmentIdSchema,
   auditEventIdSchema,
   brandVoiceIdSchema,
   briefIdSchema,
@@ -19,6 +20,7 @@ import {
   enrollmentEventIdSchema,
   eventIdSchema,
   exportJobIdSchema,
+  findingIdSchema,
   fitCriterionIdSchema,
   formatId,
   idSchema,
@@ -32,9 +34,11 @@ import {
   prospectMergeIdSchema,
   requestIdSchema,
   signalIdSchema,
+  suggestionIdSchema,
   suppressionEntryIdSchema,
   suppressionImportIdSchema,
   teamIdSchema,
+  touchIdSchema,
   userIdSchema,
 } from './ids'
 
@@ -45,6 +49,10 @@ const schemas = [
   ['aud', auditEventIdSchema],
   ['exp', exportJobIdSchema],
   ['akey', apiKeyIdSchema],
+  ['asm', assessmentIdSchema],
+  ['fnd', findingIdSchema],
+  ['sgs', suggestionIdSchema],
+  ['tch', touchIdSchema],
   ['brf', briefIdSchema],
   ['bvo', brandVoiceIdSchema],
   ['sig', signalIdSchema],
