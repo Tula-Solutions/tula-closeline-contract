@@ -114,6 +114,12 @@ export const briefIdSchema = idSchema('brf')
 export const brandVoiceIdSchema = idSchema('bvo')
 /** The id of a buying signal (`sig_…`): a dated, sourced event about a Prospect's company that a Citation can point at. */
 export const signalIdSchema = idSchema('sig')
+/** The id of an enrichment run (`erun_…`): one Prospect's pass through the provider waterfall. */
+export const enrichmentRunIdSchema = idSchema('erun')
+/** The id of an enrichment run set (`erset_…`): the runs one bulk enrichment request created. */
+export const enrichmentRunSetIdSchema = idSchema('erset')
+/** The id of a fit criterion (`fcr_…`): one named, weighted part of an Organization's ideal customer. */
+export const fitCriterionIdSchema = idSchema('fcr')
 
 /** The id of an Organization. */
 export type OrganizationId = z.infer<typeof organizationIdSchema>
@@ -201,6 +207,12 @@ export type BriefId = z.infer<typeof briefIdSchema>
 export type BrandVoiceId = z.infer<typeof brandVoiceIdSchema>
 /** The id of a buying signal. */
 export type SignalId = z.infer<typeof signalIdSchema>
+/** The id of an enrichment run. */
+export type EnrichmentRunId = z.infer<typeof enrichmentRunIdSchema>
+/** The id of an enrichment run set. */
+export type EnrichmentRunSetId = z.infer<typeof enrichmentRunSetIdSchema>
+/** The id of a fit criterion. */
+export type FitCriterionId = z.infer<typeof fitCriterionIdSchema>
 
 const UUID_PATTERN =
   /^(?:[0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i

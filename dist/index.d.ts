@@ -9345,32 +9345,61 @@ declare function foldAscii(text: string): string;
 declare const emailSchema: z45.ZodPipe<z45.ZodPipe<z45.ZodString, z45.ZodTransform<string, string>>, z45.ZodString>;
 /** An email address, folded to lower case. */
 type Email = z45.output<typeof emailSchema>;
+import { ErrorDefinition as ErrorDefinition_8gwh4511 } from "..";
+/**
+* The errors the enrichment, signal and fit routes return, as `area.reason` codes. A role that is
+* not allowed is the common `auth.forbidden`. A Prospect, run, run set, signal or criterion outside
+* the caller's view is its `*_not_found` (404, never 403), so existence is not revealed; one of
+* another Organization the same.
+*
+* - `enrichment.budget_exceeded` (429): the Organization's monthly enrichment budget is spent, so
+*   no run was made. A run that reaches the budget while running ends `stopped` with its reason
+*   instead, and the call that would pass it is not made.
+* - `enrichment.provider_unavailable` (503): no provider is enabled with a key for a group asked
+*   for, so nothing was queued.
+* - `enrichment.prospect_not_found` (404): unknown Prospect, or not the caller's to see.
+* - `enrichment.verification_failed` (422): email verification was asked for and the Prospect has
+*   no address the verifier can check.
+* - `enrichment.run_not_found` (404): unknown run, or not the caller's to see.
+* - `enrichment.run_set_not_found` (404): unknown run set, or not the caller's to see.
+* - `enrichment.provider_unknown` (404): the provider key names no provider this deployment has.
+* - `enrichment.invalid_waterfall` (422): the provider order lists a provider unknown to the
+*   deployment or one that cannot serve that group.
+* - `enrichment.version_conflict` (409): the provider order or budget was saved since the caller
+*   read it.
+* - `signal.invalid` (422): the signal fails a rule across fields (a time in the future, for one).
+* - `signal.not_found` (404): unknown signal, or not the caller's to see.
+* - `signal.webhook_unauthorized` (401): the webhook signature, timestamp or Organization did not
+*   check out; nothing was read or recorded and nothing says which.
+* - `fit.invalid_criteria` (422): the criteria fail a rule (a duplicate name, an operator that
+*   does not suit the attribute, more than 50 criteria).
+* - `fit.criterion_not_found` (404): unknown criterion.
+*/
+declare const ENRICHMENT_ERRORS: {
+	readonly "enrichment.budget_exceeded": ErrorDefinition_8gwh4511<"enrichment.budget_exceeded">;
+	readonly "enrichment.invalid_waterfall": ErrorDefinition_8gwh4511<"enrichment.invalid_waterfall">;
+	readonly "enrichment.prospect_not_found": ErrorDefinition_8gwh4511<"enrichment.prospect_not_found">;
+	readonly "enrichment.provider_unavailable": ErrorDefinition_8gwh4511<"enrichment.provider_unavailable">;
+	readonly "enrichment.provider_unknown": ErrorDefinition_8gwh4511<"enrichment.provider_unknown">;
+	readonly "enrichment.run_not_found": ErrorDefinition_8gwh4511<"enrichment.run_not_found">;
+	readonly "enrichment.run_set_not_found": ErrorDefinition_8gwh4511<"enrichment.run_set_not_found">;
+	readonly "enrichment.verification_failed": ErrorDefinition_8gwh4511<"enrichment.verification_failed">;
+	readonly "enrichment.version_conflict": ErrorDefinition_8gwh4511<"enrichment.version_conflict">;
+	readonly "fit.criterion_not_found": ErrorDefinition_8gwh4511<"fit.criterion_not_found">;
+	readonly "fit.invalid_criteria": ErrorDefinition_8gwh4511<"fit.invalid_criteria">;
+	readonly "signal.invalid": ErrorDefinition_8gwh4511<"signal.invalid">;
+	readonly "signal.not_found": ErrorDefinition_8gwh4511<"signal.not_found">;
+	readonly "signal.webhook_unauthorized": ErrorDefinition_8gwh4511<"signal.webhook_unauthorized">;
+};
+/** An error code the enrichment, signal and fit routes return. */
+type EnrichmentErrorCode = keyof typeof ENRICHMENT_ERRORS;
 import { z as z46 } from "zod";
-/** An event type in `area.event_name` or `area.subject.event_name` form, such as `team.created` or `voice.call.started`. */
-declare const eventTypeSchema: z46.ZodString;
-/** An event type. */
-type EventType = z46.infer<typeof eventTypeSchema>;
-/** The envelope every event shares, wrapping a payload validated by `dataSchema`. */
-declare function eventEnvelopeSchema<D extends z46.ZodType>(dataSchema: D): z46.ZodObject<{
-	id: z46.core.$ZodBranded<z46.ZodString, "evt", "out">;
-	type: z46.ZodString;
-	version: z46.ZodNumber;
-	occurredAt: z46.ZodISODateTime;
-	organizationId: z46.core.$ZodBranded<z46.ZodString, "org", "out">;
-	region: z46.ZodEnum<{
-		eu: "eu";
-		us: "us";
-	}>;
-	data: D;
-}, z46.core.$strip>;
-/** Declares one event type at one version; its schema accepts only that type and version. */
-declare function defineEvent<
-	const T extends string,
-	const V extends number,
-	D extends z46.ZodType
->(type: T, version: V, dataSchema: D): {
-	type: T;
-	version: V;
+/** The ways a run ends, as the event reports them. */
+declare const RUN_END_STATUSES: readonly ["complete", "incomplete", "stopped"];
+/** `enrichment.completed` (version 1): a run ended. Ids, counts and cost only; never a field value, an address or a provider message. */
+declare const enrichmentCompletedEvent: {
+	type: "enrichment.completed";
+	version: 1;
 	schema: z46.ZodObject<{
 		id: z46.core.$ZodBranded<z46.ZodString, "evt", "out">;
 		occurredAt: z46.ZodISODateTime;
@@ -9379,58 +9408,1816 @@ declare function defineEvent<
 			eu: "eu";
 			us: "us";
 		}>;
-		type: z46.ZodLiteral<T>;
-		version: z46.ZodLiteral<V>;
-		data: D;
+		type: z46.ZodLiteral<"enrichment.completed">;
+		version: z46.ZodLiteral<1>;
+		data: z46.ZodObject<{
+			runId: z46.core.$ZodBranded<z46.ZodString, "erun", "out">;
+			runSetId: z46.ZodNullable<z46.core.$ZodBranded<z46.ZodString, "erset", "out">>;
+			prospectId: z46.core.$ZodBranded<z46.ZodString, "prs", "out">;
+			status: z46.ZodEnum<{
+				complete: "complete";
+				incomplete: "incomplete";
+				stopped: "stopped";
+			}>;
+			fieldsFilled: z46.ZodNumber;
+			costMicros: z46.ZodNumber;
+			completedAt: z46.ZodISODateTime;
+		}, z46.core.$strict>;
 	}, z46.core.$strip>;
+	parse: (input: unknown) => {
+		id: string & z46.$brand<"evt">;
+		occurredAt: string;
+		organizationId: string & z46.$brand<"org">;
+		region: "eu" | "us";
+		type: "enrichment.completed";
+		version: 1;
+		data: {
+			runId: string & z46.$brand<"erun">;
+			runSetId: (string & z46.$brand<"erset">) | null;
+			prospectId: string & z46.$brand<"prs">;
+			status: "complete" | "incomplete" | "stopped";
+			fieldsFilled: number;
+			costMicros: number;
+			completedAt: string;
+		};
+	};
+	safeParse: (input: unknown) => z46.ZodSafeParseResult<{
+		id: string & z46.$brand<"evt">;
+		occurredAt: string;
+		organizationId: string & z46.$brand<"org">;
+		region: "eu" | "us";
+		type: "enrichment.completed";
+		version: 1;
+		data: {
+			runId: string & z46.$brand<"erun">;
+			runSetId: (string & z46.$brand<"erset">) | null;
+			prospectId: string & z46.$brand<"prs">;
+			status: "complete" | "incomplete" | "stopped";
+			fieldsFilled: number;
+			costMicros: number;
+			completedAt: string;
+		};
+	}>;
+};
+/** `signal.recorded` (version 1): a signal was recorded for a Prospect. Ids and values only; never the signal's text or address. */
+declare const signalRecordedEvent: {
+	type: "signal.recorded";
+	version: 1;
+	schema: z46.ZodObject<{
+		id: z46.core.$ZodBranded<z46.ZodString, "evt", "out">;
+		occurredAt: z46.ZodISODateTime;
+		organizationId: z46.core.$ZodBranded<z46.ZodString, "org", "out">;
+		region: z46.ZodEnum<{
+			eu: "eu";
+			us: "us";
+		}>;
+		type: z46.ZodLiteral<"signal.recorded">;
+		version: z46.ZodLiteral<1>;
+		data: z46.ZodObject<{
+			signalId: z46.core.$ZodBranded<z46.ZodString, "sig", "out">;
+			prospectId: z46.core.$ZodBranded<z46.ZodString, "prs", "out">;
+			kind: z46.ZodEnum<{
+				funding: "funding";
+				hiring_spike: "hiring_spike";
+				job_change: "job_change";
+				note: "note";
+				technology_change: "technology_change";
+				website_visit: "website_visit";
+			}>;
+			observedAt: z46.ZodISODateTime;
+			recordedAt: z46.ZodISODateTime;
+		}, z46.core.$strict>;
+	}, z46.core.$strip>;
+	parse: (input: unknown) => {
+		id: string & z46.$brand<"evt">;
+		occurredAt: string;
+		organizationId: string & z46.$brand<"org">;
+		region: "eu" | "us";
+		type: "signal.recorded";
+		version: 1;
+		data: {
+			signalId: string & z46.$brand<"sig">;
+			prospectId: string & z46.$brand<"prs">;
+			kind: "funding" | "hiring_spike" | "job_change" | "note" | "technology_change" | "website_visit";
+			observedAt: string;
+			recordedAt: string;
+		};
+	};
+	safeParse: (input: unknown) => z46.ZodSafeParseResult<{
+		id: string & z46.$brand<"evt">;
+		occurredAt: string;
+		organizationId: string & z46.$brand<"org">;
+		region: "eu" | "us";
+		type: "signal.recorded";
+		version: 1;
+		data: {
+			signalId: string & z46.$brand<"sig">;
+			prospectId: string & z46.$brand<"prs">;
+			kind: "funding" | "hiring_spike" | "job_change" | "note" | "technology_change" | "website_visit";
+			observedAt: string;
+			recordedAt: string;
+		};
+	}>;
+};
+/** `prospect.fit_changed` (version 1): a Prospect's fit score changed (`previousScore` is null the first time). Ids and numbers only. */
+declare const prospectFitChangedEvent: {
+	type: "prospect.fit_changed";
+	version: 1;
+	schema: z46.ZodObject<{
+		id: z46.core.$ZodBranded<z46.ZodString, "evt", "out">;
+		occurredAt: z46.ZodISODateTime;
+		organizationId: z46.core.$ZodBranded<z46.ZodString, "org", "out">;
+		region: z46.ZodEnum<{
+			eu: "eu";
+			us: "us";
+		}>;
+		type: z46.ZodLiteral<"prospect.fit_changed">;
+		version: z46.ZodLiteral<1>;
+		data: z46.ZodObject<{
+			prospectId: z46.core.$ZodBranded<z46.ZodString, "prs", "out">;
+			previousScore: z46.ZodNullable<z46.ZodNumber>;
+			score: z46.ZodNumber;
+			maxScore: z46.ZodNumber;
+			criteriaVersion: z46.ZodNumber;
+			changedAt: z46.ZodISODateTime;
+		}, z46.core.$strict>;
+	}, z46.core.$strip>;
+	parse: (input: unknown) => {
+		id: string & z46.$brand<"evt">;
+		occurredAt: string;
+		organizationId: string & z46.$brand<"org">;
+		region: "eu" | "us";
+		type: "prospect.fit_changed";
+		version: 1;
+		data: {
+			prospectId: string & z46.$brand<"prs">;
+			previousScore: number | null;
+			score: number;
+			maxScore: number;
+			criteriaVersion: number;
+			changedAt: string;
+		};
+	};
+	safeParse: (input: unknown) => z46.ZodSafeParseResult<{
+		id: string & z46.$brand<"evt">;
+		occurredAt: string;
+		organizationId: string & z46.$brand<"org">;
+		region: "eu" | "us";
+		type: "prospect.fit_changed";
+		version: 1;
+		data: {
+			prospectId: string & z46.$brand<"prs">;
+			previousScore: number | null;
+			score: number;
+			maxScore: number;
+			criteriaVersion: number;
+			changedAt: string;
+		};
+	}>;
+};
+/** The events the enrichment area publishes, by type. */
+declare const ENRICHMENT_EVENTS: {
+	readonly "enrichment.completed": {
+		type: "enrichment.completed";
+		version: 1;
+		schema: z46.ZodObject<{
+			id: z46.core.$ZodBranded<z46.ZodString, "evt", "out">;
+			occurredAt: z46.ZodISODateTime;
+			organizationId: z46.core.$ZodBranded<z46.ZodString, "org", "out">;
+			region: z46.ZodEnum<{
+				eu: "eu";
+				us: "us";
+			}>;
+			type: z46.ZodLiteral<"enrichment.completed">;
+			version: z46.ZodLiteral<1>;
+			data: z46.ZodObject<{
+				runId: z46.core.$ZodBranded<z46.ZodString, "erun", "out">;
+				runSetId: z46.ZodNullable<z46.core.$ZodBranded<z46.ZodString, "erset", "out">>;
+				prospectId: z46.core.$ZodBranded<z46.ZodString, "prs", "out">;
+				status: z46.ZodEnum<{
+					complete: "complete";
+					incomplete: "incomplete";
+					stopped: "stopped";
+				}>;
+				fieldsFilled: z46.ZodNumber;
+				costMicros: z46.ZodNumber;
+				completedAt: z46.ZodISODateTime;
+			}, z46.core.$strict>;
+		}, z46.core.$strip>;
+		parse: (input: unknown) => {
+			id: string & z46.$brand<"evt">;
+			occurredAt: string;
+			organizationId: string & z46.$brand<"org">;
+			region: "eu" | "us";
+			type: "enrichment.completed";
+			version: 1;
+			data: {
+				runId: string & z46.$brand<"erun">;
+				runSetId: (string & z46.$brand<"erset">) | null;
+				prospectId: string & z46.$brand<"prs">;
+				status: "complete" | "incomplete" | "stopped";
+				fieldsFilled: number;
+				costMicros: number;
+				completedAt: string;
+			};
+		};
+		safeParse: (input: unknown) => z46.ZodSafeParseResult<{
+			id: string & z46.$brand<"evt">;
+			occurredAt: string;
+			organizationId: string & z46.$brand<"org">;
+			region: "eu" | "us";
+			type: "enrichment.completed";
+			version: 1;
+			data: {
+				runId: string & z46.$brand<"erun">;
+				runSetId: (string & z46.$brand<"erset">) | null;
+				prospectId: string & z46.$brand<"prs">;
+				status: "complete" | "incomplete" | "stopped";
+				fieldsFilled: number;
+				costMicros: number;
+				completedAt: string;
+			};
+		}>;
+	};
+	readonly "signal.recorded": {
+		type: "signal.recorded";
+		version: 1;
+		schema: z46.ZodObject<{
+			id: z46.core.$ZodBranded<z46.ZodString, "evt", "out">;
+			occurredAt: z46.ZodISODateTime;
+			organizationId: z46.core.$ZodBranded<z46.ZodString, "org", "out">;
+			region: z46.ZodEnum<{
+				eu: "eu";
+				us: "us";
+			}>;
+			type: z46.ZodLiteral<"signal.recorded">;
+			version: z46.ZodLiteral<1>;
+			data: z46.ZodObject<{
+				signalId: z46.core.$ZodBranded<z46.ZodString, "sig", "out">;
+				prospectId: z46.core.$ZodBranded<z46.ZodString, "prs", "out">;
+				kind: z46.ZodEnum<{
+					funding: "funding";
+					hiring_spike: "hiring_spike";
+					job_change: "job_change";
+					note: "note";
+					technology_change: "technology_change";
+					website_visit: "website_visit";
+				}>;
+				observedAt: z46.ZodISODateTime;
+				recordedAt: z46.ZodISODateTime;
+			}, z46.core.$strict>;
+		}, z46.core.$strip>;
+		parse: (input: unknown) => {
+			id: string & z46.$brand<"evt">;
+			occurredAt: string;
+			organizationId: string & z46.$brand<"org">;
+			region: "eu" | "us";
+			type: "signal.recorded";
+			version: 1;
+			data: {
+				signalId: string & z46.$brand<"sig">;
+				prospectId: string & z46.$brand<"prs">;
+				kind: "funding" | "hiring_spike" | "job_change" | "note" | "technology_change" | "website_visit";
+				observedAt: string;
+				recordedAt: string;
+			};
+		};
+		safeParse: (input: unknown) => z46.ZodSafeParseResult<{
+			id: string & z46.$brand<"evt">;
+			occurredAt: string;
+			organizationId: string & z46.$brand<"org">;
+			region: "eu" | "us";
+			type: "signal.recorded";
+			version: 1;
+			data: {
+				signalId: string & z46.$brand<"sig">;
+				prospectId: string & z46.$brand<"prs">;
+				kind: "funding" | "hiring_spike" | "job_change" | "note" | "technology_change" | "website_visit";
+				observedAt: string;
+				recordedAt: string;
+			};
+		}>;
+	};
+	readonly "prospect.fit_changed": {
+		type: "prospect.fit_changed";
+		version: 1;
+		schema: z46.ZodObject<{
+			id: z46.core.$ZodBranded<z46.ZodString, "evt", "out">;
+			occurredAt: z46.ZodISODateTime;
+			organizationId: z46.core.$ZodBranded<z46.ZodString, "org", "out">;
+			region: z46.ZodEnum<{
+				eu: "eu";
+				us: "us";
+			}>;
+			type: z46.ZodLiteral<"prospect.fit_changed">;
+			version: z46.ZodLiteral<1>;
+			data: z46.ZodObject<{
+				prospectId: z46.core.$ZodBranded<z46.ZodString, "prs", "out">;
+				previousScore: z46.ZodNullable<z46.ZodNumber>;
+				score: z46.ZodNumber;
+				maxScore: z46.ZodNumber;
+				criteriaVersion: z46.ZodNumber;
+				changedAt: z46.ZodISODateTime;
+			}, z46.core.$strict>;
+		}, z46.core.$strip>;
+		parse: (input: unknown) => {
+			id: string & z46.$brand<"evt">;
+			occurredAt: string;
+			organizationId: string & z46.$brand<"org">;
+			region: "eu" | "us";
+			type: "prospect.fit_changed";
+			version: 1;
+			data: {
+				prospectId: string & z46.$brand<"prs">;
+				previousScore: number | null;
+				score: number;
+				maxScore: number;
+				criteriaVersion: number;
+				changedAt: string;
+			};
+		};
+		safeParse: (input: unknown) => z46.ZodSafeParseResult<{
+			id: string & z46.$brand<"evt">;
+			occurredAt: string;
+			organizationId: string & z46.$brand<"org">;
+			region: "eu" | "us";
+			type: "prospect.fit_changed";
+			version: 1;
+			data: {
+				prospectId: string & z46.$brand<"prs">;
+				previousScore: number | null;
+				score: number;
+				maxScore: number;
+				criteriaVersion: number;
+				changedAt: string;
+			};
+		}>;
+	};
+};
+/** The type of an enrichment event. */
+type EnrichmentEventType = keyof typeof ENRICHMENT_EVENTS;
+import { z as z47 } from "zod";
+/** The Prospect or company attributes a fit criterion can look at: title, industry, size, region and technology. */
+declare const FIT_FIELDS: readonly ["jobTitle", "industry", "employeeCount", "region", "technologies"];
+/** An attribute a fit criterion looks at. */
+declare const fitFieldSchema: z47.ZodEnum<{
+	employeeCount: "employeeCount";
+	industry: "industry";
+	jobTitle: "jobTitle";
+	region: "region";
+	technologies: "technologies";
+}>;
+/** An attribute a fit criterion looks at. */
+type FitField = z47.infer<typeof fitFieldSchema>;
+/**
+* What a criterion asks of the attribute: `one_of` (equals one of the values, ignoring case),
+* `contains_any` (contains one of the values, ignoring case) or `between` (a whole number, at
+* least `min` and at most `max`; one of the two may be left out). `between` is for
+* `employeeCount` only and `employeeCount` takes nothing else.
+*/
+declare const fitConditionSchema: z47.ZodDiscriminatedUnion<[z47.ZodObject<{
+	operator: z47.ZodLiteral<"one_of">;
+	values: z47.ZodArray<z47.ZodPipe<z47.ZodString, z47.ZodString>>;
+}, z47.core.$strict>, z47.ZodObject<{
+	operator: z47.ZodLiteral<"contains_any">;
+	values: z47.ZodArray<z47.ZodPipe<z47.ZodString, z47.ZodString>>;
+}, z47.core.$strict>, z47.ZodObject<{
+	operator: z47.ZodLiteral<"between">;
+	min: z47.ZodNullable<z47.ZodNumber>;
+	max: z47.ZodNullable<z47.ZodNumber>;
+}, z47.core.$strict>], "operator">;
+/** What a criterion asks of an attribute. */
+type FitCondition = z47.infer<typeof fitConditionSchema>;
+/** Whether an operator suits an attribute: `between` only for `employeeCount`, and `employeeCount` only with `between`. */
+declare function fitConditionSuitsField(field: FitField, condition: FitCondition): boolean;
+/** One named, weighted part of an Organization's ideal customer. A matched criterion adds its weight to the fit score. */
+declare const fitCriterionSchema: z47.ZodObject<{
+	id: z47.core.$ZodBranded<z47.ZodString, "fcr", "out">;
+	name: z47.ZodPipe<z47.ZodString, z47.ZodString>;
+	field: z47.ZodEnum<{
+		employeeCount: "employeeCount";
+		industry: "industry";
+		jobTitle: "jobTitle";
+		region: "region";
+		technologies: "technologies";
+	}>;
+	condition: z47.ZodDiscriminatedUnion<[z47.ZodObject<{
+		operator: z47.ZodLiteral<"one_of">;
+		values: z47.ZodArray<z47.ZodPipe<z47.ZodString, z47.ZodString>>;
+	}, z47.core.$strict>, z47.ZodObject<{
+		operator: z47.ZodLiteral<"contains_any">;
+		values: z47.ZodArray<z47.ZodPipe<z47.ZodString, z47.ZodString>>;
+	}, z47.core.$strict>, z47.ZodObject<{
+		operator: z47.ZodLiteral<"between">;
+		min: z47.ZodNullable<z47.ZodNumber>;
+		max: z47.ZodNullable<z47.ZodNumber>;
+	}, z47.core.$strict>], "operator">;
+	weight: z47.ZodNumber;
+	enabled: z47.ZodBoolean;
+	createdAt: z47.ZodISODateTime;
+	updatedAt: z47.ZodISODateTime;
+}, z47.core.$strip>;
+/** One fit criterion. */
+type FitCriterion = z47.infer<typeof fitCriterionSchema>;
+/** The body to add a criterion; at most 50 per Organization and names are unique. An operator that does not suit the attribute is `fit.invalid_criteria`. */
+declare const createFitCriterionRequestSchema: z47.ZodObject<{
+	name: z47.ZodPipe<z47.ZodString, z47.ZodString>;
+	field: z47.ZodEnum<{
+		employeeCount: "employeeCount";
+		industry: "industry";
+		jobTitle: "jobTitle";
+		region: "region";
+		technologies: "technologies";
+	}>;
+	condition: z47.ZodDiscriminatedUnion<[z47.ZodObject<{
+		operator: z47.ZodLiteral<"one_of">;
+		values: z47.ZodArray<z47.ZodPipe<z47.ZodString, z47.ZodString>>;
+	}, z47.core.$strict>, z47.ZodObject<{
+		operator: z47.ZodLiteral<"contains_any">;
+		values: z47.ZodArray<z47.ZodPipe<z47.ZodString, z47.ZodString>>;
+	}, z47.core.$strict>, z47.ZodObject<{
+		operator: z47.ZodLiteral<"between">;
+		min: z47.ZodNullable<z47.ZodNumber>;
+		max: z47.ZodNullable<z47.ZodNumber>;
+	}, z47.core.$strict>], "operator">;
+	weight: z47.ZodNumber;
+	enabled: z47.ZodDefault<z47.ZodBoolean>;
+}, z47.core.$strict>;
+/** The body to add a criterion. */
+type CreateFitCriterionRequest = z47.infer<typeof createFitCriterionRequestSchema>;
+/** The body to change a criterion: any of its parts, at least one. */
+declare const updateFitCriterionRequestSchema: z47.ZodObject<{
+	name: z47.ZodOptional<z47.ZodPipe<z47.ZodString, z47.ZodString>>;
+	field: z47.ZodOptional<z47.ZodEnum<{
+		employeeCount: "employeeCount";
+		industry: "industry";
+		jobTitle: "jobTitle";
+		region: "region";
+		technologies: "technologies";
+	}>>;
+	condition: z47.ZodOptional<z47.ZodDiscriminatedUnion<[z47.ZodObject<{
+		operator: z47.ZodLiteral<"one_of">;
+		values: z47.ZodArray<z47.ZodPipe<z47.ZodString, z47.ZodString>>;
+	}, z47.core.$strict>, z47.ZodObject<{
+		operator: z47.ZodLiteral<"contains_any">;
+		values: z47.ZodArray<z47.ZodPipe<z47.ZodString, z47.ZodString>>;
+	}, z47.core.$strict>, z47.ZodObject<{
+		operator: z47.ZodLiteral<"between">;
+		min: z47.ZodNullable<z47.ZodNumber>;
+		max: z47.ZodNullable<z47.ZodNumber>;
+	}, z47.core.$strict>], "operator">>;
+	weight: z47.ZodOptional<z47.ZodNumber>;
+	enabled: z47.ZodOptional<z47.ZodBoolean>;
+}, z47.core.$strict>;
+/** The body to change a criterion. */
+type UpdateFitCriterionRequest = z47.infer<typeof updateFitCriterionRequestSchema>;
+/** The query of a criteria list: cursor and limit (at most 100). */
+declare const listFitCriteriaQuerySchema: z47.ZodObject<{
+	cursor: z47.ZodOptional<z47.ZodString>;
+	limit: z47.ZodDefault<z47.ZodPipe<z47.ZodPipe<z47.ZodUnion<readonly [z47.ZodNumber, z47.ZodString]>, z47.ZodTransform<number, string | number>>, z47.ZodNumber>>;
+}, z47.core.$strip>;
+/** One page of criteria (oldest first, by `createdAt`, then id) with the version of the whole set, which rises on every change. */
+declare const listFitCriteriaResponseSchema: z47.ZodObject<{
+	items: z47.ZodArray<z47.ZodObject<{
+		id: z47.core.$ZodBranded<z47.ZodString, "fcr", "out">;
+		name: z47.ZodPipe<z47.ZodString, z47.ZodString>;
+		field: z47.ZodEnum<{
+			employeeCount: "employeeCount";
+			industry: "industry";
+			jobTitle: "jobTitle";
+			region: "region";
+			technologies: "technologies";
+		}>;
+		condition: z47.ZodDiscriminatedUnion<[z47.ZodObject<{
+			operator: z47.ZodLiteral<"one_of">;
+			values: z47.ZodArray<z47.ZodPipe<z47.ZodString, z47.ZodString>>;
+		}, z47.core.$strict>, z47.ZodObject<{
+			operator: z47.ZodLiteral<"contains_any">;
+			values: z47.ZodArray<z47.ZodPipe<z47.ZodString, z47.ZodString>>;
+		}, z47.core.$strict>, z47.ZodObject<{
+			operator: z47.ZodLiteral<"between">;
+			min: z47.ZodNullable<z47.ZodNumber>;
+			max: z47.ZodNullable<z47.ZodNumber>;
+		}, z47.core.$strict>], "operator">;
+		weight: z47.ZodNumber;
+		enabled: z47.ZodBoolean;
+		createdAt: z47.ZodISODateTime;
+		updatedAt: z47.ZodISODateTime;
+	}, z47.core.$strip>>;
+	nextCursor: z47.ZodNullable<z47.ZodString>;
+	criteriaVersion: z47.ZodNumber;
+}, z47.core.$strip>;
+/** Whether a criterion matched: `unknown` when the Prospect has no value for its attribute (it adds nothing, and is not a miss). */
+declare const FIT_RESULTS: readonly ["matched", "missed", "unknown"];
+/** Whether a criterion matched. */
+declare const fitResultSchema: z47.ZodEnum<{
+	matched: "matched";
+	missed: "missed";
+	unknown: "unknown";
+}>;
+/** One criterion's part in a score. */
+declare const fitMatchSchema: z47.ZodObject<{
+	criterionId: z47.core.$ZodBranded<z47.ZodString, "fcr", "out">;
+	name: z47.ZodPipe<z47.ZodString, z47.ZodString>;
+	weight: z47.ZodNumber;
+	result: z47.ZodEnum<{
+		matched: "matched";
+		missed: "missed";
+		unknown: "unknown";
+	}>;
+}, z47.core.$strip>;
+/** One criterion's part in a score. */
+type FitMatch = z47.infer<typeof fitMatchSchema>;
+/**
+* A Prospect's fit score: the sum of the weights of the matched criteria (`score`) out of the sum
+* of all enabled criteria (`maxScore`), and every criterion with its result, so the score explains
+* itself. `criteriaVersion` is the version of the criteria it was scored with.
+*/
+declare const fitScoreSchema: z47.ZodObject<{
+	prospectId: z47.core.$ZodBranded<z47.ZodString, "prs", "out">;
+	score: z47.ZodNumber;
+	maxScore: z47.ZodNumber;
+	matches: z47.ZodArray<z47.ZodObject<{
+		criterionId: z47.core.$ZodBranded<z47.ZodString, "fcr", "out">;
+		name: z47.ZodPipe<z47.ZodString, z47.ZodString>;
+		weight: z47.ZodNumber;
+		result: z47.ZodEnum<{
+			matched: "matched";
+			missed: "missed";
+			unknown: "unknown";
+		}>;
+	}, z47.core.$strip>>;
+	criteriaVersion: z47.ZodNumber;
+	scoredAt: z47.ZodISODateTime;
+}, z47.core.$strip>;
+/** A Prospect's fit score. */
+type FitScore = z47.infer<typeof fitScoreSchema>;
+/** The query of a score list: cursor, limit (at most 100) and an optional lowest score. */
+declare const listFitScoresQuerySchema: z47.ZodObject<{
+	cursor: z47.ZodOptional<z47.ZodString>;
+	limit: z47.ZodDefault<z47.ZodPipe<z47.ZodPipe<z47.ZodUnion<readonly [z47.ZodNumber, z47.ZodString]>, z47.ZodTransform<number, string | number>>, z47.ZodNumber>>;
+	minScore: z47.ZodOptional<z47.ZodPipe<z47.ZodPipe<z47.ZodUnion<readonly [z47.ZodNumber, z47.ZodString]>, z47.ZodTransform<number, string | number>>, z47.ZodNumber>>;
+}, z47.core.$strip>;
+/** One page of scores for the Prospects the caller may see, highest first (by `score`, then Prospect id). */
+declare const listFitScoresResponseSchema: z47.ZodObject<{
+	items: z47.ZodArray<z47.ZodObject<{
+		prospectId: z47.core.$ZodBranded<z47.ZodString, "prs", "out">;
+		score: z47.ZodNumber;
+		maxScore: z47.ZodNumber;
+		matches: z47.ZodArray<z47.ZodObject<{
+			criterionId: z47.core.$ZodBranded<z47.ZodString, "fcr", "out">;
+			name: z47.ZodPipe<z47.ZodString, z47.ZodString>;
+			weight: z47.ZodNumber;
+			result: z47.ZodEnum<{
+				matched: "matched";
+				missed: "missed";
+				unknown: "unknown";
+			}>;
+		}, z47.core.$strip>>;
+		criteriaVersion: z47.ZodNumber;
+		scoredAt: z47.ZodISODateTime;
+	}, z47.core.$strip>>;
+	nextCursor: z47.ZodNullable<z47.ZodString>;
+}, z47.core.$strip>;
+/** Every role: each enriches, reads signals and sees fit for the Prospects they may see. */
+declare const ENRICHMENT_ALL_ROLES: readonly ["owner", "admin", "manager", "rep"];
+/** The roles that read spend and the provider setup. */
+declare const ENRICHMENT_READ_ROLES: readonly ["owner", "admin", "manager"];
+/** The roles that change providers, the budget, signal settings and fit criteria. */
+declare const ENRICHMENT_ADMIN_ROLES: readonly ["owner", "admin"];
+/** The enrichment, signal and fit route names. */
+type EnrichmentRouteName = "createEnrichment" | "getEnrichmentRunSet" | "getEnrichmentRun" | "listEnrichmentRuns" | "getProspectEnrichment" | "deleteProspectEnrichment" | "listEnrichmentProviders" | "setEnrichmentProvider" | "getEnrichmentWaterfall" | "setEnrichmentWaterfall" | "getEnrichmentBudget" | "setEnrichmentBudget" | "listEnrichmentSpend" | "recordSignalNote" | "listProspectSignals" | "getSignal" | "getSignalSettings" | "setSignalSettings" | "rotateSignalWebhookSecret" | "receiveSignalWebhook" | "listFitCriteria" | "createFitCriterion" | "updateFitCriterion" | "deleteFitCriterion" | "getProspectFit" | "listFitScores";
+/** One enrichment, signal or fit route. */
+type EnrichmentRoute = InboundRoute<EnrichmentErrorCode>;
+/**
+* The enrichment, signal and fit routes (spec M05): runs through the provider waterfall with
+* per-field provenance and cost, providers, order and budget, signals, and fit criteria and
+* scores. Outbound owns them. Lists are cursor-paginated with a page of at most 100. Every route
+* that changes something needs an Idempotency-Key header, except the public signed webhook, which
+* is made idempotent by its `eventId`.
+*/
+declare const ENRICHMENT_ROUTES: Readonly<Record<EnrichmentRouteName, EnrichmentRoute>>;
+import { z as z48 } from "zod";
+/** The states of a run: `queued`, `running`, then `complete` (every asked group filled), `incomplete` (no provider could fill some group) or `stopped` (a budget stopped it; see `stopReason`). */
+declare const RUN_STATUSES: readonly ["queued", "running", "complete", "incomplete", "stopped"];
+/** The state of a run. */
+declare const runStatusSchema: z48.ZodEnum<{
+	complete: "complete";
+	incomplete: "incomplete";
+	queued: "queued";
+	running: "running";
+	stopped: "stopped";
+}>;
+/** The state of a run. */
+type RunStatus = z48.infer<typeof runStatusSchema>;
+/** Why a run stopped before asking every provider: the Organization's monthly budget or the run's own cost ceiling was reached. Checked before each provider call, not after. */
+declare const STOP_REASONS: readonly ["monthly_budget", "run_ceiling"];
+/** Why a run stopped. */
+declare const stopReasonSchema: z48.ZodEnum<{
+	monthly_budget: "monthly_budget";
+	run_ceiling: "run_ceiling";
+}>;
+/** Why a run stopped. */
+type StopReason = z48.infer<typeof stopReasonSchema>;
+/** What one call to one provider came to. `skipped_*` means no call was made and nothing was charged. */
+declare const ATTEMPT_OUTCOMES: readonly ["filled", "no_result", "failed", "skipped_disabled", "skipped_circuit_open", "skipped_budget"];
+/** What one call to one provider came to. */
+declare const attemptOutcomeSchema: z48.ZodEnum<{
+	failed: "failed";
+	filled: "filled";
+	no_result: "no_result";
+	skipped_budget: "skipped_budget";
+	skipped_circuit_open: "skipped_circuit_open";
+	skipped_disabled: "skipped_disabled";
+}>;
+/** Why a provider call failed, as a closed list; the provider's own message is never kept. */
+declare const ATTEMPT_FAILURES: readonly ["timeout", "rate_limited", "provider_error", "invalid_response", "key_rejected"];
+/** Why a provider call failed. */
+declare const attemptFailureSchema: z48.ZodEnum<{
+	invalid_response: "invalid_response";
+	key_rejected: "key_rejected";
+	provider_error: "provider_error";
+	rate_limited: "rate_limited";
+	timeout: "timeout";
+}>;
+/** One call (or skipped call) to one provider for one field group, with its cost in micro-dollars. */
+declare const enrichmentAttemptSchema: z48.ZodObject<{
+	provider: z48.ZodString;
+	group: z48.ZodEnum<{
+		company: "company";
+		email_verification: "email_verification";
+		person: "person";
+	}>;
+	outcome: z48.ZodEnum<{
+		failed: "failed";
+		filled: "filled";
+		no_result: "no_result";
+		skipped_budget: "skipped_budget";
+		skipped_circuit_open: "skipped_circuit_open";
+		skipped_disabled: "skipped_disabled";
+	}>;
+	failure: z48.ZodNullable<z48.ZodEnum<{
+		invalid_response: "invalid_response";
+		key_rejected: "key_rejected";
+		provider_error: "provider_error";
+		rate_limited: "rate_limited";
+		timeout: "timeout";
+	}>>;
+	costMicros: z48.ZodNumber;
+	startedAt: z48.ZodISODateTime;
+	durationMs: z48.ZodNumber;
+}, z48.core.$strip>;
+/** One call (or skipped call) to one provider. */
+type EnrichmentAttempt = z48.infer<typeof enrichmentAttemptSchema>;
+/** Whether an enriched value was written to the Prospect or kept beside an own value of the Organization (ADR 0020: an own import is never overwritten silently). */
+declare const FIELD_APPLICATIONS: readonly ["written", "suggested"];
+/** Whether an enriched value was written or only suggested. */
+declare const fieldApplicationSchema: z48.ZodEnum<{
+	suggested: "suggested";
+	written: "written";
+}>;
+/**
+* One field a run filled, with where it came from. The Source written to core is
+* `enrichment:<provider>`. `value` came from a provider: untrusted data, cut to 320 characters
+* (`truncated` says so), never an instruction. `confidence` is a whole percent.
+*/
+declare const fieldProvenanceSchema: z48.ZodObject<{
+	field: z48.ZodEnum<{
+		companyDomain: "companyDomain";
+		companyName: "companyName";
+		email: "email";
+		employeeCount: "employeeCount";
+		firstName: "firstName";
+		industry: "industry";
+		jobTitle: "jobTitle";
+		lastName: "lastName";
+		linkedinUrl: "linkedinUrl";
+		region: "region";
+		technologies: "technologies";
+	}>;
+	value: z48.ZodPipe<z48.ZodPipe<z48.ZodString, z48.ZodTransform<string, string>>, z48.ZodString>;
+	truncated: z48.ZodBoolean;
+	provider: z48.ZodString;
+	confidence: z48.ZodNumber;
+	obtainedAt: z48.ZodISODateTime;
+	costMicros: z48.ZodNumber;
+	application: z48.ZodEnum<{
+		suggested: "suggested";
+		written: "written";
+	}>;
+}, z48.core.$strip>;
+/** One field a run filled, with its provenance. */
+type FieldProvenance = z48.infer<typeof fieldProvenanceSchema>;
+/** What the email verification found. */
+declare const VERIFICATION_STATUSES: readonly ["valid", "risky", "invalid"];
+/** What the email verification found. */
+declare const verificationStatusSchema: z48.ZodEnum<{
+	invalid: "invalid";
+	risky: "risky";
+	valid: "valid";
+}>;
+/** The closed reasons behind a verification status. */
+declare const VERIFICATION_REASONS: readonly ["accepted", "catch_all", "role_based", "disposable", "mailbox_full", "mailbox_not_found", "domain_invalid", "unknown"];
+/** The reason behind a verification status. */
+declare const verificationReasonSchema: z48.ZodEnum<{
+	accepted: "accepted";
+	catch_all: "catch_all";
+	disposable: "disposable";
+	domain_invalid: "domain_invalid";
+	mailbox_full: "mailbox_full";
+	mailbox_not_found: "mailbox_not_found";
+	role_based: "role_based";
+	unknown: "unknown";
+}>;
+/** The result of verifying a Prospect's email address. It never repeats the address. */
+declare const emailVerificationSchema: z48.ZodObject<{
+	status: z48.ZodEnum<{
+		invalid: "invalid";
+		risky: "risky";
+		valid: "valid";
+	}>;
+	reason: z48.ZodEnum<{
+		accepted: "accepted";
+		catch_all: "catch_all";
+		disposable: "disposable";
+		domain_invalid: "domain_invalid";
+		mailbox_full: "mailbox_full";
+		mailbox_not_found: "mailbox_not_found";
+		role_based: "role_based";
+		unknown: "unknown";
+	}>;
+	provider: z48.ZodString;
+	checkedAt: z48.ZodISODateTime;
+}, z48.core.$strip>;
+/** The result of verifying an email address. */
+type EmailVerification = z48.infer<typeof emailVerificationSchema>;
+/**
+* One Prospect's pass through the provider waterfall: the groups asked for, every attempt made
+* (provider, group, outcome, cost), the fields filled with their provenance, the email
+* verification if asked, and the total cost against the run's ceiling. `stopReason` is set exactly
+* when the status is `stopped`. Provider data in it is untrusted.
+*/
+declare const enrichmentRunSchema: z48.ZodObject<{
+	id: z48.core.$ZodBranded<z48.ZodString, "erun", "out">;
+	runSetId: z48.ZodNullable<z48.core.$ZodBranded<z48.ZodString, "erset", "out">>;
+	prospectId: z48.core.$ZodBranded<z48.ZodString, "prs", "out">;
+	status: z48.ZodEnum<{
+		complete: "complete";
+		incomplete: "incomplete";
+		queued: "queued";
+		running: "running";
+		stopped: "stopped";
+	}>;
+	stopReason: z48.ZodNullable<z48.ZodEnum<{
+		monthly_budget: "monthly_budget";
+		run_ceiling: "run_ceiling";
+	}>>;
+	groups: z48.ZodArray<z48.ZodEnum<{
+		company: "company";
+		email_verification: "email_verification";
+		person: "person";
+	}>>;
+	attempts: z48.ZodArray<z48.ZodObject<{
+		provider: z48.ZodString;
+		group: z48.ZodEnum<{
+			company: "company";
+			email_verification: "email_verification";
+			person: "person";
+		}>;
+		outcome: z48.ZodEnum<{
+			failed: "failed";
+			filled: "filled";
+			no_result: "no_result";
+			skipped_budget: "skipped_budget";
+			skipped_circuit_open: "skipped_circuit_open";
+			skipped_disabled: "skipped_disabled";
+		}>;
+		failure: z48.ZodNullable<z48.ZodEnum<{
+			invalid_response: "invalid_response";
+			key_rejected: "key_rejected";
+			provider_error: "provider_error";
+			rate_limited: "rate_limited";
+			timeout: "timeout";
+		}>>;
+		costMicros: z48.ZodNumber;
+		startedAt: z48.ZodISODateTime;
+		durationMs: z48.ZodNumber;
+	}, z48.core.$strip>>;
+	fields: z48.ZodArray<z48.ZodObject<{
+		field: z48.ZodEnum<{
+			companyDomain: "companyDomain";
+			companyName: "companyName";
+			email: "email";
+			employeeCount: "employeeCount";
+			firstName: "firstName";
+			industry: "industry";
+			jobTitle: "jobTitle";
+			lastName: "lastName";
+			linkedinUrl: "linkedinUrl";
+			region: "region";
+			technologies: "technologies";
+		}>;
+		value: z48.ZodPipe<z48.ZodPipe<z48.ZodString, z48.ZodTransform<string, string>>, z48.ZodString>;
+		truncated: z48.ZodBoolean;
+		provider: z48.ZodString;
+		confidence: z48.ZodNumber;
+		obtainedAt: z48.ZodISODateTime;
+		costMicros: z48.ZodNumber;
+		application: z48.ZodEnum<{
+			suggested: "suggested";
+			written: "written";
+		}>;
+	}, z48.core.$strip>>;
+	emailVerification: z48.ZodNullable<z48.ZodObject<{
+		status: z48.ZodEnum<{
+			invalid: "invalid";
+			risky: "risky";
+			valid: "valid";
+		}>;
+		reason: z48.ZodEnum<{
+			accepted: "accepted";
+			catch_all: "catch_all";
+			disposable: "disposable";
+			domain_invalid: "domain_invalid";
+			mailbox_full: "mailbox_full";
+			mailbox_not_found: "mailbox_not_found";
+			role_based: "role_based";
+			unknown: "unknown";
+		}>;
+		provider: z48.ZodString;
+		checkedAt: z48.ZodISODateTime;
+	}, z48.core.$strip>>;
+	costMicros: z48.ZodNumber;
+	ceilingMicros: z48.ZodNumber;
+	requestedByUserId: z48.ZodNullable<z48.core.$ZodBranded<z48.ZodString, "usr", "out">>;
+	createdAt: z48.ZodISODateTime;
+	startedAt: z48.ZodNullable<z48.ZodISODateTime>;
+	completedAt: z48.ZodNullable<z48.ZodISODateTime>;
+}, z48.core.$strip>;
+/** One Prospect's pass through the waterfall. */
+type EnrichmentRun = z48.infer<typeof enrichmentRunSchema>;
+/**
+* The body to enrich Prospects: one to 500 ids and, optionally, the groups to fill (all three
+* when left out). A bulk request makes a run set; the runs are queued in bounded batches, nothing
+* proportional to the Organization's size runs on the request. The `Idempotency-Key` header is the
+* request id: the same key twice charges once.
+*/
+declare const createEnrichmentRequestSchema: z48.ZodObject<{
+	prospectIds: z48.ZodArray<z48.core.$ZodBranded<z48.ZodString, "prs", "out">>;
+	groups: z48.ZodOptional<z48.ZodArray<z48.ZodEnum<{
+		company: "company";
+		email_verification: "email_verification";
+		person: "person";
+	}>>>;
+}, z48.core.$strict>;
+/** The body to enrich Prospects. */
+type CreateEnrichmentRequest = z48.infer<typeof createEnrichmentRequestSchema>;
+/** The counts of a run set by run status. */
+declare const runSetCountsSchema: z48.ZodObject<{
+	queued: z48.ZodNumber;
+	running: z48.ZodNumber;
+	complete: z48.ZodNumber;
+	incomplete: z48.ZodNumber;
+	stopped: z48.ZodNumber;
+}, z48.core.$strip>;
+/** The runs one bulk request created, with progress: `total` runs, their counts by status and the cost so far. */
+declare const enrichmentRunSetSchema: z48.ZodObject<{
+	id: z48.core.$ZodBranded<z48.ZodString, "erset", "out">;
+	total: z48.ZodNumber;
+	counts: z48.ZodObject<{
+		queued: z48.ZodNumber;
+		running: z48.ZodNumber;
+		complete: z48.ZodNumber;
+		incomplete: z48.ZodNumber;
+		stopped: z48.ZodNumber;
+	}, z48.core.$strip>;
+	costMicros: z48.ZodNumber;
+	done: z48.ZodBoolean;
+	requestedByUserId: z48.ZodNullable<z48.core.$ZodBranded<z48.ZodString, "usr", "out">>;
+	createdAt: z48.ZodISODateTime;
+	completedAt: z48.ZodNullable<z48.ZodISODateTime>;
+}, z48.core.$strip>;
+/** The runs one bulk request created, with progress. */
+type EnrichmentRunSet = z48.infer<typeof enrichmentRunSetSchema>;
+/** The query of a run list: cursor, limit (at most 100), and optional filters by Prospect, run set and status. */
+declare const listEnrichmentRunsQuerySchema: z48.ZodObject<{
+	cursor: z48.ZodOptional<z48.ZodString>;
+	limit: z48.ZodDefault<z48.ZodPipe<z48.ZodPipe<z48.ZodUnion<readonly [z48.ZodNumber, z48.ZodString]>, z48.ZodTransform<number, string | number>>, z48.ZodNumber>>;
+	prospectId: z48.ZodOptional<z48.core.$ZodBranded<z48.ZodString, "prs", "out">>;
+	runSetId: z48.ZodOptional<z48.core.$ZodBranded<z48.ZodString, "erset", "out">>;
+	status: z48.ZodOptional<z48.ZodEnum<{
+		complete: "complete";
+		incomplete: "incomplete";
+		queued: "queued";
+		running: "running";
+		stopped: "stopped";
+	}>>;
+}, z48.core.$strip>;
+/** One page of runs, newest first (by `createdAt`, then id). */
+declare const listEnrichmentRunsResponseSchema: z48.ZodObject<{
+	items: z48.ZodArray<z48.ZodObject<{
+		id: z48.core.$ZodBranded<z48.ZodString, "erun", "out">;
+		runSetId: z48.ZodNullable<z48.core.$ZodBranded<z48.ZodString, "erset", "out">>;
+		prospectId: z48.core.$ZodBranded<z48.ZodString, "prs", "out">;
+		status: z48.ZodEnum<{
+			complete: "complete";
+			incomplete: "incomplete";
+			queued: "queued";
+			running: "running";
+			stopped: "stopped";
+		}>;
+		stopReason: z48.ZodNullable<z48.ZodEnum<{
+			monthly_budget: "monthly_budget";
+			run_ceiling: "run_ceiling";
+		}>>;
+		groups: z48.ZodArray<z48.ZodEnum<{
+			company: "company";
+			email_verification: "email_verification";
+			person: "person";
+		}>>;
+		attempts: z48.ZodArray<z48.ZodObject<{
+			provider: z48.ZodString;
+			group: z48.ZodEnum<{
+				company: "company";
+				email_verification: "email_verification";
+				person: "person";
+			}>;
+			outcome: z48.ZodEnum<{
+				failed: "failed";
+				filled: "filled";
+				no_result: "no_result";
+				skipped_budget: "skipped_budget";
+				skipped_circuit_open: "skipped_circuit_open";
+				skipped_disabled: "skipped_disabled";
+			}>;
+			failure: z48.ZodNullable<z48.ZodEnum<{
+				invalid_response: "invalid_response";
+				key_rejected: "key_rejected";
+				provider_error: "provider_error";
+				rate_limited: "rate_limited";
+				timeout: "timeout";
+			}>>;
+			costMicros: z48.ZodNumber;
+			startedAt: z48.ZodISODateTime;
+			durationMs: z48.ZodNumber;
+		}, z48.core.$strip>>;
+		fields: z48.ZodArray<z48.ZodObject<{
+			field: z48.ZodEnum<{
+				companyDomain: "companyDomain";
+				companyName: "companyName";
+				email: "email";
+				employeeCount: "employeeCount";
+				firstName: "firstName";
+				industry: "industry";
+				jobTitle: "jobTitle";
+				lastName: "lastName";
+				linkedinUrl: "linkedinUrl";
+				region: "region";
+				technologies: "technologies";
+			}>;
+			value: z48.ZodPipe<z48.ZodPipe<z48.ZodString, z48.ZodTransform<string, string>>, z48.ZodString>;
+			truncated: z48.ZodBoolean;
+			provider: z48.ZodString;
+			confidence: z48.ZodNumber;
+			obtainedAt: z48.ZodISODateTime;
+			costMicros: z48.ZodNumber;
+			application: z48.ZodEnum<{
+				suggested: "suggested";
+				written: "written";
+			}>;
+		}, z48.core.$strip>>;
+		emailVerification: z48.ZodNullable<z48.ZodObject<{
+			status: z48.ZodEnum<{
+				invalid: "invalid";
+				risky: "risky";
+				valid: "valid";
+			}>;
+			reason: z48.ZodEnum<{
+				accepted: "accepted";
+				catch_all: "catch_all";
+				disposable: "disposable";
+				domain_invalid: "domain_invalid";
+				mailbox_full: "mailbox_full";
+				mailbox_not_found: "mailbox_not_found";
+				role_based: "role_based";
+				unknown: "unknown";
+			}>;
+			provider: z48.ZodString;
+			checkedAt: z48.ZodISODateTime;
+		}, z48.core.$strip>>;
+		costMicros: z48.ZodNumber;
+		ceilingMicros: z48.ZodNumber;
+		requestedByUserId: z48.ZodNullable<z48.core.$ZodBranded<z48.ZodString, "usr", "out">>;
+		createdAt: z48.ZodISODateTime;
+		startedAt: z48.ZodNullable<z48.ZodISODateTime>;
+		completedAt: z48.ZodNullable<z48.ZodISODateTime>;
+	}, z48.core.$strip>>;
+	nextCursor: z48.ZodNullable<z48.ZodString>;
+}, z48.core.$strip>;
+/** What one provider cost for one Prospect. */
+declare const providerCostSchema: z48.ZodObject<{
+	provider: z48.ZodString;
+	costMicros: z48.ZodNumber;
+	calls: z48.ZodNumber;
+}, z48.core.$strip>;
+/**
+* What is known about one Prospect from enrichment: its current fields with provenance, the
+* latest email verification, and what it cost in total and by provider. Provider data is
+* untrusted. Nothing is here for a Prospect that was never enriched: the lists are empty.
+*/
+declare const prospectEnrichmentSchema: z48.ZodObject<{
+	prospectId: z48.core.$ZodBranded<z48.ZodString, "prs", "out">;
+	fields: z48.ZodArray<z48.ZodObject<{
+		field: z48.ZodEnum<{
+			companyDomain: "companyDomain";
+			companyName: "companyName";
+			email: "email";
+			employeeCount: "employeeCount";
+			firstName: "firstName";
+			industry: "industry";
+			jobTitle: "jobTitle";
+			lastName: "lastName";
+			linkedinUrl: "linkedinUrl";
+			region: "region";
+			technologies: "technologies";
+		}>;
+		value: z48.ZodPipe<z48.ZodPipe<z48.ZodString, z48.ZodTransform<string, string>>, z48.ZodString>;
+		truncated: z48.ZodBoolean;
+		provider: z48.ZodString;
+		confidence: z48.ZodNumber;
+		obtainedAt: z48.ZodISODateTime;
+		costMicros: z48.ZodNumber;
+		application: z48.ZodEnum<{
+			suggested: "suggested";
+			written: "written";
+		}>;
+	}, z48.core.$strip>>;
+	emailVerification: z48.ZodNullable<z48.ZodObject<{
+		status: z48.ZodEnum<{
+			invalid: "invalid";
+			risky: "risky";
+			valid: "valid";
+		}>;
+		reason: z48.ZodEnum<{
+			accepted: "accepted";
+			catch_all: "catch_all";
+			disposable: "disposable";
+			domain_invalid: "domain_invalid";
+			mailbox_full: "mailbox_full";
+			mailbox_not_found: "mailbox_not_found";
+			role_based: "role_based";
+			unknown: "unknown";
+		}>;
+		provider: z48.ZodString;
+		checkedAt: z48.ZodISODateTime;
+	}, z48.core.$strip>>;
+	costMicros: z48.ZodNumber;
+	costByProvider: z48.ZodArray<z48.ZodObject<{
+		provider: z48.ZodString;
+		costMicros: z48.ZodNumber;
+		calls: z48.ZodNumber;
+	}, z48.core.$strip>>;
+	lastRunId: z48.ZodNullable<z48.core.$ZodBranded<z48.ZodString, "erun", "out">>;
+	lastEnrichedAt: z48.ZodNullable<z48.ZodISODateTime>;
+}, z48.core.$strip>;
+/** What is known about one Prospect from enrichment. */
+type ProspectEnrichment = z48.infer<typeof prospectEnrichmentSchema>;
+import { z as z49 } from "zod";
+/**
+* What an Organization sees of one provider. There is no key field: the key an Admin entered is
+* stored encrypted and never returned, logged or put in an error report; `credentialSet` says only
+* whether one is stored. `groups` are the field groups the provider can serve.
+*/
+declare const providerSettingsSchema: z49.ZodObject<{
+	provider: z49.ZodString;
+	enabled: z49.ZodBoolean;
+	credentialSet: z49.ZodBoolean;
+	credentialUpdatedAt: z49.ZodNullable<z49.ZodISODateTime>;
+	groups: z49.ZodArray<z49.ZodEnum<{
+		company: "company";
+		email_verification: "email_verification";
+		person: "person";
+	}>>;
+	updatedAt: z49.ZodNullable<z49.ZodISODateTime>;
+}, z49.core.$strip>;
+/** What an Organization sees of one provider; it holds no key. */
+type ProviderSettings = z49.infer<typeof providerSettingsSchema>;
+/** A provider API key as typed: 8 to 512 printable characters without spaces. Write-only; no response holds it. */
+declare const providerApiKeySchema: z49.ZodString;
+/**
+* The body to change a provider: switch it on or off and, optionally, set its key (`apiKey`) or
+* remove it (`null`). Leaving `apiKey` out keeps the stored key. The key is never read back.
+*/
+declare const setProviderRequestSchema: z49.ZodObject<{
+	enabled: z49.ZodBoolean;
+	apiKey: z49.ZodOptional<z49.ZodNullable<z49.ZodString>>;
+}, z49.core.$strict>;
+/** The body to change a provider. */
+type SetProviderRequest = z49.infer<typeof setProviderRequestSchema>;
+/** The query of a provider list: cursor and limit (at most 100). */
+declare const listProvidersQuerySchema: z49.ZodObject<{
+	cursor: z49.ZodOptional<z49.ZodString>;
+	limit: z49.ZodDefault<z49.ZodPipe<z49.ZodPipe<z49.ZodUnion<readonly [z49.ZodNumber, z49.ZodString]>, z49.ZodTransform<number, string | number>>, z49.ZodNumber>>;
+}, z49.core.$strip>;
+/** One page of providers, by key. */
+declare const listProvidersResponseSchema: z49.ZodObject<{
+	items: z49.ZodArray<z49.ZodObject<{
+		provider: z49.ZodString;
+		enabled: z49.ZodBoolean;
+		credentialSet: z49.ZodBoolean;
+		credentialUpdatedAt: z49.ZodNullable<z49.ZodISODateTime>;
+		groups: z49.ZodArray<z49.ZodEnum<{
+			company: "company";
+			email_verification: "email_verification";
+			person: "person";
+		}>>;
+		updatedAt: z49.ZodNullable<z49.ZodISODateTime>;
+	}, z49.core.$strip>>;
+	nextCursor: z49.ZodNullable<z49.ZodString>;
+}, z49.core.$strip>;
+/** The Organization's provider order per field group; the waterfall asks them first to last. */
+declare const waterfallOrderSchema: z49.ZodObject<{
+	person: z49.ZodArray<z49.ZodString>;
+	company: z49.ZodArray<z49.ZodString>;
+	email_verification: z49.ZodArray<z49.ZodString>;
+}, z49.core.$strict>;
+/** The provider order per field group. */
+type WaterfallOrder = z49.infer<typeof waterfallOrderSchema>;
+/** The saved provider order with its version and when it was saved. Version 0 is the default order, never saved. */
+declare const waterfallSchema: z49.ZodObject<{
+	order: z49.ZodObject<{
+		person: z49.ZodArray<z49.ZodString>;
+		company: z49.ZodArray<z49.ZodString>;
+		email_verification: z49.ZodArray<z49.ZodString>;
+	}, z49.core.$strict>;
+	version: z49.ZodNumber;
+	updatedAt: z49.ZodNullable<z49.ZodISODateTime>;
+}, z49.core.$strip>;
+/** The saved provider order. */
+type Waterfall = z49.infer<typeof waterfallSchema>;
+/** The body to save the provider order: the order and the `expectedVersion` the caller read. */
+declare const setWaterfallRequestSchema: z49.ZodObject<{
+	order: z49.ZodObject<{
+		person: z49.ZodArray<z49.ZodString>;
+		company: z49.ZodArray<z49.ZodString>;
+		email_verification: z49.ZodArray<z49.ZodString>;
+	}, z49.core.$strict>;
+	expectedVersion: z49.ZodNumber;
+}, z49.core.$strict>;
+/** The body to save the provider order. */
+type SetWaterfallRequest = z49.infer<typeof setWaterfallRequestSchema>;
+/**
+* The Organization's enrichment budget this month: the limit, what was spent (in micro-dollars),
+* what is left, when the month resets (UTC) and the ceiling one run may reach. A run stops before
+* the call that would pass either.
+*/
+declare const enrichmentBudgetSchema: z49.ZodObject<{
+	month: z49.ZodString;
+	monthlyLimitMicros: z49.ZodNumber;
+	perRunCeilingMicros: z49.ZodNumber;
+	spentMicros: z49.ZodNumber;
+	remainingMicros: z49.ZodNumber;
+	resetsAt: z49.ZodISODateTime;
+	version: z49.ZodNumber;
+	updatedAt: z49.ZodNullable<z49.ZodISODateTime>;
+}, z49.core.$strip>;
+/** The Organization's enrichment budget. */
+type EnrichmentBudget = z49.infer<typeof enrichmentBudgetSchema>;
+/** The body to set the budget: the monthly limit, the per-run ceiling (not above the limit) and the `expectedVersion` the caller read. */
+declare const setBudgetRequestSchema: z49.ZodObject<{
+	monthlyLimitMicros: z49.ZodNumber;
+	perRunCeilingMicros: z49.ZodNumber;
+	expectedVersion: z49.ZodNumber;
+}, z49.core.$strict>;
+/** The body to set the budget. */
+type SetBudgetRequest = z49.infer<typeof setBudgetRequestSchema>;
+/** What one provider cost in one month: micro-dollars and calls made. */
+declare const spendEntrySchema: z49.ZodObject<{
+	month: z49.ZodString;
+	provider: z49.ZodString;
+	costMicros: z49.ZodNumber;
+	calls: z49.ZodNumber;
+}, z49.core.$strip>;
+/** What one provider cost in one month. */
+type SpendEntry = z49.infer<typeof spendEntrySchema>;
+/** The query of a spend list: cursor, limit (at most 100) and an optional month. */
+declare const listSpendQuerySchema: z49.ZodObject<{
+	cursor: z49.ZodOptional<z49.ZodString>;
+	limit: z49.ZodDefault<z49.ZodPipe<z49.ZodPipe<z49.ZodUnion<readonly [z49.ZodNumber, z49.ZodString]>, z49.ZodTransform<number, string | number>>, z49.ZodNumber>>;
+	month: z49.ZodOptional<z49.ZodString>;
+}, z49.core.$strip>;
+/** One page of spend entries, newest month first (then provider). */
+declare const listSpendResponseSchema: z49.ZodObject<{
+	items: z49.ZodArray<z49.ZodObject<{
+		month: z49.ZodString;
+		provider: z49.ZodString;
+		costMicros: z49.ZodNumber;
+		calls: z49.ZodNumber;
+	}, z49.core.$strip>>;
+	nextCursor: z49.ZodNullable<z49.ZodString>;
+}, z49.core.$strip>;
+import { z as z50 } from "zod";
+/** The kinds of signal, in the order the portal lists them. */
+declare const SIGNAL_KINDS: readonly ["funding", "hiring_spike", "job_change", "technology_change", "website_visit", "note"];
+/** The kind of a signal. */
+declare const signalKindSchema: z50.ZodEnum<{
+	funding: "funding";
+	hiring_spike: "hiring_spike";
+	job_change: "job_change";
+	note: "note";
+	technology_change: "technology_change";
+	website_visit: "website_visit";
+}>;
+/** The kind of a signal. */
+type SignalKind = z50.infer<typeof signalKindSchema>;
+/** How a signal got here: from a provider, from the Organization's own signed webhook, or typed in by a person. */
+declare const signalSourceSchema: z50.ZodDiscriminatedUnion<[z50.ZodObject<{
+	type: z50.ZodLiteral<"provider">;
+	provider: z50.ZodString;
+}, z50.core.$strip>, z50.ZodObject<{
+	type: z50.ZodLiteral<"webhook">;
+}, z50.core.$strip>, z50.ZodObject<{
+	type: z50.ZodLiteral<"manual">;
+	userId: z50.core.$ZodBranded<z50.ZodString, "usr", "out">;
+}, z50.core.$strip>], "type">;
+/** How a signal got here. */
+type SignalSource = z50.infer<typeof signalSourceSchema>;
+/** The closed list of funding rounds; anything else a provider names is `other`. */
+declare const FUNDING_ROUNDS: readonly ["pre_seed", "seed", "series_a", "series_b", "series_c", "later_stage", "debt", "grant", "other"];
+/**
+* A dated, typed event about a Prospect or its company that gives a reason to contact them now.
+* A union by `kind`. Text in it came from a provider, a web page, a webhook or a person: untrusted
+* data, bounded, shown to people and never run as an instruction. Unknown fields are dropped.
+*/
+declare const signalSchema: z50.ZodDiscriminatedUnion<[z50.ZodObject<{
+	id: z50.core.$ZodBranded<z50.ZodString, "sig", "out">;
+	prospectId: z50.core.$ZodBranded<z50.ZodString, "prs", "out">;
+	source: z50.ZodDiscriminatedUnion<[z50.ZodObject<{
+		type: z50.ZodLiteral<"provider">;
+		provider: z50.ZodString;
+	}, z50.core.$strip>, z50.ZodObject<{
+		type: z50.ZodLiteral<"webhook">;
+	}, z50.core.$strip>, z50.ZodObject<{
+		type: z50.ZodLiteral<"manual">;
+		userId: z50.core.$ZodBranded<z50.ZodString, "usr", "out">;
+	}, z50.core.$strip>], "type">;
+	observedAt: z50.ZodISODateTime;
+	recordedAt: z50.ZodISODateTime;
+	expiresAt: z50.ZodISODateTime;
+	fresh: z50.ZodBoolean;
+	kind: z50.ZodLiteral<"funding">;
+	round: z50.ZodEnum<{
+		debt: "debt";
+		grant: "grant";
+		later_stage: "later_stage";
+		other: "other";
+		pre_seed: "pre_seed";
+		seed: "seed";
+		series_a: "series_a";
+		series_b: "series_b";
+		series_c: "series_c";
+	}>;
+	amountMajorUnits: z50.ZodNullable<z50.ZodNumber>;
+	currency: z50.ZodNullable<z50.ZodString>;
+}, z50.core.$strip>, z50.ZodObject<{
+	id: z50.core.$ZodBranded<z50.ZodString, "sig", "out">;
+	prospectId: z50.core.$ZodBranded<z50.ZodString, "prs", "out">;
+	source: z50.ZodDiscriminatedUnion<[z50.ZodObject<{
+		type: z50.ZodLiteral<"provider">;
+		provider: z50.ZodString;
+	}, z50.core.$strip>, z50.ZodObject<{
+		type: z50.ZodLiteral<"webhook">;
+	}, z50.core.$strip>, z50.ZodObject<{
+		type: z50.ZodLiteral<"manual">;
+		userId: z50.core.$ZodBranded<z50.ZodString, "usr", "out">;
+	}, z50.core.$strip>], "type">;
+	observedAt: z50.ZodISODateTime;
+	recordedAt: z50.ZodISODateTime;
+	expiresAt: z50.ZodISODateTime;
+	fresh: z50.ZodBoolean;
+	kind: z50.ZodLiteral<"hiring_spike">;
+	openRoles: z50.ZodNumber;
+	windowDays: z50.ZodNumber;
+	department: z50.ZodNullable<z50.ZodPipe<z50.ZodPipe<z50.ZodString, z50.ZodTransform<string, string>>, z50.ZodString>>;
+}, z50.core.$strip>, z50.ZodObject<{
+	id: z50.core.$ZodBranded<z50.ZodString, "sig", "out">;
+	prospectId: z50.core.$ZodBranded<z50.ZodString, "prs", "out">;
+	source: z50.ZodDiscriminatedUnion<[z50.ZodObject<{
+		type: z50.ZodLiteral<"provider">;
+		provider: z50.ZodString;
+	}, z50.core.$strip>, z50.ZodObject<{
+		type: z50.ZodLiteral<"webhook">;
+	}, z50.core.$strip>, z50.ZodObject<{
+		type: z50.ZodLiteral<"manual">;
+		userId: z50.core.$ZodBranded<z50.ZodString, "usr", "out">;
+	}, z50.core.$strip>], "type">;
+	observedAt: z50.ZodISODateTime;
+	recordedAt: z50.ZodISODateTime;
+	expiresAt: z50.ZodISODateTime;
+	fresh: z50.ZodBoolean;
+	kind: z50.ZodLiteral<"job_change">;
+	previousTitle: z50.ZodNullable<z50.ZodPipe<z50.ZodPipe<z50.ZodString, z50.ZodTransform<string, string>>, z50.ZodString>>;
+	newTitle: z50.ZodPipe<z50.ZodPipe<z50.ZodString, z50.ZodTransform<string, string>>, z50.ZodString>;
+	previousCompany: z50.ZodNullable<z50.ZodPipe<z50.ZodPipe<z50.ZodString, z50.ZodTransform<string, string>>, z50.ZodString>>;
+	newCompany: z50.ZodNullable<z50.ZodPipe<z50.ZodPipe<z50.ZodString, z50.ZodTransform<string, string>>, z50.ZodString>>;
+}, z50.core.$strip>, z50.ZodObject<{
+	id: z50.core.$ZodBranded<z50.ZodString, "sig", "out">;
+	prospectId: z50.core.$ZodBranded<z50.ZodString, "prs", "out">;
+	source: z50.ZodDiscriminatedUnion<[z50.ZodObject<{
+		type: z50.ZodLiteral<"provider">;
+		provider: z50.ZodString;
+	}, z50.core.$strip>, z50.ZodObject<{
+		type: z50.ZodLiteral<"webhook">;
+	}, z50.core.$strip>, z50.ZodObject<{
+		type: z50.ZodLiteral<"manual">;
+		userId: z50.core.$ZodBranded<z50.ZodString, "usr", "out">;
+	}, z50.core.$strip>], "type">;
+	observedAt: z50.ZodISODateTime;
+	recordedAt: z50.ZodISODateTime;
+	expiresAt: z50.ZodISODateTime;
+	fresh: z50.ZodBoolean;
+	kind: z50.ZodLiteral<"technology_change">;
+	technology: z50.ZodPipe<z50.ZodPipe<z50.ZodString, z50.ZodTransform<string, string>>, z50.ZodString>;
+	change: z50.ZodEnum<{
+		adopted: "adopted";
+		dropped: "dropped";
+	}>;
+}, z50.core.$strip>, z50.ZodObject<{
+	id: z50.core.$ZodBranded<z50.ZodString, "sig", "out">;
+	prospectId: z50.core.$ZodBranded<z50.ZodString, "prs", "out">;
+	source: z50.ZodDiscriminatedUnion<[z50.ZodObject<{
+		type: z50.ZodLiteral<"provider">;
+		provider: z50.ZodString;
+	}, z50.core.$strip>, z50.ZodObject<{
+		type: z50.ZodLiteral<"webhook">;
+	}, z50.core.$strip>, z50.ZodObject<{
+		type: z50.ZodLiteral<"manual">;
+		userId: z50.core.$ZodBranded<z50.ZodString, "usr", "out">;
+	}, z50.core.$strip>], "type">;
+	observedAt: z50.ZodISODateTime;
+	recordedAt: z50.ZodISODateTime;
+	expiresAt: z50.ZodISODateTime;
+	fresh: z50.ZodBoolean;
+	kind: z50.ZodLiteral<"website_visit">;
+	pageUrl: z50.ZodString;
+	visitCount: z50.ZodNumber;
+}, z50.core.$strip>, z50.ZodObject<{
+	id: z50.core.$ZodBranded<z50.ZodString, "sig", "out">;
+	prospectId: z50.core.$ZodBranded<z50.ZodString, "prs", "out">;
+	source: z50.ZodDiscriminatedUnion<[z50.ZodObject<{
+		type: z50.ZodLiteral<"provider">;
+		provider: z50.ZodString;
+	}, z50.core.$strip>, z50.ZodObject<{
+		type: z50.ZodLiteral<"webhook">;
+	}, z50.core.$strip>, z50.ZodObject<{
+		type: z50.ZodLiteral<"manual">;
+		userId: z50.core.$ZodBranded<z50.ZodString, "usr", "out">;
+	}, z50.core.$strip>], "type">;
+	observedAt: z50.ZodISODateTime;
+	recordedAt: z50.ZodISODateTime;
+	expiresAt: z50.ZodISODateTime;
+	fresh: z50.ZodBoolean;
+	kind: z50.ZodLiteral<"note">;
+	text: z50.ZodPipe<z50.ZodPipe<z50.ZodString, z50.ZodTransform<string, string>>, z50.ZodString>;
+}, z50.core.$strip>], "kind">;
+/** A signal. */
+type Signal = z50.infer<typeof signalSchema>;
+/** The body to record a note: a Rep's own words about a Prospect, such as "met at the conference". The other kinds come from providers and the webhook, not from people. */
+declare const recordNoteRequestSchema: z50.ZodObject<{
+	kind: z50.ZodLiteral<"note">;
+	text: z50.ZodPipe<z50.ZodString, z50.ZodString>;
+	observedAt: z50.ZodOptional<z50.ZodISODateTime>;
+}, z50.core.$strict>;
+/** The body to record a note. */
+type RecordNoteRequest = z50.infer<typeof recordNoteRequestSchema>;
+/** The query of a signal list: cursor, limit (at most 100), an optional kind and whether to list only fresh signals. */
+declare const listSignalsQuerySchema: z50.ZodObject<{
+	cursor: z50.ZodOptional<z50.ZodString>;
+	limit: z50.ZodDefault<z50.ZodPipe<z50.ZodPipe<z50.ZodUnion<readonly [z50.ZodNumber, z50.ZodString]>, z50.ZodTransform<number, string | number>>, z50.ZodNumber>>;
+	kind: z50.ZodOptional<z50.ZodEnum<{
+		funding: "funding";
+		hiring_spike: "hiring_spike";
+		job_change: "job_change";
+		note: "note";
+		technology_change: "technology_change";
+		website_visit: "website_visit";
+	}>>;
+	fresh: z50.ZodOptional<z50.ZodUnion<readonly [z50.ZodBoolean, z50.ZodPipe<z50.ZodEnum<{
+		false: "false";
+		true: "true";
+	}>, z50.ZodTransform<boolean, "false" | "true">>]>>;
+}, z50.core.$strip>;
+/** One page of signals, newest first (by `observedAt`, then id). */
+declare const listSignalsResponseSchema: z50.ZodObject<{
+	items: z50.ZodArray<z50.ZodDiscriminatedUnion<[z50.ZodObject<{
+		id: z50.core.$ZodBranded<z50.ZodString, "sig", "out">;
+		prospectId: z50.core.$ZodBranded<z50.ZodString, "prs", "out">;
+		source: z50.ZodDiscriminatedUnion<[z50.ZodObject<{
+			type: z50.ZodLiteral<"provider">;
+			provider: z50.ZodString;
+		}, z50.core.$strip>, z50.ZodObject<{
+			type: z50.ZodLiteral<"webhook">;
+		}, z50.core.$strip>, z50.ZodObject<{
+			type: z50.ZodLiteral<"manual">;
+			userId: z50.core.$ZodBranded<z50.ZodString, "usr", "out">;
+		}, z50.core.$strip>], "type">;
+		observedAt: z50.ZodISODateTime;
+		recordedAt: z50.ZodISODateTime;
+		expiresAt: z50.ZodISODateTime;
+		fresh: z50.ZodBoolean;
+		kind: z50.ZodLiteral<"funding">;
+		round: z50.ZodEnum<{
+			debt: "debt";
+			grant: "grant";
+			later_stage: "later_stage";
+			other: "other";
+			pre_seed: "pre_seed";
+			seed: "seed";
+			series_a: "series_a";
+			series_b: "series_b";
+			series_c: "series_c";
+		}>;
+		amountMajorUnits: z50.ZodNullable<z50.ZodNumber>;
+		currency: z50.ZodNullable<z50.ZodString>;
+	}, z50.core.$strip>, z50.ZodObject<{
+		id: z50.core.$ZodBranded<z50.ZodString, "sig", "out">;
+		prospectId: z50.core.$ZodBranded<z50.ZodString, "prs", "out">;
+		source: z50.ZodDiscriminatedUnion<[z50.ZodObject<{
+			type: z50.ZodLiteral<"provider">;
+			provider: z50.ZodString;
+		}, z50.core.$strip>, z50.ZodObject<{
+			type: z50.ZodLiteral<"webhook">;
+		}, z50.core.$strip>, z50.ZodObject<{
+			type: z50.ZodLiteral<"manual">;
+			userId: z50.core.$ZodBranded<z50.ZodString, "usr", "out">;
+		}, z50.core.$strip>], "type">;
+		observedAt: z50.ZodISODateTime;
+		recordedAt: z50.ZodISODateTime;
+		expiresAt: z50.ZodISODateTime;
+		fresh: z50.ZodBoolean;
+		kind: z50.ZodLiteral<"hiring_spike">;
+		openRoles: z50.ZodNumber;
+		windowDays: z50.ZodNumber;
+		department: z50.ZodNullable<z50.ZodPipe<z50.ZodPipe<z50.ZodString, z50.ZodTransform<string, string>>, z50.ZodString>>;
+	}, z50.core.$strip>, z50.ZodObject<{
+		id: z50.core.$ZodBranded<z50.ZodString, "sig", "out">;
+		prospectId: z50.core.$ZodBranded<z50.ZodString, "prs", "out">;
+		source: z50.ZodDiscriminatedUnion<[z50.ZodObject<{
+			type: z50.ZodLiteral<"provider">;
+			provider: z50.ZodString;
+		}, z50.core.$strip>, z50.ZodObject<{
+			type: z50.ZodLiteral<"webhook">;
+		}, z50.core.$strip>, z50.ZodObject<{
+			type: z50.ZodLiteral<"manual">;
+			userId: z50.core.$ZodBranded<z50.ZodString, "usr", "out">;
+		}, z50.core.$strip>], "type">;
+		observedAt: z50.ZodISODateTime;
+		recordedAt: z50.ZodISODateTime;
+		expiresAt: z50.ZodISODateTime;
+		fresh: z50.ZodBoolean;
+		kind: z50.ZodLiteral<"job_change">;
+		previousTitle: z50.ZodNullable<z50.ZodPipe<z50.ZodPipe<z50.ZodString, z50.ZodTransform<string, string>>, z50.ZodString>>;
+		newTitle: z50.ZodPipe<z50.ZodPipe<z50.ZodString, z50.ZodTransform<string, string>>, z50.ZodString>;
+		previousCompany: z50.ZodNullable<z50.ZodPipe<z50.ZodPipe<z50.ZodString, z50.ZodTransform<string, string>>, z50.ZodString>>;
+		newCompany: z50.ZodNullable<z50.ZodPipe<z50.ZodPipe<z50.ZodString, z50.ZodTransform<string, string>>, z50.ZodString>>;
+	}, z50.core.$strip>, z50.ZodObject<{
+		id: z50.core.$ZodBranded<z50.ZodString, "sig", "out">;
+		prospectId: z50.core.$ZodBranded<z50.ZodString, "prs", "out">;
+		source: z50.ZodDiscriminatedUnion<[z50.ZodObject<{
+			type: z50.ZodLiteral<"provider">;
+			provider: z50.ZodString;
+		}, z50.core.$strip>, z50.ZodObject<{
+			type: z50.ZodLiteral<"webhook">;
+		}, z50.core.$strip>, z50.ZodObject<{
+			type: z50.ZodLiteral<"manual">;
+			userId: z50.core.$ZodBranded<z50.ZodString, "usr", "out">;
+		}, z50.core.$strip>], "type">;
+		observedAt: z50.ZodISODateTime;
+		recordedAt: z50.ZodISODateTime;
+		expiresAt: z50.ZodISODateTime;
+		fresh: z50.ZodBoolean;
+		kind: z50.ZodLiteral<"technology_change">;
+		technology: z50.ZodPipe<z50.ZodPipe<z50.ZodString, z50.ZodTransform<string, string>>, z50.ZodString>;
+		change: z50.ZodEnum<{
+			adopted: "adopted";
+			dropped: "dropped";
+		}>;
+	}, z50.core.$strip>, z50.ZodObject<{
+		id: z50.core.$ZodBranded<z50.ZodString, "sig", "out">;
+		prospectId: z50.core.$ZodBranded<z50.ZodString, "prs", "out">;
+		source: z50.ZodDiscriminatedUnion<[z50.ZodObject<{
+			type: z50.ZodLiteral<"provider">;
+			provider: z50.ZodString;
+		}, z50.core.$strip>, z50.ZodObject<{
+			type: z50.ZodLiteral<"webhook">;
+		}, z50.core.$strip>, z50.ZodObject<{
+			type: z50.ZodLiteral<"manual">;
+			userId: z50.core.$ZodBranded<z50.ZodString, "usr", "out">;
+		}, z50.core.$strip>], "type">;
+		observedAt: z50.ZodISODateTime;
+		recordedAt: z50.ZodISODateTime;
+		expiresAt: z50.ZodISODateTime;
+		fresh: z50.ZodBoolean;
+		kind: z50.ZodLiteral<"website_visit">;
+		pageUrl: z50.ZodString;
+		visitCount: z50.ZodNumber;
+	}, z50.core.$strip>, z50.ZodObject<{
+		id: z50.core.$ZodBranded<z50.ZodString, "sig", "out">;
+		prospectId: z50.core.$ZodBranded<z50.ZodString, "prs", "out">;
+		source: z50.ZodDiscriminatedUnion<[z50.ZodObject<{
+			type: z50.ZodLiteral<"provider">;
+			provider: z50.ZodString;
+		}, z50.core.$strip>, z50.ZodObject<{
+			type: z50.ZodLiteral<"webhook">;
+		}, z50.core.$strip>, z50.ZodObject<{
+			type: z50.ZodLiteral<"manual">;
+			userId: z50.core.$ZodBranded<z50.ZodString, "usr", "out">;
+		}, z50.core.$strip>], "type">;
+		observedAt: z50.ZodISODateTime;
+		recordedAt: z50.ZodISODateTime;
+		expiresAt: z50.ZodISODateTime;
+		fresh: z50.ZodBoolean;
+		kind: z50.ZodLiteral<"note">;
+		text: z50.ZodPipe<z50.ZodPipe<z50.ZodString, z50.ZodTransform<string, string>>, z50.ZodString>;
+	}, z50.core.$strip>], "kind">>;
+	nextCursor: z50.ZodNullable<z50.ZodString>;
+}, z50.core.$strip>;
+/** The header that carries the webhook timestamp. */
+declare const SIGNAL_WEBHOOK_TIMESTAMP_HEADER = "x-closeline-timestamp";
+/** The header that carries the webhook signature: lower-case hex of HMAC-SHA256 over `<timestamp>.<raw body>` with the Organization's signing secret. */
+declare const SIGNAL_WEBHOOK_SIGNATURE_HEADER = "x-closeline-signature";
+/** How far a webhook timestamp may be from the receiver's clock, in seconds; older or newer is refused. */
+declare const SIGNAL_WEBHOOK_TOLERANCE_SECONDS = 300;
+/**
+* The body of the signed webhook an Organization calls from its own site: one website visit,
+* naming the Prospect by id or by email address, with an `eventId` that makes a replay record
+* nothing twice. The Organization comes from the path, and the Prospect must be that
+* Organization's own.
+*/
+declare const signalWebhookRequestSchema: z50.ZodUnion<readonly [z50.ZodObject<{
+	eventId: z50.ZodString;
+	kind: z50.ZodLiteral<"website_visit">;
+	prospectId: z50.core.$ZodBranded<z50.ZodString, "prs", "out">;
+	pageUrl: z50.ZodString;
+	visitedAt: z50.ZodISODateTime;
+}, z50.core.$strict>, z50.ZodObject<{
+	eventId: z50.ZodString;
+	kind: z50.ZodLiteral<"website_visit">;
+	email: z50.ZodPipe<z50.ZodPipe<z50.ZodString, z50.ZodTransform<string, string>>, z50.ZodString>;
+	pageUrl: z50.ZodString;
+	visitedAt: z50.ZodISODateTime;
+}, z50.core.$strict>]>;
+/** The body of the signed webhook. */
+type SignalWebhookRequest = z50.infer<typeof signalWebhookRequestSchema>;
+/** What the webhook answers: the signal recorded, or `duplicate` (and no signal) for an `eventId` already seen. */
+declare const signalWebhookResponseSchema: z50.ZodObject<{
+	recorded: z50.ZodBoolean;
+	duplicate: z50.ZodBoolean;
+	signalId: z50.ZodNullable<z50.core.$ZodBranded<z50.ZodString, "sig", "out">>;
+}, z50.core.$strip>;
+/** What the webhook answers. */
+type SignalWebhookResponse = z50.infer<typeof signalWebhookResponseSchema>;
+/** How long one kind of signal stays fresh, and whether it counts at all. */
+declare const signalKindSettingSchema: z50.ZodObject<{
+	kind: z50.ZodEnum<{
+		funding: "funding";
+		hiring_spike: "hiring_spike";
+		job_change: "job_change";
+		note: "note";
+		technology_change: "technology_change";
+		website_visit: "website_visit";
+	}>;
+	enabled: z50.ZodBoolean;
+	freshnessDays: z50.ZodNumber;
+}, z50.core.$strict>;
+/** The setting of one kind of signal. */
+type SignalKindSetting = z50.infer<typeof signalKindSettingSchema>;
+/** Whether the Organization's signing secret is set, and when it was last changed. The secret is never returned here. */
+declare const signalWebhookStateSchema: z50.ZodObject<{
+	configured: z50.ZodBoolean;
+	rotatedAt: z50.ZodNullable<z50.ZodISODateTime>;
+}, z50.core.$strip>;
+/** The signal settings: one entry per kind (each kind once), the webhook state and a version. */
+declare const signalSettingsSchema: z50.ZodObject<{
+	kinds: z50.ZodArray<z50.ZodObject<{
+		kind: z50.ZodEnum<{
+			funding: "funding";
+			hiring_spike: "hiring_spike";
+			job_change: "job_change";
+			note: "note";
+			technology_change: "technology_change";
+			website_visit: "website_visit";
+		}>;
+		enabled: z50.ZodBoolean;
+		freshnessDays: z50.ZodNumber;
+	}, z50.core.$strict>>;
+	webhook: z50.ZodObject<{
+		configured: z50.ZodBoolean;
+		rotatedAt: z50.ZodNullable<z50.ZodISODateTime>;
+	}, z50.core.$strip>;
+	version: z50.ZodNumber;
+	updatedAt: z50.ZodNullable<z50.ZodISODateTime>;
+}, z50.core.$strip>;
+/** The signal settings. */
+type SignalSettings = z50.infer<typeof signalSettingsSchema>;
+/** The body to save the signal settings: every kind once, and the `expectedVersion` the caller read. */
+declare const setSignalSettingsRequestSchema: z50.ZodObject<{
+	kinds: z50.ZodArray<z50.ZodObject<{
+		kind: z50.ZodEnum<{
+			funding: "funding";
+			hiring_spike: "hiring_spike";
+			job_change: "job_change";
+			note: "note";
+			technology_change: "technology_change";
+			website_visit: "website_visit";
+		}>;
+		enabled: z50.ZodBoolean;
+		freshnessDays: z50.ZodNumber;
+	}, z50.core.$strict>>;
+	expectedVersion: z50.ZodNumber;
+}, z50.core.$strict>;
+/** The body to save the signal settings. */
+type SetSignalSettingsRequest = z50.infer<typeof setSignalSettingsRequestSchema>;
+/** The webhook secret, shown once when it is made: 43 URL-safe characters (256 bits). */
+declare const signalWebhookSecretSchema: z50.ZodString;
+/** The answer to a rotation: the new secret, returned this once, and the address to call. */
+declare const rotateSignalWebhookResponseSchema: z50.ZodObject<{
+	organizationId: z50.core.$ZodBranded<z50.ZodString, "org", "out">;
+	secret: z50.ZodString;
+	rotatedAt: z50.ZodISODateTime;
+}, z50.core.$strip>;
+/** The answer to a rotation of the webhook secret. */
+type RotateSignalWebhookResponse = z50.infer<typeof rotateSignalWebhookResponseSchema>;
+import { z as z51 } from "zod";
+/** The most Prospects one enrichment request may name. */
+declare const MAX_ENRICH_PROSPECTS = 500;
+/** The longest value of an enriched field kept, in characters; a longer one is cut and flagged `truncated`. */
+declare const MAX_ENRICHED_VALUE_LENGTH = 320;
+/** The most providers the Organization may configure. */
+declare const MAX_PROVIDERS = 50;
+/** The longest provider key (the `<provider>` of `enrichment:<provider>`), in characters. */
+declare const MAX_PROVIDER_KEY_LENGTH = 32;
+/** The longest API key an Organization may enter for a provider, in characters. It is write-only. */
+declare const MAX_PROVIDER_API_KEY_LENGTH = 512;
+/** The most attempts one run records; a run asks each enabled provider of each group at most once. */
+declare const MAX_ATTEMPTS_PER_RUN = 150;
+/** The largest cost value, in micro-dollars (one million dollars). */
+declare const MAX_MICRO_DOLLARS = 0xe8d4a51000;
+/** The longest text of a signal or a note, in characters. */
+declare const MAX_SIGNAL_TEXT_LENGTH = 1e3;
+/** The longest short label of a signal (a title, a technology, a department), in characters. */
+declare const MAX_SIGNAL_LABEL_LENGTH = 200;
+/** The longest web address of a signal, in characters. */
+declare const MAX_SIGNAL_URL_LENGTH = 2048;
+/** The most days a signal of one kind stays fresh. */
+declare const MAX_SIGNAL_FRESHNESS_DAYS = 3650;
+/** The most fit criteria an Organization may keep. */
+declare const MAX_FIT_CRITERIA = 50;
+/** The longest name of a fit criterion, in characters. */
+declare const MAX_CRITERION_NAME_LENGTH = 100;
+/** The most values one fit criterion lists. */
+declare const MAX_CRITERION_VALUES = 20;
+/** The longest value of a fit criterion, in characters. */
+declare const MAX_CRITERION_VALUE_LENGTH = 100;
+/** The heaviest weight one fit criterion may carry. */
+declare const MAX_CRITERION_WEIGHT = 100;
+/** Text of 1 to `maxLength` characters, trimmed, with no control character; line breaks are allowed when `multiline`. */
+declare function enrichmentTextSchema(maxLength: number, multiline?: boolean): z51.ZodPipe<z51.ZodString, z51.ZodString>;
+/**
+* Text that came from outside (a provider, a web page, a webhook): untrusted data, kept as a plain
+* string of at most `maxLength` characters with control characters taken out, and never run as an
+* instruction. Unlike {@link enrichmentTextSchema} it does not refuse long input; it cuts it, and
+* the field beside it records the cut.
+*/
+declare function vendorTextSchema(maxLength: number): z51.ZodPipe<z51.ZodPipe<z51.ZodString, z51.ZodTransform<string, string>>, z51.ZodString>;
+/** An integer cost in micro-dollars (millionths of a dollar), never negative. */
+declare const microDollarsSchema: z51.ZodNumber;
+/**
+* A provider key: 1 to 32 lower-case letters, digits and underscores, starting with a letter. It
+* is an opaque name the Organization and the service agree on and is the `<provider>` of the
+* Source `enrichment:<provider>`. The contract names no vendor.
+*/
+declare const providerKeySchema: z51.ZodString;
+/** A provider key. */
+type ProviderKey = z51.infer<typeof providerKeySchema>;
+/** The field groups a waterfall fills, each with its own ordered providers. */
+declare const FIELD_GROUPS: readonly ["person", "company", "email_verification"];
+/** A field group of the waterfall. */
+declare const fieldGroupSchema: z51.ZodEnum<{
+	company: "company";
+	email_verification: "email_verification";
+	person: "person";
+}>;
+/** A field group of the waterfall. */
+type FieldGroup = z51.infer<typeof fieldGroupSchema>;
+/** The fields enrichment can fill, in the camelCase the API uses. Phone numbers are never enriched (ADR 0003). */
+declare const ENRICHED_FIELDS: readonly ["firstName", "lastName", "jobTitle", "linkedinUrl", "email", "companyName", "companyDomain", "industry", "employeeCount", "region", "technologies"];
+/** A field enrichment can fill. */
+declare const enrichedFieldNameSchema: z51.ZodEnum<{
+	companyDomain: "companyDomain";
+	companyName: "companyName";
+	email: "email";
+	employeeCount: "employeeCount";
+	firstName: "firstName";
+	industry: "industry";
+	jobTitle: "jobTitle";
+	lastName: "lastName";
+	linkedinUrl: "linkedinUrl";
+	region: "region";
+	technologies: "technologies";
+}>;
+/** A field enrichment can fill. */
+type EnrichedFieldName = z51.infer<typeof enrichedFieldNameSchema>;
+/** Which group fills which field. `email` is checked by the verification group, not looked up. */
+declare const FIELD_GROUP_OF: Readonly<Record<EnrichedFieldName, FieldGroup>>;
+/** The months an enrichment budget is counted in, as `YYYY-MM` (UTC). */
+declare const monthSchema: z51.ZodString;
+import { z as z52 } from "zod";
+/** An event type in `area.event_name` or `area.subject.event_name` form, such as `team.created` or `voice.call.started`. */
+declare const eventTypeSchema: z52.ZodString;
+/** An event type. */
+type EventType = z52.infer<typeof eventTypeSchema>;
+/** The envelope every event shares, wrapping a payload validated by `dataSchema`. */
+declare function eventEnvelopeSchema<D extends z52.ZodType>(dataSchema: D): z52.ZodObject<{
+	id: z52.core.$ZodBranded<z52.ZodString, "evt", "out">;
+	type: z52.ZodString;
+	version: z52.ZodNumber;
+	occurredAt: z52.ZodISODateTime;
+	organizationId: z52.core.$ZodBranded<z52.ZodString, "org", "out">;
+	region: z52.ZodEnum<{
+		eu: "eu";
+		us: "us";
+	}>;
+	data: D;
+}, z52.core.$strip>;
+/** Declares one event type at one version; its schema accepts only that type and version. */
+declare function defineEvent<
+	const T extends string,
+	const V extends number,
+	D extends z52.ZodType
+>(type: T, version: V, dataSchema: D): {
+	type: T;
+	version: V;
+	schema: z52.ZodObject<{
+		id: z52.core.$ZodBranded<z52.ZodString, "evt", "out">;
+		occurredAt: z52.ZodISODateTime;
+		organizationId: z52.core.$ZodBranded<z52.ZodString, "org", "out">;
+		region: z52.ZodEnum<{
+			eu: "eu";
+			us: "us";
+		}>;
+		type: z52.ZodLiteral<T>;
+		version: z52.ZodLiteral<V>;
+		data: D;
+	}, z52.core.$strip>;
 	/** Parses an envelope of this type and version; throws a ZodError for anything else. */
 	parse: (input: unknown) => ({
-		id: z46.core.$ZodBranded<z46.ZodString, "evt", "out">;
-		occurredAt: z46.ZodISODateTime;
-		organizationId: z46.core.$ZodBranded<z46.ZodString, "org", "out">;
-		region: z46.ZodEnum<{
+		id: z52.core.$ZodBranded<z52.ZodString, "evt", "out">;
+		occurredAt: z52.ZodISODateTime;
+		organizationId: z52.core.$ZodBranded<z52.ZodString, "org", "out">;
+		region: z52.ZodEnum<{
 			eu: "eu";
 			us: "us";
 		}>;
-		type: z46.ZodLiteral<T>;
-		version: z46.ZodLiteral<V>;
+		type: z52.ZodLiteral<T>;
+		version: z52.ZodLiteral<V>;
 		data: D;
-	} extends infer T_2 extends z46.core.$ZodLooseShape ? { -readonly [k in keyof T_2 as {
-		id: z46.core.$ZodBranded<z46.ZodString, "evt", "out">;
-		occurredAt: z46.ZodISODateTime;
-		organizationId: z46.core.$ZodBranded<z46.ZodString, "org", "out">;
-		region: z46.ZodEnum<{
+	} extends infer T_2 extends z52.core.$ZodLooseShape ? { -readonly [k in keyof T_2 as {
+		id: z52.core.$ZodBranded<z52.ZodString, "evt", "out">;
+		occurredAt: z52.ZodISODateTime;
+		organizationId: z52.core.$ZodBranded<z52.ZodString, "org", "out">;
+		region: z52.ZodEnum<{
 			eu: "eu";
 			us: "us";
 		}>;
-		type: z46.ZodLiteral<T>;
-		version: z46.ZodLiteral<V>;
+		type: z52.ZodLiteral<T>;
+		version: z52.ZodLiteral<V>;
 		data: D;
 	}[k] extends {
 		_zod: {
 			optout: "optional";
 		};
 	} ? never : k] : T_2[k]["_zod"]["output"] } : never) & ({
-		id: z46.core.$ZodBranded<z46.ZodString, "evt", "out">;
-		occurredAt: z46.ZodISODateTime;
-		organizationId: z46.core.$ZodBranded<z46.ZodString, "org", "out">;
-		region: z46.ZodEnum<{
+		id: z52.core.$ZodBranded<z52.ZodString, "evt", "out">;
+		occurredAt: z52.ZodISODateTime;
+		organizationId: z52.core.$ZodBranded<z52.ZodString, "org", "out">;
+		region: z52.ZodEnum<{
 			eu: "eu";
 			us: "us";
 		}>;
-		type: z46.ZodLiteral<T>;
-		version: z46.ZodLiteral<V>;
+		type: z52.ZodLiteral<T>;
+		version: z52.ZodLiteral<V>;
 		data: D;
-	} extends infer T_3 extends z46.core.$ZodLooseShape ? { -readonly [k in keyof T_3 as {
-		id: z46.core.$ZodBranded<z46.ZodString, "evt", "out">;
-		occurredAt: z46.ZodISODateTime;
-		organizationId: z46.core.$ZodBranded<z46.ZodString, "org", "out">;
-		region: z46.ZodEnum<{
+	} extends infer T_3 extends z52.core.$ZodLooseShape ? { -readonly [k in keyof T_3 as {
+		id: z52.core.$ZodBranded<z52.ZodString, "evt", "out">;
+		occurredAt: z52.ZodISODateTime;
+		organizationId: z52.core.$ZodBranded<z52.ZodString, "org", "out">;
+		region: z52.ZodEnum<{
 			eu: "eu";
 			us: "us";
 		}>;
-		type: z46.ZodLiteral<T>;
-		version: z46.ZodLiteral<V>;
+		type: z52.ZodLiteral<T>;
+		version: z52.ZodLiteral<V>;
 		data: D;
 	}[k] extends {
 		_zod: {
@@ -9438,53 +11225,53 @@ declare function defineEvent<
 		};
 	} ? k : never]? : T_3[k]["_zod"]["output"] | undefined } : never) extends infer T_1 ? { [K in keyof T_1] : T_1[K] } : never;
 	/** Parses without throwing. Queue consumers use this, so a malformed message is a result to handle, not an exception to retry. */
-	safeParse: (input: unknown) => z46.ZodSafeParseResult<({
-		id: z46.core.$ZodBranded<z46.ZodString, "evt", "out">;
-		occurredAt: z46.ZodISODateTime;
-		organizationId: z46.core.$ZodBranded<z46.ZodString, "org", "out">;
-		region: z46.ZodEnum<{
+	safeParse: (input: unknown) => z52.ZodSafeParseResult<({
+		id: z52.core.$ZodBranded<z52.ZodString, "evt", "out">;
+		occurredAt: z52.ZodISODateTime;
+		organizationId: z52.core.$ZodBranded<z52.ZodString, "org", "out">;
+		region: z52.ZodEnum<{
 			eu: "eu";
 			us: "us";
 		}>;
-		type: z46.ZodLiteral<T>;
-		version: z46.ZodLiteral<V>;
+		type: z52.ZodLiteral<T>;
+		version: z52.ZodLiteral<V>;
 		data: D;
-	} extends infer T_2 extends z46.core.$ZodLooseShape ? { -readonly [k in keyof T_2 as {
-		id: z46.core.$ZodBranded<z46.ZodString, "evt", "out">;
-		occurredAt: z46.ZodISODateTime;
-		organizationId: z46.core.$ZodBranded<z46.ZodString, "org", "out">;
-		region: z46.ZodEnum<{
+	} extends infer T_2 extends z52.core.$ZodLooseShape ? { -readonly [k in keyof T_2 as {
+		id: z52.core.$ZodBranded<z52.ZodString, "evt", "out">;
+		occurredAt: z52.ZodISODateTime;
+		organizationId: z52.core.$ZodBranded<z52.ZodString, "org", "out">;
+		region: z52.ZodEnum<{
 			eu: "eu";
 			us: "us";
 		}>;
-		type: z46.ZodLiteral<T>;
-		version: z46.ZodLiteral<V>;
+		type: z52.ZodLiteral<T>;
+		version: z52.ZodLiteral<V>;
 		data: D;
 	}[k] extends {
 		_zod: {
 			optout: "optional";
 		};
 	} ? never : k] : T_2[k]["_zod"]["output"] } : never) & ({
-		id: z46.core.$ZodBranded<z46.ZodString, "evt", "out">;
-		occurredAt: z46.ZodISODateTime;
-		organizationId: z46.core.$ZodBranded<z46.ZodString, "org", "out">;
-		region: z46.ZodEnum<{
+		id: z52.core.$ZodBranded<z52.ZodString, "evt", "out">;
+		occurredAt: z52.ZodISODateTime;
+		organizationId: z52.core.$ZodBranded<z52.ZodString, "org", "out">;
+		region: z52.ZodEnum<{
 			eu: "eu";
 			us: "us";
 		}>;
-		type: z46.ZodLiteral<T>;
-		version: z46.ZodLiteral<V>;
+		type: z52.ZodLiteral<T>;
+		version: z52.ZodLiteral<V>;
 		data: D;
-	} extends infer T_3 extends z46.core.$ZodLooseShape ? { -readonly [k in keyof T_3 as {
-		id: z46.core.$ZodBranded<z46.ZodString, "evt", "out">;
-		occurredAt: z46.ZodISODateTime;
-		organizationId: z46.core.$ZodBranded<z46.ZodString, "org", "out">;
-		region: z46.ZodEnum<{
+	} extends infer T_3 extends z52.core.$ZodLooseShape ? { -readonly [k in keyof T_3 as {
+		id: z52.core.$ZodBranded<z52.ZodString, "evt", "out">;
+		occurredAt: z52.ZodISODateTime;
+		organizationId: z52.core.$ZodBranded<z52.ZodString, "org", "out">;
+		region: z52.ZodEnum<{
 			eu: "eu";
 			us: "us";
 		}>;
-		type: z46.ZodLiteral<T>;
-		version: z46.ZodLiteral<V>;
+		type: z52.ZodLiteral<T>;
+		version: z52.ZodLiteral<V>;
 		data: D;
 	}[k] extends {
 		_zod: {
@@ -9492,225 +11279,237 @@ declare function defineEvent<
 		};
 	} ? k : never]? : T_3[k]["_zod"]["output"] | undefined } : never) extends infer T_1 ? { [K in keyof T_1] : T_1[K] } : never>;
 };
-import { z as z47 } from "zod";
+import { z as z53 } from "zod";
 /** An id string branded with its prefix, so ids of different kinds cannot be mixed up. */
-type Id<Prefix extends string> = string & z47.core.$brand<Prefix>;
+type Id<Prefix extends string> = string & z53.core.$brand<Prefix>;
 /** An id for one prefix: `<prefix>_<32 lowercase hex characters>`, branded with the prefix. */
-declare function idSchema<const Prefix extends string>(prefix: Prefix): PropertyKey extends Prefix ? z47.ZodString : z47.core.$ZodBranded<z47.ZodString, Prefix, "out">;
+declare function idSchema<const Prefix extends string>(prefix: Prefix): PropertyKey extends Prefix ? z53.ZodString : z53.core.$ZodBranded<z53.ZodString, Prefix, "out">;
 /** The id of an Organization (`org_…`). */
-declare const organizationIdSchema: z47.core.$ZodBranded<z47.ZodString, "org", "out">;
+declare const organizationIdSchema: z53.core.$ZodBranded<z53.ZodString, "org", "out">;
 /** The id of a user (`usr_…`). */
-declare const userIdSchema: z47.core.$ZodBranded<z47.ZodString, "usr", "out">;
+declare const userIdSchema: z53.core.$ZodBranded<z53.ZodString, "usr", "out">;
 /** The id of a membership of a user in an Organization (`mem_…`). */
-declare const membershipIdSchema: z47.core.$ZodBranded<z47.ZodString, "mem", "out">;
+declare const membershipIdSchema: z53.core.$ZodBranded<z53.ZodString, "mem", "out">;
 /** The id of a Team (`team_…`). */
-declare const teamIdSchema: z47.core.$ZodBranded<z47.ZodString, "team", "out">;
+declare const teamIdSchema: z53.core.$ZodBranded<z53.ZodString, "team", "out">;
 /** The id of an Invitation to join an Organization (`inv_…`). */
-declare const invitationIdSchema: z47.core.$ZodBranded<z47.ZodString, "inv", "out">;
+declare const invitationIdSchema: z53.core.$ZodBranded<z53.ZodString, "inv", "out">;
 /** The id of a Prospect (`prs_…`). */
-declare const prospectIdSchema: z47.core.$ZodBranded<z47.ZodString, "prs", "out">;
+declare const prospectIdSchema: z53.core.$ZodBranded<z53.ZodString, "prs", "out">;
 /** The id of a Prospect Company (`pco_…`). */
-declare const prospectCompanyIdSchema: z47.core.$ZodBranded<z47.ZodString, "pco", "out">;
+declare const prospectCompanyIdSchema: z53.core.$ZodBranded<z53.ZodString, "pco", "out">;
 /** The id of a Prospect import (`pimp_…`). */
-declare const prospectImportIdSchema: z47.core.$ZodBranded<z47.ZodString, "pimp", "out">;
+declare const prospectImportIdSchema: z53.core.$ZodBranded<z53.ZodString, "pimp", "out">;
 /** The id of a Prospect merge record (`pmrg_…`). */
-declare const prospectMergeIdSchema: z47.core.$ZodBranded<z47.ZodString, "pmrg", "out">;
+declare const prospectMergeIdSchema: z53.core.$ZodBranded<z53.ZodString, "pmrg", "out">;
 /** The id of a consent event in the ledger (`cev_…`). */
-declare const consentEventIdSchema: z47.core.$ZodBranded<z47.ZodString, "cev", "out">;
+declare const consentEventIdSchema: z53.core.$ZodBranded<z53.ZodString, "cev", "out">;
 /** The id of a Consent Wording version (`cwd_…`). */
-declare const consentWordingIdSchema: z47.core.$ZodBranded<z47.ZodString, "cwd", "out">;
+declare const consentWordingIdSchema: z53.core.$ZodBranded<z53.ZodString, "cwd", "out">;
 /** The id of a Suppression entry (`sup_…`). */
-declare const suppressionEntryIdSchema: z47.core.$ZodBranded<z47.ZodString, "sup", "out">;
+declare const suppressionEntryIdSchema: z53.core.$ZodBranded<z53.ZodString, "sup", "out">;
 /** The id of a hosted consent form (`cfm_…`). */
-declare const consentFormIdSchema: z47.core.$ZodBranded<z47.ZodString, "cfm", "out">;
+declare const consentFormIdSchema: z53.core.$ZodBranded<z53.ZodString, "cfm", "out">;
 /** The id of one Contact Check, as its audit row is named (`chk_…`). */
-declare const contactCheckIdSchema: z47.core.$ZodBranded<z47.ZodString, "chk", "out">;
+declare const contactCheckIdSchema: z53.core.$ZodBranded<z53.ZodString, "chk", "out">;
 /** The id of a Suppression import (`simp_…`). */
-declare const suppressionImportIdSchema: z47.core.$ZodBranded<z47.ZodString, "simp", "out">;
+declare const suppressionImportIdSchema: z53.core.$ZodBranded<z53.ZodString, "simp", "out">;
 /** The id of a Playbook document (`doc_…`). */
-declare const documentIdSchema: z47.core.$ZodBranded<z47.ZodString, "doc", "out">;
+declare const documentIdSchema: z53.core.$ZodBranded<z53.ZodString, "doc", "out">;
 /** The opaque id of a Deal record (`deal_…`), used in every URL path; the customer's own deal id never travels in a path. */
-declare const dealRecordIdSchema: z47.core.$ZodBranded<z47.ZodString, "deal", "out">;
+declare const dealRecordIdSchema: z53.core.$ZodBranded<z53.ZodString, "deal", "out">;
 /** The id of a Call (`call_…`). */
-declare const callIdSchema: z47.core.$ZodBranded<z47.ZodString, "call", "out">;
+declare const callIdSchema: z53.core.$ZodBranded<z53.ZodString, "call", "out">;
 /** The id of a Copilot Card (`ccard_…`), one piece of advice shown to a Rep during a Call. */
-declare const copilotCardIdSchema: z47.core.$ZodBranded<z47.ZodString, "ccard", "out">;
+declare const copilotCardIdSchema: z53.core.$ZodBranded<z53.ZodString, "ccard", "out">;
 /** The id of a Line (`line_…`), a phone number an Organization uses to place and receive Calls. */
-declare const lineIdSchema: z47.core.$ZodBranded<z47.ZodString, "line", "out">;
+declare const lineIdSchema: z53.core.$ZodBranded<z53.ZodString, "line", "out">;
 /** The id of a Deal import (`dimp_…`). */
-declare const dealImportIdSchema: z47.core.$ZodBranded<z47.ZodString, "dimp", "out">;
+declare const dealImportIdSchema: z53.core.$ZodBranded<z53.ZodString, "dimp", "out">;
 /** The id of an event (`evt_…`). */
-declare const eventIdSchema: z47.core.$ZodBranded<z47.ZodString, "evt", "out">;
+declare const eventIdSchema: z53.core.$ZodBranded<z53.ZodString, "evt", "out">;
 /** The id of a request, for tracing (`req_…`). */
-declare const requestIdSchema: z47.core.$ZodBranded<z47.ZodString, "req", "out">;
+declare const requestIdSchema: z53.core.$ZodBranded<z53.ZodString, "req", "out">;
 /** The id of a Demo Request (`dreq_…`), a Visitor's submitted wish to see Closeline. */
-declare const demoRequestIdSchema: z47.core.$ZodBranded<z47.ZodString, "dreq", "out">;
+declare const demoRequestIdSchema: z53.core.$ZodBranded<z53.ZodString, "dreq", "out">;
 /** The id of a Booking (`bkg_…`), a time reserved on a Rep's calendar for a Prospect. */
-declare const bookingIdSchema: z47.core.$ZodBranded<z47.ZodString, "bkg", "out">;
+declare const bookingIdSchema: z53.core.$ZodBranded<z53.ZodString, "bkg", "out">;
 /** The id of a Booking Type (`bkt_…`), a named kind of Booking with a length, buffers and mode. */
-declare const bookingTypeIdSchema: z47.core.$ZodBranded<z47.ZodString, "bkt", "out">;
+declare const bookingTypeIdSchema: z53.core.$ZodBranded<z53.ZodString, "bkt", "out">;
 /** The id of a Routing Rule (`rrl_…`). */
-declare const routingRuleIdSchema: z47.core.$ZodBranded<z47.ZodString, "rrl", "out">;
+declare const routingRuleIdSchema: z53.core.$ZodBranded<z53.ZodString, "rrl", "out">;
 /** The id of a stored routing decision (`rdc_…`): which rule picked which Rep, and who was skipped. */
-declare const routingDecisionIdSchema: z47.core.$ZodBranded<z47.ZodString, "rdc", "out">;
+declare const routingDecisionIdSchema: z53.core.$ZodBranded<z53.ZodString, "rdc", "out">;
 /** The id of an Inquiry (`inq_…`): a Prospect's request, through a form, a Chat or a Call, to talk to the Organization. */
-declare const inquiryIdSchema: z47.core.$ZodBranded<z47.ZodString, "inq", "out">;
+declare const inquiryIdSchema: z53.core.$ZodBranded<z53.ZodString, "inq", "out">;
 /** The id of a Qualification question (`qst_…`). */
-declare const qualificationQuestionIdSchema: z47.core.$ZodBranded<z47.ZodString, "qst", "out">;
+declare const qualificationQuestionIdSchema: z53.core.$ZodBranded<z53.ZodString, "qst", "out">;
 /** The id of a Chat (`cht_…`): a text conversation between a Prospect and the Inbound Agent on a website. */
-declare const chatIdSchema: z47.core.$ZodBranded<z47.ZodString, "cht", "out">;
+declare const chatIdSchema: z53.core.$ZodBranded<z53.ZodString, "cht", "out">;
 /** The id of a Handoff (`hof_…`): a live Call or Chat passed from the Inbound Agent to a Rep. */
-declare const handoffIdSchema: z47.core.$ZodBranded<z47.ZodString, "hof", "out">;
+declare const handoffIdSchema: z53.core.$ZodBranded<z53.ZodString, "hof", "out">;
 /** The id of a text session an Admin uses to try the Inbound Agent before it speaks to anyone (`try_…`). */
-declare const trySessionIdSchema: z47.core.$ZodBranded<z47.ZodString, "try", "out">;
+declare const trySessionIdSchema: z53.core.$ZodBranded<z53.ZodString, "try", "out">;
 /** The id of a Conversation (`cnv_…`): all Messages between one Prospect and an Organization on one channel. */
-declare const conversationIdSchema: z47.core.$ZodBranded<z47.ZodString, "cnv", "out">;
+declare const conversationIdSchema: z53.core.$ZodBranded<z53.ZodString, "cnv", "out">;
 /** The id of a Message (`msg_…`): one piece of text sent or received in a Conversation. */
-declare const messageIdSchema: z47.core.$ZodBranded<z47.ZodString, "msg", "out">;
+declare const messageIdSchema: z53.core.$ZodBranded<z53.ZodString, "msg", "out">;
 /** The id of a Draft (`drf_…`): text an Agent or a Rep wrote for a Conversation and not yet sent. */
-declare const draftIdSchema: z47.core.$ZodBranded<z47.ZodString, "drf", "out">;
+declare const draftIdSchema: z53.core.$ZodBranded<z53.ZodString, "drf", "out">;
 /** The id of an approval Decision (`dcs_…`): one recorded decision about a Draft or a Conversation. */
-declare const decisionIdSchema: z47.core.$ZodBranded<z47.ZodString, "dcs", "out">;
+declare const decisionIdSchema: z53.core.$ZodBranded<z53.ZodString, "dcs", "out">;
 /** The id of a Mailbox (`mbx_…`): an email account a Rep or Admin connected so the Outbound Agent can send from it. */
-declare const mailboxIdSchema: z47.core.$ZodBranded<z47.ZodString, "mbx", "out">;
+declare const mailboxIdSchema: z53.core.$ZodBranded<z53.ZodString, "mbx", "out">;
 /** The id of a send decision record (`snd_…`): one attempt to send one Step of an Enrollment, sent or refused. */
-declare const sendIdSchema: z47.core.$ZodBranded<z47.ZodString, "snd", "out">;
+declare const sendIdSchema: z53.core.$ZodBranded<z53.ZodString, "snd", "out">;
 /** The id of a mail event (`mev_…`): a bounce, complaint, reply, out-of-office or unsubscribe seen on a Mailbox. */
-declare const mailEventIdSchema: z47.core.$ZodBranded<z47.ZodString, "mev", "out">;
+declare const mailEventIdSchema: z53.core.$ZodBranded<z53.ZodString, "mev", "out">;
 /** The id of a Campaign (`cpg_…`): a run of outreach to a set of Prospects. */
-declare const campaignIdSchema: z47.core.$ZodBranded<z47.ZodString, "cpg", "out">;
+declare const campaignIdSchema: z53.core.$ZodBranded<z53.ZodString, "cpg", "out">;
 /** The id of an Enrollment (`enr_…`): one Prospect's place in a Campaign's Sequence. */
-declare const enrollmentIdSchema: z47.core.$ZodBranded<z47.ZodString, "enr", "out">;
+declare const enrollmentIdSchema: z53.core.$ZodBranded<z53.ZodString, "enr", "out">;
 /** The id of a Play (`ply_…`): a reusable Sequence for a stated goal, built in or proposed from won Deals. */
-declare const playIdSchema: z47.core.$ZodBranded<z47.ZodString, "ply", "out">;
+declare const playIdSchema: z53.core.$ZodBranded<z53.ZodString, "ply", "out">;
 /** The id of an entry in an Enrollment's activity log (`eev_…`). */
-declare const enrollmentEventIdSchema: z47.core.$ZodBranded<z47.ZodString, "eev", "out">;
+declare const enrollmentEventIdSchema: z53.core.$ZodBranded<z53.ZodString, "eev", "out">;
 /** The id of a Research Brief (`brf_…`): the cited facts about one Prospect that a Draft is written from. */
-declare const briefIdSchema: z47.core.$ZodBranded<z47.ZodString, "brf", "out">;
+declare const briefIdSchema: z53.core.$ZodBranded<z53.ZodString, "brf", "out">;
 /** The id of a Brand Voice version (`bvo_…`): how an Organization's outreach sounds, saved as a new version on each change. */
-declare const brandVoiceIdSchema: z47.core.$ZodBranded<z47.ZodString, "bvo", "out">;
+declare const brandVoiceIdSchema: z53.core.$ZodBranded<z53.ZodString, "bvo", "out">;
 /** The id of a buying signal (`sig_…`): a dated, sourced event about a Prospect's company that a Citation can point at. */
-declare const signalIdSchema: z47.core.$ZodBranded<z47.ZodString, "sig", "out">;
+declare const signalIdSchema: z53.core.$ZodBranded<z53.ZodString, "sig", "out">;
+/** The id of an enrichment run (`erun_…`): one Prospect's pass through the provider waterfall. */
+declare const enrichmentRunIdSchema: z53.core.$ZodBranded<z53.ZodString, "erun", "out">;
+/** The id of an enrichment run set (`erset_…`): the runs one bulk enrichment request created. */
+declare const enrichmentRunSetIdSchema: z53.core.$ZodBranded<z53.ZodString, "erset", "out">;
+/** The id of a fit criterion (`fcr_…`): one named, weighted part of an Organization's ideal customer. */
+declare const fitCriterionIdSchema: z53.core.$ZodBranded<z53.ZodString, "fcr", "out">;
 /** The id of an Organization. */
-type OrganizationId = z47.infer<typeof organizationIdSchema>;
+type OrganizationId = z53.infer<typeof organizationIdSchema>;
 /** The id of a user. */
-type UserId = z47.infer<typeof userIdSchema>;
+type UserId = z53.infer<typeof userIdSchema>;
 /** The id of a membership. */
-type MembershipId = z47.infer<typeof membershipIdSchema>;
+type MembershipId = z53.infer<typeof membershipIdSchema>;
 /** The id of a Team. */
-type TeamId = z47.infer<typeof teamIdSchema>;
+type TeamId = z53.infer<typeof teamIdSchema>;
 /** The id of an Invitation. */
-type InvitationId = z47.infer<typeof invitationIdSchema>;
+type InvitationId = z53.infer<typeof invitationIdSchema>;
 /** The id of a consent event. */
-type ConsentEventId = z47.infer<typeof consentEventIdSchema>;
+type ConsentEventId = z53.infer<typeof consentEventIdSchema>;
 /** The id of a Consent Wording version. */
-type ConsentWordingId = z47.infer<typeof consentWordingIdSchema>;
+type ConsentWordingId = z53.infer<typeof consentWordingIdSchema>;
 /** The id of a Suppression entry. */
-type SuppressionEntryId = z47.infer<typeof suppressionEntryIdSchema>;
+type SuppressionEntryId = z53.infer<typeof suppressionEntryIdSchema>;
 /** The id of a hosted consent form. */
-type ConsentFormId = z47.infer<typeof consentFormIdSchema>;
+type ConsentFormId = z53.infer<typeof consentFormIdSchema>;
 /** The id of one Contact Check. */
-type ContactCheckId = z47.infer<typeof contactCheckIdSchema>;
+type ContactCheckId = z53.infer<typeof contactCheckIdSchema>;
 /** The id of a Suppression import. */
-type SuppressionImportId = z47.infer<typeof suppressionImportIdSchema>;
+type SuppressionImportId = z53.infer<typeof suppressionImportIdSchema>;
 /** The id of a Prospect. */
-type ProspectId = z47.infer<typeof prospectIdSchema>;
+type ProspectId = z53.infer<typeof prospectIdSchema>;
 /** The id of a Prospect Company. */
-type ProspectCompanyId = z47.infer<typeof prospectCompanyIdSchema>;
+type ProspectCompanyId = z53.infer<typeof prospectCompanyIdSchema>;
 /** The id of a Prospect import. */
-type ProspectImportId = z47.infer<typeof prospectImportIdSchema>;
+type ProspectImportId = z53.infer<typeof prospectImportIdSchema>;
 /** The id of a Prospect merge record. */
-type ProspectMergeId = z47.infer<typeof prospectMergeIdSchema>;
+type ProspectMergeId = z53.infer<typeof prospectMergeIdSchema>;
 /** The id of a Playbook document. */
-type DocumentId = z47.infer<typeof documentIdSchema>;
+type DocumentId = z53.infer<typeof documentIdSchema>;
 /** The opaque id of a Deal record. */
-type DealRecordId = z47.infer<typeof dealRecordIdSchema>;
+type DealRecordId = z53.infer<typeof dealRecordIdSchema>;
 /** The id of a Call. */
-type CallId = z47.infer<typeof callIdSchema>;
+type CallId = z53.infer<typeof callIdSchema>;
 /** The id of a Copilot Card. */
-type CopilotCardId = z47.infer<typeof copilotCardIdSchema>;
+type CopilotCardId = z53.infer<typeof copilotCardIdSchema>;
 /** The id of a Line. */
-type LineId = z47.infer<typeof lineIdSchema>;
+type LineId = z53.infer<typeof lineIdSchema>;
 /** The id of a Deal import. */
-type DealImportId = z47.infer<typeof dealImportIdSchema>;
+type DealImportId = z53.infer<typeof dealImportIdSchema>;
 /** The id of an event. */
-type EventId = z47.infer<typeof eventIdSchema>;
+type EventId = z53.infer<typeof eventIdSchema>;
 /** The id of a request. */
-type RequestId = z47.infer<typeof requestIdSchema>;
+type RequestId = z53.infer<typeof requestIdSchema>;
 /** The id of a Demo Request. */
-type DemoRequestId = z47.infer<typeof demoRequestIdSchema>;
+type DemoRequestId = z53.infer<typeof demoRequestIdSchema>;
 /** The id of a Booking. */
-type BookingId = z47.infer<typeof bookingIdSchema>;
+type BookingId = z53.infer<typeof bookingIdSchema>;
 /** The id of a Booking Type. */
-type BookingTypeId = z47.infer<typeof bookingTypeIdSchema>;
+type BookingTypeId = z53.infer<typeof bookingTypeIdSchema>;
 /** The id of a Routing Rule. */
-type RoutingRuleId = z47.infer<typeof routingRuleIdSchema>;
+type RoutingRuleId = z53.infer<typeof routingRuleIdSchema>;
 /** The id of a stored routing decision. */
-type RoutingDecisionId = z47.infer<typeof routingDecisionIdSchema>;
+type RoutingDecisionId = z53.infer<typeof routingDecisionIdSchema>;
 /** The id of an Inquiry. */
-type InquiryId = z47.infer<typeof inquiryIdSchema>;
+type InquiryId = z53.infer<typeof inquiryIdSchema>;
 /** The id of a Qualification question. */
-type QualificationQuestionId = z47.infer<typeof qualificationQuestionIdSchema>;
+type QualificationQuestionId = z53.infer<typeof qualificationQuestionIdSchema>;
 /** The id of a Chat. */
-type ChatId = z47.infer<typeof chatIdSchema>;
+type ChatId = z53.infer<typeof chatIdSchema>;
 /** The id of a Handoff. */
-type HandoffId = z47.infer<typeof handoffIdSchema>;
+type HandoffId = z53.infer<typeof handoffIdSchema>;
 /** The id of a try-it session. */
-type TrySessionId = z47.infer<typeof trySessionIdSchema>;
+type TrySessionId = z53.infer<typeof trySessionIdSchema>;
 /** The id of a Mailbox. */
-type MailboxId = z47.infer<typeof mailboxIdSchema>;
+type MailboxId = z53.infer<typeof mailboxIdSchema>;
 /** The id of a send decision record. */
-type SendId = z47.infer<typeof sendIdSchema>;
+type SendId = z53.infer<typeof sendIdSchema>;
 /** The id of a mail event. */
-type MailEventId = z47.infer<typeof mailEventIdSchema>;
+type MailEventId = z53.infer<typeof mailEventIdSchema>;
 /** The id of a Campaign. */
-type CampaignId = z47.infer<typeof campaignIdSchema>;
+type CampaignId = z53.infer<typeof campaignIdSchema>;
 /** The id of an Enrollment. */
-type EnrollmentId = z47.infer<typeof enrollmentIdSchema>;
+type EnrollmentId = z53.infer<typeof enrollmentIdSchema>;
 /** The id of a Play. */
-type PlayId = z47.infer<typeof playIdSchema>;
+type PlayId = z53.infer<typeof playIdSchema>;
 /** The id of an entry in an Enrollment's activity log. */
-type EnrollmentEventId = z47.infer<typeof enrollmentEventIdSchema>;
+type EnrollmentEventId = z53.infer<typeof enrollmentEventIdSchema>;
 /** The id of a Research Brief. */
-type BriefId = z47.infer<typeof briefIdSchema>;
+type BriefId = z53.infer<typeof briefIdSchema>;
 /** The id of a Brand Voice version. */
-type BrandVoiceId = z47.infer<typeof brandVoiceIdSchema>;
+type BrandVoiceId = z53.infer<typeof brandVoiceIdSchema>;
 /** The id of a buying signal. */
-type SignalId = z47.infer<typeof signalIdSchema>;
+type SignalId = z53.infer<typeof signalIdSchema>;
+/** The id of an enrichment run. */
+type EnrichmentRunId = z53.infer<typeof enrichmentRunIdSchema>;
+/** The id of an enrichment run set. */
+type EnrichmentRunSetId = z53.infer<typeof enrichmentRunSetIdSchema>;
+/** The id of a fit criterion. */
+type FitCriterionId = z53.infer<typeof fitCriterionIdSchema>;
 /** Turns a UUID (any case; 32 hex characters or the dashed 8-4-4-4-12 form) into an id with the given prefix; throws otherwise. */
 declare function formatId<const Prefix extends string>(prefix: Prefix, uuid: string): Id<Prefix>;
 /** The id of a Conversation. */
-type ConversationId = z47.infer<typeof conversationIdSchema>;
+type ConversationId = z53.infer<typeof conversationIdSchema>;
 /** The id of a Message. */
-type MessageId = z47.infer<typeof messageIdSchema>;
+type MessageId = z53.infer<typeof messageIdSchema>;
 /** The id of a Draft. */
-type DraftId = z47.infer<typeof draftIdSchema>;
+type DraftId = z53.infer<typeof draftIdSchema>;
 /** The id of an approval Decision. */
-type DecisionId = z47.infer<typeof decisionIdSchema>;
-import { z as z49 } from "zod";
-import { z as z48 } from "zod";
+type DecisionId = z53.infer<typeof decisionIdSchema>;
+import { z as z55 } from "zod";
+import { z as z54 } from "zod";
 /**
 * The channels a Conversation runs on. SMS and WhatsApp are added here when their phases begin;
 * until then a value outside this list is refused at the edge.
 */
 declare const INBOX_CHANNELS: readonly ["email", "linkedin", "chat"];
 /** A channel a Conversation runs on. */
-declare const inboxChannelSchema: z48.ZodEnum<{
+declare const inboxChannelSchema: z54.ZodEnum<{
 	chat: "chat";
 	email: "email";
 	linkedin: "linkedin";
 }>;
 /** A channel a Conversation runs on. */
-type InboxChannel = z48.infer<typeof inboxChannelSchema>;
+type InboxChannel = z54.infer<typeof inboxChannelSchema>;
 /** Who is answering a Conversation now: the Agent, or the Rep who took it over. */
 declare const CONVERSATION_CONTROLLERS: readonly ["agent", "rep"];
 /** Who is answering a Conversation now. */
-declare const conversationControllerSchema: z48.ZodEnum<{
+declare const conversationControllerSchema: z54.ZodEnum<{
 	agent: "agent";
 	rep: "rep";
 }>;
 /** Who is answering a Conversation now. */
-type ConversationController = z48.infer<typeof conversationControllerSchema>;
+type ConversationController = z54.infer<typeof conversationControllerSchema>;
 /**
 * The states of a Conversation: `agent` (the Agent answers), `awaiting_approval` (a Draft waits for
 * a person), `rep` (a Rep took over), `escalated` (it needs a person and has been routed) and
@@ -9718,7 +11517,7 @@ type ConversationController = z48.infer<typeof conversationControllerSchema>;
 */
 declare const CONVERSATION_STATES: readonly ["agent", "awaiting_approval", "rep", "escalated", "closed"];
 /** The state of a Conversation. */
-declare const conversationStateSchema: z48.ZodEnum<{
+declare const conversationStateSchema: z54.ZodEnum<{
 	agent: "agent";
 	awaiting_approval: "awaiting_approval";
 	closed: "closed";
@@ -9726,26 +11525,26 @@ declare const conversationStateSchema: z48.ZodEnum<{
 	rep: "rep";
 }>;
 /** The state of a Conversation. */
-type ConversationState = z48.infer<typeof conversationStateSchema>;
+type ConversationState = z54.infer<typeof conversationStateSchema>;
 /** Whether a Message came from the Prospect or went to them. */
 declare const MESSAGE_DIRECTIONS: readonly ["inbound", "outbound"];
 /** Whether a Message came from the Prospect or went to them. */
-declare const messageDirectionSchema: z48.ZodEnum<{
+declare const messageDirectionSchema: z54.ZodEnum<{
 	inbound: "inbound";
 	outbound: "outbound";
 }>;
 /** Whether a Message came from the Prospect or went to them. */
-type MessageDirection = z48.infer<typeof messageDirectionSchema>;
+type MessageDirection = z54.infer<typeof messageDirectionSchema>;
 /** Who wrote a Message: the Prospect, an Agent or a Rep. */
 declare const MESSAGE_AUTHOR_KINDS: readonly ["prospect", "agent", "rep"];
 /** Who wrote a Message. */
-declare const messageAuthorKindSchema: z48.ZodEnum<{
+declare const messageAuthorKindSchema: z54.ZodEnum<{
 	agent: "agent";
 	prospect: "prospect";
 	rep: "rep";
 }>;
 /** Who wrote a Message. */
-type MessageAuthorKind = z48.infer<typeof messageAuthorKindSchema>;
+type MessageAuthorKind = z54.infer<typeof messageAuthorKindSchema>;
 /**
 * What an inbound Message means. The set is closed: a label outside it is refused by every schema
 * here, and a classifier whose output is not in it records `other` (see {@link toReplyLabel}).
@@ -9753,7 +11552,7 @@ type MessageAuthorKind = z48.infer<typeof messageAuthorKindSchema>;
 */
 declare const REPLY_LABELS: readonly ["positive", "question", "objection", "not_now", "wrong_person", "unsubscribe", "out_of_office", "bounce", "negative", "other"];
 /** What an inbound Message means. */
-declare const replyLabelSchema: z48.ZodEnum<{
+declare const replyLabelSchema: z54.ZodEnum<{
 	bounce: "bounce";
 	negative: "negative";
 	not_now: "not_now";
@@ -9766,7 +11565,7 @@ declare const replyLabelSchema: z48.ZodEnum<{
 	wrong_person: "wrong_person";
 }>;
 /** What an inbound Message means. */
-type ReplyLabel = z48.infer<typeof replyLabelSchema>;
+type ReplyLabel = z54.infer<typeof replyLabelSchema>;
 /** Maps untrusted classifier output to a label: anything outside the closed set is `other`. */
 declare function toReplyLabel(value: unknown): ReplyLabel;
 /** The labels that stop further sends to the Prospect on the channel at once. */
@@ -9774,7 +11573,7 @@ declare const STOP_SENDING_LABELS: readonly ["unsubscribe"];
 /** The labels that pause the sequence for the Prospect (a dead address or the wrong person). */
 declare const PAUSE_SEQUENCE_LABELS: readonly ["bounce", "wrong_person"];
 /** A confidence from 0 to 1. */
-declare const confidenceSchema: z48.ZodNumber;
+declare const confidenceSchema: z54.ZodNumber;
 /** The longest Message body, in characters. */
 declare const MAX_MESSAGE_BODY_LENGTH = 2e4;
 /**
@@ -9782,16 +11581,16 @@ declare const MAX_MESSAGE_BODY_LENGTH = 2e4;
 * control character. It is the Prospect's or a model's text, so it is untrusted data for every
 * consumer, and it is never logged, never put in an error and never in an event.
 */
-declare const messageBodySchema: z48.ZodString;
+declare const messageBodySchema: z54.ZodString;
 /**
 * The id a channel gives a Message (an email Message-ID, a LinkedIn message id): printable ASCII
 * with no space, 1 to 255 characters. Core stores each (channel, provider id) once.
 */
-declare const providerMessageIdSchema: z48.ZodString;
+declare const providerMessageIdSchema: z54.ZodString;
 /** The longest note a person leaves with a decision, in characters. */
 declare const MAX_DECISION_NOTE_LENGTH = 500;
 /** A short note with a decision: 1 to 500 characters, line breaks and tabs allowed, no other control character. */
-declare const decisionNoteSchema: z48.ZodString;
+declare const decisionNoteSchema: z54.ZodString;
 /** The longest sentence a Draft gives for its strategy, in characters. */
 declare const MAX_STRATEGY_LENGTH = 300;
 /** The most Sources a Draft may cite. */
@@ -9799,14 +11598,14 @@ declare const MAX_DRAFT_SOURCES = 10;
 /** What Sources can be: a Moment of a won, lost or open Deal, or a chunk of a Playbook document. */
 declare const DRAFT_SOURCE_KINDS: readonly ["moment", "document_chunk"];
 /** What a Source can be. */
-declare const draftSourceKindSchema: z48.ZodEnum<{
+declare const draftSourceKindSchema: z54.ZodEnum<{
 	document_chunk: "document_chunk";
 	moment: "moment";
 }>;
 /** What a Source can be. */
-type DraftSourceKind = z48.infer<typeof draftSourceKindSchema>;
+type DraftSourceKind = z54.infer<typeof draftSourceKindSchema>;
 /** The id of a Moment or document chunk in the Playbook: 1 to 128 characters from `A-Za-z0-9_.:-`. */
-declare const sourceRefSchema: z48.ZodString;
+declare const sourceRefSchema: z54.ZodString;
 /** The longest passage shown for a Source, in characters. */
 declare const MAX_SOURCE_PASSAGE_LENGTH = 4e3;
 /**
@@ -9816,7 +11615,7 @@ declare const MAX_SOURCE_PASSAGE_LENGTH = 4e3;
 */
 declare const DRAFT_HOLD_REASONS: readonly ["policy", "ungrounded", "check_failed", "escalated", "first_message"];
 /** Why a Draft waits for a person. */
-declare const draftHoldReasonSchema: z48.ZodEnum<{
+declare const draftHoldReasonSchema: z54.ZodEnum<{
 	check_failed: "check_failed";
 	escalated: "escalated";
 	first_message: "first_message";
@@ -9824,13 +11623,13 @@ declare const draftHoldReasonSchema: z48.ZodEnum<{
 	ungrounded: "ungrounded";
 }>;
 /** Why a Draft waits for a person. */
-type DraftHoldReason = z48.infer<typeof draftHoldReasonSchema>;
+type DraftHoldReason = z54.infer<typeof draftHoldReasonSchema>;
 /** The hold reasons no setting can turn off. */
 declare const ALWAYS_HELD_REASONS: readonly ["ungrounded", "check_failed", "escalated", "first_message"];
 /** The states of a Draft. */
 declare const DRAFT_STATUSES: readonly ["pending", "approved", "rejected", "sent", "superseded", "void"];
 /** The state of a Draft. */
-declare const draftStatusSchema: z48.ZodEnum<{
+declare const draftStatusSchema: z54.ZodEnum<{
 	approved: "approved";
 	pending: "pending";
 	rejected: "rejected";
@@ -9839,20 +11638,20 @@ declare const draftStatusSchema: z48.ZodEnum<{
 	void: "void";
 }>;
 /** The state of a Draft. */
-type DraftStatus = z48.infer<typeof draftStatusSchema>;
+type DraftStatus = z54.infer<typeof draftStatusSchema>;
 /** Who wrote a Draft: an Agent, or a Rep composing a reply in the inbox. */
 declare const DRAFT_AUTHORS: readonly ["agent", "rep"];
 /** Who wrote a Draft. */
-declare const draftAuthorSchema: z48.ZodEnum<{
+declare const draftAuthorSchema: z54.ZodEnum<{
 	agent: "agent";
 	rep: "rep";
 }>;
 /** Who wrote a Draft. */
-type DraftAuthor = z48.infer<typeof draftAuthorSchema>;
+type DraftAuthor = z54.infer<typeof draftAuthorSchema>;
 /** Why a send failed: a closed list, never the provider's own text. */
 declare const MESSAGE_FAILURE_REASONS: readonly ["provider_rejected", "recipient_invalid", "suppressed", "channel_unavailable", "timeout", "unknown"];
 /** Why a send failed. */
-declare const messageFailureReasonSchema: z48.ZodEnum<{
+declare const messageFailureReasonSchema: z54.ZodEnum<{
 	channel_unavailable: "channel_unavailable";
 	provider_rejected: "provider_rejected";
 	recipient_invalid: "recipient_invalid";
@@ -9861,13 +11660,13 @@ declare const messageFailureReasonSchema: z48.ZodEnum<{
 	unknown: "unknown";
 }>;
 /** Why a send failed. */
-type MessageFailureReason = z48.infer<typeof messageFailureReasonSchema>;
+type MessageFailureReason = z54.infer<typeof messageFailureReasonSchema>;
 /**
 * The meaning of an inbound Message: a label from the closed set, a confidence, and who decided
 * it. `model` is the classifier; `rep` is a person's correction, which names them.
 */
-declare const classificationSchema: z49.ZodObject<{
-	label: z49.ZodEnum<{
+declare const classificationSchema: z55.ZodObject<{
+	label: z55.ZodEnum<{
 		bounce: "bounce";
 		negative: "negative";
 		not_now: "not_now";
@@ -9879,16 +11678,16 @@ declare const classificationSchema: z49.ZodObject<{
 		unsubscribe: "unsubscribe";
 		wrong_person: "wrong_person";
 	}>;
-	confidence: z49.ZodNumber;
-	decidedBy: z49.ZodEnum<{
+	confidence: z55.ZodNumber;
+	decidedBy: z55.ZodEnum<{
 		model: "model";
 		rep: "rep";
 	}>;
-	correctedByMembershipId: z49.ZodNullable<z49.core.$ZodBranded<z49.ZodString, "mem", "out">>;
-	classifiedAt: z49.ZodISODateTime;
-}, z49.core.$strict>;
+	correctedByMembershipId: z55.ZodNullable<z55.core.$ZodBranded<z55.ZodString, "mem", "out">>;
+	classifiedAt: z55.ZodISODateTime;
+}, z55.core.$strict>;
 /** The meaning of an inbound Message. */
-type Classification = z49.infer<typeof classificationSchema>;
+type Classification = z55.infer<typeof classificationSchema>;
 /**
 * A Conversation: all Messages between one Prospect and the Organization on one channel, and who
 * answers now. `controllerMembershipId` names the Rep exactly when `controller` is `rep`, and the
@@ -9896,28 +11695,28 @@ type Classification = z49.infer<typeof classificationSchema>;
 * one whose inbox it is), null while unassigned in the Admin queue. `latestLabel` is the label of
 * the latest inbound Message, null until one is classified.
 */
-declare const conversationSchema: z49.ZodObject<{
-	id: z49.core.$ZodBranded<z49.ZodString, "cnv", "out">;
-	prospectId: z49.core.$ZodBranded<z49.ZodString, "prs", "out">;
-	channel: z49.ZodEnum<{
+declare const conversationSchema: z55.ZodObject<{
+	id: z55.core.$ZodBranded<z55.ZodString, "cnv", "out">;
+	prospectId: z55.core.$ZodBranded<z55.ZodString, "prs", "out">;
+	channel: z55.ZodEnum<{
 		chat: "chat";
 		email: "email";
 		linkedin: "linkedin";
 	}>;
-	controller: z49.ZodEnum<{
+	controller: z55.ZodEnum<{
 		agent: "agent";
 		rep: "rep";
 	}>;
-	controllerMembershipId: z49.ZodNullable<z49.core.$ZodBranded<z49.ZodString, "mem", "out">>;
-	state: z49.ZodEnum<{
+	controllerMembershipId: z55.ZodNullable<z55.core.$ZodBranded<z55.ZodString, "mem", "out">>;
+	state: z55.ZodEnum<{
 		agent: "agent";
 		awaiting_approval: "awaiting_approval";
 		closed: "closed";
 		escalated: "escalated";
 		rep: "rep";
 	}>;
-	ownerMembershipId: z49.ZodNullable<z49.core.$ZodBranded<z49.ZodString, "mem", "out">>;
-	latestLabel: z49.ZodNullable<z49.ZodEnum<{
+	ownerMembershipId: z55.ZodNullable<z55.core.$ZodBranded<z55.ZodString, "mem", "out">>;
+	latestLabel: z55.ZodNullable<z55.ZodEnum<{
 		bounce: "bounce";
 		negative: "negative";
 		not_now: "not_now";
@@ -9929,12 +11728,12 @@ declare const conversationSchema: z49.ZodObject<{
 		unsubscribe: "unsubscribe";
 		wrong_person: "wrong_person";
 	}>>;
-	pendingDraftCount: z49.ZodNumber;
-	lastMessageAt: z49.ZodISODateTime;
-	createdAt: z49.ZodISODateTime;
-}, z49.core.$strict>;
+	pendingDraftCount: z55.ZodNumber;
+	lastMessageAt: z55.ZodISODateTime;
+	createdAt: z55.ZodISODateTime;
+}, z55.core.$strict>;
 /** A Conversation. */
-type Conversation = z49.infer<typeof conversationSchema>;
+type Conversation = z55.infer<typeof conversationSchema>;
 /**
 * A Message: one piece of text in a Conversation. Messages are append-only. An inbound Message is
 * written by the Prospect and carries a classification (null until classified); an outbound one is
@@ -9942,25 +11741,25 @@ type Conversation = z49.infer<typeof conversationSchema>;
 * confirms it was sent. The body is the Prospect's or a model's text: untrusted, and never logged
 * or put in an event or an error.
 */
-declare const messageSchema: z49.ZodObject<{
-	id: z49.core.$ZodBranded<z49.ZodString, "msg", "out">;
-	conversationId: z49.core.$ZodBranded<z49.ZodString, "cnv", "out">;
-	direction: z49.ZodEnum<{
+declare const messageSchema: z55.ZodObject<{
+	id: z55.core.$ZodBranded<z55.ZodString, "msg", "out">;
+	conversationId: z55.core.$ZodBranded<z55.ZodString, "cnv", "out">;
+	direction: z55.ZodEnum<{
 		inbound: "inbound";
 		outbound: "outbound";
 	}>;
-	authorKind: z49.ZodEnum<{
+	authorKind: z55.ZodEnum<{
 		agent: "agent";
 		prospect: "prospect";
 		rep: "rep";
 	}>;
-	authorMembershipId: z49.ZodNullable<z49.core.$ZodBranded<z49.ZodString, "mem", "out">>;
-	providerMessageId: z49.ZodString;
-	draftId: z49.ZodNullable<z49.core.$ZodBranded<z49.ZodString, "drf", "out">>;
-	body: z49.ZodString;
-	sentAt: z49.ZodISODateTime;
-	classification: z49.ZodNullable<z49.ZodObject<{
-		label: z49.ZodEnum<{
+	authorMembershipId: z55.ZodNullable<z55.core.$ZodBranded<z55.ZodString, "mem", "out">>;
+	providerMessageId: z55.ZodString;
+	draftId: z55.ZodNullable<z55.core.$ZodBranded<z55.ZodString, "drf", "out">>;
+	body: z55.ZodString;
+	sentAt: z55.ZodISODateTime;
+	classification: z55.ZodNullable<z55.ZodObject<{
+		label: z55.ZodEnum<{
 			bounce: "bounce";
 			negative: "negative";
 			not_now: "not_now";
@@ -9972,65 +11771,65 @@ declare const messageSchema: z49.ZodObject<{
 			unsubscribe: "unsubscribe";
 			wrong_person: "wrong_person";
 		}>;
-		confidence: z49.ZodNumber;
-		decidedBy: z49.ZodEnum<{
+		confidence: z55.ZodNumber;
+		decidedBy: z55.ZodEnum<{
 			model: "model";
 			rep: "rep";
 		}>;
-		correctedByMembershipId: z49.ZodNullable<z49.core.$ZodBranded<z49.ZodString, "mem", "out">>;
-		classifiedAt: z49.ZodISODateTime;
-	}, z49.core.$strict>>;
-}, z49.core.$strict>;
+		correctedByMembershipId: z55.ZodNullable<z55.core.$ZodBranded<z55.ZodString, "mem", "out">>;
+		classifiedAt: z55.ZodISODateTime;
+	}, z55.core.$strict>>;
+}, z55.core.$strict>;
 /** A Message. */
-type Message = z49.infer<typeof messageSchema>;
+type Message = z55.infer<typeof messageSchema>;
 /**
 * A Source a Draft cites: a Moment of a Deal (with that Deal's Outcome) or a chunk of a Playbook
 * document (no Outcome), and how many Moments or passages support it. It is a reference, never
 * the text: model output is untrusted, so a Source id is accepted only when the Playbook returned
 * it for this request, and the passage is read from the Playbook (`DraftSourcePassage`).
 */
-declare const sourceSchema: z49.ZodObject<{
-	kind: z49.ZodEnum<{
+declare const sourceSchema: z55.ZodObject<{
+	kind: z55.ZodEnum<{
 		document_chunk: "document_chunk";
 		moment: "moment";
 	}>;
-	sourceRef: z49.ZodString;
-	dealRecordId: z49.ZodNullable<z49.core.$ZodBranded<z49.ZodString, "deal", "out">>;
-	documentId: z49.ZodNullable<z49.core.$ZodBranded<z49.ZodString, "doc", "out">>;
-	outcome: z49.ZodNullable<z49.ZodEnum<{
+	sourceRef: z55.ZodString;
+	dealRecordId: z55.ZodNullable<z55.core.$ZodBranded<z55.ZodString, "deal", "out">>;
+	documentId: z55.ZodNullable<z55.core.$ZodBranded<z55.ZodString, "doc", "out">>;
+	outcome: z55.ZodNullable<z55.ZodEnum<{
 		lost: "lost";
 		open: "open";
 		won: "won";
 	}>>;
-	evidenceCount: z49.ZodNumber;
-}, z49.core.$strict>;
+	evidenceCount: z55.ZodNumber;
+}, z55.core.$strict>;
 /** A Source a Draft cites. */
-type Source = z49.infer<typeof sourceSchema>;
+type Source = z55.infer<typeof sourceSchema>;
 /** A Source with the passage it points to, read from the Playbook for display; untrusted text. */
-declare const sourcePassageSchema: z49.ZodObject<{
-	source: z49.ZodObject<{
-		kind: z49.ZodEnum<{
+declare const sourcePassageSchema: z55.ZodObject<{
+	source: z55.ZodObject<{
+		kind: z55.ZodEnum<{
 			document_chunk: "document_chunk";
 			moment: "moment";
 		}>;
-		sourceRef: z49.ZodString;
-		dealRecordId: z49.ZodNullable<z49.core.$ZodBranded<z49.ZodString, "deal", "out">>;
-		documentId: z49.ZodNullable<z49.core.$ZodBranded<z49.ZodString, "doc", "out">>;
-		outcome: z49.ZodNullable<z49.ZodEnum<{
+		sourceRef: z55.ZodString;
+		dealRecordId: z55.ZodNullable<z55.core.$ZodBranded<z55.ZodString, "deal", "out">>;
+		documentId: z55.ZodNullable<z55.core.$ZodBranded<z55.ZodString, "doc", "out">>;
+		outcome: z55.ZodNullable<z55.ZodEnum<{
 			lost: "lost";
 			open: "open";
 			won: "won";
 		}>>;
-		evidenceCount: z49.ZodNumber;
-	}, z49.core.$strict>;
-	passage: z49.ZodString;
-}, z49.core.$strict>;
+		evidenceCount: z55.ZodNumber;
+	}, z55.core.$strict>;
+	passage: z55.ZodString;
+}, z55.core.$strict>;
 /** A Source with its passage. */
-type SourcePassage = z49.infer<typeof sourcePassageSchema>;
+type SourcePassage = z55.infer<typeof sourcePassageSchema>;
 /** Why a Draft was written: the Message it answers, that Message's label and the strategy in one sentence. */
-declare const draftReasonSchema: z49.ZodObject<{
-	triggerMessageId: z49.core.$ZodBranded<z49.ZodString, "msg", "out">;
-	label: z49.ZodEnum<{
+declare const draftReasonSchema: z55.ZodObject<{
+	triggerMessageId: z55.core.$ZodBranded<z55.ZodString, "msg", "out">;
+	label: z55.ZodEnum<{
 		bounce: "bounce";
 		negative: "negative";
 		not_now: "not_now";
@@ -10042,15 +11841,15 @@ declare const draftReasonSchema: z49.ZodObject<{
 		unsubscribe: "unsubscribe";
 		wrong_person: "wrong_person";
 	}>;
-	strategy: z49.ZodString;
-}, z49.core.$strict>;
+	strategy: z55.ZodString;
+}, z55.core.$strict>;
 /** Why a Draft was written. */
-type DraftReason = z49.infer<typeof draftReasonSchema>;
+type DraftReason = z55.infer<typeof draftReasonSchema>;
 /** The result of one check run on a Draft before release. */
-declare const draftCheckSchema: z49.ZodObject<{
-	name: z49.ZodString;
-	passed: z49.ZodBoolean;
-}, z49.core.$strict>;
+declare const draftCheckSchema: z55.ZodObject<{
+	name: z55.ZodString;
+	passed: z55.ZodBoolean;
+}, z55.core.$strict>;
 /**
 * A Draft: text an Agent wrote (or a Rep composed in the inbox) for a Conversation and has not
 * sent. An Agent Draft has a reason, a confidence and its Sources; one with no Source is
@@ -10058,18 +11857,18 @@ declare const draftCheckSchema: z49.ZodObject<{
 * Draft that is ungrounded, or has a failed check, always has a hold: no setting releases it. A
 * Rep's Draft is already approved by its author.
 */
-declare const draftSchema: z49.ZodObject<{
-	id: z49.core.$ZodBranded<z49.ZodString, "drf", "out">;
-	conversationId: z49.core.$ZodBranded<z49.ZodString, "cnv", "out">;
-	author: z49.ZodEnum<{
+declare const draftSchema: z55.ZodObject<{
+	id: z55.core.$ZodBranded<z55.ZodString, "drf", "out">;
+	conversationId: z55.core.$ZodBranded<z55.ZodString, "cnv", "out">;
+	author: z55.ZodEnum<{
 		agent: "agent";
 		rep: "rep";
 	}>;
-	authorMembershipId: z49.ZodNullable<z49.core.$ZodBranded<z49.ZodString, "mem", "out">>;
-	body: z49.ZodString;
-	reason: z49.ZodNullable<z49.ZodObject<{
-		triggerMessageId: z49.core.$ZodBranded<z49.ZodString, "msg", "out">;
-		label: z49.ZodEnum<{
+	authorMembershipId: z55.ZodNullable<z55.core.$ZodBranded<z55.ZodString, "mem", "out">>;
+	body: z55.ZodString;
+	reason: z55.ZodNullable<z55.ZodObject<{
+		triggerMessageId: z55.core.$ZodBranded<z55.ZodString, "msg", "out">;
+		label: z55.ZodEnum<{
 			bounce: "bounce";
 			negative: "negative";
 			not_now: "not_now";
@@ -10081,37 +11880,37 @@ declare const draftSchema: z49.ZodObject<{
 			unsubscribe: "unsubscribe";
 			wrong_person: "wrong_person";
 		}>;
-		strategy: z49.ZodString;
-	}, z49.core.$strict>>;
-	sources: z49.ZodArray<z49.ZodObject<{
-		kind: z49.ZodEnum<{
+		strategy: z55.ZodString;
+	}, z55.core.$strict>>;
+	sources: z55.ZodArray<z55.ZodObject<{
+		kind: z55.ZodEnum<{
 			document_chunk: "document_chunk";
 			moment: "moment";
 		}>;
-		sourceRef: z49.ZodString;
-		dealRecordId: z49.ZodNullable<z49.core.$ZodBranded<z49.ZodString, "deal", "out">>;
-		documentId: z49.ZodNullable<z49.core.$ZodBranded<z49.ZodString, "doc", "out">>;
-		outcome: z49.ZodNullable<z49.ZodEnum<{
+		sourceRef: z55.ZodString;
+		dealRecordId: z55.ZodNullable<z55.core.$ZodBranded<z55.ZodString, "deal", "out">>;
+		documentId: z55.ZodNullable<z55.core.$ZodBranded<z55.ZodString, "doc", "out">>;
+		outcome: z55.ZodNullable<z55.ZodEnum<{
 			lost: "lost";
 			open: "open";
 			won: "won";
 		}>>;
-		evidenceCount: z49.ZodNumber;
-	}, z49.core.$strict>>;
-	confidence: z49.ZodNullable<z49.ZodNumber>;
-	ungrounded: z49.ZodBoolean;
-	checks: z49.ZodArray<z49.ZodObject<{
-		name: z49.ZodString;
-		passed: z49.ZodBoolean;
-	}, z49.core.$strict>>;
-	hold: z49.ZodNullable<z49.ZodEnum<{
+		evidenceCount: z55.ZodNumber;
+	}, z55.core.$strict>>;
+	confidence: z55.ZodNullable<z55.ZodNumber>;
+	ungrounded: z55.ZodBoolean;
+	checks: z55.ZodArray<z55.ZodObject<{
+		name: z55.ZodString;
+		passed: z55.ZodBoolean;
+	}, z55.core.$strict>>;
+	hold: z55.ZodNullable<z55.ZodEnum<{
 		check_failed: "check_failed";
 		escalated: "escalated";
 		first_message: "first_message";
 		policy: "policy";
 		ungrounded: "ungrounded";
 	}>>;
-	status: z49.ZodEnum<{
+	status: z55.ZodEnum<{
 		approved: "approved";
 		pending: "pending";
 		rejected: "rejected";
@@ -10119,15 +11918,15 @@ declare const draftSchema: z49.ZodObject<{
 		superseded: "superseded";
 		void: "void";
 	}>;
-	createdAt: z49.ZodISODateTime;
-	decidedAt: z49.ZodNullable<z49.ZodISODateTime>;
-}, z49.core.$strict>;
+	createdAt: z55.ZodISODateTime;
+	decidedAt: z55.ZodNullable<z55.ZodISODateTime>;
+}, z55.core.$strict>;
 /** A Draft. */
-type Draft = z49.infer<typeof draftSchema>;
+type Draft = z55.infer<typeof draftSchema>;
 /** What a recorded Decision was. */
 declare const DECISION_KINDS: readonly ["approve", "edit_approve", "reject", "auto_release", "takeover", "hand_back"];
 /** What a recorded Decision was. */
-declare const decisionKindSchema: z49.ZodEnum<{
+declare const decisionKindSchema: z55.ZodEnum<{
 	approve: "approve";
 	auto_release: "auto_release";
 	edit_approve: "edit_approve";
@@ -10136,18 +11935,18 @@ declare const decisionKindSchema: z49.ZodEnum<{
 	takeover: "takeover";
 }>;
 /** What a recorded Decision was. */
-type DecisionKind = z49.infer<typeof decisionKindSchema>;
+type DecisionKind = z55.infer<typeof decisionKindSchema>;
 /**
 * A Decision: one approval, edit, rejection, automatic release, takeover or hand-back, with who
 * and when. It names its Draft except for a takeover or hand-back. Only an automatic release has
 * no member. `acknowledgedUngrounded` is true when a person approved an ungrounded Draft knowing
 * it cites no Source. The edited text is the Message that was sent, not stored here.
 */
-declare const decisionSchema: z49.ZodObject<{
-	id: z49.core.$ZodBranded<z49.ZodString, "dcs", "out">;
-	conversationId: z49.core.$ZodBranded<z49.ZodString, "cnv", "out">;
-	draftId: z49.ZodNullable<z49.core.$ZodBranded<z49.ZodString, "drf", "out">>;
-	kind: z49.ZodEnum<{
+declare const decisionSchema: z55.ZodObject<{
+	id: z55.core.$ZodBranded<z55.ZodString, "dcs", "out">;
+	conversationId: z55.core.$ZodBranded<z55.ZodString, "cnv", "out">;
+	draftId: z55.ZodNullable<z55.core.$ZodBranded<z55.ZodString, "drf", "out">>;
+	kind: z55.ZodEnum<{
 		approve: "approve";
 		auto_release: "auto_release";
 		edit_approve: "edit_approve";
@@ -10155,13 +11954,13 @@ declare const decisionSchema: z49.ZodObject<{
 		reject: "reject";
 		takeover: "takeover";
 	}>;
-	decidedByMembershipId: z49.ZodNullable<z49.core.$ZodBranded<z49.ZodString, "mem", "out">>;
-	note: z49.ZodNullable<z49.ZodString>;
-	acknowledgedUngrounded: z49.ZodBoolean;
-	decidedAt: z49.ZodISODateTime;
-}, z49.core.$strict>;
+	decidedByMembershipId: z55.ZodNullable<z55.core.$ZodBranded<z55.ZodString, "mem", "out">>;
+	note: z55.ZodNullable<z55.ZodString>;
+	acknowledgedUngrounded: z55.ZodBoolean;
+	decidedAt: z55.ZodISODateTime;
+}, z55.core.$strict>;
 /** A Decision. */
-type Decision = z49.infer<typeof decisionSchema>;
+type Decision = z55.infer<typeof decisionSchema>;
 /** What an Organization's approval policy asks for a channel. See {@link approvalRuleSchema}. */
 declare const APPROVAL_MODES: readonly ["always", "below_confidence", "except"];
 /** The most labels an `except` rule may name. */
@@ -10173,14 +11972,14 @@ declare const MAX_EXCEPT_LABELS = 10;
 * always apply (an ungrounded Draft, a failed check, an escalated Conversation, the first
 * message to a Prospect).
 */
-declare const approvalRuleSchema: z49.ZodDiscriminatedUnion<[z49.ZodObject<{
-	mode: z49.ZodLiteral<"always">;
-}, z49.core.$strict>, z49.ZodObject<{
-	mode: z49.ZodLiteral<"below_confidence">;
-	threshold: z49.ZodNumber;
-}, z49.core.$strict>, z49.ZodObject<{
-	mode: z49.ZodLiteral<"except">;
-	labels: z49.ZodArray<z49.ZodEnum<{
+declare const approvalRuleSchema: z55.ZodDiscriminatedUnion<[z55.ZodObject<{
+	mode: z55.ZodLiteral<"always">;
+}, z55.core.$strict>, z55.ZodObject<{
+	mode: z55.ZodLiteral<"below_confidence">;
+	threshold: z55.ZodNumber;
+}, z55.core.$strict>, z55.ZodObject<{
+	mode: z55.ZodLiteral<"except">;
+	labels: z55.ZodArray<z55.ZodEnum<{
 		bounce: "bounce";
 		negative: "negative";
 		not_now: "not_now";
@@ -10192,24 +11991,24 @@ declare const approvalRuleSchema: z49.ZodDiscriminatedUnion<[z49.ZodObject<{
 		unsubscribe: "unsubscribe";
 		wrong_person: "wrong_person";
 	}>>;
-}, z49.core.$strict>], "mode">;
+}, z55.core.$strict>], "mode">;
 /** The approval rule for a channel. */
-type ApprovalRule = z49.infer<typeof approvalRuleSchema>;
+type ApprovalRule = z55.infer<typeof approvalRuleSchema>;
 /** The approval policy of one channel: its rule, and when and by whom it was last set (null while it is the default). */
-declare const approvalPolicySchema: z49.ZodObject<{
-	channel: z49.ZodEnum<{
+declare const approvalPolicySchema: z55.ZodObject<{
+	channel: z55.ZodEnum<{
 		chat: "chat";
 		email: "email";
 		linkedin: "linkedin";
 	}>;
-	rule: z49.ZodDiscriminatedUnion<[z49.ZodObject<{
-		mode: z49.ZodLiteral<"always">;
-	}, z49.core.$strict>, z49.ZodObject<{
-		mode: z49.ZodLiteral<"below_confidence">;
-		threshold: z49.ZodNumber;
-	}, z49.core.$strict>, z49.ZodObject<{
-		mode: z49.ZodLiteral<"except">;
-		labels: z49.ZodArray<z49.ZodEnum<{
+	rule: z55.ZodDiscriminatedUnion<[z55.ZodObject<{
+		mode: z55.ZodLiteral<"always">;
+	}, z55.core.$strict>, z55.ZodObject<{
+		mode: z55.ZodLiteral<"below_confidence">;
+		threshold: z55.ZodNumber;
+	}, z55.core.$strict>, z55.ZodObject<{
+		mode: z55.ZodLiteral<"except">;
+		labels: z55.ZodArray<z55.ZodEnum<{
 			bounce: "bounce";
 			negative: "negative";
 			not_now: "not_now";
@@ -10221,15 +12020,15 @@ declare const approvalPolicySchema: z49.ZodObject<{
 			unsubscribe: "unsubscribe";
 			wrong_person: "wrong_person";
 		}>>;
-	}, z49.core.$strict>], "mode">;
-	updatedAt: z49.ZodNullable<z49.ZodISODateTime>;
-	updatedByMembershipId: z49.ZodNullable<z49.core.$ZodBranded<z49.ZodString, "mem", "out">>;
-}, z49.core.$strict>;
+	}, z55.core.$strict>], "mode">;
+	updatedAt: z55.ZodNullable<z55.ZodISODateTime>;
+	updatedByMembershipId: z55.ZodNullable<z55.core.$ZodBranded<z55.ZodString, "mem", "out">>;
+}, z55.core.$strict>;
 /** The approval policy of one channel. */
-type ApprovalPolicy = z49.infer<typeof approvalPolicySchema>;
+type ApprovalPolicy = z55.infer<typeof approvalPolicySchema>;
 /** What decides whether a Draft waits for a person. */
 type HoldFacts = {
-	readonly label: z49.infer<typeof replyLabelSchema>;
+	readonly label: z55.infer<typeof replyLabelSchema>;
 	readonly confidence: number;
 	readonly ungrounded: boolean;
 	readonly failedCheck: boolean;
@@ -10240,62 +12039,62 @@ type HoldFacts = {
 * Says why a Draft waits for a person, or null when it may be released at once. The four holds
 * that always apply come first and no rule can turn them off; only then is the policy's rule asked.
 */
-declare function holdReasonFor(rule: ApprovalRule, facts: HoldFacts): z49.infer<typeof draftHoldReasonSchema> | null;
+declare function holdReasonFor(rule: ApprovalRule, facts: HoldFacts): z55.infer<typeof draftHoldReasonSchema> | null;
 /** The path parameters of a request about one Conversation. */
-declare const conversationParamsSchema: z49.ZodObject<{
-	conversationId: z49.core.$ZodBranded<z49.ZodString, "cnv", "out">;
-}, z49.core.$strict>;
+declare const conversationParamsSchema: z55.ZodObject<{
+	conversationId: z55.core.$ZodBranded<z55.ZodString, "cnv", "out">;
+}, z55.core.$strict>;
 /** The path parameters of a request about one Message of a Conversation. */
-declare const conversationMessageParamsSchema: z49.ZodObject<{
-	conversationId: z49.core.$ZodBranded<z49.ZodString, "cnv", "out">;
-	messageId: z49.core.$ZodBranded<z49.ZodString, "msg", "out">;
-}, z49.core.$strict>;
+declare const conversationMessageParamsSchema: z55.ZodObject<{
+	conversationId: z55.core.$ZodBranded<z55.ZodString, "cnv", "out">;
+	messageId: z55.core.$ZodBranded<z55.ZodString, "msg", "out">;
+}, z55.core.$strict>;
 /** The path parameters of a request about one Draft. */
-declare const draftParamsSchema: z49.ZodObject<{
-	draftId: z49.core.$ZodBranded<z49.ZodString, "drf", "out">;
-}, z49.core.$strict>;
+declare const draftParamsSchema: z55.ZodObject<{
+	draftId: z55.core.$ZodBranded<z55.ZodString, "drf", "out">;
+}, z55.core.$strict>;
 /** The path parameters of a request about one channel's policy. */
-declare const channelParamsSchema: z49.ZodObject<{
-	channel: z49.ZodEnum<{
+declare const channelParamsSchema: z55.ZodObject<{
+	channel: z55.ZodEnum<{
 		chat: "chat";
 		email: "email";
 		linkedin: "linkedin";
 	}>;
-}, z49.core.$strict>;
+}, z55.core.$strict>;
 /** The headers of a request that requires an `Idempotency-Key` (header names arrive lower-cased). */
-declare const inboxKeyedHeadersSchema: z49.ZodObject<{
-	"idempotency-key": z49.ZodString;
-}, z49.core.$strip>;
+declare const inboxKeyedHeadersSchema: z55.ZodObject<{
+	"idempotency-key": z55.ZodString;
+}, z55.core.$strip>;
 /** The cursor position a Conversation list resumes from: latest activity first, then id. */
-declare const conversationCursorSchema: z49.ZodObject<{
-	lastMessageAt: z49.ZodISODateTime;
-	id: z49.core.$ZodBranded<z49.ZodString, "cnv", "out">;
-}, z49.core.$strict>;
+declare const conversationCursorSchema: z55.ZodObject<{
+	lastMessageAt: z55.ZodISODateTime;
+	id: z55.core.$ZodBranded<z55.ZodString, "cnv", "out">;
+}, z55.core.$strict>;
 /**
 * The query parameters of a request to list Conversations: latest activity first, one
 * cursor-paginated page at a time, narrowed by channel, state, controller, the latest label and
 * Prospect. What the caller sees is decided from the token and a filter never widens it.
 */
-declare const listConversationsQuerySchema: z49.ZodObject<{
-	cursor: z49.ZodOptional<z49.ZodString>;
-	limit: z49.ZodDefault<z49.ZodPipe<z49.ZodPipe<z49.ZodUnion<readonly [z49.ZodNumber, z49.ZodString]>, z49.ZodTransform<number, string | number>>, z49.ZodNumber>>;
-	channel: z49.ZodOptional<z49.ZodEnum<{
+declare const listConversationsQuerySchema: z55.ZodObject<{
+	cursor: z55.ZodOptional<z55.ZodString>;
+	limit: z55.ZodDefault<z55.ZodPipe<z55.ZodPipe<z55.ZodUnion<readonly [z55.ZodNumber, z55.ZodString]>, z55.ZodTransform<number, string | number>>, z55.ZodNumber>>;
+	channel: z55.ZodOptional<z55.ZodEnum<{
 		chat: "chat";
 		email: "email";
 		linkedin: "linkedin";
 	}>>;
-	state: z49.ZodOptional<z49.ZodEnum<{
+	state: z55.ZodOptional<z55.ZodEnum<{
 		agent: "agent";
 		awaiting_approval: "awaiting_approval";
 		closed: "closed";
 		escalated: "escalated";
 		rep: "rep";
 	}>>;
-	controller: z49.ZodOptional<z49.ZodEnum<{
+	controller: z55.ZodOptional<z55.ZodEnum<{
 		agent: "agent";
 		rep: "rep";
 	}>>;
-	label: z49.ZodOptional<z49.ZodEnum<{
+	label: z55.ZodOptional<z55.ZodEnum<{
 		bounce: "bounce";
 		negative: "negative";
 		not_now: "not_now";
@@ -10307,34 +12106,34 @@ declare const listConversationsQuerySchema: z49.ZodObject<{
 		unsubscribe: "unsubscribe";
 		wrong_person: "wrong_person";
 	}>>;
-	prospectId: z49.ZodOptional<z49.core.$ZodBranded<z49.ZodString, "prs", "out">>;
-}, z49.core.$strict>;
+	prospectId: z55.ZodOptional<z55.core.$ZodBranded<z55.ZodString, "prs", "out">>;
+}, z55.core.$strict>;
 /** The query parameters of a request to list Conversations. */
-type ListConversationsQuery = z49.infer<typeof listConversationsQuerySchema>;
+type ListConversationsQuery = z55.infer<typeof listConversationsQuerySchema>;
 /** One page of Conversations. */
-declare const conversationPageSchema: z49.ZodObject<{
-	items: z49.ZodArray<z49.ZodObject<{
-		id: z49.core.$ZodBranded<z49.ZodString, "cnv", "out">;
-		prospectId: z49.core.$ZodBranded<z49.ZodString, "prs", "out">;
-		channel: z49.ZodEnum<{
+declare const conversationPageSchema: z55.ZodObject<{
+	items: z55.ZodArray<z55.ZodObject<{
+		id: z55.core.$ZodBranded<z55.ZodString, "cnv", "out">;
+		prospectId: z55.core.$ZodBranded<z55.ZodString, "prs", "out">;
+		channel: z55.ZodEnum<{
 			chat: "chat";
 			email: "email";
 			linkedin: "linkedin";
 		}>;
-		controller: z49.ZodEnum<{
+		controller: z55.ZodEnum<{
 			agent: "agent";
 			rep: "rep";
 		}>;
-		controllerMembershipId: z49.ZodNullable<z49.core.$ZodBranded<z49.ZodString, "mem", "out">>;
-		state: z49.ZodEnum<{
+		controllerMembershipId: z55.ZodNullable<z55.core.$ZodBranded<z55.ZodString, "mem", "out">>;
+		state: z55.ZodEnum<{
 			agent: "agent";
 			awaiting_approval: "awaiting_approval";
 			closed: "closed";
 			escalated: "escalated";
 			rep: "rep";
 		}>;
-		ownerMembershipId: z49.ZodNullable<z49.core.$ZodBranded<z49.ZodString, "mem", "out">>;
-		latestLabel: z49.ZodNullable<z49.ZodEnum<{
+		ownerMembershipId: z55.ZodNullable<z55.core.$ZodBranded<z55.ZodString, "mem", "out">>;
+		latestLabel: z55.ZodNullable<z55.ZodEnum<{
 			bounce: "bounce";
 			negative: "negative";
 			not_now: "not_now";
@@ -10346,43 +12145,43 @@ declare const conversationPageSchema: z49.ZodObject<{
 			unsubscribe: "unsubscribe";
 			wrong_person: "wrong_person";
 		}>>;
-		pendingDraftCount: z49.ZodNumber;
-		lastMessageAt: z49.ZodISODateTime;
-		createdAt: z49.ZodISODateTime;
-	}, z49.core.$strict>>;
-	nextCursor: z49.ZodNullable<z49.ZodString>;
-}, z49.core.$strip>;
+		pendingDraftCount: z55.ZodNumber;
+		lastMessageAt: z55.ZodISODateTime;
+		createdAt: z55.ZodISODateTime;
+	}, z55.core.$strict>>;
+	nextCursor: z55.ZodNullable<z55.ZodString>;
+}, z55.core.$strip>;
 /** The cursor position a Message list resumes from: oldest first, then id. */
-declare const messageCursorSchema: z49.ZodObject<{
-	sentAt: z49.ZodISODateTime;
-	id: z49.core.$ZodBranded<z49.ZodString, "msg", "out">;
-}, z49.core.$strict>;
+declare const messageCursorSchema: z55.ZodObject<{
+	sentAt: z55.ZodISODateTime;
+	id: z55.core.$ZodBranded<z55.ZodString, "msg", "out">;
+}, z55.core.$strict>;
 /** The query parameters of a request to list the Messages of a Conversation, oldest first. */
-declare const listMessagesQuerySchema: z49.ZodObject<{
-	cursor: z49.ZodOptional<z49.ZodString>;
-	limit: z49.ZodDefault<z49.ZodPipe<z49.ZodPipe<z49.ZodUnion<readonly [z49.ZodNumber, z49.ZodString]>, z49.ZodTransform<number, string | number>>, z49.ZodNumber>>;
-}, z49.core.$strict>;
+declare const listMessagesQuerySchema: z55.ZodObject<{
+	cursor: z55.ZodOptional<z55.ZodString>;
+	limit: z55.ZodDefault<z55.ZodPipe<z55.ZodPipe<z55.ZodUnion<readonly [z55.ZodNumber, z55.ZodString]>, z55.ZodTransform<number, string | number>>, z55.ZodNumber>>;
+}, z55.core.$strict>;
 /** One page of Messages. */
-declare const messagePageSchema: z49.ZodObject<{
-	items: z49.ZodArray<z49.ZodObject<{
-		id: z49.core.$ZodBranded<z49.ZodString, "msg", "out">;
-		conversationId: z49.core.$ZodBranded<z49.ZodString, "cnv", "out">;
-		direction: z49.ZodEnum<{
+declare const messagePageSchema: z55.ZodObject<{
+	items: z55.ZodArray<z55.ZodObject<{
+		id: z55.core.$ZodBranded<z55.ZodString, "msg", "out">;
+		conversationId: z55.core.$ZodBranded<z55.ZodString, "cnv", "out">;
+		direction: z55.ZodEnum<{
 			inbound: "inbound";
 			outbound: "outbound";
 		}>;
-		authorKind: z49.ZodEnum<{
+		authorKind: z55.ZodEnum<{
 			agent: "agent";
 			prospect: "prospect";
 			rep: "rep";
 		}>;
-		authorMembershipId: z49.ZodNullable<z49.core.$ZodBranded<z49.ZodString, "mem", "out">>;
-		providerMessageId: z49.ZodString;
-		draftId: z49.ZodNullable<z49.core.$ZodBranded<z49.ZodString, "drf", "out">>;
-		body: z49.ZodString;
-		sentAt: z49.ZodISODateTime;
-		classification: z49.ZodNullable<z49.ZodObject<{
-			label: z49.ZodEnum<{
+		authorMembershipId: z55.ZodNullable<z55.core.$ZodBranded<z55.ZodString, "mem", "out">>;
+		providerMessageId: z55.ZodString;
+		draftId: z55.ZodNullable<z55.core.$ZodBranded<z55.ZodString, "drf", "out">>;
+		body: z55.ZodString;
+		sentAt: z55.ZodISODateTime;
+		classification: z55.ZodNullable<z55.ZodObject<{
+			label: z55.ZodEnum<{
 				bounce: "bounce";
 				negative: "negative";
 				not_now: "not_now";
@@ -10394,20 +12193,20 @@ declare const messagePageSchema: z49.ZodObject<{
 				unsubscribe: "unsubscribe";
 				wrong_person: "wrong_person";
 			}>;
-			confidence: z49.ZodNumber;
-			decidedBy: z49.ZodEnum<{
+			confidence: z55.ZodNumber;
+			decidedBy: z55.ZodEnum<{
 				model: "model";
 				rep: "rep";
 			}>;
-			correctedByMembershipId: z49.ZodNullable<z49.core.$ZodBranded<z49.ZodString, "mem", "out">>;
-			classifiedAt: z49.ZodISODateTime;
-		}, z49.core.$strict>>;
-	}, z49.core.$strict>>;
-	nextCursor: z49.ZodNullable<z49.ZodString>;
-}, z49.core.$strip>;
+			correctedByMembershipId: z55.ZodNullable<z55.core.$ZodBranded<z55.ZodString, "mem", "out">>;
+			classifiedAt: z55.ZodISODateTime;
+		}, z55.core.$strict>>;
+	}, z55.core.$strict>>;
+	nextCursor: z55.ZodNullable<z55.ZodString>;
+}, z55.core.$strip>;
 /** The body of a request to correct the label of an inbound Message. */
-declare const correctClassificationRequestSchema: z49.ZodObject<{
-	label: z49.ZodEnum<{
+declare const correctClassificationRequestSchema: z55.ZodObject<{
+	label: z55.ZodEnum<{
 		bounce: "bounce";
 		negative: "negative";
 		not_now: "not_now";
@@ -10419,63 +12218,63 @@ declare const correctClassificationRequestSchema: z49.ZodObject<{
 		unsubscribe: "unsubscribe";
 		wrong_person: "wrong_person";
 	}>;
-}, z49.core.$strict>;
+}, z55.core.$strict>;
 /** The body of a request to take over or hand back a Conversation: none. */
-declare const conversationActionRequestSchema: z49.ZodObject<{}, z49.core.$strict>;
+declare const conversationActionRequestSchema: z55.ZodObject<{}, z55.core.$strict>;
 /** The body of a Rep's reply from the inbox: the text to send through the Conversation's channel. */
-declare const replyRequestSchema: z49.ZodObject<{
-	body: z49.ZodString;
-}, z49.core.$strict>;
+declare const replyRequestSchema: z55.ZodObject<{
+	body: z55.ZodString;
+}, z55.core.$strict>;
 /**
 * The body of a request to approve a Draft. With `body` the Draft is edited and approved: that
 * text is what is sent, and the Decision is `edit_approve`. A Draft with no Source is approved
 * only with `acknowledgeUngrounded` true; without it the answer is `inbox.draft_ungrounded`.
 */
-declare const approveDraftRequestSchema: z49.ZodObject<{
-	body: z49.ZodOptional<z49.ZodString>;
-	acknowledgeUngrounded: z49.ZodDefault<z49.ZodBoolean>;
-}, z49.core.$strict>;
+declare const approveDraftRequestSchema: z55.ZodObject<{
+	body: z55.ZodOptional<z55.ZodString>;
+	acknowledgeUngrounded: z55.ZodDefault<z55.ZodBoolean>;
+}, z55.core.$strict>;
 /** The body of a request to approve a Draft. */
-type ApproveDraftRequest = z49.infer<typeof approveDraftRequestSchema>;
+type ApproveDraftRequest = z55.infer<typeof approveDraftRequestSchema>;
 /** The body of a request to reject a Draft, with an optional short note. */
-declare const rejectDraftRequestSchema: z49.ZodObject<{
-	note: z49.ZodOptional<z49.ZodString>;
-}, z49.core.$strict>;
+declare const rejectDraftRequestSchema: z55.ZodObject<{
+	note: z55.ZodOptional<z55.ZodString>;
+}, z55.core.$strict>;
 /** The Sources of a Draft with their passages. */
-declare const draftSourcesSchema: z49.ZodObject<{
-	items: z49.ZodArray<z49.ZodObject<{
-		source: z49.ZodObject<{
-			kind: z49.ZodEnum<{
+declare const draftSourcesSchema: z55.ZodObject<{
+	items: z55.ZodArray<z55.ZodObject<{
+		source: z55.ZodObject<{
+			kind: z55.ZodEnum<{
 				document_chunk: "document_chunk";
 				moment: "moment";
 			}>;
-			sourceRef: z49.ZodString;
-			dealRecordId: z49.ZodNullable<z49.core.$ZodBranded<z49.ZodString, "deal", "out">>;
-			documentId: z49.ZodNullable<z49.core.$ZodBranded<z49.ZodString, "doc", "out">>;
-			outcome: z49.ZodNullable<z49.ZodEnum<{
+			sourceRef: z55.ZodString;
+			dealRecordId: z55.ZodNullable<z55.core.$ZodBranded<z55.ZodString, "deal", "out">>;
+			documentId: z55.ZodNullable<z55.core.$ZodBranded<z55.ZodString, "doc", "out">>;
+			outcome: z55.ZodNullable<z55.ZodEnum<{
 				lost: "lost";
 				open: "open";
 				won: "won";
 			}>>;
-			evidenceCount: z49.ZodNumber;
-		}, z49.core.$strict>;
-		passage: z49.ZodString;
-	}, z49.core.$strict>>;
-}, z49.core.$strict>;
+			evidenceCount: z55.ZodNumber;
+		}, z55.core.$strict>;
+		passage: z55.ZodString;
+	}, z55.core.$strict>>;
+}, z55.core.$strict>;
 /** An entry of the approval queue: a Draft waiting for a person, the Conversation it belongs to, and whether the caller may decide it. */
-declare const approvalQueueItemSchema: z49.ZodObject<{
-	draft: z49.ZodObject<{
-		id: z49.core.$ZodBranded<z49.ZodString, "drf", "out">;
-		conversationId: z49.core.$ZodBranded<z49.ZodString, "cnv", "out">;
-		author: z49.ZodEnum<{
+declare const approvalQueueItemSchema: z55.ZodObject<{
+	draft: z55.ZodObject<{
+		id: z55.core.$ZodBranded<z55.ZodString, "drf", "out">;
+		conversationId: z55.core.$ZodBranded<z55.ZodString, "cnv", "out">;
+		author: z55.ZodEnum<{
 			agent: "agent";
 			rep: "rep";
 		}>;
-		authorMembershipId: z49.ZodNullable<z49.core.$ZodBranded<z49.ZodString, "mem", "out">>;
-		body: z49.ZodString;
-		reason: z49.ZodNullable<z49.ZodObject<{
-			triggerMessageId: z49.core.$ZodBranded<z49.ZodString, "msg", "out">;
-			label: z49.ZodEnum<{
+		authorMembershipId: z55.ZodNullable<z55.core.$ZodBranded<z55.ZodString, "mem", "out">>;
+		body: z55.ZodString;
+		reason: z55.ZodNullable<z55.ZodObject<{
+			triggerMessageId: z55.core.$ZodBranded<z55.ZodString, "msg", "out">;
+			label: z55.ZodEnum<{
 				bounce: "bounce";
 				negative: "negative";
 				not_now: "not_now";
@@ -10487,37 +12286,37 @@ declare const approvalQueueItemSchema: z49.ZodObject<{
 				unsubscribe: "unsubscribe";
 				wrong_person: "wrong_person";
 			}>;
-			strategy: z49.ZodString;
-		}, z49.core.$strict>>;
-		sources: z49.ZodArray<z49.ZodObject<{
-			kind: z49.ZodEnum<{
+			strategy: z55.ZodString;
+		}, z55.core.$strict>>;
+		sources: z55.ZodArray<z55.ZodObject<{
+			kind: z55.ZodEnum<{
 				document_chunk: "document_chunk";
 				moment: "moment";
 			}>;
-			sourceRef: z49.ZodString;
-			dealRecordId: z49.ZodNullable<z49.core.$ZodBranded<z49.ZodString, "deal", "out">>;
-			documentId: z49.ZodNullable<z49.core.$ZodBranded<z49.ZodString, "doc", "out">>;
-			outcome: z49.ZodNullable<z49.ZodEnum<{
+			sourceRef: z55.ZodString;
+			dealRecordId: z55.ZodNullable<z55.core.$ZodBranded<z55.ZodString, "deal", "out">>;
+			documentId: z55.ZodNullable<z55.core.$ZodBranded<z55.ZodString, "doc", "out">>;
+			outcome: z55.ZodNullable<z55.ZodEnum<{
 				lost: "lost";
 				open: "open";
 				won: "won";
 			}>>;
-			evidenceCount: z49.ZodNumber;
-		}, z49.core.$strict>>;
-		confidence: z49.ZodNullable<z49.ZodNumber>;
-		ungrounded: z49.ZodBoolean;
-		checks: z49.ZodArray<z49.ZodObject<{
-			name: z49.ZodString;
-			passed: z49.ZodBoolean;
-		}, z49.core.$strict>>;
-		hold: z49.ZodNullable<z49.ZodEnum<{
+			evidenceCount: z55.ZodNumber;
+		}, z55.core.$strict>>;
+		confidence: z55.ZodNullable<z55.ZodNumber>;
+		ungrounded: z55.ZodBoolean;
+		checks: z55.ZodArray<z55.ZodObject<{
+			name: z55.ZodString;
+			passed: z55.ZodBoolean;
+		}, z55.core.$strict>>;
+		hold: z55.ZodNullable<z55.ZodEnum<{
 			check_failed: "check_failed";
 			escalated: "escalated";
 			first_message: "first_message";
 			policy: "policy";
 			ungrounded: "ungrounded";
 		}>>;
-		status: z49.ZodEnum<{
+		status: z55.ZodEnum<{
 			approved: "approved";
 			pending: "pending";
 			rejected: "rejected";
@@ -10525,51 +12324,51 @@ declare const approvalQueueItemSchema: z49.ZodObject<{
 			superseded: "superseded";
 			void: "void";
 		}>;
-		createdAt: z49.ZodISODateTime;
-		decidedAt: z49.ZodNullable<z49.ZodISODateTime>;
-	}, z49.core.$strict>;
-	channel: z49.ZodEnum<{
+		createdAt: z55.ZodISODateTime;
+		decidedAt: z55.ZodNullable<z55.ZodISODateTime>;
+	}, z55.core.$strict>;
+	channel: z55.ZodEnum<{
 		chat: "chat";
 		email: "email";
 		linkedin: "linkedin";
 	}>;
-	prospectId: z49.core.$ZodBranded<z49.ZodString, "prs", "out">;
-	ownerMembershipId: z49.ZodNullable<z49.core.$ZodBranded<z49.ZodString, "mem", "out">>;
-	canApprove: z49.ZodBoolean;
-}, z49.core.$strict>;
+	prospectId: z55.core.$ZodBranded<z55.ZodString, "prs", "out">;
+	ownerMembershipId: z55.ZodNullable<z55.core.$ZodBranded<z55.ZodString, "mem", "out">>;
+	canApprove: z55.ZodBoolean;
+}, z55.core.$strict>;
 /** An entry of the approval queue. */
-type ApprovalQueueItem = z49.infer<typeof approvalQueueItemSchema>;
+type ApprovalQueueItem = z55.infer<typeof approvalQueueItemSchema>;
 /** The cursor position the approval queue resumes from: oldest first, then id. */
-declare const approvalQueueCursorSchema: z49.ZodObject<{
-	createdAt: z49.ZodISODateTime;
-	id: z49.core.$ZodBranded<z49.ZodString, "drf", "out">;
-}, z49.core.$strict>;
+declare const approvalQueueCursorSchema: z55.ZodObject<{
+	createdAt: z55.ZodISODateTime;
+	id: z55.core.$ZodBranded<z55.ZodString, "drf", "out">;
+}, z55.core.$strict>;
 /** The query parameters of a request to list the approval queue, oldest first. */
-declare const listApprovalQueueQuerySchema: z49.ZodObject<{
-	cursor: z49.ZodOptional<z49.ZodString>;
-	limit: z49.ZodDefault<z49.ZodPipe<z49.ZodPipe<z49.ZodUnion<readonly [z49.ZodNumber, z49.ZodString]>, z49.ZodTransform<number, string | number>>, z49.ZodNumber>>;
-	channel: z49.ZodOptional<z49.ZodEnum<{
+declare const listApprovalQueueQuerySchema: z55.ZodObject<{
+	cursor: z55.ZodOptional<z55.ZodString>;
+	limit: z55.ZodDefault<z55.ZodPipe<z55.ZodPipe<z55.ZodUnion<readonly [z55.ZodNumber, z55.ZodString]>, z55.ZodTransform<number, string | number>>, z55.ZodNumber>>;
+	channel: z55.ZodOptional<z55.ZodEnum<{
 		chat: "chat";
 		email: "email";
 		linkedin: "linkedin";
 	}>>;
-	conversationId: z49.ZodOptional<z49.core.$ZodBranded<z49.ZodString, "cnv", "out">>;
-}, z49.core.$strict>;
+	conversationId: z55.ZodOptional<z55.core.$ZodBranded<z55.ZodString, "cnv", "out">>;
+}, z55.core.$strict>;
 /** One page of the approval queue. */
-declare const approvalQueuePageSchema: z49.ZodObject<{
-	items: z49.ZodArray<z49.ZodObject<{
-		draft: z49.ZodObject<{
-			id: z49.core.$ZodBranded<z49.ZodString, "drf", "out">;
-			conversationId: z49.core.$ZodBranded<z49.ZodString, "cnv", "out">;
-			author: z49.ZodEnum<{
+declare const approvalQueuePageSchema: z55.ZodObject<{
+	items: z55.ZodArray<z55.ZodObject<{
+		draft: z55.ZodObject<{
+			id: z55.core.$ZodBranded<z55.ZodString, "drf", "out">;
+			conversationId: z55.core.$ZodBranded<z55.ZodString, "cnv", "out">;
+			author: z55.ZodEnum<{
 				agent: "agent";
 				rep: "rep";
 			}>;
-			authorMembershipId: z49.ZodNullable<z49.core.$ZodBranded<z49.ZodString, "mem", "out">>;
-			body: z49.ZodString;
-			reason: z49.ZodNullable<z49.ZodObject<{
-				triggerMessageId: z49.core.$ZodBranded<z49.ZodString, "msg", "out">;
-				label: z49.ZodEnum<{
+			authorMembershipId: z55.ZodNullable<z55.core.$ZodBranded<z55.ZodString, "mem", "out">>;
+			body: z55.ZodString;
+			reason: z55.ZodNullable<z55.ZodObject<{
+				triggerMessageId: z55.core.$ZodBranded<z55.ZodString, "msg", "out">;
+				label: z55.ZodEnum<{
 					bounce: "bounce";
 					negative: "negative";
 					not_now: "not_now";
@@ -10581,37 +12380,37 @@ declare const approvalQueuePageSchema: z49.ZodObject<{
 					unsubscribe: "unsubscribe";
 					wrong_person: "wrong_person";
 				}>;
-				strategy: z49.ZodString;
-			}, z49.core.$strict>>;
-			sources: z49.ZodArray<z49.ZodObject<{
-				kind: z49.ZodEnum<{
+				strategy: z55.ZodString;
+			}, z55.core.$strict>>;
+			sources: z55.ZodArray<z55.ZodObject<{
+				kind: z55.ZodEnum<{
 					document_chunk: "document_chunk";
 					moment: "moment";
 				}>;
-				sourceRef: z49.ZodString;
-				dealRecordId: z49.ZodNullable<z49.core.$ZodBranded<z49.ZodString, "deal", "out">>;
-				documentId: z49.ZodNullable<z49.core.$ZodBranded<z49.ZodString, "doc", "out">>;
-				outcome: z49.ZodNullable<z49.ZodEnum<{
+				sourceRef: z55.ZodString;
+				dealRecordId: z55.ZodNullable<z55.core.$ZodBranded<z55.ZodString, "deal", "out">>;
+				documentId: z55.ZodNullable<z55.core.$ZodBranded<z55.ZodString, "doc", "out">>;
+				outcome: z55.ZodNullable<z55.ZodEnum<{
 					lost: "lost";
 					open: "open";
 					won: "won";
 				}>>;
-				evidenceCount: z49.ZodNumber;
-			}, z49.core.$strict>>;
-			confidence: z49.ZodNullable<z49.ZodNumber>;
-			ungrounded: z49.ZodBoolean;
-			checks: z49.ZodArray<z49.ZodObject<{
-				name: z49.ZodString;
-				passed: z49.ZodBoolean;
-			}, z49.core.$strict>>;
-			hold: z49.ZodNullable<z49.ZodEnum<{
+				evidenceCount: z55.ZodNumber;
+			}, z55.core.$strict>>;
+			confidence: z55.ZodNullable<z55.ZodNumber>;
+			ungrounded: z55.ZodBoolean;
+			checks: z55.ZodArray<z55.ZodObject<{
+				name: z55.ZodString;
+				passed: z55.ZodBoolean;
+			}, z55.core.$strict>>;
+			hold: z55.ZodNullable<z55.ZodEnum<{
 				check_failed: "check_failed";
 				escalated: "escalated";
 				first_message: "first_message";
 				policy: "policy";
 				ungrounded: "ungrounded";
 			}>>;
-			status: z49.ZodEnum<{
+			status: z55.ZodEnum<{
 				approved: "approved";
 				pending: "pending";
 				rejected: "rejected";
@@ -10619,32 +12418,32 @@ declare const approvalQueuePageSchema: z49.ZodObject<{
 				superseded: "superseded";
 				void: "void";
 			}>;
-			createdAt: z49.ZodISODateTime;
-			decidedAt: z49.ZodNullable<z49.ZodISODateTime>;
-		}, z49.core.$strict>;
-		channel: z49.ZodEnum<{
+			createdAt: z55.ZodISODateTime;
+			decidedAt: z55.ZodNullable<z55.ZodISODateTime>;
+		}, z55.core.$strict>;
+		channel: z55.ZodEnum<{
 			chat: "chat";
 			email: "email";
 			linkedin: "linkedin";
 		}>;
-		prospectId: z49.core.$ZodBranded<z49.ZodString, "prs", "out">;
-		ownerMembershipId: z49.ZodNullable<z49.core.$ZodBranded<z49.ZodString, "mem", "out">>;
-		canApprove: z49.ZodBoolean;
-	}, z49.core.$strict>>;
-	nextCursor: z49.ZodNullable<z49.ZodString>;
-}, z49.core.$strip>;
+		prospectId: z55.core.$ZodBranded<z55.ZodString, "prs", "out">;
+		ownerMembershipId: z55.ZodNullable<z55.core.$ZodBranded<z55.ZodString, "mem", "out">>;
+		canApprove: z55.ZodBoolean;
+	}, z55.core.$strict>>;
+	nextCursor: z55.ZodNullable<z55.ZodString>;
+}, z55.core.$strip>;
 /** The cursor position a Decision list resumes from: latest first, then id. */
-declare const decisionCursorSchema: z49.ZodObject<{
-	decidedAt: z49.ZodISODateTime;
-	id: z49.core.$ZodBranded<z49.ZodString, "dcs", "out">;
-}, z49.core.$strict>;
+declare const decisionCursorSchema: z55.ZodObject<{
+	decidedAt: z55.ZodISODateTime;
+	id: z55.core.$ZodBranded<z55.ZodString, "dcs", "out">;
+}, z55.core.$strict>;
 /** The query parameters of a request to list Decisions, latest first, optionally in a time range. */
-declare const listDecisionsQuerySchema: z49.ZodObject<{
-	cursor: z49.ZodOptional<z49.ZodString>;
-	limit: z49.ZodDefault<z49.ZodPipe<z49.ZodPipe<z49.ZodUnion<readonly [z49.ZodNumber, z49.ZodString]>, z49.ZodTransform<number, string | number>>, z49.ZodNumber>>;
-	conversationId: z49.ZodOptional<z49.core.$ZodBranded<z49.ZodString, "cnv", "out">>;
-	draftId: z49.ZodOptional<z49.core.$ZodBranded<z49.ZodString, "drf", "out">>;
-	kind: z49.ZodOptional<z49.ZodEnum<{
+declare const listDecisionsQuerySchema: z55.ZodObject<{
+	cursor: z55.ZodOptional<z55.ZodString>;
+	limit: z55.ZodDefault<z55.ZodPipe<z55.ZodPipe<z55.ZodUnion<readonly [z55.ZodNumber, z55.ZodString]>, z55.ZodTransform<number, string | number>>, z55.ZodNumber>>;
+	conversationId: z55.ZodOptional<z55.core.$ZodBranded<z55.ZodString, "cnv", "out">>;
+	draftId: z55.ZodOptional<z55.core.$ZodBranded<z55.ZodString, "drf", "out">>;
+	kind: z55.ZodOptional<z55.ZodEnum<{
 		approve: "approve";
 		auto_release: "auto_release";
 		edit_approve: "edit_approve";
@@ -10652,16 +12451,16 @@ declare const listDecisionsQuerySchema: z49.ZodObject<{
 		reject: "reject";
 		takeover: "takeover";
 	}>>;
-	from: z49.ZodOptional<z49.ZodISODateTime>;
-	to: z49.ZodOptional<z49.ZodISODateTime>;
-}, z49.core.$strict>;
+	from: z55.ZodOptional<z55.ZodISODateTime>;
+	to: z55.ZodOptional<z55.ZodISODateTime>;
+}, z55.core.$strict>;
 /** One page of Decisions. */
-declare const decisionPageSchema: z49.ZodObject<{
-	items: z49.ZodArray<z49.ZodObject<{
-		id: z49.core.$ZodBranded<z49.ZodString, "dcs", "out">;
-		conversationId: z49.core.$ZodBranded<z49.ZodString, "cnv", "out">;
-		draftId: z49.ZodNullable<z49.core.$ZodBranded<z49.ZodString, "drf", "out">>;
-		kind: z49.ZodEnum<{
+declare const decisionPageSchema: z55.ZodObject<{
+	items: z55.ZodArray<z55.ZodObject<{
+		id: z55.core.$ZodBranded<z55.ZodString, "dcs", "out">;
+		conversationId: z55.core.$ZodBranded<z55.ZodString, "cnv", "out">;
+		draftId: z55.ZodNullable<z55.core.$ZodBranded<z55.ZodString, "drf", "out">>;
+		kind: z55.ZodEnum<{
 			approve: "approve";
 			auto_release: "auto_release";
 			edit_approve: "edit_approve";
@@ -10669,29 +12468,29 @@ declare const decisionPageSchema: z49.ZodObject<{
 			reject: "reject";
 			takeover: "takeover";
 		}>;
-		decidedByMembershipId: z49.ZodNullable<z49.core.$ZodBranded<z49.ZodString, "mem", "out">>;
-		note: z49.ZodNullable<z49.ZodString>;
-		acknowledgedUngrounded: z49.ZodBoolean;
-		decidedAt: z49.ZodISODateTime;
-	}, z49.core.$strict>>;
-	nextCursor: z49.ZodNullable<z49.ZodString>;
-}, z49.core.$strip>;
+		decidedByMembershipId: z55.ZodNullable<z55.core.$ZodBranded<z55.ZodString, "mem", "out">>;
+		note: z55.ZodNullable<z55.ZodString>;
+		acknowledgedUngrounded: z55.ZodBoolean;
+		decidedAt: z55.ZodISODateTime;
+	}, z55.core.$strict>>;
+	nextCursor: z55.ZodNullable<z55.ZodString>;
+}, z55.core.$strip>;
 /** The approval policy of every channel: one entry per channel, the default `always` until set. */
-declare const approvalPoliciesSchema: z49.ZodObject<{
-	items: z49.ZodArray<z49.ZodObject<{
-		channel: z49.ZodEnum<{
+declare const approvalPoliciesSchema: z55.ZodObject<{
+	items: z55.ZodArray<z55.ZodObject<{
+		channel: z55.ZodEnum<{
 			chat: "chat";
 			email: "email";
 			linkedin: "linkedin";
 		}>;
-		rule: z49.ZodDiscriminatedUnion<[z49.ZodObject<{
-			mode: z49.ZodLiteral<"always">;
-		}, z49.core.$strict>, z49.ZodObject<{
-			mode: z49.ZodLiteral<"below_confidence">;
-			threshold: z49.ZodNumber;
-		}, z49.core.$strict>, z49.ZodObject<{
-			mode: z49.ZodLiteral<"except">;
-			labels: z49.ZodArray<z49.ZodEnum<{
+		rule: z55.ZodDiscriminatedUnion<[z55.ZodObject<{
+			mode: z55.ZodLiteral<"always">;
+		}, z55.core.$strict>, z55.ZodObject<{
+			mode: z55.ZodLiteral<"below_confidence">;
+			threshold: z55.ZodNumber;
+		}, z55.core.$strict>, z55.ZodObject<{
+			mode: z55.ZodLiteral<"except">;
+			labels: z55.ZodArray<z55.ZodEnum<{
 				bounce: "bounce";
 				negative: "negative";
 				not_now: "not_now";
@@ -10703,21 +12502,21 @@ declare const approvalPoliciesSchema: z49.ZodObject<{
 				unsubscribe: "unsubscribe";
 				wrong_person: "wrong_person";
 			}>>;
-		}, z49.core.$strict>], "mode">;
-		updatedAt: z49.ZodNullable<z49.ZodISODateTime>;
-		updatedByMembershipId: z49.ZodNullable<z49.core.$ZodBranded<z49.ZodString, "mem", "out">>;
-	}, z49.core.$strict>>;
-}, z49.core.$strict>;
+		}, z55.core.$strict>], "mode">;
+		updatedAt: z55.ZodNullable<z55.ZodISODateTime>;
+		updatedByMembershipId: z55.ZodNullable<z55.core.$ZodBranded<z55.ZodString, "mem", "out">>;
+	}, z55.core.$strict>>;
+}, z55.core.$strict>;
 /** The body of a request to set a channel's approval rule; it replaces the rule, so a repeat changes nothing. */
-declare const setApprovalPolicyRequestSchema: z49.ZodObject<{
-	rule: z49.ZodDiscriminatedUnion<[z49.ZodObject<{
-		mode: z49.ZodLiteral<"always">;
-	}, z49.core.$strict>, z49.ZodObject<{
-		mode: z49.ZodLiteral<"below_confidence">;
-		threshold: z49.ZodNumber;
-	}, z49.core.$strict>, z49.ZodObject<{
-		mode: z49.ZodLiteral<"except">;
-		labels: z49.ZodArray<z49.ZodEnum<{
+declare const setApprovalPolicyRequestSchema: z55.ZodObject<{
+	rule: z55.ZodDiscriminatedUnion<[z55.ZodObject<{
+		mode: z55.ZodLiteral<"always">;
+	}, z55.core.$strict>, z55.ZodObject<{
+		mode: z55.ZodLiteral<"below_confidence">;
+		threshold: z55.ZodNumber;
+	}, z55.core.$strict>, z55.ZodObject<{
+		mode: z55.ZodLiteral<"except">;
+		labels: z55.ZodArray<z55.ZodEnum<{
 			bounce: "bounce";
 			negative: "negative";
 			not_now: "not_now";
@@ -10729,53 +12528,53 @@ declare const setApprovalPolicyRequestSchema: z49.ZodObject<{
 			unsubscribe: "unsubscribe";
 			wrong_person: "wrong_person";
 		}>>;
-	}, z49.core.$strict>], "mode">;
-}, z49.core.$strict>;
+	}, z55.core.$strict>], "mode">;
+}, z55.core.$strict>;
 /**
 * The body a channel service posts to `/internal/messages` for every Message it received or sent.
 * Core stores one Message per channel and provider id. An inbound Message is the Prospect's;
 * an outbound one carries its Draft's id when it came from one, else it is an Agent's sequence
 * message. The body is untrusted text and never logged.
 */
-declare const ingestMessageRequestSchema: z49.ZodObject<{
-	channel: z49.ZodEnum<{
+declare const ingestMessageRequestSchema: z55.ZodObject<{
+	channel: z55.ZodEnum<{
 		chat: "chat";
 		email: "email";
 		linkedin: "linkedin";
 	}>;
-	providerMessageId: z49.ZodString;
-	prospectId: z49.core.$ZodBranded<z49.ZodString, "prs", "out">;
-	direction: z49.ZodEnum<{
+	providerMessageId: z55.ZodString;
+	prospectId: z55.core.$ZodBranded<z55.ZodString, "prs", "out">;
+	direction: z55.ZodEnum<{
 		inbound: "inbound";
 		outbound: "outbound";
 	}>;
-	body: z49.ZodPipe<z49.ZodPipe<z49.ZodString, z49.ZodTransform<string, string>>, z49.ZodString>;
-	draftId: z49.ZodOptional<z49.core.$ZodBranded<z49.ZodString, "drf", "out">>;
-	sentAt: z49.ZodISODateTime;
-}, z49.core.$strict>;
+	body: z55.ZodPipe<z55.ZodPipe<z55.ZodString, z55.ZodTransform<string, string>>, z55.ZodString>;
+	draftId: z55.ZodOptional<z55.core.$ZodBranded<z55.ZodString, "drf", "out">>;
+	sentAt: z55.ZodISODateTime;
+}, z55.core.$strict>;
 /** The body posted to `/internal/messages`. */
-type IngestMessageRequest = z49.infer<typeof ingestMessageRequestSchema>;
+type IngestMessageRequest = z55.infer<typeof ingestMessageRequestSchema>;
 /** The answer to an ingest: the stored Message, and whether this call stored it (false for a repeat). */
-declare const ingestMessageResultSchema: z49.ZodObject<{
-	message: z49.ZodObject<{
-		id: z49.core.$ZodBranded<z49.ZodString, "msg", "out">;
-		conversationId: z49.core.$ZodBranded<z49.ZodString, "cnv", "out">;
-		direction: z49.ZodEnum<{
+declare const ingestMessageResultSchema: z55.ZodObject<{
+	message: z55.ZodObject<{
+		id: z55.core.$ZodBranded<z55.ZodString, "msg", "out">;
+		conversationId: z55.core.$ZodBranded<z55.ZodString, "cnv", "out">;
+		direction: z55.ZodEnum<{
 			inbound: "inbound";
 			outbound: "outbound";
 		}>;
-		authorKind: z49.ZodEnum<{
+		authorKind: z55.ZodEnum<{
 			agent: "agent";
 			prospect: "prospect";
 			rep: "rep";
 		}>;
-		authorMembershipId: z49.ZodNullable<z49.core.$ZodBranded<z49.ZodString, "mem", "out">>;
-		providerMessageId: z49.ZodString;
-		draftId: z49.ZodNullable<z49.core.$ZodBranded<z49.ZodString, "drf", "out">>;
-		body: z49.ZodString;
-		sentAt: z49.ZodISODateTime;
-		classification: z49.ZodNullable<z49.ZodObject<{
-			label: z49.ZodEnum<{
+		authorMembershipId: z55.ZodNullable<z55.core.$ZodBranded<z55.ZodString, "mem", "out">>;
+		providerMessageId: z55.ZodString;
+		draftId: z55.ZodNullable<z55.core.$ZodBranded<z55.ZodString, "drf", "out">>;
+		body: z55.ZodString;
+		sentAt: z55.ZodISODateTime;
+		classification: z55.ZodNullable<z55.ZodObject<{
+			label: z55.ZodEnum<{
 				bounce: "bounce";
 				negative: "negative";
 				not_now: "not_now";
@@ -10787,32 +12586,32 @@ declare const ingestMessageResultSchema: z49.ZodObject<{
 				unsubscribe: "unsubscribe";
 				wrong_person: "wrong_person";
 			}>;
-			confidence: z49.ZodNumber;
-			decidedBy: z49.ZodEnum<{
+			confidence: z55.ZodNumber;
+			decidedBy: z55.ZodEnum<{
 				model: "model";
 				rep: "rep";
 			}>;
-			correctedByMembershipId: z49.ZodNullable<z49.core.$ZodBranded<z49.ZodString, "mem", "out">>;
-			classifiedAt: z49.ZodISODateTime;
-		}, z49.core.$strict>>;
-	}, z49.core.$strict>;
-	created: z49.ZodBoolean;
-}, z49.core.$strict>;
+			correctedByMembershipId: z55.ZodNullable<z55.core.$ZodBranded<z55.ZodString, "mem", "out">>;
+			classifiedAt: z55.ZodISODateTime;
+		}, z55.core.$strict>>;
+	}, z55.core.$strict>;
+	created: z55.ZodBoolean;
+}, z55.core.$strict>;
 /** What a channel service needs to send an approved Draft: where, to whom and the text. Sensitive; never logged. */
-declare const draftReleaseSchema: z49.ZodObject<{
-	draftId: z49.core.$ZodBranded<z49.ZodString, "drf", "out">;
-	conversationId: z49.core.$ZodBranded<z49.ZodString, "cnv", "out">;
-	prospectId: z49.core.$ZodBranded<z49.ZodString, "prs", "out">;
-	channel: z49.ZodEnum<{
+declare const draftReleaseSchema: z55.ZodObject<{
+	draftId: z55.core.$ZodBranded<z55.ZodString, "drf", "out">;
+	conversationId: z55.core.$ZodBranded<z55.ZodString, "cnv", "out">;
+	prospectId: z55.core.$ZodBranded<z55.ZodString, "prs", "out">;
+	channel: z55.ZodEnum<{
 		chat: "chat";
 		email: "email";
 		linkedin: "linkedin";
 	}>;
-	body: z49.ZodString;
-}, z49.core.$strict>;
+	body: z55.ZodString;
+}, z55.core.$strict>;
 /** What a channel service needs to send an approved Draft. */
-type DraftRelease = z49.infer<typeof draftReleaseSchema>;
-import { ErrorDefinition as ErrorDefinition_8gwh4511 } from "..";
+type DraftRelease = z55.infer<typeof draftReleaseSchema>;
+import { ErrorDefinition as ErrorDefinition_8gwh4512 } from "..";
 /**
 * The errors the inbox routes return, as `area.reason` codes. A role that is not allowed is the
 * common `auth.forbidden`. A Conversation of another Organization, or one the caller may not see
@@ -10838,23 +12637,23 @@ import { ErrorDefinition as ErrorDefinition_8gwh4511 } from "..";
 *   sent.
 */
 declare const INBOX_ERRORS: {
-	readonly "inbox.already_controlled": ErrorDefinition_8gwh4511<"inbox.already_controlled">;
-	readonly "inbox.conversation_closed": ErrorDefinition_8gwh4511<"inbox.conversation_closed">;
-	readonly "inbox.conversation_not_found": ErrorDefinition_8gwh4511<"inbox.conversation_not_found">;
-	readonly "inbox.draft_not_found": ErrorDefinition_8gwh4511<"inbox.draft_not_found">;
-	readonly "inbox.draft_not_pending": ErrorDefinition_8gwh4511<"inbox.draft_not_pending">;
-	readonly "inbox.draft_ungrounded": ErrorDefinition_8gwh4511<"inbox.draft_ungrounded">;
-	readonly "inbox.message_not_found": ErrorDefinition_8gwh4511<"inbox.message_not_found">;
-	readonly "inbox.message_not_inbound": ErrorDefinition_8gwh4511<"inbox.message_not_inbound">;
-	readonly "inbox.not_conversation_owner": ErrorDefinition_8gwh4511<"inbox.not_conversation_owner">;
-	readonly "inbox.not_taken_over": ErrorDefinition_8gwh4511<"inbox.not_taken_over">;
-	readonly "inbox.prospect_not_found": ErrorDefinition_8gwh4511<"inbox.prospect_not_found">;
-	readonly "inbox.prospect_suppressed": ErrorDefinition_8gwh4511<"inbox.prospect_suppressed">;
-	readonly "inbox.takeover_required": ErrorDefinition_8gwh4511<"inbox.takeover_required">;
+	readonly "inbox.already_controlled": ErrorDefinition_8gwh4512<"inbox.already_controlled">;
+	readonly "inbox.conversation_closed": ErrorDefinition_8gwh4512<"inbox.conversation_closed">;
+	readonly "inbox.conversation_not_found": ErrorDefinition_8gwh4512<"inbox.conversation_not_found">;
+	readonly "inbox.draft_not_found": ErrorDefinition_8gwh4512<"inbox.draft_not_found">;
+	readonly "inbox.draft_not_pending": ErrorDefinition_8gwh4512<"inbox.draft_not_pending">;
+	readonly "inbox.draft_ungrounded": ErrorDefinition_8gwh4512<"inbox.draft_ungrounded">;
+	readonly "inbox.message_not_found": ErrorDefinition_8gwh4512<"inbox.message_not_found">;
+	readonly "inbox.message_not_inbound": ErrorDefinition_8gwh4512<"inbox.message_not_inbound">;
+	readonly "inbox.not_conversation_owner": ErrorDefinition_8gwh4512<"inbox.not_conversation_owner">;
+	readonly "inbox.not_taken_over": ErrorDefinition_8gwh4512<"inbox.not_taken_over">;
+	readonly "inbox.prospect_not_found": ErrorDefinition_8gwh4512<"inbox.prospect_not_found">;
+	readonly "inbox.prospect_suppressed": ErrorDefinition_8gwh4512<"inbox.prospect_suppressed">;
+	readonly "inbox.takeover_required": ErrorDefinition_8gwh4512<"inbox.takeover_required">;
 };
 /** An inbox error code. */
 type InboxErrorCode = keyof typeof INBOX_ERRORS;
-import { z as z50 } from "zod";
+import { z as z56 } from "zod";
 /**
 * `message.approved` (version 1): a Draft was approved, by a person or released by the policy
 * (`approvedByMembershipId` null). The Draft id is the idempotency key for the send: the channel
@@ -10863,62 +12662,62 @@ import { z as z50 } from "zod";
 declare const messageApprovedEvent: {
 	type: "message.approved";
 	version: 1;
-	schema: z50.ZodObject<{
-		id: z50.core.$ZodBranded<z50.ZodString, "evt", "out">;
-		occurredAt: z50.ZodISODateTime;
-		organizationId: z50.core.$ZodBranded<z50.ZodString, "org", "out">;
-		region: z50.ZodEnum<{
+	schema: z56.ZodObject<{
+		id: z56.core.$ZodBranded<z56.ZodString, "evt", "out">;
+		occurredAt: z56.ZodISODateTime;
+		organizationId: z56.core.$ZodBranded<z56.ZodString, "org", "out">;
+		region: z56.ZodEnum<{
 			eu: "eu";
 			us: "us";
 		}>;
-		type: z50.ZodLiteral<"message.approved">;
-		version: z50.ZodLiteral<1>;
-		data: z50.ZodObject<{
-			draftId: z50.core.$ZodBranded<z50.ZodString, "drf", "out">;
-			conversationId: z50.core.$ZodBranded<z50.ZodString, "cnv", "out">;
-			prospectId: z50.core.$ZodBranded<z50.ZodString, "prs", "out">;
-			channel: z50.ZodEnum<{
+		type: z56.ZodLiteral<"message.approved">;
+		version: z56.ZodLiteral<1>;
+		data: z56.ZodObject<{
+			draftId: z56.core.$ZodBranded<z56.ZodString, "drf", "out">;
+			conversationId: z56.core.$ZodBranded<z56.ZodString, "cnv", "out">;
+			prospectId: z56.core.$ZodBranded<z56.ZodString, "prs", "out">;
+			channel: z56.ZodEnum<{
 				chat: "chat";
 				email: "email";
 				linkedin: "linkedin";
 			}>;
-			approvedByMembershipId: z50.ZodNullable<z50.core.$ZodBranded<z50.ZodString, "mem", "out">>;
-			edited: z50.ZodBoolean;
-			acknowledgedUngrounded: z50.ZodBoolean;
-			approvedAt: z50.ZodISODateTime;
-		}, z50.core.$strict>;
-	}, z50.core.$strip>;
+			approvedByMembershipId: z56.ZodNullable<z56.core.$ZodBranded<z56.ZodString, "mem", "out">>;
+			edited: z56.ZodBoolean;
+			acknowledgedUngrounded: z56.ZodBoolean;
+			approvedAt: z56.ZodISODateTime;
+		}, z56.core.$strict>;
+	}, z56.core.$strip>;
 	parse: (input: unknown) => {
-		id: string & z50.$brand<"evt">;
+		id: string & z56.$brand<"evt">;
 		occurredAt: string;
-		organizationId: string & z50.$brand<"org">;
+		organizationId: string & z56.$brand<"org">;
 		region: "eu" | "us";
 		type: "message.approved";
 		version: 1;
 		data: {
-			draftId: string & z50.$brand<"drf">;
-			conversationId: string & z50.$brand<"cnv">;
-			prospectId: string & z50.$brand<"prs">;
+			draftId: string & z56.$brand<"drf">;
+			conversationId: string & z56.$brand<"cnv">;
+			prospectId: string & z56.$brand<"prs">;
 			channel: "chat" | "email" | "linkedin";
-			approvedByMembershipId: (string & z50.$brand<"mem">) | null;
+			approvedByMembershipId: (string & z56.$brand<"mem">) | null;
 			edited: boolean;
 			acknowledgedUngrounded: boolean;
 			approvedAt: string;
 		};
 	};
-	safeParse: (input: unknown) => z50.ZodSafeParseResult<{
-		id: string & z50.$brand<"evt">;
+	safeParse: (input: unknown) => z56.ZodSafeParseResult<{
+		id: string & z56.$brand<"evt">;
 		occurredAt: string;
-		organizationId: string & z50.$brand<"org">;
+		organizationId: string & z56.$brand<"org">;
 		region: "eu" | "us";
 		type: "message.approved";
 		version: 1;
 		data: {
-			draftId: string & z50.$brand<"drf">;
-			conversationId: string & z50.$brand<"cnv">;
-			prospectId: string & z50.$brand<"prs">;
+			draftId: string & z56.$brand<"drf">;
+			conversationId: string & z56.$brand<"cnv">;
+			prospectId: string & z56.$brand<"prs">;
 			channel: "chat" | "email" | "linkedin";
-			approvedByMembershipId: (string & z50.$brand<"mem">) | null;
+			approvedByMembershipId: (string & z56.$brand<"mem">) | null;
 			edited: boolean;
 			acknowledgedUngrounded: boolean;
 			approvedAt: string;
@@ -10929,57 +12728,57 @@ declare const messageApprovedEvent: {
 declare const messageSentEvent: {
 	type: "message.sent";
 	version: 1;
-	schema: z50.ZodObject<{
-		id: z50.core.$ZodBranded<z50.ZodString, "evt", "out">;
-		occurredAt: z50.ZodISODateTime;
-		organizationId: z50.core.$ZodBranded<z50.ZodString, "org", "out">;
-		region: z50.ZodEnum<{
+	schema: z56.ZodObject<{
+		id: z56.core.$ZodBranded<z56.ZodString, "evt", "out">;
+		occurredAt: z56.ZodISODateTime;
+		organizationId: z56.core.$ZodBranded<z56.ZodString, "org", "out">;
+		region: z56.ZodEnum<{
 			eu: "eu";
 			us: "us";
 		}>;
-		type: z50.ZodLiteral<"message.sent">;
-		version: z50.ZodLiteral<1>;
-		data: z50.ZodObject<{
-			draftId: z50.core.$ZodBranded<z50.ZodString, "drf", "out">;
-			conversationId: z50.core.$ZodBranded<z50.ZodString, "cnv", "out">;
-			messageId: z50.core.$ZodBranded<z50.ZodString, "msg", "out">;
-			prospectId: z50.core.$ZodBranded<z50.ZodString, "prs", "out">;
-			channel: z50.ZodEnum<{
+		type: z56.ZodLiteral<"message.sent">;
+		version: z56.ZodLiteral<1>;
+		data: z56.ZodObject<{
+			draftId: z56.core.$ZodBranded<z56.ZodString, "drf", "out">;
+			conversationId: z56.core.$ZodBranded<z56.ZodString, "cnv", "out">;
+			messageId: z56.core.$ZodBranded<z56.ZodString, "msg", "out">;
+			prospectId: z56.core.$ZodBranded<z56.ZodString, "prs", "out">;
+			channel: z56.ZodEnum<{
 				chat: "chat";
 				email: "email";
 				linkedin: "linkedin";
 			}>;
-			sentAt: z50.ZodISODateTime;
-		}, z50.core.$strict>;
-	}, z50.core.$strip>;
+			sentAt: z56.ZodISODateTime;
+		}, z56.core.$strict>;
+	}, z56.core.$strip>;
 	parse: (input: unknown) => {
-		id: string & z50.$brand<"evt">;
+		id: string & z56.$brand<"evt">;
 		occurredAt: string;
-		organizationId: string & z50.$brand<"org">;
+		organizationId: string & z56.$brand<"org">;
 		region: "eu" | "us";
 		type: "message.sent";
 		version: 1;
 		data: {
-			draftId: string & z50.$brand<"drf">;
-			conversationId: string & z50.$brand<"cnv">;
-			messageId: string & z50.$brand<"msg">;
-			prospectId: string & z50.$brand<"prs">;
+			draftId: string & z56.$brand<"drf">;
+			conversationId: string & z56.$brand<"cnv">;
+			messageId: string & z56.$brand<"msg">;
+			prospectId: string & z56.$brand<"prs">;
 			channel: "chat" | "email" | "linkedin";
 			sentAt: string;
 		};
 	};
-	safeParse: (input: unknown) => z50.ZodSafeParseResult<{
-		id: string & z50.$brand<"evt">;
+	safeParse: (input: unknown) => z56.ZodSafeParseResult<{
+		id: string & z56.$brand<"evt">;
 		occurredAt: string;
-		organizationId: string & z50.$brand<"org">;
+		organizationId: string & z56.$brand<"org">;
 		region: "eu" | "us";
 		type: "message.sent";
 		version: 1;
 		data: {
-			draftId: string & z50.$brand<"drf">;
-			conversationId: string & z50.$brand<"cnv">;
-			messageId: string & z50.$brand<"msg">;
-			prospectId: string & z50.$brand<"prs">;
+			draftId: string & z56.$brand<"drf">;
+			conversationId: string & z56.$brand<"cnv">;
+			messageId: string & z56.$brand<"msg">;
+			prospectId: string & z56.$brand<"prs">;
 			channel: "chat" | "email" | "linkedin";
 			sentAt: string;
 		};
@@ -10989,26 +12788,26 @@ declare const messageSentEvent: {
 declare const messageFailedEvent: {
 	type: "message.failed";
 	version: 1;
-	schema: z50.ZodObject<{
-		id: z50.core.$ZodBranded<z50.ZodString, "evt", "out">;
-		occurredAt: z50.ZodISODateTime;
-		organizationId: z50.core.$ZodBranded<z50.ZodString, "org", "out">;
-		region: z50.ZodEnum<{
+	schema: z56.ZodObject<{
+		id: z56.core.$ZodBranded<z56.ZodString, "evt", "out">;
+		occurredAt: z56.ZodISODateTime;
+		organizationId: z56.core.$ZodBranded<z56.ZodString, "org", "out">;
+		region: z56.ZodEnum<{
 			eu: "eu";
 			us: "us";
 		}>;
-		type: z50.ZodLiteral<"message.failed">;
-		version: z50.ZodLiteral<1>;
-		data: z50.ZodObject<{
-			draftId: z50.core.$ZodBranded<z50.ZodString, "drf", "out">;
-			conversationId: z50.core.$ZodBranded<z50.ZodString, "cnv", "out">;
-			prospectId: z50.core.$ZodBranded<z50.ZodString, "prs", "out">;
-			channel: z50.ZodEnum<{
+		type: z56.ZodLiteral<"message.failed">;
+		version: z56.ZodLiteral<1>;
+		data: z56.ZodObject<{
+			draftId: z56.core.$ZodBranded<z56.ZodString, "drf", "out">;
+			conversationId: z56.core.$ZodBranded<z56.ZodString, "cnv", "out">;
+			prospectId: z56.core.$ZodBranded<z56.ZodString, "prs", "out">;
+			channel: z56.ZodEnum<{
 				chat: "chat";
 				email: "email";
 				linkedin: "linkedin";
 			}>;
-			reason: z50.ZodEnum<{
+			reason: z56.ZodEnum<{
 				channel_unavailable: "channel_unavailable";
 				provider_rejected: "provider_rejected";
 				recipient_invalid: "recipient_invalid";
@@ -11016,38 +12815,38 @@ declare const messageFailedEvent: {
 				timeout: "timeout";
 				unknown: "unknown";
 			}>;
-			retryable: z50.ZodBoolean;
-			failedAt: z50.ZodISODateTime;
-		}, z50.core.$strict>;
-	}, z50.core.$strip>;
+			retryable: z56.ZodBoolean;
+			failedAt: z56.ZodISODateTime;
+		}, z56.core.$strict>;
+	}, z56.core.$strip>;
 	parse: (input: unknown) => {
-		id: string & z50.$brand<"evt">;
+		id: string & z56.$brand<"evt">;
 		occurredAt: string;
-		organizationId: string & z50.$brand<"org">;
+		organizationId: string & z56.$brand<"org">;
 		region: "eu" | "us";
 		type: "message.failed";
 		version: 1;
 		data: {
-			draftId: string & z50.$brand<"drf">;
-			conversationId: string & z50.$brand<"cnv">;
-			prospectId: string & z50.$brand<"prs">;
+			draftId: string & z56.$brand<"drf">;
+			conversationId: string & z56.$brand<"cnv">;
+			prospectId: string & z56.$brand<"prs">;
 			channel: "chat" | "email" | "linkedin";
 			reason: "channel_unavailable" | "provider_rejected" | "recipient_invalid" | "suppressed" | "timeout" | "unknown";
 			retryable: boolean;
 			failedAt: string;
 		};
 	};
-	safeParse: (input: unknown) => z50.ZodSafeParseResult<{
-		id: string & z50.$brand<"evt">;
+	safeParse: (input: unknown) => z56.ZodSafeParseResult<{
+		id: string & z56.$brand<"evt">;
 		occurredAt: string;
-		organizationId: string & z50.$brand<"org">;
+		organizationId: string & z56.$brand<"org">;
 		region: "eu" | "us";
 		type: "message.failed";
 		version: 1;
 		data: {
-			draftId: string & z50.$brand<"drf">;
-			conversationId: string & z50.$brand<"cnv">;
-			prospectId: string & z50.$brand<"prs">;
+			draftId: string & z56.$brand<"drf">;
+			conversationId: string & z56.$brand<"cnv">;
+			prospectId: string & z56.$brand<"prs">;
 			channel: "chat" | "email" | "linkedin";
 			reason: "channel_unavailable" | "provider_rejected" | "recipient_invalid" | "suppressed" | "timeout" | "unknown";
 			retryable: boolean;
@@ -11063,26 +12862,26 @@ declare const messageFailedEvent: {
 declare const replyClassifiedEvent: {
 	type: "reply.classified";
 	version: 1;
-	schema: z50.ZodObject<{
-		id: z50.core.$ZodBranded<z50.ZodString, "evt", "out">;
-		occurredAt: z50.ZodISODateTime;
-		organizationId: z50.core.$ZodBranded<z50.ZodString, "org", "out">;
-		region: z50.ZodEnum<{
+	schema: z56.ZodObject<{
+		id: z56.core.$ZodBranded<z56.ZodString, "evt", "out">;
+		occurredAt: z56.ZodISODateTime;
+		organizationId: z56.core.$ZodBranded<z56.ZodString, "org", "out">;
+		region: z56.ZodEnum<{
 			eu: "eu";
 			us: "us";
 		}>;
-		type: z50.ZodLiteral<"reply.classified">;
-		version: z50.ZodLiteral<1>;
-		data: z50.ZodObject<{
-			conversationId: z50.core.$ZodBranded<z50.ZodString, "cnv", "out">;
-			messageId: z50.core.$ZodBranded<z50.ZodString, "msg", "out">;
-			prospectId: z50.core.$ZodBranded<z50.ZodString, "prs", "out">;
-			channel: z50.ZodEnum<{
+		type: z56.ZodLiteral<"reply.classified">;
+		version: z56.ZodLiteral<1>;
+		data: z56.ZodObject<{
+			conversationId: z56.core.$ZodBranded<z56.ZodString, "cnv", "out">;
+			messageId: z56.core.$ZodBranded<z56.ZodString, "msg", "out">;
+			prospectId: z56.core.$ZodBranded<z56.ZodString, "prs", "out">;
+			channel: z56.ZodEnum<{
 				chat: "chat";
 				email: "email";
 				linkedin: "linkedin";
 			}>;
-			label: z50.ZodEnum<{
+			label: z56.ZodEnum<{
 				bounce: "bounce";
 				negative: "negative";
 				not_now: "not_now";
@@ -11094,38 +12893,38 @@ declare const replyClassifiedEvent: {
 				unsubscribe: "unsubscribe";
 				wrong_person: "wrong_person";
 			}>;
-			confidence: z50.ZodNumber;
-			classifiedAt: z50.ZodISODateTime;
-		}, z50.core.$strict>;
-	}, z50.core.$strip>;
+			confidence: z56.ZodNumber;
+			classifiedAt: z56.ZodISODateTime;
+		}, z56.core.$strict>;
+	}, z56.core.$strip>;
 	parse: (input: unknown) => {
-		id: string & z50.$brand<"evt">;
+		id: string & z56.$brand<"evt">;
 		occurredAt: string;
-		organizationId: string & z50.$brand<"org">;
+		organizationId: string & z56.$brand<"org">;
 		region: "eu" | "us";
 		type: "reply.classified";
 		version: 1;
 		data: {
-			conversationId: string & z50.$brand<"cnv">;
-			messageId: string & z50.$brand<"msg">;
-			prospectId: string & z50.$brand<"prs">;
+			conversationId: string & z56.$brand<"cnv">;
+			messageId: string & z56.$brand<"msg">;
+			prospectId: string & z56.$brand<"prs">;
 			channel: "chat" | "email" | "linkedin";
 			label: "bounce" | "negative" | "not_now" | "objection" | "other" | "out_of_office" | "positive" | "question" | "unsubscribe" | "wrong_person";
 			confidence: number;
 			classifiedAt: string;
 		};
 	};
-	safeParse: (input: unknown) => z50.ZodSafeParseResult<{
-		id: string & z50.$brand<"evt">;
+	safeParse: (input: unknown) => z56.ZodSafeParseResult<{
+		id: string & z56.$brand<"evt">;
 		occurredAt: string;
-		organizationId: string & z50.$brand<"org">;
+		organizationId: string & z56.$brand<"org">;
 		region: "eu" | "us";
 		type: "reply.classified";
 		version: 1;
 		data: {
-			conversationId: string & z50.$brand<"cnv">;
-			messageId: string & z50.$brand<"msg">;
-			prospectId: string & z50.$brand<"prs">;
+			conversationId: string & z56.$brand<"cnv">;
+			messageId: string & z56.$brand<"msg">;
+			prospectId: string & z56.$brand<"prs">;
 			channel: "chat" | "email" | "linkedin";
 			label: "bounce" | "negative" | "not_now" | "objection" | "other" | "out_of_office" | "positive" | "question" | "unsubscribe" | "wrong_person";
 			confidence: number;
@@ -11137,57 +12936,57 @@ declare const replyClassifiedEvent: {
 declare const conversationTakenOverEvent: {
 	type: "conversation.taken_over";
 	version: 1;
-	schema: z50.ZodObject<{
-		id: z50.core.$ZodBranded<z50.ZodString, "evt", "out">;
-		occurredAt: z50.ZodISODateTime;
-		organizationId: z50.core.$ZodBranded<z50.ZodString, "org", "out">;
-		region: z50.ZodEnum<{
+	schema: z56.ZodObject<{
+		id: z56.core.$ZodBranded<z56.ZodString, "evt", "out">;
+		occurredAt: z56.ZodISODateTime;
+		organizationId: z56.core.$ZodBranded<z56.ZodString, "org", "out">;
+		region: z56.ZodEnum<{
 			eu: "eu";
 			us: "us";
 		}>;
-		type: z50.ZodLiteral<"conversation.taken_over">;
-		version: z50.ZodLiteral<1>;
-		data: z50.ZodObject<{
-			conversationId: z50.core.$ZodBranded<z50.ZodString, "cnv", "out">;
-			prospectId: z50.core.$ZodBranded<z50.ZodString, "prs", "out">;
-			channel: z50.ZodEnum<{
+		type: z56.ZodLiteral<"conversation.taken_over">;
+		version: z56.ZodLiteral<1>;
+		data: z56.ZodObject<{
+			conversationId: z56.core.$ZodBranded<z56.ZodString, "cnv", "out">;
+			prospectId: z56.core.$ZodBranded<z56.ZodString, "prs", "out">;
+			channel: z56.ZodEnum<{
 				chat: "chat";
 				email: "email";
 				linkedin: "linkedin";
 			}>;
-			takenOverByMembershipId: z50.core.$ZodBranded<z50.ZodString, "mem", "out">;
-			voidedDraftCount: z50.ZodNumber;
-			takenOverAt: z50.ZodISODateTime;
-		}, z50.core.$strict>;
-	}, z50.core.$strip>;
+			takenOverByMembershipId: z56.core.$ZodBranded<z56.ZodString, "mem", "out">;
+			voidedDraftCount: z56.ZodNumber;
+			takenOverAt: z56.ZodISODateTime;
+		}, z56.core.$strict>;
+	}, z56.core.$strip>;
 	parse: (input: unknown) => {
-		id: string & z50.$brand<"evt">;
+		id: string & z56.$brand<"evt">;
 		occurredAt: string;
-		organizationId: string & z50.$brand<"org">;
+		organizationId: string & z56.$brand<"org">;
 		region: "eu" | "us";
 		type: "conversation.taken_over";
 		version: 1;
 		data: {
-			conversationId: string & z50.$brand<"cnv">;
-			prospectId: string & z50.$brand<"prs">;
+			conversationId: string & z56.$brand<"cnv">;
+			prospectId: string & z56.$brand<"prs">;
 			channel: "chat" | "email" | "linkedin";
-			takenOverByMembershipId: string & z50.$brand<"mem">;
+			takenOverByMembershipId: string & z56.$brand<"mem">;
 			voidedDraftCount: number;
 			takenOverAt: string;
 		};
 	};
-	safeParse: (input: unknown) => z50.ZodSafeParseResult<{
-		id: string & z50.$brand<"evt">;
+	safeParse: (input: unknown) => z56.ZodSafeParseResult<{
+		id: string & z56.$brand<"evt">;
 		occurredAt: string;
-		organizationId: string & z50.$brand<"org">;
+		organizationId: string & z56.$brand<"org">;
 		region: "eu" | "us";
 		type: "conversation.taken_over";
 		version: 1;
 		data: {
-			conversationId: string & z50.$brand<"cnv">;
-			prospectId: string & z50.$brand<"prs">;
+			conversationId: string & z56.$brand<"cnv">;
+			prospectId: string & z56.$brand<"prs">;
 			channel: "chat" | "email" | "linkedin";
-			takenOverByMembershipId: string & z50.$brand<"mem">;
+			takenOverByMembershipId: string & z56.$brand<"mem">;
 			voidedDraftCount: number;
 			takenOverAt: string;
 		};
@@ -11197,55 +12996,55 @@ declare const conversationTakenOverEvent: {
 declare const conversationHandedBackEvent: {
 	type: "conversation.handed_back";
 	version: 1;
-	schema: z50.ZodObject<{
-		id: z50.core.$ZodBranded<z50.ZodString, "evt", "out">;
-		occurredAt: z50.ZodISODateTime;
-		organizationId: z50.core.$ZodBranded<z50.ZodString, "org", "out">;
-		region: z50.ZodEnum<{
+	schema: z56.ZodObject<{
+		id: z56.core.$ZodBranded<z56.ZodString, "evt", "out">;
+		occurredAt: z56.ZodISODateTime;
+		organizationId: z56.core.$ZodBranded<z56.ZodString, "org", "out">;
+		region: z56.ZodEnum<{
 			eu: "eu";
 			us: "us";
 		}>;
-		type: z50.ZodLiteral<"conversation.handed_back">;
-		version: z50.ZodLiteral<1>;
-		data: z50.ZodObject<{
-			conversationId: z50.core.$ZodBranded<z50.ZodString, "cnv", "out">;
-			prospectId: z50.core.$ZodBranded<z50.ZodString, "prs", "out">;
-			channel: z50.ZodEnum<{
+		type: z56.ZodLiteral<"conversation.handed_back">;
+		version: z56.ZodLiteral<1>;
+		data: z56.ZodObject<{
+			conversationId: z56.core.$ZodBranded<z56.ZodString, "cnv", "out">;
+			prospectId: z56.core.$ZodBranded<z56.ZodString, "prs", "out">;
+			channel: z56.ZodEnum<{
 				chat: "chat";
 				email: "email";
 				linkedin: "linkedin";
 			}>;
-			handedBackByMembershipId: z50.core.$ZodBranded<z50.ZodString, "mem", "out">;
-			handedBackAt: z50.ZodISODateTime;
-		}, z50.core.$strict>;
-	}, z50.core.$strip>;
+			handedBackByMembershipId: z56.core.$ZodBranded<z56.ZodString, "mem", "out">;
+			handedBackAt: z56.ZodISODateTime;
+		}, z56.core.$strict>;
+	}, z56.core.$strip>;
 	parse: (input: unknown) => {
-		id: string & z50.$brand<"evt">;
+		id: string & z56.$brand<"evt">;
 		occurredAt: string;
-		organizationId: string & z50.$brand<"org">;
+		organizationId: string & z56.$brand<"org">;
 		region: "eu" | "us";
 		type: "conversation.handed_back";
 		version: 1;
 		data: {
-			conversationId: string & z50.$brand<"cnv">;
-			prospectId: string & z50.$brand<"prs">;
+			conversationId: string & z56.$brand<"cnv">;
+			prospectId: string & z56.$brand<"prs">;
 			channel: "chat" | "email" | "linkedin";
-			handedBackByMembershipId: string & z50.$brand<"mem">;
+			handedBackByMembershipId: string & z56.$brand<"mem">;
 			handedBackAt: string;
 		};
 	};
-	safeParse: (input: unknown) => z50.ZodSafeParseResult<{
-		id: string & z50.$brand<"evt">;
+	safeParse: (input: unknown) => z56.ZodSafeParseResult<{
+		id: string & z56.$brand<"evt">;
 		occurredAt: string;
-		organizationId: string & z50.$brand<"org">;
+		organizationId: string & z56.$brand<"org">;
 		region: "eu" | "us";
 		type: "conversation.handed_back";
 		version: 1;
 		data: {
-			conversationId: string & z50.$brand<"cnv">;
-			prospectId: string & z50.$brand<"prs">;
+			conversationId: string & z56.$brand<"cnv">;
+			prospectId: string & z56.$brand<"prs">;
 			channel: "chat" | "email" | "linkedin";
-			handedBackByMembershipId: string & z50.$brand<"mem">;
+			handedBackByMembershipId: string & z56.$brand<"mem">;
 			handedBackAt: string;
 		};
 	}>;
@@ -11255,62 +13054,62 @@ declare const INBOX_EVENTS: {
 	readonly "message.approved": {
 		type: "message.approved";
 		version: 1;
-		schema: z50.ZodObject<{
-			id: z50.core.$ZodBranded<z50.ZodString, "evt", "out">;
-			occurredAt: z50.ZodISODateTime;
-			organizationId: z50.core.$ZodBranded<z50.ZodString, "org", "out">;
-			region: z50.ZodEnum<{
+		schema: z56.ZodObject<{
+			id: z56.core.$ZodBranded<z56.ZodString, "evt", "out">;
+			occurredAt: z56.ZodISODateTime;
+			organizationId: z56.core.$ZodBranded<z56.ZodString, "org", "out">;
+			region: z56.ZodEnum<{
 				eu: "eu";
 				us: "us";
 			}>;
-			type: z50.ZodLiteral<"message.approved">;
-			version: z50.ZodLiteral<1>;
-			data: z50.ZodObject<{
-				draftId: z50.core.$ZodBranded<z50.ZodString, "drf", "out">;
-				conversationId: z50.core.$ZodBranded<z50.ZodString, "cnv", "out">;
-				prospectId: z50.core.$ZodBranded<z50.ZodString, "prs", "out">;
-				channel: z50.ZodEnum<{
+			type: z56.ZodLiteral<"message.approved">;
+			version: z56.ZodLiteral<1>;
+			data: z56.ZodObject<{
+				draftId: z56.core.$ZodBranded<z56.ZodString, "drf", "out">;
+				conversationId: z56.core.$ZodBranded<z56.ZodString, "cnv", "out">;
+				prospectId: z56.core.$ZodBranded<z56.ZodString, "prs", "out">;
+				channel: z56.ZodEnum<{
 					chat: "chat";
 					email: "email";
 					linkedin: "linkedin";
 				}>;
-				approvedByMembershipId: z50.ZodNullable<z50.core.$ZodBranded<z50.ZodString, "mem", "out">>;
-				edited: z50.ZodBoolean;
-				acknowledgedUngrounded: z50.ZodBoolean;
-				approvedAt: z50.ZodISODateTime;
-			}, z50.core.$strict>;
-		}, z50.core.$strip>;
+				approvedByMembershipId: z56.ZodNullable<z56.core.$ZodBranded<z56.ZodString, "mem", "out">>;
+				edited: z56.ZodBoolean;
+				acknowledgedUngrounded: z56.ZodBoolean;
+				approvedAt: z56.ZodISODateTime;
+			}, z56.core.$strict>;
+		}, z56.core.$strip>;
 		parse: (input: unknown) => {
-			id: string & z50.$brand<"evt">;
+			id: string & z56.$brand<"evt">;
 			occurredAt: string;
-			organizationId: string & z50.$brand<"org">;
+			organizationId: string & z56.$brand<"org">;
 			region: "eu" | "us";
 			type: "message.approved";
 			version: 1;
 			data: {
-				draftId: string & z50.$brand<"drf">;
-				conversationId: string & z50.$brand<"cnv">;
-				prospectId: string & z50.$brand<"prs">;
+				draftId: string & z56.$brand<"drf">;
+				conversationId: string & z56.$brand<"cnv">;
+				prospectId: string & z56.$brand<"prs">;
 				channel: "chat" | "email" | "linkedin";
-				approvedByMembershipId: (string & z50.$brand<"mem">) | null;
+				approvedByMembershipId: (string & z56.$brand<"mem">) | null;
 				edited: boolean;
 				acknowledgedUngrounded: boolean;
 				approvedAt: string;
 			};
 		};
-		safeParse: (input: unknown) => z50.ZodSafeParseResult<{
-			id: string & z50.$brand<"evt">;
+		safeParse: (input: unknown) => z56.ZodSafeParseResult<{
+			id: string & z56.$brand<"evt">;
 			occurredAt: string;
-			organizationId: string & z50.$brand<"org">;
+			organizationId: string & z56.$brand<"org">;
 			region: "eu" | "us";
 			type: "message.approved";
 			version: 1;
 			data: {
-				draftId: string & z50.$brand<"drf">;
-				conversationId: string & z50.$brand<"cnv">;
-				prospectId: string & z50.$brand<"prs">;
+				draftId: string & z56.$brand<"drf">;
+				conversationId: string & z56.$brand<"cnv">;
+				prospectId: string & z56.$brand<"prs">;
 				channel: "chat" | "email" | "linkedin";
-				approvedByMembershipId: (string & z50.$brand<"mem">) | null;
+				approvedByMembershipId: (string & z56.$brand<"mem">) | null;
 				edited: boolean;
 				acknowledgedUngrounded: boolean;
 				approvedAt: string;
@@ -11320,57 +13119,57 @@ declare const INBOX_EVENTS: {
 	readonly "message.sent": {
 		type: "message.sent";
 		version: 1;
-		schema: z50.ZodObject<{
-			id: z50.core.$ZodBranded<z50.ZodString, "evt", "out">;
-			occurredAt: z50.ZodISODateTime;
-			organizationId: z50.core.$ZodBranded<z50.ZodString, "org", "out">;
-			region: z50.ZodEnum<{
+		schema: z56.ZodObject<{
+			id: z56.core.$ZodBranded<z56.ZodString, "evt", "out">;
+			occurredAt: z56.ZodISODateTime;
+			organizationId: z56.core.$ZodBranded<z56.ZodString, "org", "out">;
+			region: z56.ZodEnum<{
 				eu: "eu";
 				us: "us";
 			}>;
-			type: z50.ZodLiteral<"message.sent">;
-			version: z50.ZodLiteral<1>;
-			data: z50.ZodObject<{
-				draftId: z50.core.$ZodBranded<z50.ZodString, "drf", "out">;
-				conversationId: z50.core.$ZodBranded<z50.ZodString, "cnv", "out">;
-				messageId: z50.core.$ZodBranded<z50.ZodString, "msg", "out">;
-				prospectId: z50.core.$ZodBranded<z50.ZodString, "prs", "out">;
-				channel: z50.ZodEnum<{
+			type: z56.ZodLiteral<"message.sent">;
+			version: z56.ZodLiteral<1>;
+			data: z56.ZodObject<{
+				draftId: z56.core.$ZodBranded<z56.ZodString, "drf", "out">;
+				conversationId: z56.core.$ZodBranded<z56.ZodString, "cnv", "out">;
+				messageId: z56.core.$ZodBranded<z56.ZodString, "msg", "out">;
+				prospectId: z56.core.$ZodBranded<z56.ZodString, "prs", "out">;
+				channel: z56.ZodEnum<{
 					chat: "chat";
 					email: "email";
 					linkedin: "linkedin";
 				}>;
-				sentAt: z50.ZodISODateTime;
-			}, z50.core.$strict>;
-		}, z50.core.$strip>;
+				sentAt: z56.ZodISODateTime;
+			}, z56.core.$strict>;
+		}, z56.core.$strip>;
 		parse: (input: unknown) => {
-			id: string & z50.$brand<"evt">;
+			id: string & z56.$brand<"evt">;
 			occurredAt: string;
-			organizationId: string & z50.$brand<"org">;
+			organizationId: string & z56.$brand<"org">;
 			region: "eu" | "us";
 			type: "message.sent";
 			version: 1;
 			data: {
-				draftId: string & z50.$brand<"drf">;
-				conversationId: string & z50.$brand<"cnv">;
-				messageId: string & z50.$brand<"msg">;
-				prospectId: string & z50.$brand<"prs">;
+				draftId: string & z56.$brand<"drf">;
+				conversationId: string & z56.$brand<"cnv">;
+				messageId: string & z56.$brand<"msg">;
+				prospectId: string & z56.$brand<"prs">;
 				channel: "chat" | "email" | "linkedin";
 				sentAt: string;
 			};
 		};
-		safeParse: (input: unknown) => z50.ZodSafeParseResult<{
-			id: string & z50.$brand<"evt">;
+		safeParse: (input: unknown) => z56.ZodSafeParseResult<{
+			id: string & z56.$brand<"evt">;
 			occurredAt: string;
-			organizationId: string & z50.$brand<"org">;
+			organizationId: string & z56.$brand<"org">;
 			region: "eu" | "us";
 			type: "message.sent";
 			version: 1;
 			data: {
-				draftId: string & z50.$brand<"drf">;
-				conversationId: string & z50.$brand<"cnv">;
-				messageId: string & z50.$brand<"msg">;
-				prospectId: string & z50.$brand<"prs">;
+				draftId: string & z56.$brand<"drf">;
+				conversationId: string & z56.$brand<"cnv">;
+				messageId: string & z56.$brand<"msg">;
+				prospectId: string & z56.$brand<"prs">;
 				channel: "chat" | "email" | "linkedin";
 				sentAt: string;
 			};
@@ -11379,26 +13178,26 @@ declare const INBOX_EVENTS: {
 	readonly "message.failed": {
 		type: "message.failed";
 		version: 1;
-		schema: z50.ZodObject<{
-			id: z50.core.$ZodBranded<z50.ZodString, "evt", "out">;
-			occurredAt: z50.ZodISODateTime;
-			organizationId: z50.core.$ZodBranded<z50.ZodString, "org", "out">;
-			region: z50.ZodEnum<{
+		schema: z56.ZodObject<{
+			id: z56.core.$ZodBranded<z56.ZodString, "evt", "out">;
+			occurredAt: z56.ZodISODateTime;
+			organizationId: z56.core.$ZodBranded<z56.ZodString, "org", "out">;
+			region: z56.ZodEnum<{
 				eu: "eu";
 				us: "us";
 			}>;
-			type: z50.ZodLiteral<"message.failed">;
-			version: z50.ZodLiteral<1>;
-			data: z50.ZodObject<{
-				draftId: z50.core.$ZodBranded<z50.ZodString, "drf", "out">;
-				conversationId: z50.core.$ZodBranded<z50.ZodString, "cnv", "out">;
-				prospectId: z50.core.$ZodBranded<z50.ZodString, "prs", "out">;
-				channel: z50.ZodEnum<{
+			type: z56.ZodLiteral<"message.failed">;
+			version: z56.ZodLiteral<1>;
+			data: z56.ZodObject<{
+				draftId: z56.core.$ZodBranded<z56.ZodString, "drf", "out">;
+				conversationId: z56.core.$ZodBranded<z56.ZodString, "cnv", "out">;
+				prospectId: z56.core.$ZodBranded<z56.ZodString, "prs", "out">;
+				channel: z56.ZodEnum<{
 					chat: "chat";
 					email: "email";
 					linkedin: "linkedin";
 				}>;
-				reason: z50.ZodEnum<{
+				reason: z56.ZodEnum<{
 					channel_unavailable: "channel_unavailable";
 					provider_rejected: "provider_rejected";
 					recipient_invalid: "recipient_invalid";
@@ -11406,38 +13205,38 @@ declare const INBOX_EVENTS: {
 					timeout: "timeout";
 					unknown: "unknown";
 				}>;
-				retryable: z50.ZodBoolean;
-				failedAt: z50.ZodISODateTime;
-			}, z50.core.$strict>;
-		}, z50.core.$strip>;
+				retryable: z56.ZodBoolean;
+				failedAt: z56.ZodISODateTime;
+			}, z56.core.$strict>;
+		}, z56.core.$strip>;
 		parse: (input: unknown) => {
-			id: string & z50.$brand<"evt">;
+			id: string & z56.$brand<"evt">;
 			occurredAt: string;
-			organizationId: string & z50.$brand<"org">;
+			organizationId: string & z56.$brand<"org">;
 			region: "eu" | "us";
 			type: "message.failed";
 			version: 1;
 			data: {
-				draftId: string & z50.$brand<"drf">;
-				conversationId: string & z50.$brand<"cnv">;
-				prospectId: string & z50.$brand<"prs">;
+				draftId: string & z56.$brand<"drf">;
+				conversationId: string & z56.$brand<"cnv">;
+				prospectId: string & z56.$brand<"prs">;
 				channel: "chat" | "email" | "linkedin";
 				reason: "channel_unavailable" | "provider_rejected" | "recipient_invalid" | "suppressed" | "timeout" | "unknown";
 				retryable: boolean;
 				failedAt: string;
 			};
 		};
-		safeParse: (input: unknown) => z50.ZodSafeParseResult<{
-			id: string & z50.$brand<"evt">;
+		safeParse: (input: unknown) => z56.ZodSafeParseResult<{
+			id: string & z56.$brand<"evt">;
 			occurredAt: string;
-			organizationId: string & z50.$brand<"org">;
+			organizationId: string & z56.$brand<"org">;
 			region: "eu" | "us";
 			type: "message.failed";
 			version: 1;
 			data: {
-				draftId: string & z50.$brand<"drf">;
-				conversationId: string & z50.$brand<"cnv">;
-				prospectId: string & z50.$brand<"prs">;
+				draftId: string & z56.$brand<"drf">;
+				conversationId: string & z56.$brand<"cnv">;
+				prospectId: string & z56.$brand<"prs">;
 				channel: "chat" | "email" | "linkedin";
 				reason: "channel_unavailable" | "provider_rejected" | "recipient_invalid" | "suppressed" | "timeout" | "unknown";
 				retryable: boolean;
@@ -11448,26 +13247,26 @@ declare const INBOX_EVENTS: {
 	readonly "reply.classified": {
 		type: "reply.classified";
 		version: 1;
-		schema: z50.ZodObject<{
-			id: z50.core.$ZodBranded<z50.ZodString, "evt", "out">;
-			occurredAt: z50.ZodISODateTime;
-			organizationId: z50.core.$ZodBranded<z50.ZodString, "org", "out">;
-			region: z50.ZodEnum<{
+		schema: z56.ZodObject<{
+			id: z56.core.$ZodBranded<z56.ZodString, "evt", "out">;
+			occurredAt: z56.ZodISODateTime;
+			organizationId: z56.core.$ZodBranded<z56.ZodString, "org", "out">;
+			region: z56.ZodEnum<{
 				eu: "eu";
 				us: "us";
 			}>;
-			type: z50.ZodLiteral<"reply.classified">;
-			version: z50.ZodLiteral<1>;
-			data: z50.ZodObject<{
-				conversationId: z50.core.$ZodBranded<z50.ZodString, "cnv", "out">;
-				messageId: z50.core.$ZodBranded<z50.ZodString, "msg", "out">;
-				prospectId: z50.core.$ZodBranded<z50.ZodString, "prs", "out">;
-				channel: z50.ZodEnum<{
+			type: z56.ZodLiteral<"reply.classified">;
+			version: z56.ZodLiteral<1>;
+			data: z56.ZodObject<{
+				conversationId: z56.core.$ZodBranded<z56.ZodString, "cnv", "out">;
+				messageId: z56.core.$ZodBranded<z56.ZodString, "msg", "out">;
+				prospectId: z56.core.$ZodBranded<z56.ZodString, "prs", "out">;
+				channel: z56.ZodEnum<{
 					chat: "chat";
 					email: "email";
 					linkedin: "linkedin";
 				}>;
-				label: z50.ZodEnum<{
+				label: z56.ZodEnum<{
 					bounce: "bounce";
 					negative: "negative";
 					not_now: "not_now";
@@ -11479,38 +13278,38 @@ declare const INBOX_EVENTS: {
 					unsubscribe: "unsubscribe";
 					wrong_person: "wrong_person";
 				}>;
-				confidence: z50.ZodNumber;
-				classifiedAt: z50.ZodISODateTime;
-			}, z50.core.$strict>;
-		}, z50.core.$strip>;
+				confidence: z56.ZodNumber;
+				classifiedAt: z56.ZodISODateTime;
+			}, z56.core.$strict>;
+		}, z56.core.$strip>;
 		parse: (input: unknown) => {
-			id: string & z50.$brand<"evt">;
+			id: string & z56.$brand<"evt">;
 			occurredAt: string;
-			organizationId: string & z50.$brand<"org">;
+			organizationId: string & z56.$brand<"org">;
 			region: "eu" | "us";
 			type: "reply.classified";
 			version: 1;
 			data: {
-				conversationId: string & z50.$brand<"cnv">;
-				messageId: string & z50.$brand<"msg">;
-				prospectId: string & z50.$brand<"prs">;
+				conversationId: string & z56.$brand<"cnv">;
+				messageId: string & z56.$brand<"msg">;
+				prospectId: string & z56.$brand<"prs">;
 				channel: "chat" | "email" | "linkedin";
 				label: "bounce" | "negative" | "not_now" | "objection" | "other" | "out_of_office" | "positive" | "question" | "unsubscribe" | "wrong_person";
 				confidence: number;
 				classifiedAt: string;
 			};
 		};
-		safeParse: (input: unknown) => z50.ZodSafeParseResult<{
-			id: string & z50.$brand<"evt">;
+		safeParse: (input: unknown) => z56.ZodSafeParseResult<{
+			id: string & z56.$brand<"evt">;
 			occurredAt: string;
-			organizationId: string & z50.$brand<"org">;
+			organizationId: string & z56.$brand<"org">;
 			region: "eu" | "us";
 			type: "reply.classified";
 			version: 1;
 			data: {
-				conversationId: string & z50.$brand<"cnv">;
-				messageId: string & z50.$brand<"msg">;
-				prospectId: string & z50.$brand<"prs">;
+				conversationId: string & z56.$brand<"cnv">;
+				messageId: string & z56.$brand<"msg">;
+				prospectId: string & z56.$brand<"prs">;
 				channel: "chat" | "email" | "linkedin";
 				label: "bounce" | "negative" | "not_now" | "objection" | "other" | "out_of_office" | "positive" | "question" | "unsubscribe" | "wrong_person";
 				confidence: number;
@@ -11521,57 +13320,57 @@ declare const INBOX_EVENTS: {
 	readonly "conversation.taken_over": {
 		type: "conversation.taken_over";
 		version: 1;
-		schema: z50.ZodObject<{
-			id: z50.core.$ZodBranded<z50.ZodString, "evt", "out">;
-			occurredAt: z50.ZodISODateTime;
-			organizationId: z50.core.$ZodBranded<z50.ZodString, "org", "out">;
-			region: z50.ZodEnum<{
+		schema: z56.ZodObject<{
+			id: z56.core.$ZodBranded<z56.ZodString, "evt", "out">;
+			occurredAt: z56.ZodISODateTime;
+			organizationId: z56.core.$ZodBranded<z56.ZodString, "org", "out">;
+			region: z56.ZodEnum<{
 				eu: "eu";
 				us: "us";
 			}>;
-			type: z50.ZodLiteral<"conversation.taken_over">;
-			version: z50.ZodLiteral<1>;
-			data: z50.ZodObject<{
-				conversationId: z50.core.$ZodBranded<z50.ZodString, "cnv", "out">;
-				prospectId: z50.core.$ZodBranded<z50.ZodString, "prs", "out">;
-				channel: z50.ZodEnum<{
+			type: z56.ZodLiteral<"conversation.taken_over">;
+			version: z56.ZodLiteral<1>;
+			data: z56.ZodObject<{
+				conversationId: z56.core.$ZodBranded<z56.ZodString, "cnv", "out">;
+				prospectId: z56.core.$ZodBranded<z56.ZodString, "prs", "out">;
+				channel: z56.ZodEnum<{
 					chat: "chat";
 					email: "email";
 					linkedin: "linkedin";
 				}>;
-				takenOverByMembershipId: z50.core.$ZodBranded<z50.ZodString, "mem", "out">;
-				voidedDraftCount: z50.ZodNumber;
-				takenOverAt: z50.ZodISODateTime;
-			}, z50.core.$strict>;
-		}, z50.core.$strip>;
+				takenOverByMembershipId: z56.core.$ZodBranded<z56.ZodString, "mem", "out">;
+				voidedDraftCount: z56.ZodNumber;
+				takenOverAt: z56.ZodISODateTime;
+			}, z56.core.$strict>;
+		}, z56.core.$strip>;
 		parse: (input: unknown) => {
-			id: string & z50.$brand<"evt">;
+			id: string & z56.$brand<"evt">;
 			occurredAt: string;
-			organizationId: string & z50.$brand<"org">;
+			organizationId: string & z56.$brand<"org">;
 			region: "eu" | "us";
 			type: "conversation.taken_over";
 			version: 1;
 			data: {
-				conversationId: string & z50.$brand<"cnv">;
-				prospectId: string & z50.$brand<"prs">;
+				conversationId: string & z56.$brand<"cnv">;
+				prospectId: string & z56.$brand<"prs">;
 				channel: "chat" | "email" | "linkedin";
-				takenOverByMembershipId: string & z50.$brand<"mem">;
+				takenOverByMembershipId: string & z56.$brand<"mem">;
 				voidedDraftCount: number;
 				takenOverAt: string;
 			};
 		};
-		safeParse: (input: unknown) => z50.ZodSafeParseResult<{
-			id: string & z50.$brand<"evt">;
+		safeParse: (input: unknown) => z56.ZodSafeParseResult<{
+			id: string & z56.$brand<"evt">;
 			occurredAt: string;
-			organizationId: string & z50.$brand<"org">;
+			organizationId: string & z56.$brand<"org">;
 			region: "eu" | "us";
 			type: "conversation.taken_over";
 			version: 1;
 			data: {
-				conversationId: string & z50.$brand<"cnv">;
-				prospectId: string & z50.$brand<"prs">;
+				conversationId: string & z56.$brand<"cnv">;
+				prospectId: string & z56.$brand<"prs">;
 				channel: "chat" | "email" | "linkedin";
-				takenOverByMembershipId: string & z50.$brand<"mem">;
+				takenOverByMembershipId: string & z56.$brand<"mem">;
 				voidedDraftCount: number;
 				takenOverAt: string;
 			};
@@ -11580,55 +13379,55 @@ declare const INBOX_EVENTS: {
 	readonly "conversation.handed_back": {
 		type: "conversation.handed_back";
 		version: 1;
-		schema: z50.ZodObject<{
-			id: z50.core.$ZodBranded<z50.ZodString, "evt", "out">;
-			occurredAt: z50.ZodISODateTime;
-			organizationId: z50.core.$ZodBranded<z50.ZodString, "org", "out">;
-			region: z50.ZodEnum<{
+		schema: z56.ZodObject<{
+			id: z56.core.$ZodBranded<z56.ZodString, "evt", "out">;
+			occurredAt: z56.ZodISODateTime;
+			organizationId: z56.core.$ZodBranded<z56.ZodString, "org", "out">;
+			region: z56.ZodEnum<{
 				eu: "eu";
 				us: "us";
 			}>;
-			type: z50.ZodLiteral<"conversation.handed_back">;
-			version: z50.ZodLiteral<1>;
-			data: z50.ZodObject<{
-				conversationId: z50.core.$ZodBranded<z50.ZodString, "cnv", "out">;
-				prospectId: z50.core.$ZodBranded<z50.ZodString, "prs", "out">;
-				channel: z50.ZodEnum<{
+			type: z56.ZodLiteral<"conversation.handed_back">;
+			version: z56.ZodLiteral<1>;
+			data: z56.ZodObject<{
+				conversationId: z56.core.$ZodBranded<z56.ZodString, "cnv", "out">;
+				prospectId: z56.core.$ZodBranded<z56.ZodString, "prs", "out">;
+				channel: z56.ZodEnum<{
 					chat: "chat";
 					email: "email";
 					linkedin: "linkedin";
 				}>;
-				handedBackByMembershipId: z50.core.$ZodBranded<z50.ZodString, "mem", "out">;
-				handedBackAt: z50.ZodISODateTime;
-			}, z50.core.$strict>;
-		}, z50.core.$strip>;
+				handedBackByMembershipId: z56.core.$ZodBranded<z56.ZodString, "mem", "out">;
+				handedBackAt: z56.ZodISODateTime;
+			}, z56.core.$strict>;
+		}, z56.core.$strip>;
 		parse: (input: unknown) => {
-			id: string & z50.$brand<"evt">;
+			id: string & z56.$brand<"evt">;
 			occurredAt: string;
-			organizationId: string & z50.$brand<"org">;
+			organizationId: string & z56.$brand<"org">;
 			region: "eu" | "us";
 			type: "conversation.handed_back";
 			version: 1;
 			data: {
-				conversationId: string & z50.$brand<"cnv">;
-				prospectId: string & z50.$brand<"prs">;
+				conversationId: string & z56.$brand<"cnv">;
+				prospectId: string & z56.$brand<"prs">;
 				channel: "chat" | "email" | "linkedin";
-				handedBackByMembershipId: string & z50.$brand<"mem">;
+				handedBackByMembershipId: string & z56.$brand<"mem">;
 				handedBackAt: string;
 			};
 		};
-		safeParse: (input: unknown) => z50.ZodSafeParseResult<{
-			id: string & z50.$brand<"evt">;
+		safeParse: (input: unknown) => z56.ZodSafeParseResult<{
+			id: string & z56.$brand<"evt">;
 			occurredAt: string;
-			organizationId: string & z50.$brand<"org">;
+			organizationId: string & z56.$brand<"org">;
 			region: "eu" | "us";
 			type: "conversation.handed_back";
 			version: 1;
 			data: {
-				conversationId: string & z50.$brand<"cnv">;
-				prospectId: string & z50.$brand<"prs">;
+				conversationId: string & z56.$brand<"cnv">;
+				prospectId: string & z56.$brand<"prs">;
 				channel: "chat" | "email" | "linkedin";
-				handedBackByMembershipId: string & z50.$brand<"mem">;
+				handedBackByMembershipId: string & z56.$brand<"mem">;
 				handedBackAt: string;
 			};
 		}>;
@@ -11652,7 +13451,7 @@ type InboxRoute = InboundRoute<InboxErrorCode>;
 * sends text: an approval publishes `message.approved` and the channel service sends it.
 */
 declare const INBOX_ROUTES: Readonly<Record<InboxRouteName, InboxRoute>>;
-import { ErrorDefinition as ErrorDefinition_8gwh4512 } from "..";
+import { ErrorDefinition as ErrorDefinition_8gwh4513 } from "..";
 /**
 * The errors the Inquiry routes return, as `area.reason` codes. A role that is not allowed is the
 * common `auth.forbidden`. An Inquiry of another Organization, or one the caller may not see (a
@@ -11672,16 +13471,16 @@ import { ErrorDefinition as ErrorDefinition_8gwh4512 } from "..";
 * - `inquiry.not_found` (404): the Inquiry is unknown or not the caller's to see.
 */
 declare const INQUIRY_ERRORS: {
-	readonly "inquiry.consent_wording_missing": ErrorDefinition_8gwh4512<"inquiry.consent_wording_missing">;
-	readonly "inquiry.embed_invalid": ErrorDefinition_8gwh4512<"inquiry.embed_invalid">;
-	readonly "inquiry.key_invalid": ErrorDefinition_8gwh4512<"inquiry.key_invalid">;
-	readonly "inquiry.not_found": ErrorDefinition_8gwh4512<"inquiry.not_found">;
-	readonly "inquiry.origin_not_allowed": ErrorDefinition_8gwh4512<"inquiry.origin_not_allowed">;
-	readonly "inquiry.retries_exhausted": ErrorDefinition_8gwh4512<"inquiry.retries_exhausted">;
+	readonly "inquiry.consent_wording_missing": ErrorDefinition_8gwh4513<"inquiry.consent_wording_missing">;
+	readonly "inquiry.embed_invalid": ErrorDefinition_8gwh4513<"inquiry.embed_invalid">;
+	readonly "inquiry.key_invalid": ErrorDefinition_8gwh4513<"inquiry.key_invalid">;
+	readonly "inquiry.not_found": ErrorDefinition_8gwh4513<"inquiry.not_found">;
+	readonly "inquiry.origin_not_allowed": ErrorDefinition_8gwh4513<"inquiry.origin_not_allowed">;
+	readonly "inquiry.retries_exhausted": ErrorDefinition_8gwh4513<"inquiry.retries_exhausted">;
 };
 /** An Inquiry error code. */
 type InquiryErrorCode = keyof typeof INQUIRY_ERRORS;
-import { z as z51 } from "zod";
+import { z as z57 } from "zod";
 /**
 * `voice.inquiry.received` (version 1): an Inquiry was stored and the Prospect upserted. Ids, the
 * source and the time: no name, email, number, message, page address or Qualification answer.
@@ -11689,58 +13488,58 @@ import { z as z51 } from "zod";
 declare const voiceInquiryReceivedEvent: {
 	type: "voice.inquiry.received";
 	version: 1;
-	schema: z51.ZodObject<{
-		id: z51.core.$ZodBranded<z51.ZodString, "evt", "out">;
-		occurredAt: z51.ZodISODateTime;
-		organizationId: z51.core.$ZodBranded<z51.ZodString, "org", "out">;
-		region: z51.ZodEnum<{
+	schema: z57.ZodObject<{
+		id: z57.core.$ZodBranded<z57.ZodString, "evt", "out">;
+		occurredAt: z57.ZodISODateTime;
+		organizationId: z57.core.$ZodBranded<z57.ZodString, "org", "out">;
+		region: z57.ZodEnum<{
 			eu: "eu";
 			us: "us";
 		}>;
-		type: z51.ZodLiteral<"voice.inquiry.received">;
-		version: z51.ZodLiteral<1>;
-		data: z51.ZodObject<{
-			inquiryId: z51.core.$ZodBranded<z51.ZodString, "inq", "out">;
-			source: z51.ZodEnum<{
+		type: z57.ZodLiteral<"voice.inquiry.received">;
+		version: z57.ZodLiteral<1>;
+		data: z57.ZodObject<{
+			inquiryId: z57.core.$ZodBranded<z57.ZodString, "inq", "out">;
+			source: z57.ZodEnum<{
 				call: "call";
 				chat: "chat";
 				form: "form";
 			}>;
-			prospectId: z51.core.$ZodBranded<z51.ZodString, "prs", "out">;
-			chatId: z51.ZodNullable<z51.core.$ZodBranded<z51.ZodString, "cht", "out">>;
-			callId: z51.ZodNullable<z51.core.$ZodBranded<z51.ZodString, "call", "out">>;
-			receivedAt: z51.ZodISODateTime;
-		}, z51.core.$strict>;
-	}, z51.core.$strip>;
+			prospectId: z57.core.$ZodBranded<z57.ZodString, "prs", "out">;
+			chatId: z57.ZodNullable<z57.core.$ZodBranded<z57.ZodString, "cht", "out">>;
+			callId: z57.ZodNullable<z57.core.$ZodBranded<z57.ZodString, "call", "out">>;
+			receivedAt: z57.ZodISODateTime;
+		}, z57.core.$strict>;
+	}, z57.core.$strip>;
 	parse: (input: unknown) => {
-		id: string & z51.$brand<"evt">;
+		id: string & z57.$brand<"evt">;
 		occurredAt: string;
-		organizationId: string & z51.$brand<"org">;
+		organizationId: string & z57.$brand<"org">;
 		region: "eu" | "us";
 		type: "voice.inquiry.received";
 		version: 1;
 		data: {
-			inquiryId: string & z51.$brand<"inq">;
+			inquiryId: string & z57.$brand<"inq">;
 			source: "call" | "chat" | "form";
-			prospectId: string & z51.$brand<"prs">;
-			chatId: (string & z51.$brand<"cht">) | null;
-			callId: (string & z51.$brand<"call">) | null;
+			prospectId: string & z57.$brand<"prs">;
+			chatId: (string & z57.$brand<"cht">) | null;
+			callId: (string & z57.$brand<"call">) | null;
 			receivedAt: string;
 		};
 	};
-	safeParse: (input: unknown) => z51.ZodSafeParseResult<{
-		id: string & z51.$brand<"evt">;
+	safeParse: (input: unknown) => z57.ZodSafeParseResult<{
+		id: string & z57.$brand<"evt">;
 		occurredAt: string;
-		organizationId: string & z51.$brand<"org">;
+		organizationId: string & z57.$brand<"org">;
 		region: "eu" | "us";
 		type: "voice.inquiry.received";
 		version: 1;
 		data: {
-			inquiryId: string & z51.$brand<"inq">;
+			inquiryId: string & z57.$brand<"inq">;
 			source: "call" | "chat" | "form";
-			prospectId: string & z51.$brand<"prs">;
-			chatId: (string & z51.$brand<"cht">) | null;
-			callId: (string & z51.$brand<"call">) | null;
+			prospectId: string & z57.$brand<"prs">;
+			chatId: (string & z57.$brand<"cht">) | null;
+			callId: (string & z57.$brand<"call">) | null;
 			receivedAt: string;
 		};
 	}>;
@@ -11750,58 +13549,58 @@ declare const INQUIRY_EVENTS: {
 	readonly "voice.inquiry.received": {
 		type: "voice.inquiry.received";
 		version: 1;
-		schema: z51.ZodObject<{
-			id: z51.core.$ZodBranded<z51.ZodString, "evt", "out">;
-			occurredAt: z51.ZodISODateTime;
-			organizationId: z51.core.$ZodBranded<z51.ZodString, "org", "out">;
-			region: z51.ZodEnum<{
+		schema: z57.ZodObject<{
+			id: z57.core.$ZodBranded<z57.ZodString, "evt", "out">;
+			occurredAt: z57.ZodISODateTime;
+			organizationId: z57.core.$ZodBranded<z57.ZodString, "org", "out">;
+			region: z57.ZodEnum<{
 				eu: "eu";
 				us: "us";
 			}>;
-			type: z51.ZodLiteral<"voice.inquiry.received">;
-			version: z51.ZodLiteral<1>;
-			data: z51.ZodObject<{
-				inquiryId: z51.core.$ZodBranded<z51.ZodString, "inq", "out">;
-				source: z51.ZodEnum<{
+			type: z57.ZodLiteral<"voice.inquiry.received">;
+			version: z57.ZodLiteral<1>;
+			data: z57.ZodObject<{
+				inquiryId: z57.core.$ZodBranded<z57.ZodString, "inq", "out">;
+				source: z57.ZodEnum<{
 					call: "call";
 					chat: "chat";
 					form: "form";
 				}>;
-				prospectId: z51.core.$ZodBranded<z51.ZodString, "prs", "out">;
-				chatId: z51.ZodNullable<z51.core.$ZodBranded<z51.ZodString, "cht", "out">>;
-				callId: z51.ZodNullable<z51.core.$ZodBranded<z51.ZodString, "call", "out">>;
-				receivedAt: z51.ZodISODateTime;
-			}, z51.core.$strict>;
-		}, z51.core.$strip>;
+				prospectId: z57.core.$ZodBranded<z57.ZodString, "prs", "out">;
+				chatId: z57.ZodNullable<z57.core.$ZodBranded<z57.ZodString, "cht", "out">>;
+				callId: z57.ZodNullable<z57.core.$ZodBranded<z57.ZodString, "call", "out">>;
+				receivedAt: z57.ZodISODateTime;
+			}, z57.core.$strict>;
+		}, z57.core.$strip>;
 		parse: (input: unknown) => {
-			id: string & z51.$brand<"evt">;
+			id: string & z57.$brand<"evt">;
 			occurredAt: string;
-			organizationId: string & z51.$brand<"org">;
+			organizationId: string & z57.$brand<"org">;
 			region: "eu" | "us";
 			type: "voice.inquiry.received";
 			version: 1;
 			data: {
-				inquiryId: string & z51.$brand<"inq">;
+				inquiryId: string & z57.$brand<"inq">;
 				source: "call" | "chat" | "form";
-				prospectId: string & z51.$brand<"prs">;
-				chatId: (string & z51.$brand<"cht">) | null;
-				callId: (string & z51.$brand<"call">) | null;
+				prospectId: string & z57.$brand<"prs">;
+				chatId: (string & z57.$brand<"cht">) | null;
+				callId: (string & z57.$brand<"call">) | null;
 				receivedAt: string;
 			};
 		};
-		safeParse: (input: unknown) => z51.ZodSafeParseResult<{
-			id: string & z51.$brand<"evt">;
+		safeParse: (input: unknown) => z57.ZodSafeParseResult<{
+			id: string & z57.$brand<"evt">;
 			occurredAt: string;
-			organizationId: string & z51.$brand<"org">;
+			organizationId: string & z57.$brand<"org">;
 			region: "eu" | "us";
 			type: "voice.inquiry.received";
 			version: 1;
 			data: {
-				inquiryId: string & z51.$brand<"inq">;
+				inquiryId: string & z57.$brand<"inq">;
 				source: "call" | "chat" | "form";
-				prospectId: string & z51.$brand<"prs">;
-				chatId: (string & z51.$brand<"cht">) | null;
-				callId: (string & z51.$brand<"call">) | null;
+				prospectId: string & z57.$brand<"prs">;
+				chatId: (string & z57.$brand<"cht">) | null;
+				callId: (string & z57.$brand<"call">) | null;
 				receivedAt: string;
 			};
 		}>;
@@ -11809,15 +13608,15 @@ declare const INQUIRY_EVENTS: {
 };
 /** The type of an Inquiry event. */
 type InquiryEventType = keyof typeof INQUIRY_EVENTS;
-import { z as z52 } from "zod";
+import { z as z58 } from "zod";
 /**
 * The callback of a form Inquiry. `skipReason` is set exactly when the state is `skipped`, so a
 * callback that did not happen always says why. `attempts` counts dials (at most three) and
 * `nextAttemptAt` is set while a retry waits (`no_answer`). Each attempt re-checks the Contact
 * Consent for the phone channel at dial time; no field here can waive that check (ADR 0003).
 */
-declare const inquiryCallbackSchema: z52.ZodObject<{
-	state: z52.ZodEnum<{
+declare const inquiryCallbackSchema: z58.ZodObject<{
+	state: z58.ZodEnum<{
 		connected: "connected";
 		dialling: "dialling";
 		failed: "failed";
@@ -11826,7 +13625,7 @@ declare const inquiryCallbackSchema: z52.ZodObject<{
 		pending: "pending";
 		skipped: "skipped";
 	}>;
-	skipReason: z52.ZodNullable<z52.ZodEnum<{
+	skipReason: z58.ZodNullable<z58.ZodEnum<{
 		agent_paused: "agent_paused";
 		concurrency_cap: "concurrency_cap";
 		consent_check_unavailable: "consent_check_unavailable";
@@ -11837,48 +13636,48 @@ declare const inquiryCallbackSchema: z52.ZodObject<{
 		retries_exhausted: "retries_exhausted";
 		suppressed: "suppressed";
 	}>>;
-	attempts: z52.ZodNumber;
-	nextAttemptAt: z52.ZodNullable<z52.ZodISODateTime>;
-	lastAttemptAt: z52.ZodNullable<z52.ZodISODateTime>;
-}, z52.core.$strict>;
+	attempts: z58.ZodNumber;
+	nextAttemptAt: z58.ZodNullable<z58.ZodISODateTime>;
+	lastAttemptAt: z58.ZodNullable<z58.ZodISODateTime>;
+}, z58.core.$strict>;
 /** The callback of a form Inquiry. */
-type InquiryCallback = z52.infer<typeof inquiryCallbackSchema>;
+type InquiryCallback = z58.infer<typeof inquiryCallbackSchema>;
 /**
 * The Contact Consent evidence an Inquiry carries: the channel, the exact wording version shown
 * and the page it was shown on. The wording text itself is in core's ledger. `phoneGranted` is
 * whether the Prospect ticked the callback box.
 */
-declare const inquiryConsentSchema: z52.ZodObject<{
-	wordingId: z52.core.$ZodBranded<z52.ZodString, "cwd", "out">;
-	wordingVersion: z52.ZodNumber;
-	sourceUrl: z52.ZodString;
-	phoneGranted: z52.ZodBoolean;
-}, z52.core.$strict>;
+declare const inquiryConsentSchema: z58.ZodObject<{
+	wordingId: z58.core.$ZodBranded<z58.ZodString, "cwd", "out">;
+	wordingVersion: z58.ZodNumber;
+	sourceUrl: z58.ZodString;
+	phoneGranted: z58.ZodBoolean;
+}, z58.core.$strict>;
 /**
 * An Inquiry: a request from a Prospect through a form, a Chat or a Call to talk to the
 * Organization. `consent` is set for a form (and a Chat that captured a callback consent) and null
 * for a Call. The Prospect's name, email and number are on the Prospect, not here. `chatId` is set
 * exactly for a Chat Inquiry and `callId` for a Call Inquiry or once a callback connected.
 */
-declare const inquirySchema: z52.ZodObject<{
-	id: z52.core.$ZodBranded<z52.ZodString, "inq", "out">;
-	source: z52.ZodEnum<{
+declare const inquirySchema: z58.ZodObject<{
+	id: z58.core.$ZodBranded<z58.ZodString, "inq", "out">;
+	source: z58.ZodEnum<{
 		call: "call";
 		chat: "chat";
 		form: "form";
 	}>;
-	prospectId: z52.core.$ZodBranded<z52.ZodString, "prs", "out">;
-	assignedToMembershipId: z52.ZodNullable<z52.core.$ZodBranded<z52.ZodString, "mem", "out">>;
-	chatId: z52.ZodNullable<z52.core.$ZodBranded<z52.ZodString, "cht", "out">>;
-	callId: z52.ZodNullable<z52.core.$ZodBranded<z52.ZodString, "call", "out">>;
-	consent: z52.ZodNullable<z52.ZodObject<{
-		wordingId: z52.core.$ZodBranded<z52.ZodString, "cwd", "out">;
-		wordingVersion: z52.ZodNumber;
-		sourceUrl: z52.ZodString;
-		phoneGranted: z52.ZodBoolean;
-	}, z52.core.$strict>>;
-	callback: z52.ZodObject<{
-		state: z52.ZodEnum<{
+	prospectId: z58.core.$ZodBranded<z58.ZodString, "prs", "out">;
+	assignedToMembershipId: z58.ZodNullable<z58.core.$ZodBranded<z58.ZodString, "mem", "out">>;
+	chatId: z58.ZodNullable<z58.core.$ZodBranded<z58.ZodString, "cht", "out">>;
+	callId: z58.ZodNullable<z58.core.$ZodBranded<z58.ZodString, "call", "out">>;
+	consent: z58.ZodNullable<z58.ZodObject<{
+		wordingId: z58.core.$ZodBranded<z58.ZodString, "cwd", "out">;
+		wordingVersion: z58.ZodNumber;
+		sourceUrl: z58.ZodString;
+		phoneGranted: z58.ZodBoolean;
+	}, z58.core.$strict>>;
+	callback: z58.ZodObject<{
+		state: z58.ZodEnum<{
 			connected: "connected";
 			dialling: "dialling";
 			failed: "failed";
@@ -11887,7 +13686,7 @@ declare const inquirySchema: z52.ZodObject<{
 			pending: "pending";
 			skipped: "skipped";
 		}>;
-		skipReason: z52.ZodNullable<z52.ZodEnum<{
+		skipReason: z58.ZodNullable<z58.ZodEnum<{
 			agent_paused: "agent_paused";
 			concurrency_cap: "concurrency_cap";
 			consent_check_unavailable: "consent_check_unavailable";
@@ -11898,45 +13697,45 @@ declare const inquirySchema: z52.ZodObject<{
 			retries_exhausted: "retries_exhausted";
 			suppressed: "suppressed";
 		}>>;
-		attempts: z52.ZodNumber;
-		nextAttemptAt: z52.ZodNullable<z52.ZodISODateTime>;
-		lastAttemptAt: z52.ZodNullable<z52.ZodISODateTime>;
-	}, z52.core.$strict>;
-	qualification: z52.ZodObject<{
-		answers: z52.ZodArray<z52.ZodObject<{
-			questionId: z52.core.$ZodBranded<z52.ZodString, "qst", "out">;
-			value: z52.ZodNullable<z52.ZodUnion<readonly [z52.ZodPipe<z52.ZodString, z52.ZodString>, z52.ZodNumber, z52.ZodBoolean]>>;
-			skipped: z52.ZodBoolean;
-		}, z52.core.$strict>>;
-		summary: z52.ZodNullable<z52.ZodPipe<z52.ZodString, z52.ZodString>>;
-	}, z52.core.$strict>;
-	receivedAt: z52.ZodISODateTime;
-}, z52.core.$strict>;
+		attempts: z58.ZodNumber;
+		nextAttemptAt: z58.ZodNullable<z58.ZodISODateTime>;
+		lastAttemptAt: z58.ZodNullable<z58.ZodISODateTime>;
+	}, z58.core.$strict>;
+	qualification: z58.ZodObject<{
+		answers: z58.ZodArray<z58.ZodObject<{
+			questionId: z58.core.$ZodBranded<z58.ZodString, "qst", "out">;
+			value: z58.ZodNullable<z58.ZodUnion<readonly [z58.ZodPipe<z58.ZodString, z58.ZodString>, z58.ZodNumber, z58.ZodBoolean]>>;
+			skipped: z58.ZodBoolean;
+		}, z58.core.$strict>>;
+		summary: z58.ZodNullable<z58.ZodPipe<z58.ZodString, z58.ZodString>>;
+	}, z58.core.$strict>;
+	receivedAt: z58.ZodISODateTime;
+}, z58.core.$strict>;
 /** An Inquiry. */
-type Inquiry = z52.infer<typeof inquirySchema>;
+type Inquiry = z58.infer<typeof inquirySchema>;
 /** The path parameters of a request about one Inquiry. */
-declare const inquiryParamsSchema: z52.ZodObject<{
-	inquiryId: z52.core.$ZodBranded<z52.ZodString, "inq", "out">;
-}, z52.core.$strict>;
+declare const inquiryParamsSchema: z58.ZodObject<{
+	inquiryId: z58.core.$ZodBranded<z58.ZodString, "inq", "out">;
+}, z58.core.$strict>;
 /** The cursor position an Inquiry list resumes from: latest first, then id. */
-declare const inquiryCursorSchema: z52.ZodObject<{
-	receivedAt: z52.ZodISODateTime;
-	id: z52.core.$ZodBranded<z52.ZodString, "inq", "out">;
-}, z52.core.$strict>;
+declare const inquiryCursorSchema: z58.ZodObject<{
+	receivedAt: z58.ZodISODateTime;
+	id: z58.core.$ZodBranded<z58.ZodString, "inq", "out">;
+}, z58.core.$strict>;
 /**
 * The query parameters of a request to list Inquiries: latest first, one cursor-paginated page at
 * a time, optionally narrowed by source, callback state, Prospect and a time range. What the
 * caller sees is decided from the token and a filter never widens it.
 */
-declare const listInquiriesQuerySchema: z52.ZodObject<{
-	cursor: z52.ZodOptional<z52.ZodString>;
-	limit: z52.ZodDefault<z52.ZodPipe<z52.ZodPipe<z52.ZodUnion<readonly [z52.ZodNumber, z52.ZodString]>, z52.ZodTransform<number, string | number>>, z52.ZodNumber>>;
-	source: z52.ZodOptional<z52.ZodEnum<{
+declare const listInquiriesQuerySchema: z58.ZodObject<{
+	cursor: z58.ZodOptional<z58.ZodString>;
+	limit: z58.ZodDefault<z58.ZodPipe<z58.ZodPipe<z58.ZodUnion<readonly [z58.ZodNumber, z58.ZodString]>, z58.ZodTransform<number, string | number>>, z58.ZodNumber>>;
+	source: z58.ZodOptional<z58.ZodEnum<{
 		call: "call";
 		chat: "chat";
 		form: "form";
 	}>>;
-	callbackState: z52.ZodOptional<z52.ZodEnum<{
+	callbackState: z58.ZodOptional<z58.ZodEnum<{
 		connected: "connected";
 		dialling: "dialling";
 		failed: "failed";
@@ -11945,33 +13744,33 @@ declare const listInquiriesQuerySchema: z52.ZodObject<{
 		pending: "pending";
 		skipped: "skipped";
 	}>>;
-	prospectId: z52.ZodOptional<z52.core.$ZodBranded<z52.ZodString, "prs", "out">>;
-	from: z52.ZodOptional<z52.ZodISODateTime>;
-	to: z52.ZodOptional<z52.ZodISODateTime>;
-}, z52.core.$strict>;
+	prospectId: z58.ZodOptional<z58.core.$ZodBranded<z58.ZodString, "prs", "out">>;
+	from: z58.ZodOptional<z58.ZodISODateTime>;
+	to: z58.ZodOptional<z58.ZodISODateTime>;
+}, z58.core.$strict>;
 /** The query parameters of a request to list Inquiries. */
-type ListInquiriesQuery = z52.infer<typeof listInquiriesQuerySchema>;
+type ListInquiriesQuery = z58.infer<typeof listInquiriesQuerySchema>;
 /** One page of Inquiries. */
-declare const inquiryPageSchema: z52.ZodObject<{
-	items: z52.ZodArray<z52.ZodObject<{
-		id: z52.core.$ZodBranded<z52.ZodString, "inq", "out">;
-		source: z52.ZodEnum<{
+declare const inquiryPageSchema: z58.ZodObject<{
+	items: z58.ZodArray<z58.ZodObject<{
+		id: z58.core.$ZodBranded<z58.ZodString, "inq", "out">;
+		source: z58.ZodEnum<{
 			call: "call";
 			chat: "chat";
 			form: "form";
 		}>;
-		prospectId: z52.core.$ZodBranded<z52.ZodString, "prs", "out">;
-		assignedToMembershipId: z52.ZodNullable<z52.core.$ZodBranded<z52.ZodString, "mem", "out">>;
-		chatId: z52.ZodNullable<z52.core.$ZodBranded<z52.ZodString, "cht", "out">>;
-		callId: z52.ZodNullable<z52.core.$ZodBranded<z52.ZodString, "call", "out">>;
-		consent: z52.ZodNullable<z52.ZodObject<{
-			wordingId: z52.core.$ZodBranded<z52.ZodString, "cwd", "out">;
-			wordingVersion: z52.ZodNumber;
-			sourceUrl: z52.ZodString;
-			phoneGranted: z52.ZodBoolean;
-		}, z52.core.$strict>>;
-		callback: z52.ZodObject<{
-			state: z52.ZodEnum<{
+		prospectId: z58.core.$ZodBranded<z58.ZodString, "prs", "out">;
+		assignedToMembershipId: z58.ZodNullable<z58.core.$ZodBranded<z58.ZodString, "mem", "out">>;
+		chatId: z58.ZodNullable<z58.core.$ZodBranded<z58.ZodString, "cht", "out">>;
+		callId: z58.ZodNullable<z58.core.$ZodBranded<z58.ZodString, "call", "out">>;
+		consent: z58.ZodNullable<z58.ZodObject<{
+			wordingId: z58.core.$ZodBranded<z58.ZodString, "cwd", "out">;
+			wordingVersion: z58.ZodNumber;
+			sourceUrl: z58.ZodString;
+			phoneGranted: z58.ZodBoolean;
+		}, z58.core.$strict>>;
+		callback: z58.ZodObject<{
+			state: z58.ZodEnum<{
 				connected: "connected";
 				dialling: "dialling";
 				failed: "failed";
@@ -11980,7 +13779,7 @@ declare const inquiryPageSchema: z52.ZodObject<{
 				pending: "pending";
 				skipped: "skipped";
 			}>;
-			skipReason: z52.ZodNullable<z52.ZodEnum<{
+			skipReason: z58.ZodNullable<z58.ZodEnum<{
 				agent_paused: "agent_paused";
 				concurrency_cap: "concurrency_cap";
 				consent_check_unavailable: "consent_check_unavailable";
@@ -11991,80 +13790,80 @@ declare const inquiryPageSchema: z52.ZodObject<{
 				retries_exhausted: "retries_exhausted";
 				suppressed: "suppressed";
 			}>>;
-			attempts: z52.ZodNumber;
-			nextAttemptAt: z52.ZodNullable<z52.ZodISODateTime>;
-			lastAttemptAt: z52.ZodNullable<z52.ZodISODateTime>;
-		}, z52.core.$strict>;
-		qualification: z52.ZodObject<{
-			answers: z52.ZodArray<z52.ZodObject<{
-				questionId: z52.core.$ZodBranded<z52.ZodString, "qst", "out">;
-				value: z52.ZodNullable<z52.ZodUnion<readonly [z52.ZodPipe<z52.ZodString, z52.ZodString>, z52.ZodNumber, z52.ZodBoolean]>>;
-				skipped: z52.ZodBoolean;
-			}, z52.core.$strict>>;
-			summary: z52.ZodNullable<z52.ZodPipe<z52.ZodString, z52.ZodString>>;
-		}, z52.core.$strict>;
-		receivedAt: z52.ZodISODateTime;
-	}, z52.core.$strict>>;
-	nextCursor: z52.ZodNullable<z52.ZodString>;
-}, z52.core.$strip>;
+			attempts: z58.ZodNumber;
+			nextAttemptAt: z58.ZodNullable<z58.ZodISODateTime>;
+			lastAttemptAt: z58.ZodNullable<z58.ZodISODateTime>;
+		}, z58.core.$strict>;
+		qualification: z58.ZodObject<{
+			answers: z58.ZodArray<z58.ZodObject<{
+				questionId: z58.core.$ZodBranded<z58.ZodString, "qst", "out">;
+				value: z58.ZodNullable<z58.ZodUnion<readonly [z58.ZodPipe<z58.ZodString, z58.ZodString>, z58.ZodNumber, z58.ZodBoolean]>>;
+				skipped: z58.ZodBoolean;
+			}, z58.core.$strict>>;
+			summary: z58.ZodNullable<z58.ZodPipe<z58.ZodString, z58.ZodString>>;
+		}, z58.core.$strict>;
+		receivedAt: z58.ZodISODateTime;
+	}, z58.core.$strict>>;
+	nextCursor: z58.ZodNullable<z58.ZodString>;
+}, z58.core.$strip>;
 /** The headers of a request that requires an `Idempotency-Key` (header names arrive lower-cased). */
-declare const inquiryKeyedHeadersSchema: z52.ZodObject<{
-	"idempotency-key": z52.ZodString;
-}, z52.core.$strip>;
+declare const inquiryKeyedHeadersSchema: z58.ZodObject<{
+	"idempotency-key": z58.ZodString;
+}, z58.core.$strip>;
 /**
 * The embed settings of an Organization's Inquiry form and Chat: the publishable key, the origins
 * allowed to submit and the Consent Wording the form displays (null until chosen; an embed with no
 * wording is not live). Only Owner and Admin read them.
 */
-declare const inquiryEmbedSchema: z52.ZodObject<{
-	publishableKey: z52.ZodString;
-	allowedOrigins: z52.ZodArray<z52.ZodString>;
-	consentWordingId: z52.ZodNullable<z52.core.$ZodBranded<z52.ZodString, "cwd", "out">>;
-	updatedAt: z52.ZodNullable<z52.ZodISODateTime>;
-}, z52.core.$strict>;
+declare const inquiryEmbedSchema: z58.ZodObject<{
+	publishableKey: z58.ZodString;
+	allowedOrigins: z58.ZodArray<z58.ZodString>;
+	consentWordingId: z58.ZodNullable<z58.core.$ZodBranded<z58.ZodString, "cwd", "out">>;
+	updatedAt: z58.ZodNullable<z58.ZodISODateTime>;
+}, z58.core.$strict>;
 /** The embed settings. */
-type InquiryEmbed = z52.infer<typeof inquiryEmbedSchema>;
+type InquiryEmbed = z58.infer<typeof inquiryEmbedSchema>;
 /** The body of a request to set the allowed origins and the displayed wording; it replaces them, so a repeat changes nothing. */
-declare const setInquiryEmbedRequestSchema: z52.ZodObject<{
-	allowedOrigins: z52.ZodArray<z52.ZodString>;
-	consentWordingId: z52.core.$ZodBranded<z52.ZodString, "cwd", "out">;
-}, z52.core.$strict>;
+declare const setInquiryEmbedRequestSchema: z58.ZodObject<{
+	allowedOrigins: z58.ZodArray<z58.ZodString>;
+	consentWordingId: z58.core.$ZodBranded<z58.ZodString, "cwd", "out">;
+}, z58.core.$strict>;
 /** The body of a request to set the embed settings. */
-type SetInquiryEmbedRequest = z52.infer<typeof setInquiryEmbedRequestSchema>;
+type SetInquiryEmbedRequest = z58.infer<typeof setInquiryEmbedRequestSchema>;
 /** The path parameters of every public Inquiry route: the publishable key. */
-declare const publicInquiryParamsSchema: z52.ZodObject<{
-	key: z52.ZodString;
-}, z52.core.$strict>;
+declare const publicInquiryParamsSchema: z58.ZodObject<{
+	key: z58.ZodString;
+}, z58.core.$strict>;
 /**
 * The headers of a public request that does not change anything: the `Origin` the browser sends,
 * which must be one of the Organization's allowed origins (`inquiry.origin_not_allowed`).
 */
-declare const publicOriginHeadersSchema: z52.ZodObject<{
-	origin: z52.ZodString;
-}, z52.core.$strip>;
+declare const publicOriginHeadersSchema: z58.ZodObject<{
+	origin: z58.ZodString;
+}, z58.core.$strip>;
 /**
 * The headers of a public submission: the `Origin` and a required `Idempotency-Key` (16 to 128
 * characters; the client generates one per submission), so a double click records one Inquiry and
 * causes one callback.
 */
-declare const publicInquiryHeadersSchema: z52.ZodObject<{
-	origin: z52.ZodString;
-	"idempotency-key": z52.ZodString;
-}, z52.core.$strip>;
+declare const publicInquiryHeadersSchema: z58.ZodObject<{
+	origin: z58.ZodString;
+	"idempotency-key": z58.ZodString;
+}, z58.core.$strip>;
 /**
 * What the embedded form displays: the Organization's name, the exact Consent Wording to show next
 * to the callback box (and its id and version, to send back) and that an AI will make the call. It
 * has nothing about any Prospect, Rep or internal id beyond the wording.
 */
-declare const publicInquiryFormViewSchema: z52.ZodObject<{
-	organizationName: z52.ZodPipe<z52.ZodString, z52.ZodString>;
-	wordingId: z52.core.$ZodBranded<z52.ZodString, "cwd", "out">;
-	wordingVersion: z52.ZodNumber;
-	wordingText: z52.ZodPipe<z52.ZodString, z52.ZodString>;
-	aiNotice: z52.ZodPipe<z52.ZodString, z52.ZodString>;
-}, z52.core.$strict>;
+declare const publicInquiryFormViewSchema: z58.ZodObject<{
+	organizationName: z58.ZodPipe<z58.ZodString, z58.ZodString>;
+	wordingId: z58.core.$ZodBranded<z58.ZodString, "cwd", "out">;
+	wordingVersion: z58.ZodNumber;
+	wordingText: z58.ZodPipe<z58.ZodString, z58.ZodString>;
+	aiNotice: z58.ZodPipe<z58.ZodString, z58.ZodString>;
+}, z58.core.$strict>;
 /** What the embedded form displays. */
-type PublicInquiryFormView = z52.infer<typeof publicInquiryFormViewSchema>;
+type PublicInquiryFormView = z58.infer<typeof publicInquiryFormViewSchema>;
 /**
 * The body of a public Inquiry from the embedded form. The wording id and version are the ones
 * the form displayed and `sourceUrl` is the page it was on: all three are required, so an embed
@@ -12075,43 +13874,43 @@ type PublicInquiryFormView = z52.infer<typeof publicInquiryFormViewSchema>;
 * service answers as for a real request and stores nothing. The idempotency key is the
 * `Idempotency-Key` header (`publicInquiryHeadersSchema`).
 */
-declare const publicInquiryRequestSchema: z52.ZodObject<{
-	name: z52.ZodPipe<z52.ZodString, z52.ZodString>;
-	phone: z52.ZodPipe<z52.ZodString, z52.ZodString>;
-	email: z52.ZodOptional<z52.ZodPipe<z52.ZodPipe<z52.ZodString, z52.ZodTransform<string, string>>, z52.ZodString>>;
-	message: z52.ZodOptional<z52.ZodPipe<z52.ZodString, z52.ZodString>>;
-	consentWordingId: z52.core.$ZodBranded<z52.ZodString, "cwd", "out">;
-	consentWordingVersion: z52.ZodNumber;
-	callbackConsent: z52.ZodBoolean;
-	sourceUrl: z52.ZodString;
-	website: z52.ZodDefault<z52.ZodString>;
-}, z52.core.$strict>;
+declare const publicInquiryRequestSchema: z58.ZodObject<{
+	name: z58.ZodPipe<z58.ZodString, z58.ZodString>;
+	phone: z58.ZodPipe<z58.ZodString, z58.ZodString>;
+	email: z58.ZodOptional<z58.ZodPipe<z58.ZodPipe<z58.ZodString, z58.ZodTransform<string, string>>, z58.ZodString>>;
+	message: z58.ZodOptional<z58.ZodPipe<z58.ZodString, z58.ZodString>>;
+	consentWordingId: z58.core.$ZodBranded<z58.ZodString, "cwd", "out">;
+	consentWordingVersion: z58.ZodNumber;
+	callbackConsent: z58.ZodBoolean;
+	sourceUrl: z58.ZodString;
+	website: z58.ZodDefault<z58.ZodString>;
+}, z58.core.$strict>;
 /** The body of a public Inquiry. */
-type PublicInquiryRequest = z52.infer<typeof publicInquiryRequestSchema>;
+type PublicInquiryRequest = z58.infer<typeof publicInquiryRequestSchema>;
 /**
 * The receipt a Prospect gets: that it arrived, and when. It says nothing about whether a call is
 * coming, so a public caller cannot learn whether a number is suppressed, revoked or blocked by a
 * paused Agent or the hours. No Inquiry, Prospect, Rep or Organization id, and no echo of the
 * address or number.
 */
-declare const publicInquiryReceiptSchema: z52.ZodObject<{
-	received: z52.ZodLiteral<true>;
-	receivedAt: z52.ZodISODateTime;
-}, z52.core.$strict>;
+declare const publicInquiryReceiptSchema: z58.ZodObject<{
+	received: z58.ZodLiteral<true>;
+	receivedAt: z58.ZodISODateTime;
+}, z58.core.$strict>;
 /** The receipt a Prospect gets. */
-type PublicInquiryReceipt = z52.infer<typeof publicInquiryReceiptSchema>;
-import { z as z53 } from "zod";
+type PublicInquiryReceipt = z58.infer<typeof publicInquiryReceiptSchema>;
+import { z as z59 } from "zod";
 /** The kinds of Qualification question: free text, one choice from a list, a number, or yes or no. */
 declare const QUALIFICATION_QUESTION_KINDS: readonly ["free_text", "choice", "number", "yes_no"];
 /** The kind of a Qualification question. */
-declare const qualificationQuestionKindSchema: z53.ZodEnum<{
+declare const qualificationQuestionKindSchema: z59.ZodEnum<{
 	choice: "choice";
 	free_text: "free_text";
 	number: "number";
 	yes_no: "yes_no";
 }>;
 /** The kind of a Qualification question. */
-type QualificationQuestionKind = z53.infer<typeof qualificationQuestionKindSchema>;
+type QualificationQuestionKind = z59.infer<typeof qualificationQuestionKindSchema>;
 /** The most Qualification questions an Organization may keep. */
 declare const MAX_QUALIFICATION_QUESTIONS = 50;
 /** The longest prompt of a Qualification question, in characters. */
@@ -12127,15 +13926,15 @@ declare const MAX_SKIP_CONDITIONS = 5;
 /** The most suggestions one request for suggested questions returns. */
 declare const MAX_QUESTION_SUGGESTIONS = 10;
 /** The wording of a Qualification question: bounded text with no control character. */
-declare const questionPromptSchema: z53.ZodPipe<z53.ZodString, z53.ZodString>;
+declare const questionPromptSchema: z59.ZodPipe<z59.ZodString, z59.ZodString>;
 /** The value of a Qualification answer or a skip comparison: text, a number or a yes or no. */
-declare const qualificationValueSchema: z53.ZodUnion<readonly [z53.ZodPipe<z53.ZodString, z53.ZodString>, z53.ZodNumber, z53.ZodBoolean]>;
+declare const qualificationValueSchema: z59.ZodUnion<readonly [z59.ZodPipe<z59.ZodString, z59.ZodString>, z59.ZodNumber, z59.ZodBoolean]>;
 /** The value of a Qualification answer or a skip comparison. */
-type QualificationValue = z53.infer<typeof qualificationValueSchema>;
+type QualificationValue = z59.infer<typeof qualificationValueSchema>;
 /** The tests a skip condition makes of an earlier answer. */
 declare const SKIP_OPERATORS: readonly ["equals", "not_equals", "greater_than", "less_than", "answered", "not_answered"];
 /** A test a skip condition makes of an earlier answer. */
-declare const skipOperatorSchema: z53.ZodEnum<{
+declare const skipOperatorSchema: z59.ZodEnum<{
 	answered: "answered";
 	equals: "equals";
 	greater_than: "greater_than";
@@ -12149,9 +13948,9 @@ declare const skipOperatorSchema: z53.ZodEnum<{
 * that names an unknown question, the question itself, or a later question (a cycle) as
 * `agent.question_invalid`.
 */
-declare const skipConditionSchema: z53.ZodObject<{
-	questionId: z53.core.$ZodBranded<z53.ZodString, "qst", "out">;
-	operator: z53.ZodEnum<{
+declare const skipConditionSchema: z59.ZodObject<{
+	questionId: z59.core.$ZodBranded<z59.ZodString, "qst", "out">;
+	operator: z59.ZodEnum<{
 		answered: "answered";
 		equals: "equals";
 		greater_than: "greater_than";
@@ -12159,31 +13958,31 @@ declare const skipConditionSchema: z53.ZodObject<{
 		not_answered: "not_answered";
 		not_equals: "not_equals";
 	}>;
-	value: z53.ZodOptional<z53.ZodUnion<readonly [z53.ZodPipe<z53.ZodString, z53.ZodString>, z53.ZodNumber, z53.ZodBoolean]>>;
-}, z53.core.$strict>;
+	value: z59.ZodOptional<z59.ZodUnion<readonly [z59.ZodPipe<z59.ZodString, z59.ZodString>, z59.ZodNumber, z59.ZodBoolean]>>;
+}, z59.core.$strict>;
 /** One condition of the skip logic. */
-type SkipCondition = z53.infer<typeof skipConditionSchema>;
+type SkipCondition = z59.infer<typeof skipConditionSchema>;
 /**
 * A Qualification question an Admin wrote for the Inbound Agent to ask. `position` orders the
 * questions from 1. The question is skipped when every condition of `skipWhen` holds (an empty list
 * never skips). The questions feed routing as Prospect attributes; a question's wording is
 * tenant data and untrusted for display.
 */
-declare const qualificationQuestionSchema: z53.ZodObject<{
-	id: z53.core.$ZodBranded<z53.ZodString, "qst", "out">;
-	position: z53.ZodNumber;
-	prompt: z53.ZodPipe<z53.ZodString, z53.ZodString>;
-	kind: z53.ZodEnum<{
+declare const qualificationQuestionSchema: z59.ZodObject<{
+	id: z59.core.$ZodBranded<z59.ZodString, "qst", "out">;
+	position: z59.ZodNumber;
+	prompt: z59.ZodPipe<z59.ZodString, z59.ZodString>;
+	kind: z59.ZodEnum<{
 		choice: "choice";
 		free_text: "free_text";
 		number: "number";
 		yes_no: "yes_no";
 	}>;
-	choices: z53.ZodNullable<z53.ZodArray<z53.ZodPipe<z53.ZodString, z53.ZodString>>>;
-	required: z53.ZodBoolean;
-	skipWhen: z53.ZodArray<z53.ZodObject<{
-		questionId: z53.core.$ZodBranded<z53.ZodString, "qst", "out">;
-		operator: z53.ZodEnum<{
+	choices: z59.ZodNullable<z59.ZodArray<z59.ZodPipe<z59.ZodString, z59.ZodString>>>;
+	required: z59.ZodBoolean;
+	skipWhen: z59.ZodArray<z59.ZodObject<{
+		questionId: z59.core.$ZodBranded<z59.ZodString, "qst", "out">;
+		operator: z59.ZodEnum<{
 			answered: "answered";
 			equals: "equals";
 			greater_than: "greater_than";
@@ -12191,29 +13990,29 @@ declare const qualificationQuestionSchema: z53.ZodObject<{
 			not_answered: "not_answered";
 			not_equals: "not_equals";
 		}>;
-		value: z53.ZodOptional<z53.ZodUnion<readonly [z53.ZodPipe<z53.ZodString, z53.ZodString>, z53.ZodNumber, z53.ZodBoolean]>>;
-	}, z53.core.$strict>>;
-}, z53.core.$strict>;
+		value: z59.ZodOptional<z59.ZodUnion<readonly [z59.ZodPipe<z59.ZodString, z59.ZodString>, z59.ZodNumber, z59.ZodBoolean]>>;
+	}, z59.core.$strict>>;
+}, z59.core.$strict>;
 /** A Qualification question. */
-type QualificationQuestion = z53.infer<typeof qualificationQuestionSchema>;
+type QualificationQuestion = z59.infer<typeof qualificationQuestionSchema>;
 /** The path parameters of a request about one Qualification question. */
-declare const qualificationQuestionParamsSchema: z53.ZodObject<{
-	questionId: z53.core.$ZodBranded<z53.ZodString, "qst", "out">;
-}, z53.core.$strict>;
+declare const qualificationQuestionParamsSchema: z59.ZodObject<{
+	questionId: z59.core.$ZodBranded<z59.ZodString, "qst", "out">;
+}, z59.core.$strict>;
 /** The body of a request to write a Qualification question; it goes last unless `position` says otherwise. */
-declare const createQualificationQuestionRequestSchema: z53.ZodObject<{
-	prompt: z53.ZodPipe<z53.ZodString, z53.ZodString>;
-	kind: z53.ZodEnum<{
+declare const createQualificationQuestionRequestSchema: z59.ZodObject<{
+	prompt: z59.ZodPipe<z59.ZodString, z59.ZodString>;
+	kind: z59.ZodEnum<{
 		choice: "choice";
 		free_text: "free_text";
 		number: "number";
 		yes_no: "yes_no";
 	}>;
-	choices: z53.ZodDefault<z53.ZodNullable<z53.ZodArray<z53.ZodPipe<z53.ZodString, z53.ZodString>>>>;
-	required: z53.ZodDefault<z53.ZodBoolean>;
-	skipWhen: z53.ZodDefault<z53.ZodArray<z53.ZodObject<{
-		questionId: z53.core.$ZodBranded<z53.ZodString, "qst", "out">;
-		operator: z53.ZodEnum<{
+	choices: z59.ZodDefault<z59.ZodNullable<z59.ZodArray<z59.ZodPipe<z59.ZodString, z59.ZodString>>>>;
+	required: z59.ZodDefault<z59.ZodBoolean>;
+	skipWhen: z59.ZodDefault<z59.ZodArray<z59.ZodObject<{
+		questionId: z59.core.$ZodBranded<z59.ZodString, "qst", "out">;
+		operator: z59.ZodEnum<{
 			answered: "answered";
 			equals: "equals";
 			greater_than: "greater_than";
@@ -12221,26 +14020,26 @@ declare const createQualificationQuestionRequestSchema: z53.ZodObject<{
 			not_answered: "not_answered";
 			not_equals: "not_equals";
 		}>;
-		value: z53.ZodOptional<z53.ZodUnion<readonly [z53.ZodPipe<z53.ZodString, z53.ZodString>, z53.ZodNumber, z53.ZodBoolean]>>;
-	}, z53.core.$strict>>>;
-	position: z53.ZodOptional<z53.ZodNumber>;
-}, z53.core.$strict>;
+		value: z59.ZodOptional<z59.ZodUnion<readonly [z59.ZodPipe<z59.ZodString, z59.ZodString>, z59.ZodNumber, z59.ZodBoolean]>>;
+	}, z59.core.$strict>>>;
+	position: z59.ZodOptional<z59.ZodNumber>;
+}, z59.core.$strict>;
 /** The body of a request to write a Qualification question. */
-type CreateQualificationQuestionRequest = z53.infer<typeof createQualificationQuestionRequestSchema>;
+type CreateQualificationQuestionRequest = z59.infer<typeof createQualificationQuestionRequestSchema>;
 /** The body of a request to replace a Qualification question's content; the position changes by reorder. */
-declare const updateQualificationQuestionRequestSchema: z53.ZodObject<{
-	prompt: z53.ZodPipe<z53.ZodString, z53.ZodString>;
-	kind: z53.ZodEnum<{
+declare const updateQualificationQuestionRequestSchema: z59.ZodObject<{
+	prompt: z59.ZodPipe<z59.ZodString, z59.ZodString>;
+	kind: z59.ZodEnum<{
 		choice: "choice";
 		free_text: "free_text";
 		number: "number";
 		yes_no: "yes_no";
 	}>;
-	choices: z53.ZodNullable<z53.ZodArray<z53.ZodPipe<z53.ZodString, z53.ZodString>>>;
-	required: z53.ZodBoolean;
-	skipWhen: z53.ZodArray<z53.ZodObject<{
-		questionId: z53.core.$ZodBranded<z53.ZodString, "qst", "out">;
-		operator: z53.ZodEnum<{
+	choices: z59.ZodNullable<z59.ZodArray<z59.ZodPipe<z59.ZodString, z59.ZodString>>>;
+	required: z59.ZodBoolean;
+	skipWhen: z59.ZodArray<z59.ZodObject<{
+		questionId: z59.core.$ZodBranded<z59.ZodString, "qst", "out">;
+		operator: z59.ZodEnum<{
 			answered: "answered";
 			equals: "equals";
 			greater_than: "greater_than";
@@ -12248,37 +14047,37 @@ declare const updateQualificationQuestionRequestSchema: z53.ZodObject<{
 			not_answered: "not_answered";
 			not_equals: "not_equals";
 		}>;
-		value: z53.ZodOptional<z53.ZodUnion<readonly [z53.ZodPipe<z53.ZodString, z53.ZodString>, z53.ZodNumber, z53.ZodBoolean]>>;
-	}, z53.core.$strict>>;
-}, z53.core.$strict>;
+		value: z59.ZodOptional<z59.ZodUnion<readonly [z59.ZodPipe<z59.ZodString, z59.ZodString>, z59.ZodNumber, z59.ZodBoolean]>>;
+	}, z59.core.$strict>>;
+}, z59.core.$strict>;
 /** The body of a request to replace a Qualification question. */
-type UpdateQualificationQuestionRequest = z53.infer<typeof updateQualificationQuestionRequestSchema>;
+type UpdateQualificationQuestionRequest = z59.infer<typeof updateQualificationQuestionRequestSchema>;
 /** The body of a request to reorder the questions: every id once, in the new order. */
-declare const reorderQualificationQuestionsRequestSchema: z53.ZodObject<{
-	questionIds: z53.ZodArray<z53.core.$ZodBranded<z53.ZodString, "qst", "out">>;
-}, z53.core.$strict>;
+declare const reorderQualificationQuestionsRequestSchema: z59.ZodObject<{
+	questionIds: z59.ZodArray<z59.core.$ZodBranded<z59.ZodString, "qst", "out">>;
+}, z59.core.$strict>;
 /** The query parameters of a request to list questions, in order of position. */
-declare const listQualificationQuestionsQuerySchema: z53.ZodObject<{
-	cursor: z53.ZodOptional<z53.ZodString>;
-	limit: z53.ZodDefault<z53.ZodPipe<z53.ZodPipe<z53.ZodUnion<readonly [z53.ZodNumber, z53.ZodString]>, z53.ZodTransform<number, string | number>>, z53.ZodNumber>>;
-}, z53.core.$strict>;
+declare const listQualificationQuestionsQuerySchema: z59.ZodObject<{
+	cursor: z59.ZodOptional<z59.ZodString>;
+	limit: z59.ZodDefault<z59.ZodPipe<z59.ZodPipe<z59.ZodUnion<readonly [z59.ZodNumber, z59.ZodString]>, z59.ZodTransform<number, string | number>>, z59.ZodNumber>>;
+}, z59.core.$strict>;
 /** One page of Qualification questions. */
-declare const qualificationQuestionPageSchema: z53.ZodObject<{
-	items: z53.ZodArray<z53.ZodObject<{
-		id: z53.core.$ZodBranded<z53.ZodString, "qst", "out">;
-		position: z53.ZodNumber;
-		prompt: z53.ZodPipe<z53.ZodString, z53.ZodString>;
-		kind: z53.ZodEnum<{
+declare const qualificationQuestionPageSchema: z59.ZodObject<{
+	items: z59.ZodArray<z59.ZodObject<{
+		id: z59.core.$ZodBranded<z59.ZodString, "qst", "out">;
+		position: z59.ZodNumber;
+		prompt: z59.ZodPipe<z59.ZodString, z59.ZodString>;
+		kind: z59.ZodEnum<{
 			choice: "choice";
 			free_text: "free_text";
 			number: "number";
 			yes_no: "yes_no";
 		}>;
-		choices: z53.ZodNullable<z53.ZodArray<z53.ZodPipe<z53.ZodString, z53.ZodString>>>;
-		required: z53.ZodBoolean;
-		skipWhen: z53.ZodArray<z53.ZodObject<{
-			questionId: z53.core.$ZodBranded<z53.ZodString, "qst", "out">;
-			operator: z53.ZodEnum<{
+		choices: z59.ZodNullable<z59.ZodArray<z59.ZodPipe<z59.ZodString, z59.ZodString>>>;
+		required: z59.ZodBoolean;
+		skipWhen: z59.ZodArray<z59.ZodObject<{
+			questionId: z59.core.$ZodBranded<z59.ZodString, "qst", "out">;
+			operator: z59.ZodEnum<{
 				answered: "answered";
 				equals: "equals";
 				greater_than: "greater_than";
@@ -12286,64 +14085,64 @@ declare const qualificationQuestionPageSchema: z53.ZodObject<{
 				not_answered: "not_answered";
 				not_equals: "not_equals";
 			}>;
-			value: z53.ZodOptional<z53.ZodUnion<readonly [z53.ZodPipe<z53.ZodString, z53.ZodString>, z53.ZodNumber, z53.ZodBoolean]>>;
-		}, z53.core.$strict>>;
-	}, z53.core.$strict>>;
-	nextCursor: z53.ZodNullable<z53.ZodString>;
-}, z53.core.$strip>;
+			value: z59.ZodOptional<z59.ZodUnion<readonly [z59.ZodPipe<z59.ZodString, z59.ZodString>, z59.ZodNumber, z59.ZodBoolean]>>;
+		}, z59.core.$strict>>;
+	}, z59.core.$strict>>;
+	nextCursor: z59.ZodNullable<z59.ZodString>;
+}, z59.core.$strip>;
 /** A suggested question, drawn from the Organization's won Deals; an Admin approves it by creating it. It has no id and is not stored. */
-declare const suggestedQualificationQuestionSchema: z53.ZodObject<{
-	prompt: z53.ZodPipe<z53.ZodString, z53.ZodString>;
-	kind: z53.ZodEnum<{
+declare const suggestedQualificationQuestionSchema: z59.ZodObject<{
+	prompt: z59.ZodPipe<z59.ZodString, z59.ZodString>;
+	kind: z59.ZodEnum<{
 		choice: "choice";
 		free_text: "free_text";
 		number: "number";
 		yes_no: "yes_no";
 	}>;
-	choices: z53.ZodNullable<z53.ZodArray<z53.ZodPipe<z53.ZodString, z53.ZodString>>>;
-}, z53.core.$strict>;
+	choices: z59.ZodNullable<z59.ZodArray<z59.ZodPipe<z59.ZodString, z59.ZodString>>>;
+}, z59.core.$strict>;
 /** A suggested question. */
-type SuggestedQualificationQuestion = z53.infer<typeof suggestedQualificationQuestionSchema>;
+type SuggestedQualificationQuestion = z59.infer<typeof suggestedQualificationQuestionSchema>;
 /** The answer to a request for suggestions: at most ten, not stored. */
-declare const questionSuggestionsSchema: z53.ZodObject<{
-	items: z53.ZodArray<z53.ZodObject<{
-		prompt: z53.ZodPipe<z53.ZodString, z53.ZodString>;
-		kind: z53.ZodEnum<{
+declare const questionSuggestionsSchema: z59.ZodObject<{
+	items: z59.ZodArray<z59.ZodObject<{
+		prompt: z59.ZodPipe<z59.ZodString, z59.ZodString>;
+		kind: z59.ZodEnum<{
 			choice: "choice";
 			free_text: "free_text";
 			number: "number";
 			yes_no: "yes_no";
 		}>;
-		choices: z53.ZodNullable<z53.ZodArray<z53.ZodPipe<z53.ZodString, z53.ZodString>>>;
-	}, z53.core.$strict>>;
-}, z53.core.$strict>;
+		choices: z59.ZodNullable<z59.ZodArray<z59.ZodPipe<z59.ZodString, z59.ZodString>>>;
+	}, z59.core.$strict>>;
+}, z59.core.$strict>;
 /**
 * One answer of a Qualification. `value` is null when the question was skipped by its skip logic or
 * the Prospect declined; `skipped` says which of the two cases a null is.
 */
-declare const qualificationAnswerSchema: z53.ZodObject<{
-	questionId: z53.core.$ZodBranded<z53.ZodString, "qst", "out">;
-	value: z53.ZodNullable<z53.ZodUnion<readonly [z53.ZodPipe<z53.ZodString, z53.ZodString>, z53.ZodNumber, z53.ZodBoolean]>>;
-	skipped: z53.ZodBoolean;
-}, z53.core.$strict>;
+declare const qualificationAnswerSchema: z59.ZodObject<{
+	questionId: z59.core.$ZodBranded<z59.ZodString, "qst", "out">;
+	value: z59.ZodNullable<z59.ZodUnion<readonly [z59.ZodPipe<z59.ZodString, z59.ZodString>, z59.ZodNumber, z59.ZodBoolean]>>;
+	skipped: z59.ZodBoolean;
+}, z59.core.$strict>;
 /** One answer of a Qualification. */
-type QualificationAnswer = z53.infer<typeof qualificationAnswerSchema>;
+type QualificationAnswer = z59.infer<typeof qualificationAnswerSchema>;
 /** The longest Qualification summary, in characters. */
 declare const MAX_QUALIFICATION_SUMMARY_LENGTH = 2e3;
 /**
 * The Qualification of an Inquiry: the answers so far and a short summary (null until the Agent
 * writes one). It is tenant data about a Prospect, and untrusted text: it came from the Prospect.
 */
-declare const qualificationSchema: z53.ZodObject<{
-	answers: z53.ZodArray<z53.ZodObject<{
-		questionId: z53.core.$ZodBranded<z53.ZodString, "qst", "out">;
-		value: z53.ZodNullable<z53.ZodUnion<readonly [z53.ZodPipe<z53.ZodString, z53.ZodString>, z53.ZodNumber, z53.ZodBoolean]>>;
-		skipped: z53.ZodBoolean;
-	}, z53.core.$strict>>;
-	summary: z53.ZodNullable<z53.ZodPipe<z53.ZodString, z53.ZodString>>;
-}, z53.core.$strict>;
+declare const qualificationSchema: z59.ZodObject<{
+	answers: z59.ZodArray<z59.ZodObject<{
+		questionId: z59.core.$ZodBranded<z59.ZodString, "qst", "out">;
+		value: z59.ZodNullable<z59.ZodUnion<readonly [z59.ZodPipe<z59.ZodString, z59.ZodString>, z59.ZodNumber, z59.ZodBoolean]>>;
+		skipped: z59.ZodBoolean;
+	}, z59.core.$strict>>;
+	summary: z59.ZodNullable<z59.ZodPipe<z59.ZodString, z59.ZodString>>;
+}, z59.core.$strict>;
 /** The Qualification of an Inquiry. */
-type Qualification = z53.infer<typeof qualificationSchema>;
+type Qualification = z59.infer<typeof qualificationSchema>;
 /** Every role: each reads the Inquiries they may see. */
 declare const INQUIRY_ALL_ROLES: readonly ["owner", "admin", "manager", "rep"];
 /** The roles that set up the embed and its key. */
@@ -12360,17 +14159,17 @@ type InquiryRoute = InboundRoute<InquiryErrorCode | AgentErrorCode>;
 * place a callback without a Contact Consent for the phone channel (ADR 0003).
 */
 declare const INQUIRY_ROUTES: Readonly<Record<InquiryRouteName, InquiryRoute>>;
-import { z as z54 } from "zod";
+import { z as z60 } from "zod";
 /** Where an Inquiry came from: a form embedded on the Organization's site, a Chat, or a Call to a Line. */
 declare const INQUIRY_SOURCES: readonly ["form", "chat", "call"];
 /** Where an Inquiry came from. */
-declare const inquirySourceSchema: z54.ZodEnum<{
+declare const inquirySourceSchema: z60.ZodEnum<{
 	call: "call";
 	chat: "chat";
 	form: "form";
 }>;
 /** Where an Inquiry came from. */
-type InquirySource = z54.infer<typeof inquirySourceSchema>;
+type InquirySource = z60.infer<typeof inquirySourceSchema>;
 /**
 * The states of the Agent's callback for a form Inquiry. `not_applicable` is a Chat or a Call
 * Inquiry (the Prospect initiated it live); `pending` waits to be dialled; `dialling` and
@@ -12379,7 +14178,7 @@ type InquirySource = z54.infer<typeof inquirySourceSchema>;
 */
 declare const INQUIRY_CALLBACK_STATES: readonly ["not_applicable", "pending", "dialling", "connected", "no_answer", "skipped", "failed"];
 /** The state of the callback for an Inquiry. */
-declare const inquiryCallbackStateSchema: z54.ZodEnum<{
+declare const inquiryCallbackStateSchema: z60.ZodEnum<{
 	connected: "connected";
 	dialling: "dialling";
 	failed: "failed";
@@ -12389,7 +14188,7 @@ declare const inquiryCallbackStateSchema: z54.ZodEnum<{
 	skipped: "skipped";
 }>;
 /** The state of the callback for an Inquiry. */
-type InquiryCallbackState = z54.infer<typeof inquiryCallbackStateSchema>;
+type InquiryCallbackState = z60.infer<typeof inquiryCallbackStateSchema>;
 /**
 * Why a callback did not happen: a closed list the portal maps to its own wording (user story 27).
 * Each one is a refusal of the gate, never a setting. `no_consent` includes a Prospect who did not
@@ -12397,7 +14196,7 @@ type InquiryCallbackState = z54.infer<typeof inquiryCallbackStateSchema>;
 */
 declare const INQUIRY_SKIP_REASONS: readonly ["agent_paused", "no_consent", "consent_revoked", "suppressed", "outside_hours", "consent_check_unavailable", "no_phone_number", "concurrency_cap", "retries_exhausted"];
 /** Why a callback did not happen. */
-declare const inquirySkipReasonSchema: z54.ZodEnum<{
+declare const inquirySkipReasonSchema: z60.ZodEnum<{
 	agent_paused: "agent_paused";
 	concurrency_cap: "concurrency_cap";
 	consent_check_unavailable: "consent_check_unavailable";
@@ -12409,7 +14208,7 @@ declare const inquirySkipReasonSchema: z54.ZodEnum<{
 	suppressed: "suppressed";
 }>;
 /** Why a callback did not happen. */
-type InquirySkipReason = z54.infer<typeof inquirySkipReasonSchema>;
+type InquirySkipReason = z60.infer<typeof inquirySkipReasonSchema>;
 /** The most callback attempts for one Inquiry: the first and at most two retries. */
 declare const MAX_CALLBACK_ATTEMPTS = 3;
 /** The most origins an Organization may allow to submit its Inquiry form or Chat. */
@@ -12419,36 +14218,36 @@ declare const MAX_ALLOWED_ORIGINS = 20;
 * except `http://localhost` and `http://127.0.0.1` for development. It is what a browser sends in
 * the `Origin` header.
 */
-declare const allowedOriginSchema: z54.ZodString;
+declare const allowedOriginSchema: z60.ZodString;
 /** A web origin. */
-type AllowedOrigin = z54.infer<typeof allowedOriginSchema>;
+type AllowedOrigin = z60.infer<typeof allowedOriginSchema>;
 /**
 * The publishable key of an Organization's Inquiry form and Chat: 32 to 64 URL-safe characters. It
 * is shown in the Organization's web pages, so it is not a secret in itself; what it opens is
 * limited to the allowed origins, and it can be rotated. Services still redact it from logs.
 */
-declare const inquiryKeySchema: z54.ZodString;
+declare const inquiryKeySchema: z60.ZodString;
 /** The longest URL of the page a form or Chat was used on, in characters. */
 declare const MAX_SOURCE_URL_LENGTH = 2048;
 /** The address of the page a Prospect submitted the form on, or opened the Chat on: an `http(s)` URL with no whitespace. Evidence for the Contact Consent. */
-declare const sourceUrlSchema: z54.ZodString;
+declare const sourceUrlSchema: z60.ZodString;
 /** The longest message a Prospect may leave with a form Inquiry, in characters. */
 declare const MAX_INQUIRY_MESSAGE_LENGTH = 2e3;
 /** The message a Prospect leaves with a form Inquiry: bounded text with no control character, untrusted. */
-declare const inquiryMessageSchema: z54.ZodPipe<z54.ZodString, z54.ZodString>;
+declare const inquiryMessageSchema: z60.ZodPipe<z60.ZodString, z60.ZodString>;
 /** The longest honeypot value a public form may send. */
 declare const MAX_HONEYPOT_LENGTH = 200;
-import { z as z55 } from "zod";
+import { z as z61 } from "zod";
 /** The DNS records a domain check looks at. */
 declare const DOMAIN_CHECK_RECORDS: readonly ["spf", "dkim", "dmarc"];
 /** A DNS record a domain check looks at. */
-declare const domainCheckRecordSchema: z55.ZodEnum<{
+declare const domainCheckRecordSchema: z61.ZodEnum<{
 	dkim: "dkim";
 	dmarc: "dmarc";
 	spf: "spf";
 }>;
 /** A DNS record a domain check looks at. */
-type DomainCheckRecord = z55.infer<typeof domainCheckRecordSchema>;
+type DomainCheckRecord = z61.infer<typeof domainCheckRecordSchema>;
 /**
 * How one record came out: `pass`, `weak` (present but not enough, such as a DMARC policy of
 * `none`), `fail` (present and wrong), `missing`, or `unknown` (the resolver could not answer, or
@@ -12456,7 +14255,7 @@ type DomainCheckRecord = z55.infer<typeof domainCheckRecordSchema>;
 */
 declare const DOMAIN_CHECK_STATUSES: readonly ["pass", "weak", "fail", "missing", "unknown"];
 /** How one record came out. */
-declare const domainCheckStatusSchema: z55.ZodEnum<{
+declare const domainCheckStatusSchema: z61.ZodEnum<{
 	fail: "fail";
 	missing: "missing";
 	pass: "pass";
@@ -12464,7 +14263,7 @@ declare const domainCheckStatusSchema: z55.ZodEnum<{
 	weak: "weak";
 }>;
 /** How one record came out. */
-type DomainCheckStatus = z55.infer<typeof domainCheckStatusSchema>;
+type DomainCheckStatus = z61.infer<typeof domainCheckStatusSchema>;
 /** The longest explanation or suggested record of a check, in characters. */
 declare const MAX_DOMAIN_CHECK_TEXT_LENGTH = 1e3;
 /**
@@ -12472,53 +14271,53 @@ declare const MAX_DOMAIN_CHECK_TEXT_LENGTH = 1e3;
 * fix, and, when there is something to add, the record to publish. The explanation is written
 * by Closeline; DNS text read from the domain is not copied into it.
 */
-declare const domainCheckResultSchema: z55.ZodObject<{
-	record: z55.ZodEnum<{
+declare const domainCheckResultSchema: z61.ZodObject<{
+	record: z61.ZodEnum<{
 		dkim: "dkim";
 		dmarc: "dmarc";
 		spf: "spf";
 	}>;
-	status: z55.ZodEnum<{
+	status: z61.ZodEnum<{
 		fail: "fail";
 		missing: "missing";
 		pass: "pass";
 		unknown: "unknown";
 		weak: "weak";
 	}>;
-	explanation: z55.ZodString;
-	suggestedRecord: z55.ZodNullable<z55.ZodString>;
-}, z55.core.$strip>;
+	explanation: z61.ZodString;
+	suggestedRecord: z61.ZodNullable<z61.ZodString>;
+}, z61.core.$strip>;
 /** One record's result. */
-type DomainCheckResult = z55.infer<typeof domainCheckResultSchema>;
+type DomainCheckResult = z61.infer<typeof domainCheckResultSchema>;
 /**
 * The state of a Mailbox's domain: the domain the Mailbox sends from, one result for each of SPF,
 * DKIM and DMARC, and when it was checked. `checkedAt` is null and `results` empty until the
 * first check.
 */
-declare const domainCheckSchema: z55.ZodObject<{
-	mailboxId: z55.core.$ZodBranded<z55.ZodString, "mbx", "out">;
-	domain: z55.ZodString;
-	results: z55.ZodArray<z55.ZodObject<{
-		record: z55.ZodEnum<{
+declare const domainCheckSchema: z61.ZodObject<{
+	mailboxId: z61.core.$ZodBranded<z61.ZodString, "mbx", "out">;
+	domain: z61.ZodString;
+	results: z61.ZodArray<z61.ZodObject<{
+		record: z61.ZodEnum<{
 			dkim: "dkim";
 			dmarc: "dmarc";
 			spf: "spf";
 		}>;
-		status: z55.ZodEnum<{
+		status: z61.ZodEnum<{
 			fail: "fail";
 			missing: "missing";
 			pass: "pass";
 			unknown: "unknown";
 			weak: "weak";
 		}>;
-		explanation: z55.ZodString;
-		suggestedRecord: z55.ZodNullable<z55.ZodString>;
-	}, z55.core.$strip>>;
-	checkedAt: z55.ZodNullable<z55.ZodISODateTime>;
-}, z55.core.$strip>;
+		explanation: z61.ZodString;
+		suggestedRecord: z61.ZodNullable<z61.ZodString>;
+	}, z61.core.$strip>>;
+	checkedAt: z61.ZodNullable<z61.ZodISODateTime>;
+}, z61.core.$strip>;
 /** The state of a Mailbox's domain. */
-type DomainCheck = z55.infer<typeof domainCheckSchema>;
-import { ErrorDefinition as ErrorDefinition_8gwh4513 } from "..";
+type DomainCheck = z61.infer<typeof domainCheckSchema>;
+import { ErrorDefinition as ErrorDefinition_8gwh4514 } from "..";
 /**
 * The errors the mail routes return, as `area.reason` codes. A role that is not allowed is the
 * common `auth.forbidden`. A Mailbox of another Organization, or one the caller may not see (a
@@ -12553,27 +14352,27 @@ import { ErrorDefinition as ErrorDefinition_8gwh4513 } from "..";
 *   expired or unknown. It answers the same for all three and never says which.
 */
 declare const MAIL_ERRORS: {
-	readonly "mailbox.already_connected": ErrorDefinition_8gwh4513<"mailbox.already_connected">;
-	readonly "mailbox.auth_revoked": ErrorDefinition_8gwh4513<"mailbox.auth_revoked">;
-	readonly "mailbox.limit_above_ceiling": ErrorDefinition_8gwh4513<"mailbox.limit_above_ceiling">;
-	readonly "mailbox.limit_reached": ErrorDefinition_8gwh4513<"mailbox.limit_reached">;
-	readonly "mailbox.not_connected": ErrorDefinition_8gwh4513<"mailbox.not_connected">;
-	readonly "mailbox.not_found": ErrorDefinition_8gwh4513<"mailbox.not_found">;
-	readonly "mailbox.oauth_state_invalid": ErrorDefinition_8gwh4513<"mailbox.oauth_state_invalid">;
-	readonly "mailbox.paused": ErrorDefinition_8gwh4513<"mailbox.paused">;
-	readonly "send.campaign_not_running": ErrorDefinition_8gwh4513<"send.campaign_not_running">;
-	readonly "send.duplicate": ErrorDefinition_8gwh4513<"send.duplicate">;
-	readonly "send.no_consent": ErrorDefinition_8gwh4513<"send.no_consent">;
-	readonly "send.not_found": ErrorDefinition_8gwh4513<"send.not_found">;
-	readonly "send.organization_cap_reached": ErrorDefinition_8gwh4513<"send.organization_cap_reached">;
-	readonly "send.outside_window": ErrorDefinition_8gwh4513<"send.outside_window">;
-	readonly "send.suppressed": ErrorDefinition_8gwh4513<"send.suppressed">;
-	readonly "send.unverified_address": ErrorDefinition_8gwh4513<"send.unverified_address">;
-	readonly "unsubscribe.invalid_token": ErrorDefinition_8gwh4513<"unsubscribe.invalid_token">;
+	readonly "mailbox.already_connected": ErrorDefinition_8gwh4514<"mailbox.already_connected">;
+	readonly "mailbox.auth_revoked": ErrorDefinition_8gwh4514<"mailbox.auth_revoked">;
+	readonly "mailbox.limit_above_ceiling": ErrorDefinition_8gwh4514<"mailbox.limit_above_ceiling">;
+	readonly "mailbox.limit_reached": ErrorDefinition_8gwh4514<"mailbox.limit_reached">;
+	readonly "mailbox.not_connected": ErrorDefinition_8gwh4514<"mailbox.not_connected">;
+	readonly "mailbox.not_found": ErrorDefinition_8gwh4514<"mailbox.not_found">;
+	readonly "mailbox.oauth_state_invalid": ErrorDefinition_8gwh4514<"mailbox.oauth_state_invalid">;
+	readonly "mailbox.paused": ErrorDefinition_8gwh4514<"mailbox.paused">;
+	readonly "send.campaign_not_running": ErrorDefinition_8gwh4514<"send.campaign_not_running">;
+	readonly "send.duplicate": ErrorDefinition_8gwh4514<"send.duplicate">;
+	readonly "send.no_consent": ErrorDefinition_8gwh4514<"send.no_consent">;
+	readonly "send.not_found": ErrorDefinition_8gwh4514<"send.not_found">;
+	readonly "send.organization_cap_reached": ErrorDefinition_8gwh4514<"send.organization_cap_reached">;
+	readonly "send.outside_window": ErrorDefinition_8gwh4514<"send.outside_window">;
+	readonly "send.suppressed": ErrorDefinition_8gwh4514<"send.suppressed">;
+	readonly "send.unverified_address": ErrorDefinition_8gwh4514<"send.unverified_address">;
+	readonly "unsubscribe.invalid_token": ErrorDefinition_8gwh4514<"unsubscribe.invalid_token">;
 };
 /** A mail error code. */
 type MailErrorCode = keyof typeof MAIL_ERRORS;
-import { z as z56 } from "zod";
+import { z as z62 } from "zod";
 /**
 * `mailbox.state_changed` (version 1): a Mailbox moved between states, by a person or by the
 * service. `ownerMembershipId` is the person to tell (null for a shared Mailbox, whose Admins are
@@ -12583,34 +14382,34 @@ import { z as z56 } from "zod";
 declare const mailboxStateChangedEvent: {
 	type: "mailbox.state_changed";
 	version: 1;
-	schema: z56.ZodObject<{
-		id: z56.core.$ZodBranded<z56.ZodString, "evt", "out">;
-		occurredAt: z56.ZodISODateTime;
-		organizationId: z56.core.$ZodBranded<z56.ZodString, "org", "out">;
-		region: z56.ZodEnum<{
+	schema: z62.ZodObject<{
+		id: z62.core.$ZodBranded<z62.ZodString, "evt", "out">;
+		occurredAt: z62.ZodISODateTime;
+		organizationId: z62.core.$ZodBranded<z62.ZodString, "org", "out">;
+		region: z62.ZodEnum<{
 			eu: "eu";
 			us: "us";
 		}>;
-		type: z56.ZodLiteral<"mailbox.state_changed">;
-		version: z56.ZodLiteral<1>;
-		data: z56.ZodObject<{
-			mailboxId: z56.core.$ZodBranded<z56.ZodString, "mbx", "out">;
-			ownerMembershipId: z56.ZodNullable<z56.core.$ZodBranded<z56.ZodString, "mem", "out">>;
-			from: z56.ZodEnum<{
+		type: z62.ZodLiteral<"mailbox.state_changed">;
+		version: z62.ZodLiteral<1>;
+		data: z62.ZodObject<{
+			mailboxId: z62.core.$ZodBranded<z62.ZodString, "mbx", "out">;
+			ownerMembershipId: z62.ZodNullable<z62.core.$ZodBranded<z62.ZodString, "mem", "out">>;
+			from: z62.ZodEnum<{
 				disconnected: "disconnected";
 				healthy: "healthy";
 				limited: "limited";
 				paused: "paused";
 				warming: "warming";
 			}>;
-			to: z56.ZodEnum<{
+			to: z62.ZodEnum<{
 				disconnected: "disconnected";
 				healthy: "healthy";
 				limited: "limited";
 				paused: "paused";
 				warming: "warming";
 			}>;
-			reason: z56.ZodNullable<z56.ZodEnum<{
+			reason: z62.ZodNullable<z62.ZodEnum<{
 				admin_paused: "admin_paused";
 				auth_revoked: "auth_revoked";
 				bounce_spike: "bounce_spike";
@@ -12620,35 +14419,35 @@ declare const mailboxStateChangedEvent: {
 				owner_paused: "owner_paused";
 				provider_suspended: "provider_suspended";
 			}>>;
-			changedAt: z56.ZodISODateTime;
-		}, z56.core.$strict>;
-	}, z56.core.$strip>;
+			changedAt: z62.ZodISODateTime;
+		}, z62.core.$strict>;
+	}, z62.core.$strip>;
 	parse: (input: unknown) => {
-		id: string & z56.$brand<"evt">;
+		id: string & z62.$brand<"evt">;
 		occurredAt: string;
-		organizationId: string & z56.$brand<"org">;
+		organizationId: string & z62.$brand<"org">;
 		region: "eu" | "us";
 		type: "mailbox.state_changed";
 		version: 1;
 		data: {
-			mailboxId: string & z56.$brand<"mbx">;
-			ownerMembershipId: (string & z56.$brand<"mem">) | null;
+			mailboxId: string & z62.$brand<"mbx">;
+			ownerMembershipId: (string & z62.$brand<"mem">) | null;
 			from: "disconnected" | "healthy" | "limited" | "paused" | "warming";
 			to: "disconnected" | "healthy" | "limited" | "paused" | "warming";
 			reason: "admin_paused" | "auth_revoked" | "bounce_spike" | "complaint_spike" | "disconnected_by_owner" | "health_warning" | "owner_paused" | "provider_suspended" | null;
 			changedAt: string;
 		};
 	};
-	safeParse: (input: unknown) => z56.ZodSafeParseResult<{
-		id: string & z56.$brand<"evt">;
+	safeParse: (input: unknown) => z62.ZodSafeParseResult<{
+		id: string & z62.$brand<"evt">;
 		occurredAt: string;
-		organizationId: string & z56.$brand<"org">;
+		organizationId: string & z62.$brand<"org">;
 		region: "eu" | "us";
 		type: "mailbox.state_changed";
 		version: 1;
 		data: {
-			mailboxId: string & z56.$brand<"mbx">;
-			ownerMembershipId: (string & z56.$brand<"mem">) | null;
+			mailboxId: string & z62.$brand<"mbx">;
+			ownerMembershipId: (string & z62.$brand<"mem">) | null;
 			from: "disconnected" | "healthy" | "limited" | "paused" | "warming";
 			to: "disconnected" | "healthy" | "limited" | "paused" | "warming";
 			reason: "admin_paused" | "auth_revoked" | "bounce_spike" | "complaint_spike" | "disconnected_by_owner" | "health_warning" | "owner_paused" | "provider_suspended" | null;
@@ -12663,61 +14462,61 @@ declare const mailboxStateChangedEvent: {
 declare const mailBouncedEvent: {
 	type: "mail.bounced";
 	version: 1;
-	schema: z56.ZodObject<{
-		id: z56.core.$ZodBranded<z56.ZodString, "evt", "out">;
-		occurredAt: z56.ZodISODateTime;
-		organizationId: z56.core.$ZodBranded<z56.ZodString, "org", "out">;
-		region: z56.ZodEnum<{
+	schema: z62.ZodObject<{
+		id: z62.core.$ZodBranded<z62.ZodString, "evt", "out">;
+		occurredAt: z62.ZodISODateTime;
+		organizationId: z62.core.$ZodBranded<z62.ZodString, "org", "out">;
+		region: z62.ZodEnum<{
 			eu: "eu";
 			us: "us";
 		}>;
-		type: z56.ZodLiteral<"mail.bounced">;
-		version: z56.ZodLiteral<1>;
-		data: z56.ZodObject<{
-			mailboxId: z56.core.$ZodBranded<z56.ZodString, "mbx", "out">;
-			prospectId: z56.core.$ZodBranded<z56.ZodString, "prs", "out">;
-			sendId: z56.ZodNullable<z56.core.$ZodBranded<z56.ZodString, "snd", "out">>;
-			campaignId: z56.ZodNullable<z56.core.$ZodBranded<z56.ZodString, "cpg", "out">>;
-			enrollmentId: z56.ZodNullable<z56.core.$ZodBranded<z56.ZodString, "enr", "out">>;
-			providerMessageId: z56.ZodString;
-			kind: z56.ZodEnum<{
+		type: z62.ZodLiteral<"mail.bounced">;
+		version: z62.ZodLiteral<1>;
+		data: z62.ZodObject<{
+			mailboxId: z62.core.$ZodBranded<z62.ZodString, "mbx", "out">;
+			prospectId: z62.core.$ZodBranded<z62.ZodString, "prs", "out">;
+			sendId: z62.ZodNullable<z62.core.$ZodBranded<z62.ZodString, "snd", "out">>;
+			campaignId: z62.ZodNullable<z62.core.$ZodBranded<z62.ZodString, "cpg", "out">>;
+			enrollmentId: z62.ZodNullable<z62.core.$ZodBranded<z62.ZodString, "enr", "out">>;
+			providerMessageId: z62.ZodString;
+			kind: z62.ZodEnum<{
 				hard: "hard";
 				soft: "soft";
 			}>;
-			bouncedAt: z56.ZodISODateTime;
-		}, z56.core.$strict>;
-	}, z56.core.$strip>;
+			bouncedAt: z62.ZodISODateTime;
+		}, z62.core.$strict>;
+	}, z62.core.$strip>;
 	parse: (input: unknown) => {
-		id: string & z56.$brand<"evt">;
+		id: string & z62.$brand<"evt">;
 		occurredAt: string;
-		organizationId: string & z56.$brand<"org">;
+		organizationId: string & z62.$brand<"org">;
 		region: "eu" | "us";
 		type: "mail.bounced";
 		version: 1;
 		data: {
-			mailboxId: string & z56.$brand<"mbx">;
-			prospectId: string & z56.$brand<"prs">;
-			sendId: (string & z56.$brand<"snd">) | null;
-			campaignId: (string & z56.$brand<"cpg">) | null;
-			enrollmentId: (string & z56.$brand<"enr">) | null;
+			mailboxId: string & z62.$brand<"mbx">;
+			prospectId: string & z62.$brand<"prs">;
+			sendId: (string & z62.$brand<"snd">) | null;
+			campaignId: (string & z62.$brand<"cpg">) | null;
+			enrollmentId: (string & z62.$brand<"enr">) | null;
 			providerMessageId: string;
 			kind: "hard" | "soft";
 			bouncedAt: string;
 		};
 	};
-	safeParse: (input: unknown) => z56.ZodSafeParseResult<{
-		id: string & z56.$brand<"evt">;
+	safeParse: (input: unknown) => z62.ZodSafeParseResult<{
+		id: string & z62.$brand<"evt">;
 		occurredAt: string;
-		organizationId: string & z56.$brand<"org">;
+		organizationId: string & z62.$brand<"org">;
 		region: "eu" | "us";
 		type: "mail.bounced";
 		version: 1;
 		data: {
-			mailboxId: string & z56.$brand<"mbx">;
-			prospectId: string & z56.$brand<"prs">;
-			sendId: (string & z56.$brand<"snd">) | null;
-			campaignId: (string & z56.$brand<"cpg">) | null;
-			enrollmentId: (string & z56.$brand<"enr">) | null;
+			mailboxId: string & z62.$brand<"mbx">;
+			prospectId: string & z62.$brand<"prs">;
+			sendId: (string & z62.$brand<"snd">) | null;
+			campaignId: (string & z62.$brand<"cpg">) | null;
+			enrollmentId: (string & z62.$brand<"enr">) | null;
 			providerMessageId: string;
 			kind: "hard" | "soft";
 			bouncedAt: string;
@@ -12728,56 +14527,56 @@ declare const mailBouncedEvent: {
 declare const mailComplainedEvent: {
 	type: "mail.complained";
 	version: 1;
-	schema: z56.ZodObject<{
-		id: z56.core.$ZodBranded<z56.ZodString, "evt", "out">;
-		occurredAt: z56.ZodISODateTime;
-		organizationId: z56.core.$ZodBranded<z56.ZodString, "org", "out">;
-		region: z56.ZodEnum<{
+	schema: z62.ZodObject<{
+		id: z62.core.$ZodBranded<z62.ZodString, "evt", "out">;
+		occurredAt: z62.ZodISODateTime;
+		organizationId: z62.core.$ZodBranded<z62.ZodString, "org", "out">;
+		region: z62.ZodEnum<{
 			eu: "eu";
 			us: "us";
 		}>;
-		type: z56.ZodLiteral<"mail.complained">;
-		version: z56.ZodLiteral<1>;
-		data: z56.ZodObject<{
-			mailboxId: z56.core.$ZodBranded<z56.ZodString, "mbx", "out">;
-			prospectId: z56.core.$ZodBranded<z56.ZodString, "prs", "out">;
-			sendId: z56.ZodNullable<z56.core.$ZodBranded<z56.ZodString, "snd", "out">>;
-			campaignId: z56.ZodNullable<z56.core.$ZodBranded<z56.ZodString, "cpg", "out">>;
-			enrollmentId: z56.ZodNullable<z56.core.$ZodBranded<z56.ZodString, "enr", "out">>;
-			providerMessageId: z56.ZodString;
-			complainedAt: z56.ZodISODateTime;
-		}, z56.core.$strict>;
-	}, z56.core.$strip>;
+		type: z62.ZodLiteral<"mail.complained">;
+		version: z62.ZodLiteral<1>;
+		data: z62.ZodObject<{
+			mailboxId: z62.core.$ZodBranded<z62.ZodString, "mbx", "out">;
+			prospectId: z62.core.$ZodBranded<z62.ZodString, "prs", "out">;
+			sendId: z62.ZodNullable<z62.core.$ZodBranded<z62.ZodString, "snd", "out">>;
+			campaignId: z62.ZodNullable<z62.core.$ZodBranded<z62.ZodString, "cpg", "out">>;
+			enrollmentId: z62.ZodNullable<z62.core.$ZodBranded<z62.ZodString, "enr", "out">>;
+			providerMessageId: z62.ZodString;
+			complainedAt: z62.ZodISODateTime;
+		}, z62.core.$strict>;
+	}, z62.core.$strip>;
 	parse: (input: unknown) => {
-		id: string & z56.$brand<"evt">;
+		id: string & z62.$brand<"evt">;
 		occurredAt: string;
-		organizationId: string & z56.$brand<"org">;
+		organizationId: string & z62.$brand<"org">;
 		region: "eu" | "us";
 		type: "mail.complained";
 		version: 1;
 		data: {
-			mailboxId: string & z56.$brand<"mbx">;
-			prospectId: string & z56.$brand<"prs">;
-			sendId: (string & z56.$brand<"snd">) | null;
-			campaignId: (string & z56.$brand<"cpg">) | null;
-			enrollmentId: (string & z56.$brand<"enr">) | null;
+			mailboxId: string & z62.$brand<"mbx">;
+			prospectId: string & z62.$brand<"prs">;
+			sendId: (string & z62.$brand<"snd">) | null;
+			campaignId: (string & z62.$brand<"cpg">) | null;
+			enrollmentId: (string & z62.$brand<"enr">) | null;
 			providerMessageId: string;
 			complainedAt: string;
 		};
 	};
-	safeParse: (input: unknown) => z56.ZodSafeParseResult<{
-		id: string & z56.$brand<"evt">;
+	safeParse: (input: unknown) => z62.ZodSafeParseResult<{
+		id: string & z62.$brand<"evt">;
 		occurredAt: string;
-		organizationId: string & z56.$brand<"org">;
+		organizationId: string & z62.$brand<"org">;
 		region: "eu" | "us";
 		type: "mail.complained";
 		version: 1;
 		data: {
-			mailboxId: string & z56.$brand<"mbx">;
-			prospectId: string & z56.$brand<"prs">;
-			sendId: (string & z56.$brand<"snd">) | null;
-			campaignId: (string & z56.$brand<"cpg">) | null;
-			enrollmentId: (string & z56.$brand<"enr">) | null;
+			mailboxId: string & z62.$brand<"mbx">;
+			prospectId: string & z62.$brand<"prs">;
+			sendId: (string & z62.$brand<"snd">) | null;
+			campaignId: (string & z62.$brand<"cpg">) | null;
+			enrollmentId: (string & z62.$brand<"enr">) | null;
 			providerMessageId: string;
 			complainedAt: string;
 		};
@@ -12790,56 +14589,56 @@ declare const mailComplainedEvent: {
 declare const mailRepliedEvent: {
 	type: "mail.replied";
 	version: 1;
-	schema: z56.ZodObject<{
-		id: z56.core.$ZodBranded<z56.ZodString, "evt", "out">;
-		occurredAt: z56.ZodISODateTime;
-		organizationId: z56.core.$ZodBranded<z56.ZodString, "org", "out">;
-		region: z56.ZodEnum<{
+	schema: z62.ZodObject<{
+		id: z62.core.$ZodBranded<z62.ZodString, "evt", "out">;
+		occurredAt: z62.ZodISODateTime;
+		organizationId: z62.core.$ZodBranded<z62.ZodString, "org", "out">;
+		region: z62.ZodEnum<{
 			eu: "eu";
 			us: "us";
 		}>;
-		type: z56.ZodLiteral<"mail.replied">;
-		version: z56.ZodLiteral<1>;
-		data: z56.ZodObject<{
-			mailboxId: z56.core.$ZodBranded<z56.ZodString, "mbx", "out">;
-			prospectId: z56.core.$ZodBranded<z56.ZodString, "prs", "out">;
-			sendId: z56.ZodNullable<z56.core.$ZodBranded<z56.ZodString, "snd", "out">>;
-			campaignId: z56.ZodNullable<z56.core.$ZodBranded<z56.ZodString, "cpg", "out">>;
-			enrollmentId: z56.ZodNullable<z56.core.$ZodBranded<z56.ZodString, "enr", "out">>;
-			providerMessageId: z56.ZodString;
-			repliedAt: z56.ZodISODateTime;
-		}, z56.core.$strict>;
-	}, z56.core.$strip>;
+		type: z62.ZodLiteral<"mail.replied">;
+		version: z62.ZodLiteral<1>;
+		data: z62.ZodObject<{
+			mailboxId: z62.core.$ZodBranded<z62.ZodString, "mbx", "out">;
+			prospectId: z62.core.$ZodBranded<z62.ZodString, "prs", "out">;
+			sendId: z62.ZodNullable<z62.core.$ZodBranded<z62.ZodString, "snd", "out">>;
+			campaignId: z62.ZodNullable<z62.core.$ZodBranded<z62.ZodString, "cpg", "out">>;
+			enrollmentId: z62.ZodNullable<z62.core.$ZodBranded<z62.ZodString, "enr", "out">>;
+			providerMessageId: z62.ZodString;
+			repliedAt: z62.ZodISODateTime;
+		}, z62.core.$strict>;
+	}, z62.core.$strip>;
 	parse: (input: unknown) => {
-		id: string & z56.$brand<"evt">;
+		id: string & z62.$brand<"evt">;
 		occurredAt: string;
-		organizationId: string & z56.$brand<"org">;
+		organizationId: string & z62.$brand<"org">;
 		region: "eu" | "us";
 		type: "mail.replied";
 		version: 1;
 		data: {
-			mailboxId: string & z56.$brand<"mbx">;
-			prospectId: string & z56.$brand<"prs">;
-			sendId: (string & z56.$brand<"snd">) | null;
-			campaignId: (string & z56.$brand<"cpg">) | null;
-			enrollmentId: (string & z56.$brand<"enr">) | null;
+			mailboxId: string & z62.$brand<"mbx">;
+			prospectId: string & z62.$brand<"prs">;
+			sendId: (string & z62.$brand<"snd">) | null;
+			campaignId: (string & z62.$brand<"cpg">) | null;
+			enrollmentId: (string & z62.$brand<"enr">) | null;
 			providerMessageId: string;
 			repliedAt: string;
 		};
 	};
-	safeParse: (input: unknown) => z56.ZodSafeParseResult<{
-		id: string & z56.$brand<"evt">;
+	safeParse: (input: unknown) => z62.ZodSafeParseResult<{
+		id: string & z62.$brand<"evt">;
 		occurredAt: string;
-		organizationId: string & z56.$brand<"org">;
+		organizationId: string & z62.$brand<"org">;
 		region: "eu" | "us";
 		type: "mail.replied";
 		version: 1;
 		data: {
-			mailboxId: string & z56.$brand<"mbx">;
-			prospectId: string & z56.$brand<"prs">;
-			sendId: (string & z56.$brand<"snd">) | null;
-			campaignId: (string & z56.$brand<"cpg">) | null;
-			enrollmentId: (string & z56.$brand<"enr">) | null;
+			mailboxId: string & z62.$brand<"mbx">;
+			prospectId: string & z62.$brand<"prs">;
+			sendId: (string & z62.$brand<"snd">) | null;
+			campaignId: (string & z62.$brand<"cpg">) | null;
+			enrollmentId: (string & z62.$brand<"enr">) | null;
 			providerMessageId: string;
 			repliedAt: string;
 		};
@@ -12849,58 +14648,58 @@ declare const mailRepliedEvent: {
 declare const mailOutOfOfficeEvent: {
 	type: "mail.out_of_office";
 	version: 1;
-	schema: z56.ZodObject<{
-		id: z56.core.$ZodBranded<z56.ZodString, "evt", "out">;
-		occurredAt: z56.ZodISODateTime;
-		organizationId: z56.core.$ZodBranded<z56.ZodString, "org", "out">;
-		region: z56.ZodEnum<{
+	schema: z62.ZodObject<{
+		id: z62.core.$ZodBranded<z62.ZodString, "evt", "out">;
+		occurredAt: z62.ZodISODateTime;
+		organizationId: z62.core.$ZodBranded<z62.ZodString, "org", "out">;
+		region: z62.ZodEnum<{
 			eu: "eu";
 			us: "us";
 		}>;
-		type: z56.ZodLiteral<"mail.out_of_office">;
-		version: z56.ZodLiteral<1>;
-		data: z56.ZodObject<{
-			mailboxId: z56.core.$ZodBranded<z56.ZodString, "mbx", "out">;
-			prospectId: z56.core.$ZodBranded<z56.ZodString, "prs", "out">;
-			sendId: z56.ZodNullable<z56.core.$ZodBranded<z56.ZodString, "snd", "out">>;
-			campaignId: z56.ZodNullable<z56.core.$ZodBranded<z56.ZodString, "cpg", "out">>;
-			enrollmentId: z56.ZodNullable<z56.core.$ZodBranded<z56.ZodString, "enr", "out">>;
-			providerMessageId: z56.ZodString;
-			returnDate: z56.ZodNullable<z56.ZodISODate>;
-			receivedAt: z56.ZodISODateTime;
-		}, z56.core.$strict>;
-	}, z56.core.$strip>;
+		type: z62.ZodLiteral<"mail.out_of_office">;
+		version: z62.ZodLiteral<1>;
+		data: z62.ZodObject<{
+			mailboxId: z62.core.$ZodBranded<z62.ZodString, "mbx", "out">;
+			prospectId: z62.core.$ZodBranded<z62.ZodString, "prs", "out">;
+			sendId: z62.ZodNullable<z62.core.$ZodBranded<z62.ZodString, "snd", "out">>;
+			campaignId: z62.ZodNullable<z62.core.$ZodBranded<z62.ZodString, "cpg", "out">>;
+			enrollmentId: z62.ZodNullable<z62.core.$ZodBranded<z62.ZodString, "enr", "out">>;
+			providerMessageId: z62.ZodString;
+			returnDate: z62.ZodNullable<z62.ZodISODate>;
+			receivedAt: z62.ZodISODateTime;
+		}, z62.core.$strict>;
+	}, z62.core.$strip>;
 	parse: (input: unknown) => {
-		id: string & z56.$brand<"evt">;
+		id: string & z62.$brand<"evt">;
 		occurredAt: string;
-		organizationId: string & z56.$brand<"org">;
+		organizationId: string & z62.$brand<"org">;
 		region: "eu" | "us";
 		type: "mail.out_of_office";
 		version: 1;
 		data: {
-			mailboxId: string & z56.$brand<"mbx">;
-			prospectId: string & z56.$brand<"prs">;
-			sendId: (string & z56.$brand<"snd">) | null;
-			campaignId: (string & z56.$brand<"cpg">) | null;
-			enrollmentId: (string & z56.$brand<"enr">) | null;
+			mailboxId: string & z62.$brand<"mbx">;
+			prospectId: string & z62.$brand<"prs">;
+			sendId: (string & z62.$brand<"snd">) | null;
+			campaignId: (string & z62.$brand<"cpg">) | null;
+			enrollmentId: (string & z62.$brand<"enr">) | null;
 			providerMessageId: string;
 			returnDate: string | null;
 			receivedAt: string;
 		};
 	};
-	safeParse: (input: unknown) => z56.ZodSafeParseResult<{
-		id: string & z56.$brand<"evt">;
+	safeParse: (input: unknown) => z62.ZodSafeParseResult<{
+		id: string & z62.$brand<"evt">;
 		occurredAt: string;
-		organizationId: string & z56.$brand<"org">;
+		organizationId: string & z62.$brand<"org">;
 		region: "eu" | "us";
 		type: "mail.out_of_office";
 		version: 1;
 		data: {
-			mailboxId: string & z56.$brand<"mbx">;
-			prospectId: string & z56.$brand<"prs">;
-			sendId: (string & z56.$brand<"snd">) | null;
-			campaignId: (string & z56.$brand<"cpg">) | null;
-			enrollmentId: (string & z56.$brand<"enr">) | null;
+			mailboxId: string & z62.$brand<"mbx">;
+			prospectId: string & z62.$brand<"prs">;
+			sendId: (string & z62.$brand<"snd">) | null;
+			campaignId: (string & z62.$brand<"cpg">) | null;
+			enrollmentId: (string & z62.$brand<"enr">) | null;
 			providerMessageId: string;
 			returnDate: string | null;
 			receivedAt: string;
@@ -12915,56 +14714,56 @@ declare const mailOutOfOfficeEvent: {
 declare const mailUnsubscribedEvent: {
 	type: "mail.unsubscribed";
 	version: 1;
-	schema: z56.ZodObject<{
-		id: z56.core.$ZodBranded<z56.ZodString, "evt", "out">;
-		occurredAt: z56.ZodISODateTime;
-		organizationId: z56.core.$ZodBranded<z56.ZodString, "org", "out">;
-		region: z56.ZodEnum<{
+	schema: z62.ZodObject<{
+		id: z62.core.$ZodBranded<z62.ZodString, "evt", "out">;
+		occurredAt: z62.ZodISODateTime;
+		organizationId: z62.core.$ZodBranded<z62.ZodString, "org", "out">;
+		region: z62.ZodEnum<{
 			eu: "eu";
 			us: "us";
 		}>;
-		type: z56.ZodLiteral<"mail.unsubscribed">;
-		version: z56.ZodLiteral<1>;
-		data: z56.ZodObject<{
-			prospectId: z56.core.$ZodBranded<z56.ZodString, "prs", "out">;
-			mailboxId: z56.ZodNullable<z56.core.$ZodBranded<z56.ZodString, "mbx", "out">>;
-			sendId: z56.ZodNullable<z56.core.$ZodBranded<z56.ZodString, "snd", "out">>;
-			enrollmentId: z56.ZodNullable<z56.core.$ZodBranded<z56.ZodString, "enr", "out">>;
-			source: z56.ZodEnum<{
+		type: z62.ZodLiteral<"mail.unsubscribed">;
+		version: z62.ZodLiteral<1>;
+		data: z62.ZodObject<{
+			prospectId: z62.core.$ZodBranded<z62.ZodString, "prs", "out">;
+			mailboxId: z62.ZodNullable<z62.core.$ZodBranded<z62.ZodString, "mbx", "out">>;
+			sendId: z62.ZodNullable<z62.core.$ZodBranded<z62.ZodString, "snd", "out">>;
+			enrollmentId: z62.ZodNullable<z62.core.$ZodBranded<z62.ZodString, "enr", "out">>;
+			source: z62.ZodEnum<{
 				link: "link";
 				one_click: "one_click";
 			}>;
-			unsubscribedAt: z56.ZodISODateTime;
-		}, z56.core.$strict>;
-	}, z56.core.$strip>;
+			unsubscribedAt: z62.ZodISODateTime;
+		}, z62.core.$strict>;
+	}, z62.core.$strip>;
 	parse: (input: unknown) => {
-		id: string & z56.$brand<"evt">;
+		id: string & z62.$brand<"evt">;
 		occurredAt: string;
-		organizationId: string & z56.$brand<"org">;
+		organizationId: string & z62.$brand<"org">;
 		region: "eu" | "us";
 		type: "mail.unsubscribed";
 		version: 1;
 		data: {
-			prospectId: string & z56.$brand<"prs">;
-			mailboxId: (string & z56.$brand<"mbx">) | null;
-			sendId: (string & z56.$brand<"snd">) | null;
-			enrollmentId: (string & z56.$brand<"enr">) | null;
+			prospectId: string & z62.$brand<"prs">;
+			mailboxId: (string & z62.$brand<"mbx">) | null;
+			sendId: (string & z62.$brand<"snd">) | null;
+			enrollmentId: (string & z62.$brand<"enr">) | null;
 			source: "link" | "one_click";
 			unsubscribedAt: string;
 		};
 	};
-	safeParse: (input: unknown) => z56.ZodSafeParseResult<{
-		id: string & z56.$brand<"evt">;
+	safeParse: (input: unknown) => z62.ZodSafeParseResult<{
+		id: string & z62.$brand<"evt">;
 		occurredAt: string;
-		organizationId: string & z56.$brand<"org">;
+		organizationId: string & z62.$brand<"org">;
 		region: "eu" | "us";
 		type: "mail.unsubscribed";
 		version: 1;
 		data: {
-			prospectId: string & z56.$brand<"prs">;
-			mailboxId: (string & z56.$brand<"mbx">) | null;
-			sendId: (string & z56.$brand<"snd">) | null;
-			enrollmentId: (string & z56.$brand<"enr">) | null;
+			prospectId: string & z62.$brand<"prs">;
+			mailboxId: (string & z62.$brand<"mbx">) | null;
+			sendId: (string & z62.$brand<"snd">) | null;
+			enrollmentId: (string & z62.$brand<"enr">) | null;
 			source: "link" | "one_click";
 			unsubscribedAt: string;
 		};
@@ -12975,34 +14774,34 @@ declare const MAIL_EVENTS: {
 	readonly "mailbox.state_changed": {
 		type: "mailbox.state_changed";
 		version: 1;
-		schema: z56.ZodObject<{
-			id: z56.core.$ZodBranded<z56.ZodString, "evt", "out">;
-			occurredAt: z56.ZodISODateTime;
-			organizationId: z56.core.$ZodBranded<z56.ZodString, "org", "out">;
-			region: z56.ZodEnum<{
+		schema: z62.ZodObject<{
+			id: z62.core.$ZodBranded<z62.ZodString, "evt", "out">;
+			occurredAt: z62.ZodISODateTime;
+			organizationId: z62.core.$ZodBranded<z62.ZodString, "org", "out">;
+			region: z62.ZodEnum<{
 				eu: "eu";
 				us: "us";
 			}>;
-			type: z56.ZodLiteral<"mailbox.state_changed">;
-			version: z56.ZodLiteral<1>;
-			data: z56.ZodObject<{
-				mailboxId: z56.core.$ZodBranded<z56.ZodString, "mbx", "out">;
-				ownerMembershipId: z56.ZodNullable<z56.core.$ZodBranded<z56.ZodString, "mem", "out">>;
-				from: z56.ZodEnum<{
+			type: z62.ZodLiteral<"mailbox.state_changed">;
+			version: z62.ZodLiteral<1>;
+			data: z62.ZodObject<{
+				mailboxId: z62.core.$ZodBranded<z62.ZodString, "mbx", "out">;
+				ownerMembershipId: z62.ZodNullable<z62.core.$ZodBranded<z62.ZodString, "mem", "out">>;
+				from: z62.ZodEnum<{
 					disconnected: "disconnected";
 					healthy: "healthy";
 					limited: "limited";
 					paused: "paused";
 					warming: "warming";
 				}>;
-				to: z56.ZodEnum<{
+				to: z62.ZodEnum<{
 					disconnected: "disconnected";
 					healthy: "healthy";
 					limited: "limited";
 					paused: "paused";
 					warming: "warming";
 				}>;
-				reason: z56.ZodNullable<z56.ZodEnum<{
+				reason: z62.ZodNullable<z62.ZodEnum<{
 					admin_paused: "admin_paused";
 					auth_revoked: "auth_revoked";
 					bounce_spike: "bounce_spike";
@@ -13012,35 +14811,35 @@ declare const MAIL_EVENTS: {
 					owner_paused: "owner_paused";
 					provider_suspended: "provider_suspended";
 				}>>;
-				changedAt: z56.ZodISODateTime;
-			}, z56.core.$strict>;
-		}, z56.core.$strip>;
+				changedAt: z62.ZodISODateTime;
+			}, z62.core.$strict>;
+		}, z62.core.$strip>;
 		parse: (input: unknown) => {
-			id: string & z56.$brand<"evt">;
+			id: string & z62.$brand<"evt">;
 			occurredAt: string;
-			organizationId: string & z56.$brand<"org">;
+			organizationId: string & z62.$brand<"org">;
 			region: "eu" | "us";
 			type: "mailbox.state_changed";
 			version: 1;
 			data: {
-				mailboxId: string & z56.$brand<"mbx">;
-				ownerMembershipId: (string & z56.$brand<"mem">) | null;
+				mailboxId: string & z62.$brand<"mbx">;
+				ownerMembershipId: (string & z62.$brand<"mem">) | null;
 				from: "disconnected" | "healthy" | "limited" | "paused" | "warming";
 				to: "disconnected" | "healthy" | "limited" | "paused" | "warming";
 				reason: "admin_paused" | "auth_revoked" | "bounce_spike" | "complaint_spike" | "disconnected_by_owner" | "health_warning" | "owner_paused" | "provider_suspended" | null;
 				changedAt: string;
 			};
 		};
-		safeParse: (input: unknown) => z56.ZodSafeParseResult<{
-			id: string & z56.$brand<"evt">;
+		safeParse: (input: unknown) => z62.ZodSafeParseResult<{
+			id: string & z62.$brand<"evt">;
 			occurredAt: string;
-			organizationId: string & z56.$brand<"org">;
+			organizationId: string & z62.$brand<"org">;
 			region: "eu" | "us";
 			type: "mailbox.state_changed";
 			version: 1;
 			data: {
-				mailboxId: string & z56.$brand<"mbx">;
-				ownerMembershipId: (string & z56.$brand<"mem">) | null;
+				mailboxId: string & z62.$brand<"mbx">;
+				ownerMembershipId: (string & z62.$brand<"mem">) | null;
 				from: "disconnected" | "healthy" | "limited" | "paused" | "warming";
 				to: "disconnected" | "healthy" | "limited" | "paused" | "warming";
 				reason: "admin_paused" | "auth_revoked" | "bounce_spike" | "complaint_spike" | "disconnected_by_owner" | "health_warning" | "owner_paused" | "provider_suspended" | null;
@@ -13051,61 +14850,61 @@ declare const MAIL_EVENTS: {
 	readonly "mail.bounced": {
 		type: "mail.bounced";
 		version: 1;
-		schema: z56.ZodObject<{
-			id: z56.core.$ZodBranded<z56.ZodString, "evt", "out">;
-			occurredAt: z56.ZodISODateTime;
-			organizationId: z56.core.$ZodBranded<z56.ZodString, "org", "out">;
-			region: z56.ZodEnum<{
+		schema: z62.ZodObject<{
+			id: z62.core.$ZodBranded<z62.ZodString, "evt", "out">;
+			occurredAt: z62.ZodISODateTime;
+			organizationId: z62.core.$ZodBranded<z62.ZodString, "org", "out">;
+			region: z62.ZodEnum<{
 				eu: "eu";
 				us: "us";
 			}>;
-			type: z56.ZodLiteral<"mail.bounced">;
-			version: z56.ZodLiteral<1>;
-			data: z56.ZodObject<{
-				mailboxId: z56.core.$ZodBranded<z56.ZodString, "mbx", "out">;
-				prospectId: z56.core.$ZodBranded<z56.ZodString, "prs", "out">;
-				sendId: z56.ZodNullable<z56.core.$ZodBranded<z56.ZodString, "snd", "out">>;
-				campaignId: z56.ZodNullable<z56.core.$ZodBranded<z56.ZodString, "cpg", "out">>;
-				enrollmentId: z56.ZodNullable<z56.core.$ZodBranded<z56.ZodString, "enr", "out">>;
-				providerMessageId: z56.ZodString;
-				kind: z56.ZodEnum<{
+			type: z62.ZodLiteral<"mail.bounced">;
+			version: z62.ZodLiteral<1>;
+			data: z62.ZodObject<{
+				mailboxId: z62.core.$ZodBranded<z62.ZodString, "mbx", "out">;
+				prospectId: z62.core.$ZodBranded<z62.ZodString, "prs", "out">;
+				sendId: z62.ZodNullable<z62.core.$ZodBranded<z62.ZodString, "snd", "out">>;
+				campaignId: z62.ZodNullable<z62.core.$ZodBranded<z62.ZodString, "cpg", "out">>;
+				enrollmentId: z62.ZodNullable<z62.core.$ZodBranded<z62.ZodString, "enr", "out">>;
+				providerMessageId: z62.ZodString;
+				kind: z62.ZodEnum<{
 					hard: "hard";
 					soft: "soft";
 				}>;
-				bouncedAt: z56.ZodISODateTime;
-			}, z56.core.$strict>;
-		}, z56.core.$strip>;
+				bouncedAt: z62.ZodISODateTime;
+			}, z62.core.$strict>;
+		}, z62.core.$strip>;
 		parse: (input: unknown) => {
-			id: string & z56.$brand<"evt">;
+			id: string & z62.$brand<"evt">;
 			occurredAt: string;
-			organizationId: string & z56.$brand<"org">;
+			organizationId: string & z62.$brand<"org">;
 			region: "eu" | "us";
 			type: "mail.bounced";
 			version: 1;
 			data: {
-				mailboxId: string & z56.$brand<"mbx">;
-				prospectId: string & z56.$brand<"prs">;
-				sendId: (string & z56.$brand<"snd">) | null;
-				campaignId: (string & z56.$brand<"cpg">) | null;
-				enrollmentId: (string & z56.$brand<"enr">) | null;
+				mailboxId: string & z62.$brand<"mbx">;
+				prospectId: string & z62.$brand<"prs">;
+				sendId: (string & z62.$brand<"snd">) | null;
+				campaignId: (string & z62.$brand<"cpg">) | null;
+				enrollmentId: (string & z62.$brand<"enr">) | null;
 				providerMessageId: string;
 				kind: "hard" | "soft";
 				bouncedAt: string;
 			};
 		};
-		safeParse: (input: unknown) => z56.ZodSafeParseResult<{
-			id: string & z56.$brand<"evt">;
+		safeParse: (input: unknown) => z62.ZodSafeParseResult<{
+			id: string & z62.$brand<"evt">;
 			occurredAt: string;
-			organizationId: string & z56.$brand<"org">;
+			organizationId: string & z62.$brand<"org">;
 			region: "eu" | "us";
 			type: "mail.bounced";
 			version: 1;
 			data: {
-				mailboxId: string & z56.$brand<"mbx">;
-				prospectId: string & z56.$brand<"prs">;
-				sendId: (string & z56.$brand<"snd">) | null;
-				campaignId: (string & z56.$brand<"cpg">) | null;
-				enrollmentId: (string & z56.$brand<"enr">) | null;
+				mailboxId: string & z62.$brand<"mbx">;
+				prospectId: string & z62.$brand<"prs">;
+				sendId: (string & z62.$brand<"snd">) | null;
+				campaignId: (string & z62.$brand<"cpg">) | null;
+				enrollmentId: (string & z62.$brand<"enr">) | null;
 				providerMessageId: string;
 				kind: "hard" | "soft";
 				bouncedAt: string;
@@ -13115,56 +14914,56 @@ declare const MAIL_EVENTS: {
 	readonly "mail.complained": {
 		type: "mail.complained";
 		version: 1;
-		schema: z56.ZodObject<{
-			id: z56.core.$ZodBranded<z56.ZodString, "evt", "out">;
-			occurredAt: z56.ZodISODateTime;
-			organizationId: z56.core.$ZodBranded<z56.ZodString, "org", "out">;
-			region: z56.ZodEnum<{
+		schema: z62.ZodObject<{
+			id: z62.core.$ZodBranded<z62.ZodString, "evt", "out">;
+			occurredAt: z62.ZodISODateTime;
+			organizationId: z62.core.$ZodBranded<z62.ZodString, "org", "out">;
+			region: z62.ZodEnum<{
 				eu: "eu";
 				us: "us";
 			}>;
-			type: z56.ZodLiteral<"mail.complained">;
-			version: z56.ZodLiteral<1>;
-			data: z56.ZodObject<{
-				mailboxId: z56.core.$ZodBranded<z56.ZodString, "mbx", "out">;
-				prospectId: z56.core.$ZodBranded<z56.ZodString, "prs", "out">;
-				sendId: z56.ZodNullable<z56.core.$ZodBranded<z56.ZodString, "snd", "out">>;
-				campaignId: z56.ZodNullable<z56.core.$ZodBranded<z56.ZodString, "cpg", "out">>;
-				enrollmentId: z56.ZodNullable<z56.core.$ZodBranded<z56.ZodString, "enr", "out">>;
-				providerMessageId: z56.ZodString;
-				complainedAt: z56.ZodISODateTime;
-			}, z56.core.$strict>;
-		}, z56.core.$strip>;
+			type: z62.ZodLiteral<"mail.complained">;
+			version: z62.ZodLiteral<1>;
+			data: z62.ZodObject<{
+				mailboxId: z62.core.$ZodBranded<z62.ZodString, "mbx", "out">;
+				prospectId: z62.core.$ZodBranded<z62.ZodString, "prs", "out">;
+				sendId: z62.ZodNullable<z62.core.$ZodBranded<z62.ZodString, "snd", "out">>;
+				campaignId: z62.ZodNullable<z62.core.$ZodBranded<z62.ZodString, "cpg", "out">>;
+				enrollmentId: z62.ZodNullable<z62.core.$ZodBranded<z62.ZodString, "enr", "out">>;
+				providerMessageId: z62.ZodString;
+				complainedAt: z62.ZodISODateTime;
+			}, z62.core.$strict>;
+		}, z62.core.$strip>;
 		parse: (input: unknown) => {
-			id: string & z56.$brand<"evt">;
+			id: string & z62.$brand<"evt">;
 			occurredAt: string;
-			organizationId: string & z56.$brand<"org">;
+			organizationId: string & z62.$brand<"org">;
 			region: "eu" | "us";
 			type: "mail.complained";
 			version: 1;
 			data: {
-				mailboxId: string & z56.$brand<"mbx">;
-				prospectId: string & z56.$brand<"prs">;
-				sendId: (string & z56.$brand<"snd">) | null;
-				campaignId: (string & z56.$brand<"cpg">) | null;
-				enrollmentId: (string & z56.$brand<"enr">) | null;
+				mailboxId: string & z62.$brand<"mbx">;
+				prospectId: string & z62.$brand<"prs">;
+				sendId: (string & z62.$brand<"snd">) | null;
+				campaignId: (string & z62.$brand<"cpg">) | null;
+				enrollmentId: (string & z62.$brand<"enr">) | null;
 				providerMessageId: string;
 				complainedAt: string;
 			};
 		};
-		safeParse: (input: unknown) => z56.ZodSafeParseResult<{
-			id: string & z56.$brand<"evt">;
+		safeParse: (input: unknown) => z62.ZodSafeParseResult<{
+			id: string & z62.$brand<"evt">;
 			occurredAt: string;
-			organizationId: string & z56.$brand<"org">;
+			organizationId: string & z62.$brand<"org">;
 			region: "eu" | "us";
 			type: "mail.complained";
 			version: 1;
 			data: {
-				mailboxId: string & z56.$brand<"mbx">;
-				prospectId: string & z56.$brand<"prs">;
-				sendId: (string & z56.$brand<"snd">) | null;
-				campaignId: (string & z56.$brand<"cpg">) | null;
-				enrollmentId: (string & z56.$brand<"enr">) | null;
+				mailboxId: string & z62.$brand<"mbx">;
+				prospectId: string & z62.$brand<"prs">;
+				sendId: (string & z62.$brand<"snd">) | null;
+				campaignId: (string & z62.$brand<"cpg">) | null;
+				enrollmentId: (string & z62.$brand<"enr">) | null;
 				providerMessageId: string;
 				complainedAt: string;
 			};
@@ -13173,56 +14972,56 @@ declare const MAIL_EVENTS: {
 	readonly "mail.replied": {
 		type: "mail.replied";
 		version: 1;
-		schema: z56.ZodObject<{
-			id: z56.core.$ZodBranded<z56.ZodString, "evt", "out">;
-			occurredAt: z56.ZodISODateTime;
-			organizationId: z56.core.$ZodBranded<z56.ZodString, "org", "out">;
-			region: z56.ZodEnum<{
+		schema: z62.ZodObject<{
+			id: z62.core.$ZodBranded<z62.ZodString, "evt", "out">;
+			occurredAt: z62.ZodISODateTime;
+			organizationId: z62.core.$ZodBranded<z62.ZodString, "org", "out">;
+			region: z62.ZodEnum<{
 				eu: "eu";
 				us: "us";
 			}>;
-			type: z56.ZodLiteral<"mail.replied">;
-			version: z56.ZodLiteral<1>;
-			data: z56.ZodObject<{
-				mailboxId: z56.core.$ZodBranded<z56.ZodString, "mbx", "out">;
-				prospectId: z56.core.$ZodBranded<z56.ZodString, "prs", "out">;
-				sendId: z56.ZodNullable<z56.core.$ZodBranded<z56.ZodString, "snd", "out">>;
-				campaignId: z56.ZodNullable<z56.core.$ZodBranded<z56.ZodString, "cpg", "out">>;
-				enrollmentId: z56.ZodNullable<z56.core.$ZodBranded<z56.ZodString, "enr", "out">>;
-				providerMessageId: z56.ZodString;
-				repliedAt: z56.ZodISODateTime;
-			}, z56.core.$strict>;
-		}, z56.core.$strip>;
+			type: z62.ZodLiteral<"mail.replied">;
+			version: z62.ZodLiteral<1>;
+			data: z62.ZodObject<{
+				mailboxId: z62.core.$ZodBranded<z62.ZodString, "mbx", "out">;
+				prospectId: z62.core.$ZodBranded<z62.ZodString, "prs", "out">;
+				sendId: z62.ZodNullable<z62.core.$ZodBranded<z62.ZodString, "snd", "out">>;
+				campaignId: z62.ZodNullable<z62.core.$ZodBranded<z62.ZodString, "cpg", "out">>;
+				enrollmentId: z62.ZodNullable<z62.core.$ZodBranded<z62.ZodString, "enr", "out">>;
+				providerMessageId: z62.ZodString;
+				repliedAt: z62.ZodISODateTime;
+			}, z62.core.$strict>;
+		}, z62.core.$strip>;
 		parse: (input: unknown) => {
-			id: string & z56.$brand<"evt">;
+			id: string & z62.$brand<"evt">;
 			occurredAt: string;
-			organizationId: string & z56.$brand<"org">;
+			organizationId: string & z62.$brand<"org">;
 			region: "eu" | "us";
 			type: "mail.replied";
 			version: 1;
 			data: {
-				mailboxId: string & z56.$brand<"mbx">;
-				prospectId: string & z56.$brand<"prs">;
-				sendId: (string & z56.$brand<"snd">) | null;
-				campaignId: (string & z56.$brand<"cpg">) | null;
-				enrollmentId: (string & z56.$brand<"enr">) | null;
+				mailboxId: string & z62.$brand<"mbx">;
+				prospectId: string & z62.$brand<"prs">;
+				sendId: (string & z62.$brand<"snd">) | null;
+				campaignId: (string & z62.$brand<"cpg">) | null;
+				enrollmentId: (string & z62.$brand<"enr">) | null;
 				providerMessageId: string;
 				repliedAt: string;
 			};
 		};
-		safeParse: (input: unknown) => z56.ZodSafeParseResult<{
-			id: string & z56.$brand<"evt">;
+		safeParse: (input: unknown) => z62.ZodSafeParseResult<{
+			id: string & z62.$brand<"evt">;
 			occurredAt: string;
-			organizationId: string & z56.$brand<"org">;
+			organizationId: string & z62.$brand<"org">;
 			region: "eu" | "us";
 			type: "mail.replied";
 			version: 1;
 			data: {
-				mailboxId: string & z56.$brand<"mbx">;
-				prospectId: string & z56.$brand<"prs">;
-				sendId: (string & z56.$brand<"snd">) | null;
-				campaignId: (string & z56.$brand<"cpg">) | null;
-				enrollmentId: (string & z56.$brand<"enr">) | null;
+				mailboxId: string & z62.$brand<"mbx">;
+				prospectId: string & z62.$brand<"prs">;
+				sendId: (string & z62.$brand<"snd">) | null;
+				campaignId: (string & z62.$brand<"cpg">) | null;
+				enrollmentId: (string & z62.$brand<"enr">) | null;
 				providerMessageId: string;
 				repliedAt: string;
 			};
@@ -13231,58 +15030,58 @@ declare const MAIL_EVENTS: {
 	readonly "mail.out_of_office": {
 		type: "mail.out_of_office";
 		version: 1;
-		schema: z56.ZodObject<{
-			id: z56.core.$ZodBranded<z56.ZodString, "evt", "out">;
-			occurredAt: z56.ZodISODateTime;
-			organizationId: z56.core.$ZodBranded<z56.ZodString, "org", "out">;
-			region: z56.ZodEnum<{
+		schema: z62.ZodObject<{
+			id: z62.core.$ZodBranded<z62.ZodString, "evt", "out">;
+			occurredAt: z62.ZodISODateTime;
+			organizationId: z62.core.$ZodBranded<z62.ZodString, "org", "out">;
+			region: z62.ZodEnum<{
 				eu: "eu";
 				us: "us";
 			}>;
-			type: z56.ZodLiteral<"mail.out_of_office">;
-			version: z56.ZodLiteral<1>;
-			data: z56.ZodObject<{
-				mailboxId: z56.core.$ZodBranded<z56.ZodString, "mbx", "out">;
-				prospectId: z56.core.$ZodBranded<z56.ZodString, "prs", "out">;
-				sendId: z56.ZodNullable<z56.core.$ZodBranded<z56.ZodString, "snd", "out">>;
-				campaignId: z56.ZodNullable<z56.core.$ZodBranded<z56.ZodString, "cpg", "out">>;
-				enrollmentId: z56.ZodNullable<z56.core.$ZodBranded<z56.ZodString, "enr", "out">>;
-				providerMessageId: z56.ZodString;
-				returnDate: z56.ZodNullable<z56.ZodISODate>;
-				receivedAt: z56.ZodISODateTime;
-			}, z56.core.$strict>;
-		}, z56.core.$strip>;
+			type: z62.ZodLiteral<"mail.out_of_office">;
+			version: z62.ZodLiteral<1>;
+			data: z62.ZodObject<{
+				mailboxId: z62.core.$ZodBranded<z62.ZodString, "mbx", "out">;
+				prospectId: z62.core.$ZodBranded<z62.ZodString, "prs", "out">;
+				sendId: z62.ZodNullable<z62.core.$ZodBranded<z62.ZodString, "snd", "out">>;
+				campaignId: z62.ZodNullable<z62.core.$ZodBranded<z62.ZodString, "cpg", "out">>;
+				enrollmentId: z62.ZodNullable<z62.core.$ZodBranded<z62.ZodString, "enr", "out">>;
+				providerMessageId: z62.ZodString;
+				returnDate: z62.ZodNullable<z62.ZodISODate>;
+				receivedAt: z62.ZodISODateTime;
+			}, z62.core.$strict>;
+		}, z62.core.$strip>;
 		parse: (input: unknown) => {
-			id: string & z56.$brand<"evt">;
+			id: string & z62.$brand<"evt">;
 			occurredAt: string;
-			organizationId: string & z56.$brand<"org">;
+			organizationId: string & z62.$brand<"org">;
 			region: "eu" | "us";
 			type: "mail.out_of_office";
 			version: 1;
 			data: {
-				mailboxId: string & z56.$brand<"mbx">;
-				prospectId: string & z56.$brand<"prs">;
-				sendId: (string & z56.$brand<"snd">) | null;
-				campaignId: (string & z56.$brand<"cpg">) | null;
-				enrollmentId: (string & z56.$brand<"enr">) | null;
+				mailboxId: string & z62.$brand<"mbx">;
+				prospectId: string & z62.$brand<"prs">;
+				sendId: (string & z62.$brand<"snd">) | null;
+				campaignId: (string & z62.$brand<"cpg">) | null;
+				enrollmentId: (string & z62.$brand<"enr">) | null;
 				providerMessageId: string;
 				returnDate: string | null;
 				receivedAt: string;
 			};
 		};
-		safeParse: (input: unknown) => z56.ZodSafeParseResult<{
-			id: string & z56.$brand<"evt">;
+		safeParse: (input: unknown) => z62.ZodSafeParseResult<{
+			id: string & z62.$brand<"evt">;
 			occurredAt: string;
-			organizationId: string & z56.$brand<"org">;
+			organizationId: string & z62.$brand<"org">;
 			region: "eu" | "us";
 			type: "mail.out_of_office";
 			version: 1;
 			data: {
-				mailboxId: string & z56.$brand<"mbx">;
-				prospectId: string & z56.$brand<"prs">;
-				sendId: (string & z56.$brand<"snd">) | null;
-				campaignId: (string & z56.$brand<"cpg">) | null;
-				enrollmentId: (string & z56.$brand<"enr">) | null;
+				mailboxId: string & z62.$brand<"mbx">;
+				prospectId: string & z62.$brand<"prs">;
+				sendId: (string & z62.$brand<"snd">) | null;
+				campaignId: (string & z62.$brand<"cpg">) | null;
+				enrollmentId: (string & z62.$brand<"enr">) | null;
 				providerMessageId: string;
 				returnDate: string | null;
 				receivedAt: string;
@@ -13292,56 +15091,56 @@ declare const MAIL_EVENTS: {
 	readonly "mail.unsubscribed": {
 		type: "mail.unsubscribed";
 		version: 1;
-		schema: z56.ZodObject<{
-			id: z56.core.$ZodBranded<z56.ZodString, "evt", "out">;
-			occurredAt: z56.ZodISODateTime;
-			organizationId: z56.core.$ZodBranded<z56.ZodString, "org", "out">;
-			region: z56.ZodEnum<{
+		schema: z62.ZodObject<{
+			id: z62.core.$ZodBranded<z62.ZodString, "evt", "out">;
+			occurredAt: z62.ZodISODateTime;
+			organizationId: z62.core.$ZodBranded<z62.ZodString, "org", "out">;
+			region: z62.ZodEnum<{
 				eu: "eu";
 				us: "us";
 			}>;
-			type: z56.ZodLiteral<"mail.unsubscribed">;
-			version: z56.ZodLiteral<1>;
-			data: z56.ZodObject<{
-				prospectId: z56.core.$ZodBranded<z56.ZodString, "prs", "out">;
-				mailboxId: z56.ZodNullable<z56.core.$ZodBranded<z56.ZodString, "mbx", "out">>;
-				sendId: z56.ZodNullable<z56.core.$ZodBranded<z56.ZodString, "snd", "out">>;
-				enrollmentId: z56.ZodNullable<z56.core.$ZodBranded<z56.ZodString, "enr", "out">>;
-				source: z56.ZodEnum<{
+			type: z62.ZodLiteral<"mail.unsubscribed">;
+			version: z62.ZodLiteral<1>;
+			data: z62.ZodObject<{
+				prospectId: z62.core.$ZodBranded<z62.ZodString, "prs", "out">;
+				mailboxId: z62.ZodNullable<z62.core.$ZodBranded<z62.ZodString, "mbx", "out">>;
+				sendId: z62.ZodNullable<z62.core.$ZodBranded<z62.ZodString, "snd", "out">>;
+				enrollmentId: z62.ZodNullable<z62.core.$ZodBranded<z62.ZodString, "enr", "out">>;
+				source: z62.ZodEnum<{
 					link: "link";
 					one_click: "one_click";
 				}>;
-				unsubscribedAt: z56.ZodISODateTime;
-			}, z56.core.$strict>;
-		}, z56.core.$strip>;
+				unsubscribedAt: z62.ZodISODateTime;
+			}, z62.core.$strict>;
+		}, z62.core.$strip>;
 		parse: (input: unknown) => {
-			id: string & z56.$brand<"evt">;
+			id: string & z62.$brand<"evt">;
 			occurredAt: string;
-			organizationId: string & z56.$brand<"org">;
+			organizationId: string & z62.$brand<"org">;
 			region: "eu" | "us";
 			type: "mail.unsubscribed";
 			version: 1;
 			data: {
-				prospectId: string & z56.$brand<"prs">;
-				mailboxId: (string & z56.$brand<"mbx">) | null;
-				sendId: (string & z56.$brand<"snd">) | null;
-				enrollmentId: (string & z56.$brand<"enr">) | null;
+				prospectId: string & z62.$brand<"prs">;
+				mailboxId: (string & z62.$brand<"mbx">) | null;
+				sendId: (string & z62.$brand<"snd">) | null;
+				enrollmentId: (string & z62.$brand<"enr">) | null;
 				source: "link" | "one_click";
 				unsubscribedAt: string;
 			};
 		};
-		safeParse: (input: unknown) => z56.ZodSafeParseResult<{
-			id: string & z56.$brand<"evt">;
+		safeParse: (input: unknown) => z62.ZodSafeParseResult<{
+			id: string & z62.$brand<"evt">;
 			occurredAt: string;
-			organizationId: string & z56.$brand<"org">;
+			organizationId: string & z62.$brand<"org">;
 			region: "eu" | "us";
 			type: "mail.unsubscribed";
 			version: 1;
 			data: {
-				prospectId: string & z56.$brand<"prs">;
-				mailboxId: (string & z56.$brand<"mbx">) | null;
-				sendId: (string & z56.$brand<"snd">) | null;
-				enrollmentId: (string & z56.$brand<"enr">) | null;
+				prospectId: string & z62.$brand<"prs">;
+				mailboxId: (string & z62.$brand<"mbx">) | null;
+				sendId: (string & z62.$brand<"snd">) | null;
+				enrollmentId: (string & z62.$brand<"enr">) | null;
 				source: "link" | "one_click";
 				unsubscribedAt: string;
 			};
@@ -13350,7 +15149,7 @@ declare const MAIL_EVENTS: {
 };
 /** The type of a mail event. */
 type MailEventType = keyof typeof MAIL_EVENTS;
-import { z as z57 } from "zod";
+import { z as z63 } from "zod";
 /** The days of sending a health score looks at. */
 declare const HEALTH_WINDOW_DAYS = 14;
 /** The fewest sends in the window below which a Mailbox shows `not_enough_data` instead of a score. A starting value. */
@@ -13365,7 +15164,7 @@ declare const HEALTH_CRITICAL_SCORE = 40;
 */
 declare const HEALTH_COMPONENTS: readonly ["hard_bounce_rate", "complaint_rate", "soft_bounce_error_rate", "reply_rate", "provider_warnings"];
 /** What a health score is made of. */
-declare const healthComponentKindSchema: z57.ZodEnum<{
+declare const healthComponentKindSchema: z63.ZodEnum<{
 	complaint_rate: "complaint_rate";
 	hard_bounce_rate: "hard_bounce_rate";
 	provider_warnings: "provider_warnings";
@@ -13373,171 +15172,171 @@ declare const healthComponentKindSchema: z57.ZodEnum<{
 	soft_bounce_error_rate: "soft_bounce_error_rate";
 }>;
 /** What a health score is made of. */
-type HealthComponentKind = z57.infer<typeof healthComponentKindSchema>;
+type HealthComponentKind = z63.infer<typeof healthComponentKindSchema>;
 /** How one component stands against its thresholds. */
-declare const healthComponentStateSchema: z57.ZodEnum<{
+declare const healthComponentStateSchema: z63.ZodEnum<{
 	critical: "critical";
 	ok: "ok";
 	warning: "warning";
 }>;
 /** How one component stands. */
-type HealthComponentState = z57.infer<typeof healthComponentStateSchema>;
+type HealthComponentState = z63.infer<typeof healthComponentStateSchema>;
 /**
 * One reason behind a health score: the component, its measured value over the window (a rate from
 * 0 to 1, or a count for `provider_warnings`), its stated weight (0 to 100, all weights summing to
 * 100) and its warning and critical thresholds in the same unit, and where it stands.
 */
-declare const healthComponentSchema: z57.ZodObject<{
-	component: z57.ZodEnum<{
+declare const healthComponentSchema: z63.ZodObject<{
+	component: z63.ZodEnum<{
 		complaint_rate: "complaint_rate";
 		hard_bounce_rate: "hard_bounce_rate";
 		provider_warnings: "provider_warnings";
 		reply_rate: "reply_rate";
 		soft_bounce_error_rate: "soft_bounce_error_rate";
 	}>;
-	value: z57.ZodNumber;
-	weight: z57.ZodNumber;
-	warningThreshold: z57.ZodNumber;
-	criticalThreshold: z57.ZodNumber;
-	state: z57.ZodEnum<{
+	value: z63.ZodNumber;
+	weight: z63.ZodNumber;
+	warningThreshold: z63.ZodNumber;
+	criticalThreshold: z63.ZodNumber;
+	state: z63.ZodEnum<{
 		critical: "critical";
 		ok: "ok";
 		warning: "warning";
 	}>;
-}, z57.core.$strip>;
+}, z63.core.$strip>;
 /** One reason behind a health score. */
-type HealthComponent = z57.infer<typeof healthComponentSchema>;
+type HealthComponent = z63.infer<typeof healthComponentSchema>;
 /**
 * The health of a Mailbox over the last 14 days: a 0 to 100 score with its components, or
 * `not_enough_data` with a null score when the sends are fewer than `minimumSample`. The
 * `effect` says what the score does now: nothing, the daily limit halved, or the Mailbox paused.
 */
-declare const mailboxHealthSchema: z57.ZodObject<{
-	mailboxId: z57.core.$ZodBranded<z57.ZodString, "mbx", "out">;
-	status: z57.ZodEnum<{
+declare const mailboxHealthSchema: z63.ZodObject<{
+	mailboxId: z63.core.$ZodBranded<z63.ZodString, "mbx", "out">;
+	status: z63.ZodEnum<{
 		not_enough_data: "not_enough_data";
 		scored: "scored";
 	}>;
-	score: z57.ZodNullable<z57.ZodNumber>;
-	effect: z57.ZodEnum<{
+	score: z63.ZodNullable<z63.ZodNumber>;
+	effect: z63.ZodEnum<{
 		limit_halved: "limit_halved";
 		none: "none";
 		paused: "paused";
 	}>;
-	windowDays: z57.ZodNumber;
-	sampleSize: z57.ZodNumber;
-	minimumSample: z57.ZodNumber;
-	components: z57.ZodArray<z57.ZodObject<{
-		component: z57.ZodEnum<{
+	windowDays: z63.ZodNumber;
+	sampleSize: z63.ZodNumber;
+	minimumSample: z63.ZodNumber;
+	components: z63.ZodArray<z63.ZodObject<{
+		component: z63.ZodEnum<{
 			complaint_rate: "complaint_rate";
 			hard_bounce_rate: "hard_bounce_rate";
 			provider_warnings: "provider_warnings";
 			reply_rate: "reply_rate";
 			soft_bounce_error_rate: "soft_bounce_error_rate";
 		}>;
-		value: z57.ZodNumber;
-		weight: z57.ZodNumber;
-		warningThreshold: z57.ZodNumber;
-		criticalThreshold: z57.ZodNumber;
-		state: z57.ZodEnum<{
+		value: z63.ZodNumber;
+		weight: z63.ZodNumber;
+		warningThreshold: z63.ZodNumber;
+		criticalThreshold: z63.ZodNumber;
+		state: z63.ZodEnum<{
 			critical: "critical";
 			ok: "ok";
 			warning: "warning";
 		}>;
-	}, z57.core.$strip>>;
-	scoredAt: z57.ZodISODateTime;
-}, z57.core.$strip>;
+	}, z63.core.$strip>>;
+	scoredAt: z63.ZodISODateTime;
+}, z63.core.$strip>;
 /** The short form of a Mailbox's health shown on the Mailbox itself: status, score, effect and when it was scored. */
-declare const healthSummarySchema: z57.ZodObject<{
-	status: z57.ZodEnum<{
+declare const healthSummarySchema: z63.ZodObject<{
+	status: z63.ZodEnum<{
 		not_enough_data: "not_enough_data";
 		scored: "scored";
 	}>;
-	score: z57.ZodNullable<z57.ZodNumber>;
-	effect: z57.ZodEnum<{
+	score: z63.ZodNullable<z63.ZodNumber>;
+	effect: z63.ZodEnum<{
 		limit_halved: "limit_halved";
 		none: "none";
 		paused: "paused";
 	}>;
-	scoredAt: z57.ZodISODateTime;
-}, z57.core.$strip>;
+	scoredAt: z63.ZodISODateTime;
+}, z63.core.$strip>;
 /** The short form of a Mailbox's health. */
-type HealthSummary = z57.infer<typeof healthSummarySchema>;
+type HealthSummary = z63.infer<typeof healthSummarySchema>;
 /** The health of a Mailbox. */
-type MailboxHealth = z57.infer<typeof mailboxHealthSchema>;
+type MailboxHealth = z63.infer<typeof mailboxHealthSchema>;
 /** One day of a Mailbox's stored health: the date (`YYYY-MM-DD`, UTC), the score and the day's counts. */
-declare const healthDailySchema: z57.ZodObject<{
-	date: z57.ZodISODate;
-	score: z57.ZodNullable<z57.ZodNumber>;
-	sent: z57.ZodNumber;
-	hardBounces: z57.ZodNumber;
-	softBounces: z57.ZodNumber;
-	complaints: z57.ZodNumber;
-	replies: z57.ZodNumber;
-	errors: z57.ZodNumber;
-	components: z57.ZodArray<z57.ZodObject<{
-		component: z57.ZodEnum<{
+declare const healthDailySchema: z63.ZodObject<{
+	date: z63.ZodISODate;
+	score: z63.ZodNullable<z63.ZodNumber>;
+	sent: z63.ZodNumber;
+	hardBounces: z63.ZodNumber;
+	softBounces: z63.ZodNumber;
+	complaints: z63.ZodNumber;
+	replies: z63.ZodNumber;
+	errors: z63.ZodNumber;
+	components: z63.ZodArray<z63.ZodObject<{
+		component: z63.ZodEnum<{
 			complaint_rate: "complaint_rate";
 			hard_bounce_rate: "hard_bounce_rate";
 			provider_warnings: "provider_warnings";
 			reply_rate: "reply_rate";
 			soft_bounce_error_rate: "soft_bounce_error_rate";
 		}>;
-		value: z57.ZodNumber;
-		weight: z57.ZodNumber;
-		warningThreshold: z57.ZodNumber;
-		criticalThreshold: z57.ZodNumber;
-		state: z57.ZodEnum<{
+		value: z63.ZodNumber;
+		weight: z63.ZodNumber;
+		warningThreshold: z63.ZodNumber;
+		criticalThreshold: z63.ZodNumber;
+		state: z63.ZodEnum<{
 			critical: "critical";
 			ok: "ok";
 			warning: "warning";
 		}>;
-	}, z57.core.$strip>>;
-}, z57.core.$strip>;
+	}, z63.core.$strip>>;
+}, z63.core.$strip>;
 /** One day of a Mailbox's stored health. */
-type HealthDaily = z57.infer<typeof healthDailySchema>;
+type HealthDaily = z63.infer<typeof healthDailySchema>;
 /** The query of a request for a Mailbox's daily health history, newest day first. */
-declare const listHealthHistoryQuerySchema: z57.ZodObject<{
-	cursor: z57.ZodOptional<z57.ZodString>;
-	limit: z57.ZodDefault<z57.ZodPipe<z57.ZodPipe<z57.ZodUnion<readonly [z57.ZodNumber, z57.ZodString]>, z57.ZodTransform<number, string | number>>, z57.ZodNumber>>;
-}, z57.core.$strict>;
+declare const listHealthHistoryQuerySchema: z63.ZodObject<{
+	cursor: z63.ZodOptional<z63.ZodString>;
+	limit: z63.ZodDefault<z63.ZodPipe<z63.ZodPipe<z63.ZodUnion<readonly [z63.ZodNumber, z63.ZodString]>, z63.ZodTransform<number, string | number>>, z63.ZodNumber>>;
+}, z63.core.$strict>;
 /** One page of daily health. */
-declare const healthDailyPageSchema: z57.ZodObject<{
-	items: z57.ZodArray<z57.ZodObject<{
-		date: z57.ZodISODate;
-		score: z57.ZodNullable<z57.ZodNumber>;
-		sent: z57.ZodNumber;
-		hardBounces: z57.ZodNumber;
-		softBounces: z57.ZodNumber;
-		complaints: z57.ZodNumber;
-		replies: z57.ZodNumber;
-		errors: z57.ZodNumber;
-		components: z57.ZodArray<z57.ZodObject<{
-			component: z57.ZodEnum<{
+declare const healthDailyPageSchema: z63.ZodObject<{
+	items: z63.ZodArray<z63.ZodObject<{
+		date: z63.ZodISODate;
+		score: z63.ZodNullable<z63.ZodNumber>;
+		sent: z63.ZodNumber;
+		hardBounces: z63.ZodNumber;
+		softBounces: z63.ZodNumber;
+		complaints: z63.ZodNumber;
+		replies: z63.ZodNumber;
+		errors: z63.ZodNumber;
+		components: z63.ZodArray<z63.ZodObject<{
+			component: z63.ZodEnum<{
 				complaint_rate: "complaint_rate";
 				hard_bounce_rate: "hard_bounce_rate";
 				provider_warnings: "provider_warnings";
 				reply_rate: "reply_rate";
 				soft_bounce_error_rate: "soft_bounce_error_rate";
 			}>;
-			value: z57.ZodNumber;
-			weight: z57.ZodNumber;
-			warningThreshold: z57.ZodNumber;
-			criticalThreshold: z57.ZodNumber;
-			state: z57.ZodEnum<{
+			value: z63.ZodNumber;
+			weight: z63.ZodNumber;
+			warningThreshold: z63.ZodNumber;
+			criticalThreshold: z63.ZodNumber;
+			state: z63.ZodEnum<{
 				critical: "critical";
 				ok: "ok";
 				warning: "warning";
 			}>;
-		}, z57.core.$strip>>;
-	}, z57.core.$strip>>;
-	nextCursor: z57.ZodNullable<z57.ZodString>;
-}, z57.core.$strip>;
+		}, z63.core.$strip>>;
+	}, z63.core.$strip>>;
+	nextCursor: z63.ZodNullable<z63.ZodString>;
+}, z63.core.$strip>;
 /** The cursor position a health history resumes from: the last date returned. */
-declare const healthHistoryCursorSchema: z57.ZodObject<{
-	date: z57.ZodISODate;
-}, z57.core.$strict>;
-import { z as z58 } from "zod";
+declare const healthHistoryCursorSchema: z63.ZodObject<{
+	date: z63.ZodISODate;
+}, z63.core.$strict>;
+import { z as z64 } from "zod";
 /**
 * What a Mailbox can see happen to a message: a `hard_bounce` (the address is dead; suppresses it
 * and stops the Sequence), a `soft_bounce` (retried within bounds), a `complaint` (pauses the
@@ -13546,7 +15345,7 @@ import { z as z58 } from "zod";
 */
 declare const MAIL_EVENT_KINDS: readonly ["hard_bounce", "soft_bounce", "complaint", "reply", "out_of_office", "unsubscribe"];
 /** What a Mailbox can see happen to a message. */
-declare const mailEventKindSchema: z58.ZodEnum<{
+declare const mailEventKindSchema: z64.ZodEnum<{
 	complaint: "complaint";
 	hard_bounce: "hard_bounce";
 	out_of_office: "out_of_office";
@@ -13555,9 +15354,9 @@ declare const mailEventKindSchema: z58.ZodEnum<{
 	unsubscribe: "unsubscribe";
 }>;
 /** What a Mailbox can see happen to a message. */
-type MailEventKind = z58.infer<typeof mailEventKindSchema>;
+type MailEventKind = z64.infer<typeof mailEventKindSchema>;
 /** The id the provider gave a message (an email Message-ID or a Graph id): printable ASCII with no space, 1 to 255 characters. */
-declare const mailProviderMessageIdSchema: z58.ZodString;
+declare const mailProviderMessageIdSchema: z64.ZodString;
 /**
 * One mail event, as the Admin audits it. `sendId` is the send it concerns (null for an event on a
 * message the Organization did not send through Closeline, such as an unsolicited reply),
@@ -13565,10 +15364,10 @@ declare const mailProviderMessageIdSchema: z58.ZodString;
 * gave, only on that kind. It holds no body, no subject and no address: replies are fetched only
 * to be handed to the inbox and are never stored or logged here.
 */
-declare const mailEventSchema: z58.ZodObject<{
-	id: z58.core.$ZodBranded<z58.ZodString, "mev", "out">;
-	mailboxId: z58.core.$ZodBranded<z58.ZodString, "mbx", "out">;
-	kind: z58.ZodEnum<{
+declare const mailEventSchema: z64.ZodObject<{
+	id: z64.core.$ZodBranded<z64.ZodString, "mev", "out">;
+	mailboxId: z64.core.$ZodBranded<z64.ZodString, "mbx", "out">;
+	kind: z64.ZodEnum<{
 		complaint: "complaint";
 		hard_bounce: "hard_bounce";
 		out_of_office: "out_of_office";
@@ -13576,27 +15375,27 @@ declare const mailEventSchema: z58.ZodObject<{
 		soft_bounce: "soft_bounce";
 		unsubscribe: "unsubscribe";
 	}>;
-	sendId: z58.ZodNullable<z58.core.$ZodBranded<z58.ZodString, "snd", "out">>;
-	prospectId: z58.ZodNullable<z58.core.$ZodBranded<z58.ZodString, "prs", "out">>;
-	enrollmentId: z58.ZodNullable<z58.core.$ZodBranded<z58.ZodString, "enr", "out">>;
-	providerMessageId: z58.ZodString;
-	returnDate: z58.ZodNullable<z58.ZodISODate>;
-	occurredAt: z58.ZodISODateTime;
-	recordedAt: z58.ZodISODateTime;
-}, z58.core.$strip>;
+	sendId: z64.ZodNullable<z64.core.$ZodBranded<z64.ZodString, "snd", "out">>;
+	prospectId: z64.ZodNullable<z64.core.$ZodBranded<z64.ZodString, "prs", "out">>;
+	enrollmentId: z64.ZodNullable<z64.core.$ZodBranded<z64.ZodString, "enr", "out">>;
+	providerMessageId: z64.ZodString;
+	returnDate: z64.ZodNullable<z64.ZodISODate>;
+	occurredAt: z64.ZodISODateTime;
+	recordedAt: z64.ZodISODateTime;
+}, z64.core.$strip>;
 /** One mail event. */
-type MailEvent = z58.infer<typeof mailEventSchema>;
+type MailEvent = z64.infer<typeof mailEventSchema>;
 /** The cursor position a mail event list resumes from: newest first, then id. */
-declare const mailEventCursorSchema: z58.ZodObject<{
-	occurredAt: z58.ZodISODateTime;
-	id: z58.core.$ZodBranded<z58.ZodString, "mev", "out">;
-}, z58.core.$strict>;
+declare const mailEventCursorSchema: z64.ZodObject<{
+	occurredAt: z64.ZodISODateTime;
+	id: z64.core.$ZodBranded<z64.ZodString, "mev", "out">;
+}, z64.core.$strict>;
 /** The query of a request to list mail events, newest first, narrowed by Mailbox, kind, Prospect and time. */
-declare const listMailEventsQuerySchema: z58.ZodObject<{
-	cursor: z58.ZodOptional<z58.ZodString>;
-	limit: z58.ZodDefault<z58.ZodPipe<z58.ZodPipe<z58.ZodUnion<readonly [z58.ZodNumber, z58.ZodString]>, z58.ZodTransform<number, string | number>>, z58.ZodNumber>>;
-	mailboxId: z58.ZodOptional<z58.core.$ZodBranded<z58.ZodString, "mbx", "out">>;
-	kind: z58.ZodOptional<z58.ZodEnum<{
+declare const listMailEventsQuerySchema: z64.ZodObject<{
+	cursor: z64.ZodOptional<z64.ZodString>;
+	limit: z64.ZodDefault<z64.ZodPipe<z64.ZodPipe<z64.ZodUnion<readonly [z64.ZodNumber, z64.ZodString]>, z64.ZodTransform<number, string | number>>, z64.ZodNumber>>;
+	mailboxId: z64.ZodOptional<z64.core.$ZodBranded<z64.ZodString, "mbx", "out">>;
+	kind: z64.ZodOptional<z64.ZodEnum<{
 		complaint: "complaint";
 		hard_bounce: "hard_bounce";
 		out_of_office: "out_of_office";
@@ -13604,18 +15403,18 @@ declare const listMailEventsQuerySchema: z58.ZodObject<{
 		soft_bounce: "soft_bounce";
 		unsubscribe: "unsubscribe";
 	}>>;
-	prospectId: z58.ZodOptional<z58.core.$ZodBranded<z58.ZodString, "prs", "out">>;
-	from: z58.ZodOptional<z58.ZodISODateTime>;
-	to: z58.ZodOptional<z58.ZodISODateTime>;
-}, z58.core.$strict>;
+	prospectId: z64.ZodOptional<z64.core.$ZodBranded<z64.ZodString, "prs", "out">>;
+	from: z64.ZodOptional<z64.ZodISODateTime>;
+	to: z64.ZodOptional<z64.ZodISODateTime>;
+}, z64.core.$strict>;
 /** The query of a request to list mail events. */
-type ListMailEventsQuery = z58.infer<typeof listMailEventsQuerySchema>;
+type ListMailEventsQuery = z64.infer<typeof listMailEventsQuerySchema>;
 /** One page of mail events. */
-declare const mailEventPageSchema: z58.ZodObject<{
-	items: z58.ZodArray<z58.ZodObject<{
-		id: z58.core.$ZodBranded<z58.ZodString, "mev", "out">;
-		mailboxId: z58.core.$ZodBranded<z58.ZodString, "mbx", "out">;
-		kind: z58.ZodEnum<{
+declare const mailEventPageSchema: z64.ZodObject<{
+	items: z64.ZodArray<z64.ZodObject<{
+		id: z64.core.$ZodBranded<z64.ZodString, "mev", "out">;
+		mailboxId: z64.core.$ZodBranded<z64.ZodString, "mbx", "out">;
+		kind: z64.ZodEnum<{
 			complaint: "complaint";
 			hard_bounce: "hard_bounce";
 			out_of_office: "out_of_office";
@@ -13623,17 +15422,17 @@ declare const mailEventPageSchema: z58.ZodObject<{
 			soft_bounce: "soft_bounce";
 			unsubscribe: "unsubscribe";
 		}>;
-		sendId: z58.ZodNullable<z58.core.$ZodBranded<z58.ZodString, "snd", "out">>;
-		prospectId: z58.ZodNullable<z58.core.$ZodBranded<z58.ZodString, "prs", "out">>;
-		enrollmentId: z58.ZodNullable<z58.core.$ZodBranded<z58.ZodString, "enr", "out">>;
-		providerMessageId: z58.ZodString;
-		returnDate: z58.ZodNullable<z58.ZodISODate>;
-		occurredAt: z58.ZodISODateTime;
-		recordedAt: z58.ZodISODateTime;
-	}, z58.core.$strip>>;
-	nextCursor: z58.ZodNullable<z58.ZodString>;
-}, z58.core.$strip>;
-import { z as z59 } from "zod";
+		sendId: z64.ZodNullable<z64.core.$ZodBranded<z64.ZodString, "snd", "out">>;
+		prospectId: z64.ZodNullable<z64.core.$ZodBranded<z64.ZodString, "prs", "out">>;
+		enrollmentId: z64.ZodNullable<z64.core.$ZodBranded<z64.ZodString, "enr", "out">>;
+		providerMessageId: z64.ZodString;
+		returnDate: z64.ZodNullable<z64.ZodISODate>;
+		occurredAt: z64.ZodISODateTime;
+		recordedAt: z64.ZodISODateTime;
+	}, z64.core.$strip>>;
+	nextCursor: z64.ZodNullable<z64.ZodString>;
+}, z64.core.$strip>;
+import { z as z65 } from "zod";
 /** The longest display name of a Mailbox, in characters. */
 declare const MAX_MAILBOX_NAME_LENGTH = 100;
 /**
@@ -13645,28 +15444,28 @@ declare const MAX_MAILBOX_NAME_LENGTH = 100;
 * route); `limits` are the ones set and `effectiveLimits` those that apply now after the ramp and
 * the health score.
 */
-declare const mailboxSchema: z59.ZodObject<{
-	id: z59.core.$ZodBranded<z59.ZodString, "mbx", "out">;
-	provider: z59.ZodEnum<{
+declare const mailboxSchema: z65.ZodObject<{
+	id: z65.core.$ZodBranded<z65.ZodString, "mbx", "out">;
+	provider: z65.ZodEnum<{
 		gmail: "gmail";
 		outlook: "outlook";
 	}>;
-	kind: z59.ZodEnum<{
+	kind: z65.ZodEnum<{
 		personal: "personal";
 		shared: "shared";
 	}>;
-	address: z59.ZodPipe<z59.ZodPipe<z59.ZodString, z59.ZodTransform<string, string>>, z59.ZodString>;
-	displayName: z59.ZodPipe<z59.ZodString, z59.ZodString>;
-	ownerMembershipId: z59.ZodNullable<z59.core.$ZodBranded<z59.ZodString, "mem", "out">>;
-	teamIds: z59.ZodArray<z59.core.$ZodBranded<z59.ZodString, "team", "out">>;
-	state: z59.ZodEnum<{
+	address: z65.ZodPipe<z65.ZodPipe<z65.ZodString, z65.ZodTransform<string, string>>, z65.ZodString>;
+	displayName: z65.ZodPipe<z65.ZodString, z65.ZodString>;
+	ownerMembershipId: z65.ZodNullable<z65.core.$ZodBranded<z65.ZodString, "mem", "out">>;
+	teamIds: z65.ZodArray<z65.core.$ZodBranded<z65.ZodString, "team", "out">>;
+	state: z65.ZodEnum<{
 		disconnected: "disconnected";
 		healthy: "healthy";
 		limited: "limited";
 		paused: "paused";
 		warming: "warming";
 	}>;
-	stateReason: z59.ZodNullable<z59.ZodEnum<{
+	stateReason: z65.ZodNullable<z65.ZodEnum<{
 		admin_paused: "admin_paused";
 		auth_revoked: "auth_revoked";
 		bounce_spike: "bounce_spike";
@@ -13676,13 +15475,13 @@ declare const mailboxSchema: z59.ZodObject<{
 		owner_paused: "owner_paused";
 		provider_suspended: "provider_suspended";
 	}>>;
-	limits: z59.ZodObject<{
-		perDay: z59.ZodNumber;
-		perHour: z59.ZodNumber;
-		minGapSeconds: z59.ZodNumber;
-		window: z59.ZodObject<{
-			timeZone: z59.ZodString;
-			days: z59.ZodArray<z59.ZodEnum<{
+	limits: z65.ZodObject<{
+		perDay: z65.ZodNumber;
+		perHour: z65.ZodNumber;
+		minGapSeconds: z65.ZodNumber;
+		window: z65.ZodObject<{
+			timeZone: z65.ZodString;
+			days: z65.ZodArray<z65.ZodEnum<{
 				fri: "fri";
 				mon: "mon";
 				sat: "sat";
@@ -13691,102 +15490,102 @@ declare const mailboxSchema: z59.ZodObject<{
 				tue: "tue";
 				wed: "wed";
 			}>>;
-			startMinute: z59.ZodNumber;
-			endMinute: z59.ZodNumber;
-		}, z59.core.$strict>;
-	}, z59.core.$strict>;
-	effectiveLimits: z59.ZodObject<{
-		perDay: z59.ZodNumber;
-		perHour: z59.ZodNumber;
-		minGapSeconds: z59.ZodNumber;
-	}, z59.core.$strip>;
-	ramp: z59.ZodObject<{
-		active: z59.ZodBoolean;
-		dayIndex: z59.ZodNumber;
-		perDayNow: z59.ZodNullable<z59.ZodNumber>;
-		steps: z59.ZodArray<z59.ZodObject<{
-			fromDay: z59.ZodNumber;
-			perDay: z59.ZodNumber;
-		}, z59.core.$strict>>;
-	}, z59.core.$strip>;
-	health: z59.ZodObject<{
-		status: z59.ZodEnum<{
+			startMinute: z65.ZodNumber;
+			endMinute: z65.ZodNumber;
+		}, z65.core.$strict>;
+	}, z65.core.$strict>;
+	effectiveLimits: z65.ZodObject<{
+		perDay: z65.ZodNumber;
+		perHour: z65.ZodNumber;
+		minGapSeconds: z65.ZodNumber;
+	}, z65.core.$strip>;
+	ramp: z65.ZodObject<{
+		active: z65.ZodBoolean;
+		dayIndex: z65.ZodNumber;
+		perDayNow: z65.ZodNullable<z65.ZodNumber>;
+		steps: z65.ZodArray<z65.ZodObject<{
+			fromDay: z65.ZodNumber;
+			perDay: z65.ZodNumber;
+		}, z65.core.$strict>>;
+	}, z65.core.$strip>;
+	health: z65.ZodObject<{
+		status: z65.ZodEnum<{
 			not_enough_data: "not_enough_data";
 			scored: "scored";
 		}>;
-		score: z59.ZodNullable<z59.ZodNumber>;
-		effect: z59.ZodEnum<{
+		score: z65.ZodNullable<z65.ZodNumber>;
+		effect: z65.ZodEnum<{
 			limit_halved: "limit_halved";
 			none: "none";
 			paused: "paused";
 		}>;
-		scoredAt: z59.ZodISODateTime;
-	}, z59.core.$strip>;
-	connectedAt: z59.ZodISODateTime;
-	lastSyncedAt: z59.ZodNullable<z59.ZodISODateTime>;
-}, z59.core.$strip>;
+		scoredAt: z65.ZodISODateTime;
+	}, z65.core.$strip>;
+	connectedAt: z65.ZodISODateTime;
+	lastSyncedAt: z65.ZodNullable<z65.ZodISODateTime>;
+}, z65.core.$strip>;
 /** A Mailbox. */
-type Mailbox = z59.infer<typeof mailboxSchema>;
+type Mailbox = z65.infer<typeof mailboxSchema>;
 /** The path parameters of a request about one Mailbox. */
-declare const mailboxParamsSchema: z59.ZodObject<{
-	mailboxId: z59.core.$ZodBranded<z59.ZodString, "mbx", "out">;
-}, z59.core.$strict>;
+declare const mailboxParamsSchema: z65.ZodObject<{
+	mailboxId: z65.core.$ZodBranded<z65.ZodString, "mbx", "out">;
+}, z65.core.$strict>;
 /** The headers of a request that requires an `Idempotency-Key` (header names arrive lower-cased). */
-declare const mailKeyedHeadersSchema: z59.ZodObject<{
-	"idempotency-key": z59.ZodString;
-}, z59.core.$strip>;
+declare const mailKeyedHeadersSchema: z65.ZodObject<{
+	"idempotency-key": z65.ZodString;
+}, z65.core.$strip>;
 /** The cursor position a Mailbox list resumes from: oldest connected first, then id. */
-declare const mailboxCursorSchema: z59.ZodObject<{
-	connectedAt: z59.ZodISODateTime;
-	id: z59.core.$ZodBranded<z59.ZodString, "mbx", "out">;
-}, z59.core.$strict>;
+declare const mailboxCursorSchema: z65.ZodObject<{
+	connectedAt: z65.ZodISODateTime;
+	id: z65.core.$ZodBranded<z65.ZodString, "mbx", "out">;
+}, z65.core.$strict>;
 /** The query of a request to list Mailboxes, narrowed by state, provider, kind and owner. What the caller sees is decided from the token. */
-declare const listMailboxesQuerySchema: z59.ZodObject<{
-	cursor: z59.ZodOptional<z59.ZodString>;
-	limit: z59.ZodDefault<z59.ZodPipe<z59.ZodPipe<z59.ZodUnion<readonly [z59.ZodNumber, z59.ZodString]>, z59.ZodTransform<number, string | number>>, z59.ZodNumber>>;
-	state: z59.ZodOptional<z59.ZodEnum<{
+declare const listMailboxesQuerySchema: z65.ZodObject<{
+	cursor: z65.ZodOptional<z65.ZodString>;
+	limit: z65.ZodDefault<z65.ZodPipe<z65.ZodPipe<z65.ZodUnion<readonly [z65.ZodNumber, z65.ZodString]>, z65.ZodTransform<number, string | number>>, z65.ZodNumber>>;
+	state: z65.ZodOptional<z65.ZodEnum<{
 		disconnected: "disconnected";
 		healthy: "healthy";
 		limited: "limited";
 		paused: "paused";
 		warming: "warming";
 	}>>;
-	provider: z59.ZodOptional<z59.ZodEnum<{
+	provider: z65.ZodOptional<z65.ZodEnum<{
 		gmail: "gmail";
 		outlook: "outlook";
 	}>>;
-	kind: z59.ZodOptional<z59.ZodEnum<{
+	kind: z65.ZodOptional<z65.ZodEnum<{
 		personal: "personal";
 		shared: "shared";
 	}>>;
-	ownerMembershipId: z59.ZodOptional<z59.core.$ZodBranded<z59.ZodString, "mem", "out">>;
-}, z59.core.$strict>;
+	ownerMembershipId: z65.ZodOptional<z65.core.$ZodBranded<z65.ZodString, "mem", "out">>;
+}, z65.core.$strict>;
 /** The query of a request to list Mailboxes. */
-type ListMailboxesQuery = z59.infer<typeof listMailboxesQuerySchema>;
+type ListMailboxesQuery = z65.infer<typeof listMailboxesQuerySchema>;
 /** One page of Mailboxes. */
-declare const mailboxPageSchema: z59.ZodObject<{
-	items: z59.ZodArray<z59.ZodObject<{
-		id: z59.core.$ZodBranded<z59.ZodString, "mbx", "out">;
-		provider: z59.ZodEnum<{
+declare const mailboxPageSchema: z65.ZodObject<{
+	items: z65.ZodArray<z65.ZodObject<{
+		id: z65.core.$ZodBranded<z65.ZodString, "mbx", "out">;
+		provider: z65.ZodEnum<{
 			gmail: "gmail";
 			outlook: "outlook";
 		}>;
-		kind: z59.ZodEnum<{
+		kind: z65.ZodEnum<{
 			personal: "personal";
 			shared: "shared";
 		}>;
-		address: z59.ZodPipe<z59.ZodPipe<z59.ZodString, z59.ZodTransform<string, string>>, z59.ZodString>;
-		displayName: z59.ZodPipe<z59.ZodString, z59.ZodString>;
-		ownerMembershipId: z59.ZodNullable<z59.core.$ZodBranded<z59.ZodString, "mem", "out">>;
-		teamIds: z59.ZodArray<z59.core.$ZodBranded<z59.ZodString, "team", "out">>;
-		state: z59.ZodEnum<{
+		address: z65.ZodPipe<z65.ZodPipe<z65.ZodString, z65.ZodTransform<string, string>>, z65.ZodString>;
+		displayName: z65.ZodPipe<z65.ZodString, z65.ZodString>;
+		ownerMembershipId: z65.ZodNullable<z65.core.$ZodBranded<z65.ZodString, "mem", "out">>;
+		teamIds: z65.ZodArray<z65.core.$ZodBranded<z65.ZodString, "team", "out">>;
+		state: z65.ZodEnum<{
 			disconnected: "disconnected";
 			healthy: "healthy";
 			limited: "limited";
 			paused: "paused";
 			warming: "warming";
 		}>;
-		stateReason: z59.ZodNullable<z59.ZodEnum<{
+		stateReason: z65.ZodNullable<z65.ZodEnum<{
 			admin_paused: "admin_paused";
 			auth_revoked: "auth_revoked";
 			bounce_spike: "bounce_spike";
@@ -13796,13 +15595,13 @@ declare const mailboxPageSchema: z59.ZodObject<{
 			owner_paused: "owner_paused";
 			provider_suspended: "provider_suspended";
 		}>>;
-		limits: z59.ZodObject<{
-			perDay: z59.ZodNumber;
-			perHour: z59.ZodNumber;
-			minGapSeconds: z59.ZodNumber;
-			window: z59.ZodObject<{
-				timeZone: z59.ZodString;
-				days: z59.ZodArray<z59.ZodEnum<{
+		limits: z65.ZodObject<{
+			perDay: z65.ZodNumber;
+			perHour: z65.ZodNumber;
+			minGapSeconds: z65.ZodNumber;
+			window: z65.ZodObject<{
+				timeZone: z65.ZodString;
+				days: z65.ZodArray<z65.ZodEnum<{
 					fri: "fri";
 					mon: "mon";
 					sat: "sat";
@@ -13811,89 +15610,89 @@ declare const mailboxPageSchema: z59.ZodObject<{
 					tue: "tue";
 					wed: "wed";
 				}>>;
-				startMinute: z59.ZodNumber;
-				endMinute: z59.ZodNumber;
-			}, z59.core.$strict>;
-		}, z59.core.$strict>;
-		effectiveLimits: z59.ZodObject<{
-			perDay: z59.ZodNumber;
-			perHour: z59.ZodNumber;
-			minGapSeconds: z59.ZodNumber;
-		}, z59.core.$strip>;
-		ramp: z59.ZodObject<{
-			active: z59.ZodBoolean;
-			dayIndex: z59.ZodNumber;
-			perDayNow: z59.ZodNullable<z59.ZodNumber>;
-			steps: z59.ZodArray<z59.ZodObject<{
-				fromDay: z59.ZodNumber;
-				perDay: z59.ZodNumber;
-			}, z59.core.$strict>>;
-		}, z59.core.$strip>;
-		health: z59.ZodObject<{
-			status: z59.ZodEnum<{
+				startMinute: z65.ZodNumber;
+				endMinute: z65.ZodNumber;
+			}, z65.core.$strict>;
+		}, z65.core.$strict>;
+		effectiveLimits: z65.ZodObject<{
+			perDay: z65.ZodNumber;
+			perHour: z65.ZodNumber;
+			minGapSeconds: z65.ZodNumber;
+		}, z65.core.$strip>;
+		ramp: z65.ZodObject<{
+			active: z65.ZodBoolean;
+			dayIndex: z65.ZodNumber;
+			perDayNow: z65.ZodNullable<z65.ZodNumber>;
+			steps: z65.ZodArray<z65.ZodObject<{
+				fromDay: z65.ZodNumber;
+				perDay: z65.ZodNumber;
+			}, z65.core.$strict>>;
+		}, z65.core.$strip>;
+		health: z65.ZodObject<{
+			status: z65.ZodEnum<{
 				not_enough_data: "not_enough_data";
 				scored: "scored";
 			}>;
-			score: z59.ZodNullable<z59.ZodNumber>;
-			effect: z59.ZodEnum<{
+			score: z65.ZodNullable<z65.ZodNumber>;
+			effect: z65.ZodEnum<{
 				limit_halved: "limit_halved";
 				none: "none";
 				paused: "paused";
 			}>;
-			scoredAt: z59.ZodISODateTime;
-		}, z59.core.$strip>;
-		connectedAt: z59.ZodISODateTime;
-		lastSyncedAt: z59.ZodNullable<z59.ZodISODateTime>;
-	}, z59.core.$strip>>;
-	nextCursor: z59.ZodNullable<z59.ZodString>;
-}, z59.core.$strip>;
+			scoredAt: z65.ZodISODateTime;
+		}, z65.core.$strip>;
+		connectedAt: z65.ZodISODateTime;
+		lastSyncedAt: z65.ZodNullable<z65.ZodISODateTime>;
+	}, z65.core.$strip>>;
+	nextCursor: z65.ZodNullable<z65.ZodString>;
+}, z65.core.$strip>;
 /**
 * The body of a request to start connecting a Mailbox: the provider and whose it is. A `shared`
 * Mailbox (Owner or Admin only) names the Teams that may use it; a `personal` one takes none.
 */
-declare const startMailboxConnectRequestSchema: z59.ZodObject<{
-	provider: z59.ZodEnum<{
+declare const startMailboxConnectRequestSchema: z65.ZodObject<{
+	provider: z65.ZodEnum<{
 		gmail: "gmail";
 		outlook: "outlook";
 	}>;
-	kind: z59.ZodDefault<z59.ZodEnum<{
+	kind: z65.ZodDefault<z65.ZodEnum<{
 		personal: "personal";
 		shared: "shared";
 	}>>;
-	teamIds: z59.ZodDefault<z59.ZodArray<z59.core.$ZodBranded<z59.ZodString, "team", "out">>>;
-}, z59.core.$strict>;
+	teamIds: z65.ZodDefault<z65.ZodArray<z65.core.$ZodBranded<z65.ZodString, "team", "out">>>;
+}, z65.core.$strict>;
 /** The body of a request to start connecting a Mailbox. */
-type StartMailboxConnectRequest = z59.infer<typeof startMailboxConnectRequestSchema>;
+type StartMailboxConnectRequest = z65.infer<typeof startMailboxConnectRequestSchema>;
 /**
 * The answer to starting a connection: where to send the person to consent (an `https` URL of the
 * provider) and when that attempt expires. The `state` stays on the server's side of the link: it
 * is carried in the URL and checked when the connection is completed.
 */
-declare const mailboxConnectStartSchema: z59.ZodObject<{
-	authorizationUrl: z59.ZodURL;
-	expiresAt: z59.ZodISODateTime;
-}, z59.core.$strip>;
+declare const mailboxConnectStartSchema: z65.ZodObject<{
+	authorizationUrl: z65.ZodURL;
+	expiresAt: z65.ZodISODateTime;
+}, z65.core.$strip>;
 /** The answer to starting a connection. */
-type MailboxConnectStart = z59.infer<typeof mailboxConnectStartSchema>;
+type MailboxConnectStart = z65.infer<typeof mailboxConnectStartSchema>;
 /**
 * The body of the request that completes a connection after the provider sent the person back:
 * the `state` of the attempt and the authorization `code`. Outbound exchanges the code for tokens
 * and stores them encrypted; the code is single-use, is never logged and is never returned.
 */
-declare const completeMailboxConnectRequestSchema: z59.ZodObject<{
-	state: z59.ZodString;
-	code: z59.ZodString;
-}, z59.core.$strict>;
+declare const completeMailboxConnectRequestSchema: z65.ZodObject<{
+	state: z65.ZodString;
+	code: z65.ZodString;
+}, z65.core.$strict>;
 /** The body of a request to complete a connection. */
-type CompleteMailboxConnectRequest = z59.infer<typeof completeMailboxConnectRequestSchema>;
+type CompleteMailboxConnectRequest = z65.infer<typeof completeMailboxConnectRequestSchema>;
 /** The body of a request to set a Mailbox's limits: the whole set, replacing the old. */
-declare const setMailboxLimitsRequestSchema: z59.ZodObject<{
-	perDay: z59.ZodNumber;
-	perHour: z59.ZodNumber;
-	minGapSeconds: z59.ZodNumber;
-	window: z59.ZodObject<{
-		timeZone: z59.ZodString;
-		days: z59.ZodArray<z59.ZodEnum<{
+declare const setMailboxLimitsRequestSchema: z65.ZodObject<{
+	perDay: z65.ZodNumber;
+	perHour: z65.ZodNumber;
+	minGapSeconds: z65.ZodNumber;
+	window: z65.ZodObject<{
+		timeZone: z65.ZodString;
+		days: z65.ZodArray<z65.ZodEnum<{
 			fri: "fri";
 			mon: "mon";
 			sat: "sat";
@@ -13902,67 +15701,67 @@ declare const setMailboxLimitsRequestSchema: z59.ZodObject<{
 			tue: "tue";
 			wed: "wed";
 		}>>;
-		startMinute: z59.ZodNumber;
-		endMinute: z59.ZodNumber;
-	}, z59.core.$strict>;
-}, z59.core.$strict>;
+		startMinute: z65.ZodNumber;
+		endMinute: z65.ZodNumber;
+	}, z65.core.$strict>;
+}, z65.core.$strict>;
 /** The body of a request to set a Mailbox's limits. */
-type SetMailboxLimitsRequest = z59.infer<typeof setMailboxLimitsRequestSchema>;
+type SetMailboxLimitsRequest = z65.infer<typeof setMailboxLimitsRequestSchema>;
 /**
 * The Organization's limits: the ceiling no Mailbox may be set above, the floor of the gap, and
 * the daily cap across every Mailbox of the Organization.
 */
-declare const organizationMailLimitsSchema: z59.ZodObject<{
-	perDayCeiling: z59.ZodNumber;
-	perHourCeiling: z59.ZodNumber;
-	minGapFloorSeconds: z59.ZodNumber;
-	organizationDailyCap: z59.ZodNumber;
-}, z59.core.$strict>;
+declare const organizationMailLimitsSchema: z65.ZodObject<{
+	perDayCeiling: z65.ZodNumber;
+	perHourCeiling: z65.ZodNumber;
+	minGapFloorSeconds: z65.ZodNumber;
+	organizationDailyCap: z65.ZodNumber;
+}, z65.core.$strict>;
 /** The Organization's mail limits. */
-type OrganizationMailLimits = z59.infer<typeof organizationMailLimitsSchema>;
+type OrganizationMailLimits = z65.infer<typeof organizationMailLimitsSchema>;
 /**
 * What a Mailbox can still send, for a launch check: what remains today and this hour after the
 * ramp, its health and what was already sent, whether it can send at all (`usable`) and, when
 * not, the state that stops it.
 */
-declare const mailboxCapacitySchema: z59.ZodObject<{
-	mailboxId: z59.core.$ZodBranded<z59.ZodString, "mbx", "out">;
-	state: z59.ZodEnum<{
+declare const mailboxCapacitySchema: z65.ZodObject<{
+	mailboxId: z65.core.$ZodBranded<z65.ZodString, "mbx", "out">;
+	state: z65.ZodEnum<{
 		disconnected: "disconnected";
 		healthy: "healthy";
 		limited: "limited";
 		paused: "paused";
 		warming: "warming";
 	}>;
-	usable: z59.ZodBoolean;
-	remainingToday: z59.ZodNumber;
-	remainingThisHour: z59.ZodNumber;
-	nextSendAt: z59.ZodNullable<z59.ZodISODateTime>;
-}, z59.core.$strip>;
+	usable: z65.ZodBoolean;
+	remainingToday: z65.ZodNumber;
+	remainingThisHour: z65.ZodNumber;
+	nextSendAt: z65.ZodNullable<z65.ZodISODateTime>;
+}, z65.core.$strip>;
 /** What a Mailbox can still send. */
-type MailboxCapacity = z59.infer<typeof mailboxCapacitySchema>;
+type MailboxCapacity = z65.infer<typeof mailboxCapacitySchema>;
 /** The capacity of the Organization's Mailboxes: each Mailbox the caller may see, and the Organization's remaining daily cap. */
-declare const mailCapacitySchema: z59.ZodObject<{
-	items: z59.ZodArray<z59.ZodObject<{
-		mailboxId: z59.core.$ZodBranded<z59.ZodString, "mbx", "out">;
-		state: z59.ZodEnum<{
+declare const mailCapacitySchema: z65.ZodObject<{
+	items: z65.ZodArray<z65.ZodObject<{
+		mailboxId: z65.core.$ZodBranded<z65.ZodString, "mbx", "out">;
+		state: z65.ZodEnum<{
 			disconnected: "disconnected";
 			healthy: "healthy";
 			limited: "limited";
 			paused: "paused";
 			warming: "warming";
 		}>;
-		usable: z59.ZodBoolean;
-		remainingToday: z59.ZodNumber;
-		remainingThisHour: z59.ZodNumber;
-		nextSendAt: z59.ZodNullable<z59.ZodISODateTime>;
-	}, z59.core.$strip>>;
-	nextCursor: z59.ZodNullable<z59.ZodString>;
-	organizationRemainingToday: z59.ZodNumber;
-	organizationDailyCap: z59.ZodNumber;
-}, z59.core.$strip>;
+		usable: z65.ZodBoolean;
+		remainingToday: z65.ZodNumber;
+		remainingThisHour: z65.ZodNumber;
+		nextSendAt: z65.ZodNullable<z65.ZodISODateTime>;
+	}, z65.core.$strip>>;
+	nextCursor: z65.ZodNullable<z65.ZodString>;
+	organizationRemainingToday: z65.ZodNumber;
+	organizationDailyCap: z65.ZodNumber;
+}, z65.core.$strip>;
 /** The capacity of the Organization's Mailboxes. */
-type MailCapacity = z59.infer<typeof mailCapacitySchema>;
+type MailCapacity = z65.infer<typeof mailCapacitySchema>;
 /** Every role: each works the Mailboxes they may see. */
 declare const MAIL_ALL_ROLES: readonly ["owner", "admin", "manager", "rep"];
 /** The roles that manage the Organization's mail setup. */
@@ -13980,7 +15779,7 @@ type MailRoute = InboundRoute<MailErrorCode>;
 * Idempotency-Key header.
 */
 declare const MAIL_ROUTES: Readonly<Record<MailRouteName, MailRoute>>;
-import { z as z60 } from "zod";
+import { z as z66 } from "zod";
 /**
 * The checks run before every send, in this order: the Campaign is running (`campaign`), the send
 * is inside the window (`window`), the address is verified (`address`), core's decision allows it
@@ -13990,7 +15789,7 @@ import { z as z60 } from "zod";
 */
 declare const SEND_CHECKS: readonly ["campaign", "window", "address", "suppression", "consent", "mailbox", "limits", "organization_cap", "idempotency"];
 /** A check run before a send. */
-declare const sendCheckSchema: z60.ZodEnum<{
+declare const sendCheckSchema: z66.ZodEnum<{
 	address: "address";
 	campaign: "campaign";
 	consent: "consent";
@@ -14002,7 +15801,7 @@ declare const sendCheckSchema: z60.ZodEnum<{
 	window: "window";
 }>;
 /** A check run before a send. */
-type SendCheck = z60.infer<typeof sendCheckSchema>;
+type SendCheck = z66.infer<typeof sendCheckSchema>;
 /**
 * The state of a send record: `sending` (recorded before the transport call; if the process stops
 * here the send is reconciled against the provider's Sent folder, never repeated blind), `sent`,
@@ -14011,7 +15810,7 @@ type SendCheck = z60.infer<typeof sendCheckSchema>;
 */
 declare const SEND_STATES: readonly ["sending", "sent", "refused", "deferred", "failed"];
 /** The state of a send record. */
-declare const sendStateSchema: z60.ZodEnum<{
+declare const sendStateSchema: z66.ZodEnum<{
 	deferred: "deferred";
 	failed: "failed";
 	refused: "refused";
@@ -14019,7 +15818,7 @@ declare const sendStateSchema: z60.ZodEnum<{
 	sent: "sent";
 }>;
 /** The state of a send record. */
-type SendState = z60.infer<typeof sendStateSchema>;
+type SendState = z66.infer<typeof sendStateSchema>;
 /**
 * Why a send was refused or deferred: a closed set, never free text. The first six match the
 * checks; `campaign_not_running`, `mailbox_unavailable` and `limit_reached` and
@@ -14027,7 +15826,7 @@ type SendState = z60.infer<typeof sendStateSchema>;
 */
 declare const SEND_REFUSAL_REASONS: readonly ["campaign_not_running", "outside_window", "unverified_address", "suppressed", "no_consent", "mailbox_unavailable", "limit_reached", "organization_cap_reached", "duplicate"];
 /** Why a send was refused or deferred. */
-declare const sendRefusalReasonSchema: z60.ZodEnum<{
+declare const sendRefusalReasonSchema: z66.ZodEnum<{
 	campaign_not_running: "campaign_not_running";
 	duplicate: "duplicate";
 	limit_reached: "limit_reached";
@@ -14039,7 +15838,7 @@ declare const sendRefusalReasonSchema: z60.ZodEnum<{
 	unverified_address: "unverified_address";
 }>;
 /** Why a send was refused or deferred. */
-type SendRefusalReason = z60.infer<typeof sendRefusalReasonSchema>;
+type SendRefusalReason = z66.infer<typeof sendRefusalReasonSchema>;
 /** The reasons that defer a send to a later try instead of refusing it for good. */
 declare const SEND_DEFERRING_REASONS: readonly ["outside_window", "limit_reached", "organization_cap_reached"];
 /** The longest attempt epoch of a send key. */
@@ -14050,16 +15849,16 @@ declare const MAX_SEQUENCE_STEP = 1e3;
 * The send key: an Enrollment, the Step and the attempt epoch. One key is sent at most once, and
 * the transport call carries it where the provider allows; otherwise a header of the message does.
 */
-declare const sendKeySchema: z60.ZodObject<{
-	enrollmentId: z60.core.$ZodBranded<z60.ZodString, "enr", "out">;
-	step: z60.ZodNumber;
-	attemptEpoch: z60.ZodNumber;
-}, z60.core.$strict>;
+declare const sendKeySchema: z66.ZodObject<{
+	enrollmentId: z66.core.$ZodBranded<z66.ZodString, "enr", "out">;
+	step: z66.ZodNumber;
+	attemptEpoch: z66.ZodNumber;
+}, z66.core.$strict>;
 /** The send key. */
-type SendKey = z60.infer<typeof sendKeySchema>;
+type SendKey = z66.infer<typeof sendKeySchema>;
 /** One check and how it came out, as the decision record keeps it. */
-declare const sendCheckResultSchema: z60.ZodObject<{
-	check: z60.ZodEnum<{
+declare const sendCheckResultSchema: z66.ZodObject<{
+	check: z66.ZodEnum<{
 		address: "address";
 		campaign: "campaign";
 		consent: "consent";
@@ -14070,8 +15869,8 @@ declare const sendCheckResultSchema: z60.ZodObject<{
 		suppression: "suppression";
 		window: "window";
 	}>;
-	passed: z60.ZodBoolean;
-}, z60.core.$strip>;
+	passed: z66.ZodBoolean;
+}, z66.core.$strip>;
 /**
 * The record of one send decision: which Step of which Enrollment, through which Mailbox
 * (null when none was chosen), what each check said, and the outcome with its reason. A `refused`
@@ -14079,22 +15878,22 @@ declare const sendCheckResultSchema: z60.ZodObject<{
 * `failed` one names the Mailbox. It holds no message body, no subject and no address: ids, closed
 * values and times only.
 */
-declare const sendRecordSchema: z60.ZodObject<{
-	id: z60.core.$ZodBranded<z60.ZodString, "snd", "out">;
-	campaignId: z60.core.$ZodBranded<z60.ZodString, "cpg", "out">;
-	enrollmentId: z60.core.$ZodBranded<z60.ZodString, "enr", "out">;
-	prospectId: z60.core.$ZodBranded<z60.ZodString, "prs", "out">;
-	step: z60.ZodNumber;
-	attemptEpoch: z60.ZodNumber;
-	mailboxId: z60.ZodNullable<z60.core.$ZodBranded<z60.ZodString, "mbx", "out">>;
-	state: z60.ZodEnum<{
+declare const sendRecordSchema: z66.ZodObject<{
+	id: z66.core.$ZodBranded<z66.ZodString, "snd", "out">;
+	campaignId: z66.core.$ZodBranded<z66.ZodString, "cpg", "out">;
+	enrollmentId: z66.core.$ZodBranded<z66.ZodString, "enr", "out">;
+	prospectId: z66.core.$ZodBranded<z66.ZodString, "prs", "out">;
+	step: z66.ZodNumber;
+	attemptEpoch: z66.ZodNumber;
+	mailboxId: z66.ZodNullable<z66.core.$ZodBranded<z66.ZodString, "mbx", "out">>;
+	state: z66.ZodEnum<{
 		deferred: "deferred";
 		failed: "failed";
 		refused: "refused";
 		sending: "sending";
 		sent: "sent";
 	}>;
-	reason: z60.ZodNullable<z60.ZodEnum<{
+	reason: z66.ZodNullable<z66.ZodEnum<{
 		campaign_not_running: "campaign_not_running";
 		duplicate: "duplicate";
 		limit_reached: "limit_reached";
@@ -14105,8 +15904,8 @@ declare const sendRecordSchema: z60.ZodObject<{
 		suppressed: "suppressed";
 		unverified_address: "unverified_address";
 	}>>;
-	checks: z60.ZodArray<z60.ZodObject<{
-		check: z60.ZodEnum<{
+	checks: z66.ZodArray<z66.ZodObject<{
+		check: z66.ZodEnum<{
 			address: "address";
 			campaign: "campaign";
 			consent: "consent";
@@ -14117,73 +15916,73 @@ declare const sendRecordSchema: z60.ZodObject<{
 			suppression: "suppression";
 			window: "window";
 		}>;
-		passed: z60.ZodBoolean;
-	}, z60.core.$strip>>;
-	retryAt: z60.ZodNullable<z60.ZodISODateTime>;
-	decidedAt: z60.ZodISODateTime;
-	sentAt: z60.ZodNullable<z60.ZodISODateTime>;
-}, z60.core.$strip>;
+		passed: z66.ZodBoolean;
+	}, z66.core.$strip>>;
+	retryAt: z66.ZodNullable<z66.ZodISODateTime>;
+	decidedAt: z66.ZodISODateTime;
+	sentAt: z66.ZodNullable<z66.ZodISODateTime>;
+}, z66.core.$strip>;
 /** The record of one send decision. */
-type SendRecord = z60.infer<typeof sendRecordSchema>;
+type SendRecord = z66.infer<typeof sendRecordSchema>;
 /** The path parameters of a request about one send record. */
-declare const sendParamsSchema: z60.ZodObject<{
-	sendId: z60.core.$ZodBranded<z60.ZodString, "snd", "out">;
-}, z60.core.$strict>;
+declare const sendParamsSchema: z66.ZodObject<{
+	sendId: z66.core.$ZodBranded<z66.ZodString, "snd", "out">;
+}, z66.core.$strict>;
 /**
 * The body of a request to send one Step. The key is the Enrollment, Step and attempt epoch; the
 * Idempotency-Key header must carry the same string form (`enr_…:step:epoch`) so a replay answers
 * the same record. The message text is not in the body: outbound reads the Draft held by the
 * sequence engine.
 */
-declare const submitSendRequestSchema: z60.ZodObject<{
-	campaignId: z60.core.$ZodBranded<z60.ZodString, "cpg", "out">;
-	prospectId: z60.core.$ZodBranded<z60.ZodString, "prs", "out">;
-	key: z60.ZodObject<{
-		enrollmentId: z60.core.$ZodBranded<z60.ZodString, "enr", "out">;
-		step: z60.ZodNumber;
-		attemptEpoch: z60.ZodNumber;
-	}, z60.core.$strict>;
-	acceptUnverifiedAddress: z60.ZodDefault<z60.ZodBoolean>;
-}, z60.core.$strict>;
+declare const submitSendRequestSchema: z66.ZodObject<{
+	campaignId: z66.core.$ZodBranded<z66.ZodString, "cpg", "out">;
+	prospectId: z66.core.$ZodBranded<z66.ZodString, "prs", "out">;
+	key: z66.ZodObject<{
+		enrollmentId: z66.core.$ZodBranded<z66.ZodString, "enr", "out">;
+		step: z66.ZodNumber;
+		attemptEpoch: z66.ZodNumber;
+	}, z66.core.$strict>;
+	acceptUnverifiedAddress: z66.ZodDefault<z66.ZodBoolean>;
+}, z66.core.$strict>;
 /** The body of a request to send one Step. */
-type SubmitSendRequest = z60.infer<typeof submitSendRequestSchema>;
+type SubmitSendRequest = z66.infer<typeof submitSendRequestSchema>;
 /** The one string form of a send key used as an Idempotency-Key: `<enrollment id>:<step>:<epoch>`. */
 declare function sendKeyToString(key: SendKey): string;
 /**
 * What a limit refusal carries in `details`: which limit was reached and how many whole seconds to
 * wait, as a `Retry-After` header says too.
 */
-declare const limitDetailsSchema: z60.ZodObject<{
-	limit: z60.ZodEnum<{
+declare const limitDetailsSchema: z66.ZodObject<{
+	limit: z66.ZodEnum<{
 		min_gap: "min_gap";
 		organization_daily_cap: "organization_daily_cap";
 		per_day: "per_day";
 		per_hour: "per_hour";
 	}>;
-	retryAfter: z60.ZodNumber;
-}, z60.core.$strict>;
+	retryAfter: z66.ZodNumber;
+}, z66.core.$strict>;
 /** What a limit refusal carries in `details`. */
-type LimitDetails = z60.infer<typeof limitDetailsSchema>;
+type LimitDetails = z66.infer<typeof limitDetailsSchema>;
 /** The cursor position a send list resumes from: newest first, then id. */
-declare const sendCursorSchema: z60.ZodObject<{
-	decidedAt: z60.ZodISODateTime;
-	id: z60.core.$ZodBranded<z60.ZodString, "snd", "out">;
-}, z60.core.$strict>;
+declare const sendCursorSchema: z66.ZodObject<{
+	decidedAt: z66.ZodISODateTime;
+	id: z66.core.$ZodBranded<z66.ZodString, "snd", "out">;
+}, z66.core.$strict>;
 /** The query of a request to list send records, newest first, narrowed by Campaign, Prospect, Mailbox, state, reason and time. */
-declare const listSendsQuerySchema: z60.ZodObject<{
-	cursor: z60.ZodOptional<z60.ZodString>;
-	limit: z60.ZodDefault<z60.ZodPipe<z60.ZodPipe<z60.ZodUnion<readonly [z60.ZodNumber, z60.ZodString]>, z60.ZodTransform<number, string | number>>, z60.ZodNumber>>;
-	campaignId: z60.ZodOptional<z60.core.$ZodBranded<z60.ZodString, "cpg", "out">>;
-	prospectId: z60.ZodOptional<z60.core.$ZodBranded<z60.ZodString, "prs", "out">>;
-	mailboxId: z60.ZodOptional<z60.core.$ZodBranded<z60.ZodString, "mbx", "out">>;
-	state: z60.ZodOptional<z60.ZodEnum<{
+declare const listSendsQuerySchema: z66.ZodObject<{
+	cursor: z66.ZodOptional<z66.ZodString>;
+	limit: z66.ZodDefault<z66.ZodPipe<z66.ZodPipe<z66.ZodUnion<readonly [z66.ZodNumber, z66.ZodString]>, z66.ZodTransform<number, string | number>>, z66.ZodNumber>>;
+	campaignId: z66.ZodOptional<z66.core.$ZodBranded<z66.ZodString, "cpg", "out">>;
+	prospectId: z66.ZodOptional<z66.core.$ZodBranded<z66.ZodString, "prs", "out">>;
+	mailboxId: z66.ZodOptional<z66.core.$ZodBranded<z66.ZodString, "mbx", "out">>;
+	state: z66.ZodOptional<z66.ZodEnum<{
 		deferred: "deferred";
 		failed: "failed";
 		refused: "refused";
 		sending: "sending";
 		sent: "sent";
 	}>>;
-	reason: z60.ZodOptional<z60.ZodEnum<{
+	reason: z66.ZodOptional<z66.ZodEnum<{
 		campaign_not_running: "campaign_not_running";
 		duplicate: "duplicate";
 		limit_reached: "limit_reached";
@@ -14194,29 +15993,29 @@ declare const listSendsQuerySchema: z60.ZodObject<{
 		suppressed: "suppressed";
 		unverified_address: "unverified_address";
 	}>>;
-	from: z60.ZodOptional<z60.ZodISODateTime>;
-	to: z60.ZodOptional<z60.ZodISODateTime>;
-}, z60.core.$strict>;
+	from: z66.ZodOptional<z66.ZodISODateTime>;
+	to: z66.ZodOptional<z66.ZodISODateTime>;
+}, z66.core.$strict>;
 /** The query of a request to list send records. */
-type ListSendsQuery = z60.infer<typeof listSendsQuerySchema>;
+type ListSendsQuery = z66.infer<typeof listSendsQuerySchema>;
 /** One page of send records. */
-declare const sendPageSchema: z60.ZodObject<{
-	items: z60.ZodArray<z60.ZodObject<{
-		id: z60.core.$ZodBranded<z60.ZodString, "snd", "out">;
-		campaignId: z60.core.$ZodBranded<z60.ZodString, "cpg", "out">;
-		enrollmentId: z60.core.$ZodBranded<z60.ZodString, "enr", "out">;
-		prospectId: z60.core.$ZodBranded<z60.ZodString, "prs", "out">;
-		step: z60.ZodNumber;
-		attemptEpoch: z60.ZodNumber;
-		mailboxId: z60.ZodNullable<z60.core.$ZodBranded<z60.ZodString, "mbx", "out">>;
-		state: z60.ZodEnum<{
+declare const sendPageSchema: z66.ZodObject<{
+	items: z66.ZodArray<z66.ZodObject<{
+		id: z66.core.$ZodBranded<z66.ZodString, "snd", "out">;
+		campaignId: z66.core.$ZodBranded<z66.ZodString, "cpg", "out">;
+		enrollmentId: z66.core.$ZodBranded<z66.ZodString, "enr", "out">;
+		prospectId: z66.core.$ZodBranded<z66.ZodString, "prs", "out">;
+		step: z66.ZodNumber;
+		attemptEpoch: z66.ZodNumber;
+		mailboxId: z66.ZodNullable<z66.core.$ZodBranded<z66.ZodString, "mbx", "out">>;
+		state: z66.ZodEnum<{
 			deferred: "deferred";
 			failed: "failed";
 			refused: "refused";
 			sending: "sending";
 			sent: "sent";
 		}>;
-		reason: z60.ZodNullable<z60.ZodEnum<{
+		reason: z66.ZodNullable<z66.ZodEnum<{
 			campaign_not_running: "campaign_not_running";
 			duplicate: "duplicate";
 			limit_reached: "limit_reached";
@@ -14227,8 +16026,8 @@ declare const sendPageSchema: z60.ZodObject<{
 			suppressed: "suppressed";
 			unverified_address: "unverified_address";
 		}>>;
-		checks: z60.ZodArray<z60.ZodObject<{
-			check: z60.ZodEnum<{
+		checks: z66.ZodArray<z66.ZodObject<{
+			check: z66.ZodEnum<{
 				address: "address";
 				campaign: "campaign";
 				consent: "consent";
@@ -14239,72 +16038,72 @@ declare const sendPageSchema: z60.ZodObject<{
 				suppression: "suppression";
 				window: "window";
 			}>;
-			passed: z60.ZodBoolean;
-		}, z60.core.$strip>>;
-		retryAt: z60.ZodNullable<z60.ZodISODateTime>;
-		decidedAt: z60.ZodISODateTime;
-		sentAt: z60.ZodNullable<z60.ZodISODateTime>;
-	}, z60.core.$strip>>;
-	nextCursor: z60.ZodNullable<z60.ZodString>;
-}, z60.core.$strip>;
-import { z as z61 } from "zod";
+			passed: z66.ZodBoolean;
+		}, z66.core.$strip>>;
+		retryAt: z66.ZodNullable<z66.ZodISODateTime>;
+		decidedAt: z66.ZodISODateTime;
+		sentAt: z66.ZodNullable<z66.ZodISODateTime>;
+	}, z66.core.$strip>>;
+	nextCursor: z66.ZodNullable<z66.ZodString>;
+}, z66.core.$strip>;
+import { z as z67 } from "zod";
 /**
 * The signed, expiring token in an unsubscribe link and in the `List-Unsubscribe` header: 22 to
 * 512 URL-safe characters. It names the Organization and the message it came in; it is a
 * credential, so services redact it from logs, traces and error reports.
 */
-declare const unsubscribeTokenSchema: z61.ZodString;
+declare const unsubscribeTokenSchema: z67.ZodString;
 /** The path parameters of the public unsubscribe routes. */
-declare const unsubscribeParamsSchema: z61.ZodObject<{
-	token: z61.ZodString;
-}, z61.core.$strict>;
+declare const unsubscribeParamsSchema: z67.ZodObject<{
+	token: z67.ZodString;
+}, z67.core.$strict>;
 /**
 * What the public unsubscribe page shows before the person confirms: who sent the message (the
 * Organization's name) and nothing else. It never shows an address, and a token that is valid
 * for an address that is already suppressed shows the same page.
 */
-declare const unsubscribePageSchema: z61.ZodObject<{
-	organizationName: z61.ZodString;
-}, z61.core.$strip>;
+declare const unsubscribePageSchema: z67.ZodObject<{
+	organizationName: z67.ZodString;
+}, z67.core.$strip>;
 /** What the public unsubscribe page shows. */
-type UnsubscribePage = z61.infer<typeof unsubscribePageSchema>;
+type UnsubscribePage = z67.infer<typeof unsubscribePageSchema>;
 /**
 * The answer to an unsubscribe, one click (RFC 8058) or a confirmation: always `unsubscribed`,
 * the same for an address that was already suppressed and for one that is unknown, so nothing
 * about whether an address exists is revealed.
 */
-declare const unsubscribeResultSchema: z61.ZodObject<{
-	status: z61.ZodLiteral<"unsubscribed">;
-	organizationName: z61.ZodString;
-}, z61.core.$strip>;
+declare const unsubscribeResultSchema: z67.ZodObject<{
+	status: z67.ZodLiteral<"unsubscribed">;
+	organizationName: z67.ZodString;
+}, z67.core.$strip>;
 /** The answer to an unsubscribe. */
-type UnsubscribeResult = z61.infer<typeof unsubscribeResultSchema>;
+type UnsubscribeResult = z67.infer<typeof unsubscribeResultSchema>;
 /**
 * The one-click POST body a mail client sends (RFC 8058): the form field
 * `List-Unsubscribe=One-Click`. Any other body is `request.invalid`.
 */
-declare const oneClickUnsubscribeBodySchema: z61.ZodObject<{
-	"List-Unsubscribe": z61.ZodLiteral<"One-Click">;
-}, z61.core.$strict>;
-import { z as z62 } from "zod";
+declare const oneClickUnsubscribeBodySchema: z67.ZodObject<{
+	"List-Unsubscribe": z67.ZodLiteral<"One-Click">;
+}, z67.core.$strict>;
+import { z as z68 } from "zod";
 /** The email providers a Mailbox can be connected through. Others are added behind the same port later. */
 declare const MAILBOX_PROVIDERS: readonly ["gmail", "outlook"];
 /** An email provider a Mailbox is connected through. */
-declare const mailboxProviderSchema: z62.ZodEnum<{
+declare const mailboxProviderSchema: z68.ZodEnum<{
 	gmail: "gmail";
 	outlook: "outlook";
 }>;
 /** An email provider a Mailbox is connected through. */
-type MailboxProvider = z62.infer<typeof mailboxProviderSchema>;
+type MailboxProvider = z68.infer<typeof mailboxProviderSchema>;
 /** Whose address a Mailbox is: a Rep's `personal` one, or a `shared` one an Admin connected for Teams. */
 declare const MAILBOX_KINDS: readonly ["personal", "shared"];
 /** Whose address a Mailbox is. */
-declare const mailboxKindSchema: z62.ZodEnum<{
+declare const mailboxKindSchema: z68.ZodEnum<{
 	personal: "personal";
 	shared: "shared";
 }>;
 /** Whose address a Mailbox is. */
-type MailboxKind = z62.infer<typeof mailboxKindSchema>;
+type MailboxKind = z68.infer<typeof mailboxKindSchema>;
 /**
 * The state of a Mailbox: `warming` (newly connected, following the published ramp), `healthy`,
 * `limited` (its limits were lowered because its health fell), `paused` (nothing is sent) and
@@ -14312,7 +16111,7 @@ type MailboxKind = z62.infer<typeof mailboxKindSchema>;
 */
 declare const MAILBOX_STATES: readonly ["warming", "healthy", "limited", "paused", "disconnected"];
 /** The state of a Mailbox. */
-declare const mailboxStateSchema: z62.ZodEnum<{
+declare const mailboxStateSchema: z68.ZodEnum<{
 	disconnected: "disconnected";
 	healthy: "healthy";
 	limited: "limited";
@@ -14320,7 +16119,7 @@ declare const mailboxStateSchema: z62.ZodEnum<{
 	warming: "warming";
 }>;
 /** The state of a Mailbox. */
-type MailboxState = z62.infer<typeof mailboxStateSchema>;
+type MailboxState = z68.infer<typeof mailboxStateSchema>;
 /**
 * Why a Mailbox is in its state: a closed set, never the provider's text. `owner_paused` and
 * `admin_paused` are a person's choice; `complaint_spike`, `bounce_spike` and `provider_suspended`
@@ -14328,7 +16127,7 @@ type MailboxState = z62.infer<typeof mailboxStateSchema>;
 */
 declare const MAILBOX_STATE_REASONS: readonly ["owner_paused", "admin_paused", "complaint_spike", "bounce_spike", "provider_suspended", "auth_revoked", "disconnected_by_owner", "health_warning"];
 /** Why a Mailbox is in its state. */
-declare const mailboxStateReasonSchema: z62.ZodEnum<{
+declare const mailboxStateReasonSchema: z68.ZodEnum<{
 	admin_paused: "admin_paused";
 	auth_revoked: "auth_revoked";
 	bounce_spike: "bounce_spike";
@@ -14339,7 +16138,7 @@ declare const mailboxStateReasonSchema: z62.ZodEnum<{
 	provider_suspended: "provider_suspended";
 }>;
 /** Why a Mailbox is in its state. */
-type MailboxStateReason = z62.infer<typeof mailboxStateReasonSchema>;
+type MailboxStateReason = z68.infer<typeof mailboxStateReasonSchema>;
 /** The largest number of sends a Mailbox may be set to in a day. */
 declare const MAX_SENDS_PER_DAY = 500;
 /** The largest number of sends a Mailbox may be set to in an hour. */
@@ -14349,14 +16148,14 @@ declare const MAX_MIN_GAP_SECONDS = 3600;
 /** The most Teams a shared Mailbox can be opened to. */
 declare const MAX_MAILBOX_TEAMS = 50;
 /** A time of day as minutes after midnight: 0 to 1439. */
-declare const minuteOfDaySchema: z62.ZodNumber;
+declare const minuteOfDaySchema: z68.ZodNumber;
 /**
 * When a Mailbox may send: on the listed days, from `startMinute` to before `endMinute`, in the
 * time zone. The window ends after it starts and never crosses midnight.
 */
-declare const sendWindowSchema: z62.ZodObject<{
-	timeZone: z62.ZodString;
-	days: z62.ZodArray<z62.ZodEnum<{
+declare const sendWindowSchema: z68.ZodObject<{
+	timeZone: z68.ZodString;
+	days: z68.ZodArray<z68.ZodEnum<{
 		fri: "fri";
 		mon: "mon";
 		sat: "sat";
@@ -14365,23 +16164,23 @@ declare const sendWindowSchema: z62.ZodObject<{
 		tue: "tue";
 		wed: "wed";
 	}>>;
-	startMinute: z62.ZodNumber;
-	endMinute: z62.ZodNumber;
-}, z62.core.$strict>;
+	startMinute: z68.ZodNumber;
+	endMinute: z68.ZodNumber;
+}, z68.core.$strict>;
 /** When a Mailbox may send. */
-type SendWindow = z62.infer<typeof sendWindowSchema>;
+type SendWindow = z68.infer<typeof sendWindowSchema>;
 /**
 * The limits an Admin or the owner sets on a Mailbox: sends per day and per hour, the least gap
 * between two sends, and the send window. The Organization's ceiling bounds them
 * (`mailbox.limit_above_ceiling`); the ramp and the health score can only lower what applies.
 */
-declare const mailboxLimitsSchema: z62.ZodObject<{
-	perDay: z62.ZodNumber;
-	perHour: z62.ZodNumber;
-	minGapSeconds: z62.ZodNumber;
-	window: z62.ZodObject<{
-		timeZone: z62.ZodString;
-		days: z62.ZodArray<z62.ZodEnum<{
+declare const mailboxLimitsSchema: z68.ZodObject<{
+	perDay: z68.ZodNumber;
+	perHour: z68.ZodNumber;
+	minGapSeconds: z68.ZodNumber;
+	window: z68.ZodObject<{
+		timeZone: z68.ZodString;
+		days: z68.ZodArray<z68.ZodEnum<{
 			fri: "fri";
 			mon: "mon";
 			sat: "sat";
@@ -14390,20 +16189,20 @@ declare const mailboxLimitsSchema: z62.ZodObject<{
 			tue: "tue";
 			wed: "wed";
 		}>>;
-		startMinute: z62.ZodNumber;
-		endMinute: z62.ZodNumber;
-	}, z62.core.$strict>;
-}, z62.core.$strict>;
+		startMinute: z68.ZodNumber;
+		endMinute: z68.ZodNumber;
+	}, z68.core.$strict>;
+}, z68.core.$strict>;
 /** The limits set on a Mailbox. */
-type MailboxLimits = z62.infer<typeof mailboxLimitsSchema>;
+type MailboxLimits = z68.infer<typeof mailboxLimitsSchema>;
 /** The sends a Mailbox may make now, after the ramp and its health have lowered its set limits. */
-declare const effectiveLimitsSchema: z62.ZodObject<{
-	perDay: z62.ZodNumber;
-	perHour: z62.ZodNumber;
-	minGapSeconds: z62.ZodNumber;
-}, z62.core.$strip>;
+declare const effectiveLimitsSchema: z68.ZodObject<{
+	perDay: z68.ZodNumber;
+	perHour: z68.ZodNumber;
+	minGapSeconds: z68.ZodNumber;
+}, z68.core.$strip>;
 /** The limits that apply to a Mailbox now. */
-type EffectiveLimits = z62.infer<typeof effectiveLimitsSchema>;
+type EffectiveLimits = z68.infer<typeof effectiveLimitsSchema>;
 /**
 * The published ramp of a new Mailbox: from `fromDay` (days since it was connected) at most
 * `perDay` sends a day. Starting values, tuned against real sending; there is no simulated
@@ -14423,19 +16222,19 @@ declare const MAILBOX_RAMP_STEPS: readonly [{
 	readonly perDay: 40;
 }];
 /** The Mailbox ramp as shown to its owner. `active` is false once the last step is passed. */
-declare const rampSchema: z62.ZodObject<{
-	active: z62.ZodBoolean;
-	dayIndex: z62.ZodNumber;
-	perDayNow: z62.ZodNullable<z62.ZodNumber>;
-	steps: z62.ZodArray<z62.ZodObject<{
-		fromDay: z62.ZodNumber;
-		perDay: z62.ZodNumber;
-	}, z62.core.$strict>>;
-}, z62.core.$strip>;
+declare const rampSchema: z68.ZodObject<{
+	active: z68.ZodBoolean;
+	dayIndex: z68.ZodNumber;
+	perDayNow: z68.ZodNullable<z68.ZodNumber>;
+	steps: z68.ZodArray<z68.ZodObject<{
+		fromDay: z68.ZodNumber;
+		perDay: z68.ZodNumber;
+	}, z68.core.$strict>>;
+}, z68.core.$strip>;
 /** The ramp of a Mailbox. */
-type Ramp = z62.infer<typeof rampSchema>;
-import { z as z63 } from "zod";
-import { ErrorDefinition as ErrorDefinition_8gwh4514 } from "..";
+type Ramp = z68.infer<typeof rampSchema>;
+import { z as z69 } from "zod";
+import { ErrorDefinition as ErrorDefinition_8gwh4515 } from "..";
 /**
 * The errors the marketing routes return, as `area.reason` codes. They are the only domain
 * errors of the public Demo Request route. `marketing.invalid_request` (400) is a body that fails
@@ -14446,8 +16245,8 @@ import { ErrorDefinition as ErrorDefinition_8gwh4514 } from "..";
 * message says why a request was refused beyond that, and a filled honeypot is not an error.
 */
 declare const MARKETING_ERRORS: {
-	readonly "marketing.invalid_request": ErrorDefinition_8gwh4514<"marketing.invalid_request">;
-	readonly "marketing.rate_limited": ErrorDefinition_8gwh4514<"marketing.rate_limited">;
+	readonly "marketing.invalid_request": ErrorDefinition_8gwh4515<"marketing.invalid_request">;
+	readonly "marketing.rate_limited": ErrorDefinition_8gwh4515<"marketing.rate_limited">;
 };
 /** A code from the {@link MARKETING_ERRORS} registry. */
 type MarketingErrorCode = keyof typeof MARKETING_ERRORS;
@@ -14460,12 +16259,12 @@ declare const MAX_DEMO_REQUEST_FIELD_LENGTH = 200;
 * and tabs allowed and every other control character refused. It is untrusted text: the team
 * email and any display must escape it and never treat it as instructions.
 */
-declare const demoRequestMessageSchema: z63.ZodPipe<z63.ZodString, z63.ZodTransform<string, string>>;
+declare const demoRequestMessageSchema: z69.ZodPipe<z69.ZodString, z69.ZodTransform<string, string>>;
 /**
 * The site page a Visitor submitted from: an absolute path such as `/pricing`, at most 200
 * characters of printable ASCII with no whitespace, so a full URL or a script cannot be put in it.
 */
-declare const demoRequestSourcePageSchema: z63.ZodString;
+declare const demoRequestSourcePageSchema: z69.ZodString;
 /**
 * The body of `POST /v1/marketing/demo-requests`, sent by a Visitor (nobody signed in): name, work
 * email (folded to lower case), company name, an optional message, the page it came from and a
@@ -14475,25 +16274,25 @@ declare const demoRequestSourcePageSchema: z63.ZodString;
 * the body; it is the `Idempotency-Key` header (`idempotencyKeySchema`). The schema is strict:
 * an unknown key is `marketing.invalid_request`.
 */
-declare const createDemoRequestRequestSchema: z63.ZodObject<{
-	name: z63.ZodPipe<z63.ZodString, z63.ZodString>;
-	workEmail: z63.ZodPipe<z63.ZodPipe<z63.ZodString, z63.ZodTransform<string, string>>, z63.ZodString>;
-	companyName: z63.ZodPipe<z63.ZodString, z63.ZodString>;
-	message: z63.ZodOptional<z63.ZodPipe<z63.ZodString, z63.ZodTransform<string, string>>>;
-	sourcePage: z63.ZodString;
-	website: z63.ZodDefault<z63.ZodString>;
-}, z63.core.$strict>;
+declare const createDemoRequestRequestSchema: z69.ZodObject<{
+	name: z69.ZodPipe<z69.ZodString, z69.ZodString>;
+	workEmail: z69.ZodPipe<z69.ZodPipe<z69.ZodString, z69.ZodTransform<string, string>>, z69.ZodString>;
+	companyName: z69.ZodPipe<z69.ZodString, z69.ZodString>;
+	message: z69.ZodOptional<z69.ZodPipe<z69.ZodString, z69.ZodTransform<string, string>>>;
+	sourcePage: z69.ZodString;
+	website: z69.ZodDefault<z69.ZodString>;
+}, z69.core.$strict>;
 /** The body of a request to submit a Demo Request. */
-type CreateDemoRequestRequest = z63.infer<typeof createDemoRequestRequestSchema>;
+type CreateDemoRequestRequest = z69.infer<typeof createDemoRequestRequestSchema>;
 /**
 * The acknowledgement of a Demo Request: its id and nothing else, so no submitted field comes
 * back. A replay under the same `Idempotency-Key` returns the same id.
 */
-declare const createDemoRequestResponseSchema: z63.ZodObject<{
-	id: z63.core.$ZodBranded<z63.ZodString, "dreq", "out">;
-}, z63.core.$strip>;
+declare const createDemoRequestResponseSchema: z69.ZodObject<{
+	id: z69.core.$ZodBranded<z69.ZodString, "dreq", "out">;
+}, z69.core.$strip>;
 /** The acknowledgement of a Demo Request. */
-type CreateDemoRequestResponse = z63.infer<typeof createDemoRequestResponseSchema>;
+type CreateDemoRequestResponse = z69.infer<typeof createDemoRequestResponseSchema>;
 /** What the service needs to describe a marketing route for its OpenAPI document. */
 type MarketingRoute = {
 	readonly method: "POST";
@@ -14525,7 +16324,7 @@ declare const MARKETING_ROUTES: Readonly<Record<MarketingRouteName, MarketingRou
 * `rate.limited`: `marketing.invalid_request` and `marketing.rate_limited` stand in for them.
 */
 declare const CREATE_DEMO_REQUEST_ERROR_CODES: readonly ["marketing.invalid_request", "marketing.rate_limited", "request.too_large", "request.unsupported_media_type", "request.idempotency_key_reused", "request.idempotency_in_progress", "server.internal", "server.unavailable", "server.timeout"];
-import { z as z64 } from "zod";
+import { z as z70 } from "zod";
 /**
 * What a statement or a Draft sentence rests on. One of: a field of the Prospect's own record, a
 * dated buying signal, a web page read at a time, a Moment of a won Deal, or a page of a Playbook
@@ -14533,10 +16332,10 @@ import { z as z64 } from "zod";
 * along on a Citation. Playbook ids are opaque; the text behind them is fetched with the
 * Playbook's citation resolve route.
 */
-declare const citationSourceSchema: z64.ZodDiscriminatedUnion<[z64.ZodObject<{
-	kind: z64.ZodLiteral<"prospect_field">;
-	prospectId: z64.core.$ZodBranded<z64.ZodString, "prs", "out">;
-	field: z64.ZodEnum<{
+declare const citationSourceSchema: z70.ZodDiscriminatedUnion<[z70.ZodObject<{
+	kind: z70.ZodLiteral<"prospect_field">;
+	prospectId: z70.core.$ZodBranded<z70.ZodString, "prs", "out">;
+	field: z70.ZodEnum<{
 		email: "email";
 		firstName: "firstName";
 		jobTitle: "jobTitle";
@@ -14544,35 +16343,35 @@ declare const citationSourceSchema: z64.ZodDiscriminatedUnion<[z64.ZodObject<{
 		linkedinUrl: "linkedinUrl";
 		phone: "phone";
 	}>;
-}, z64.core.$strip>, z64.ZodObject<{
-	kind: z64.ZodLiteral<"signal">;
-	signalId: z64.core.$ZodBranded<z64.ZodString, "sig", "out">;
-	observedAt: z64.ZodISODateTime;
-}, z64.core.$strip>, z64.ZodObject<{
-	kind: z64.ZodLiteral<"web_page">;
-	url: z64.ZodString;
-	retrievedAt: z64.ZodISODateTime;
-}, z64.core.$strip>, z64.ZodObject<{
-	kind: z64.ZodLiteral<"moment">;
-	callId: z64.core.$ZodBranded<z64.ZodString, "call", "out">;
-	dealRecordId: z64.core.$ZodBranded<z64.ZodString, "deal", "out">;
-}, z64.core.$strip>, z64.ZodObject<{
-	kind: z64.ZodLiteral<"document">;
-	documentId: z64.core.$ZodBranded<z64.ZodString, "doc", "out">;
-	page: z64.ZodNullable<z64.ZodNumber>;
-}, z64.core.$strip>], "kind">;
+}, z70.core.$strip>, z70.ZodObject<{
+	kind: z70.ZodLiteral<"signal">;
+	signalId: z70.core.$ZodBranded<z70.ZodString, "sig", "out">;
+	observedAt: z70.ZodISODateTime;
+}, z70.core.$strip>, z70.ZodObject<{
+	kind: z70.ZodLiteral<"web_page">;
+	url: z70.ZodString;
+	retrievedAt: z70.ZodISODateTime;
+}, z70.core.$strip>, z70.ZodObject<{
+	kind: z70.ZodLiteral<"moment">;
+	callId: z70.core.$ZodBranded<z70.ZodString, "call", "out">;
+	dealRecordId: z70.core.$ZodBranded<z70.ZodString, "deal", "out">;
+}, z70.core.$strip>, z70.ZodObject<{
+	kind: z70.ZodLiteral<"document">;
+	documentId: z70.core.$ZodBranded<z70.ZodString, "doc", "out">;
+	page: z70.ZodNullable<z70.ZodNumber>;
+}, z70.core.$strip>], "kind">;
 /** What a statement or a Draft sentence rests on. */
-type CitationSource = z64.infer<typeof citationSourceSchema>;
+type CitationSource = z70.infer<typeof citationSourceSchema>;
 /**
 * A Citation on a Draft: its source and whether it `applies` to the text as it stands (false once
 * an edit removed or changed the sentence it supported). A Moment or document Citation also has
 * the similarity `score` the search gave it. Unknown fields are dropped. Model-generated text is
 * untrusted data, so a Draft is read together with its Citations, never alone.
 */
-declare const draftCitationSchema: z64.ZodIntersection<z64.ZodDiscriminatedUnion<[z64.ZodObject<{
-	kind: z64.ZodLiteral<"prospect_field">;
-	prospectId: z64.core.$ZodBranded<z64.ZodString, "prs", "out">;
-	field: z64.ZodEnum<{
+declare const draftCitationSchema: z70.ZodIntersection<z70.ZodDiscriminatedUnion<[z70.ZodObject<{
+	kind: z70.ZodLiteral<"prospect_field">;
+	prospectId: z70.core.$ZodBranded<z70.ZodString, "prs", "out">;
+	field: z70.ZodEnum<{
 		email: "email";
 		firstName: "firstName";
 		jobTitle: "jobTitle";
@@ -14580,33 +16379,33 @@ declare const draftCitationSchema: z64.ZodIntersection<z64.ZodDiscriminatedUnion
 		linkedinUrl: "linkedinUrl";
 		phone: "phone";
 	}>;
-}, z64.core.$strip>, z64.ZodObject<{
-	kind: z64.ZodLiteral<"signal">;
-	signalId: z64.core.$ZodBranded<z64.ZodString, "sig", "out">;
-	observedAt: z64.ZodISODateTime;
-}, z64.core.$strip>, z64.ZodObject<{
-	kind: z64.ZodLiteral<"web_page">;
-	url: z64.ZodString;
-	retrievedAt: z64.ZodISODateTime;
-}, z64.core.$strip>, z64.ZodObject<{
-	kind: z64.ZodLiteral<"moment">;
-	callId: z64.core.$ZodBranded<z64.ZodString, "call", "out">;
-	dealRecordId: z64.core.$ZodBranded<z64.ZodString, "deal", "out">;
-}, z64.core.$strip>, z64.ZodObject<{
-	kind: z64.ZodLiteral<"document">;
-	documentId: z64.core.$ZodBranded<z64.ZodString, "doc", "out">;
-	page: z64.ZodNullable<z64.ZodNumber>;
-}, z64.core.$strip>], "kind">, z64.ZodObject<{
-	applies: z64.ZodBoolean;
-	score: z64.ZodOptional<z64.ZodNumber>;
-}, z64.core.$strip>>;
+}, z70.core.$strip>, z70.ZodObject<{
+	kind: z70.ZodLiteral<"signal">;
+	signalId: z70.core.$ZodBranded<z70.ZodString, "sig", "out">;
+	observedAt: z70.ZodISODateTime;
+}, z70.core.$strip>, z70.ZodObject<{
+	kind: z70.ZodLiteral<"web_page">;
+	url: z70.ZodString;
+	retrievedAt: z70.ZodISODateTime;
+}, z70.core.$strip>, z70.ZodObject<{
+	kind: z70.ZodLiteral<"moment">;
+	callId: z70.core.$ZodBranded<z70.ZodString, "call", "out">;
+	dealRecordId: z70.core.$ZodBranded<z70.ZodString, "deal", "out">;
+}, z70.core.$strip>, z70.ZodObject<{
+	kind: z70.ZodLiteral<"document">;
+	documentId: z70.core.$ZodBranded<z70.ZodString, "doc", "out">;
+	page: z70.ZodNullable<z70.ZodNumber>;
+}, z70.core.$strip>], "kind">, z70.ZodObject<{
+	applies: z70.ZodBoolean;
+	score: z70.ZodOptional<z70.ZodNumber>;
+}, z70.core.$strip>>;
 /** A Citation on a Draft. */
-type DraftCitation = z64.infer<typeof draftCitationSchema>;
-import { z as z65 } from "zod";
+type DraftCitation = z70.infer<typeof draftCitationSchema>;
+import { z as z71 } from "zod";
 /** The checks every Draft passes before it may go without review, each run once. */
 declare const DRAFT_CHECKS: readonly ["citations_resolve", "claims_supported", "banned_phrase", "length", "name_match"];
 /** A check run on a Draft. */
-declare const draftCheckNameSchema: z65.ZodEnum<{
+declare const draftCheckNameSchema: z71.ZodEnum<{
 	banned_phrase: "banned_phrase";
 	citations_resolve: "citations_resolve";
 	claims_supported: "claims_supported";
@@ -14614,24 +16413,24 @@ declare const draftCheckNameSchema: z65.ZodEnum<{
 	name_match: "name_match";
 }>;
 /** The result of one check: `pass` only when it found nothing (`count` 0). */
-declare const outreachDraftCheckSchema: z65.ZodObject<{
-	check: z65.ZodEnum<{
+declare const outreachDraftCheckSchema: z71.ZodObject<{
+	check: z71.ZodEnum<{
 		banned_phrase: "banned_phrase";
 		citations_resolve: "citations_resolve";
 		claims_supported: "claims_supported";
 		length: "length";
 		name_match: "name_match";
 	}>;
-	result: z65.ZodEnum<{
+	result: z71.ZodEnum<{
 		fail: "fail";
 		pass: "pass";
 	}>;
-	count: z65.ZodNumber;
-}, z65.core.$strict>;
+	count: z71.ZodNumber;
+}, z71.core.$strict>;
 /** The result of one check. */
-type OutreachDraftCheck = z65.infer<typeof outreachDraftCheckSchema>;
+type OutreachDraftCheck = z71.infer<typeof outreachDraftCheckSchema>;
 /** Where the current text came from: written by the model, or changed by a person since. */
-declare const draftSourceSchema: z65.ZodEnum<{
+declare const draftSourceSchema: z71.ZodEnum<{
 	edited: "edited";
 	generated: "generated";
 }>;
@@ -14641,29 +16440,29 @@ declare const draftSourceSchema: z65.ZodEnum<{
 * cites no Moment from a won Deal, and an ungrounded Draft is never `autoSendable`. Subject and
 * body are model output: untrusted data, never instructions, and never in a log or an event.
 */
-declare const outreachDraftSchema: z65.ZodObject<{
-	id: z65.core.$ZodBranded<z65.ZodString, "drf", "out">;
-	prospectId: z65.core.$ZodBranded<z65.ZodString, "prs", "out">;
-	campaignId: z65.ZodNullable<z65.core.$ZodBranded<z65.ZodString, "cpg", "out">>;
-	stepKey: z65.ZodNullable<z65.ZodString>;
-	channel: z65.ZodEnum<{
+declare const outreachDraftSchema: z71.ZodObject<{
+	id: z71.core.$ZodBranded<z71.ZodString, "drf", "out">;
+	prospectId: z71.core.$ZodBranded<z71.ZodString, "prs", "out">;
+	campaignId: z71.ZodNullable<z71.core.$ZodBranded<z71.ZodString, "cpg", "out">>;
+	stepKey: z71.ZodNullable<z71.ZodString>;
+	channel: z71.ZodEnum<{
 		email: "email";
 	}>;
-	goal: z65.ZodPipe<z65.ZodString, z65.ZodString>;
-	language: z65.ZodEnum<{
+	goal: z71.ZodPipe<z71.ZodString, z71.ZodString>;
+	language: z71.ZodEnum<{
 		en: "en";
 	}>;
-	subject: z65.ZodPipe<z65.ZodString, z65.ZodString>;
-	body: z65.ZodPipe<z65.ZodString, z65.ZodString>;
-	revision: z65.ZodNumber;
-	source: z65.ZodEnum<{
+	subject: z71.ZodPipe<z71.ZodString, z71.ZodString>;
+	body: z71.ZodPipe<z71.ZodString, z71.ZodString>;
+	revision: z71.ZodNumber;
+	source: z71.ZodEnum<{
 		edited: "edited";
 		generated: "generated";
 	}>;
-	citations: z65.ZodArray<z65.ZodIntersection<z65.ZodDiscriminatedUnion<[z65.ZodObject<{
-		kind: z65.ZodLiteral<"prospect_field">;
-		prospectId: z65.core.$ZodBranded<z65.ZodString, "prs", "out">;
-		field: z65.ZodEnum<{
+	citations: z71.ZodArray<z71.ZodIntersection<z71.ZodDiscriminatedUnion<[z71.ZodObject<{
+		kind: z71.ZodLiteral<"prospect_field">;
+		prospectId: z71.core.$ZodBranded<z71.ZodString, "prs", "out">;
+		field: z71.ZodEnum<{
 			email: "email";
 			firstName: "firstName";
 			jobTitle: "jobTitle";
@@ -14671,115 +16470,115 @@ declare const outreachDraftSchema: z65.ZodObject<{
 			linkedinUrl: "linkedinUrl";
 			phone: "phone";
 		}>;
-	}, z65.core.$strip>, z65.ZodObject<{
-		kind: z65.ZodLiteral<"signal">;
-		signalId: z65.core.$ZodBranded<z65.ZodString, "sig", "out">;
-		observedAt: z65.ZodISODateTime;
-	}, z65.core.$strip>, z65.ZodObject<{
-		kind: z65.ZodLiteral<"web_page">;
-		url: z65.ZodString;
-		retrievedAt: z65.ZodISODateTime;
-	}, z65.core.$strip>, z65.ZodObject<{
-		kind: z65.ZodLiteral<"moment">;
-		callId: z65.core.$ZodBranded<z65.ZodString, "call", "out">;
-		dealRecordId: z65.core.$ZodBranded<z65.ZodString, "deal", "out">;
-	}, z65.core.$strip>, z65.ZodObject<{
-		kind: z65.ZodLiteral<"document">;
-		documentId: z65.core.$ZodBranded<z65.ZodString, "doc", "out">;
-		page: z65.ZodNullable<z65.ZodNumber>;
-	}, z65.core.$strip>], "kind">, z65.ZodObject<{
-		applies: z65.ZodBoolean;
-		score: z65.ZodOptional<z65.ZodNumber>;
-	}, z65.core.$strip>>>;
-	ungrounded: z65.ZodBoolean;
-	wonDealCount: z65.ZodNumber;
-	checks: z65.ZodArray<z65.ZodObject<{
-		check: z65.ZodEnum<{
+	}, z71.core.$strip>, z71.ZodObject<{
+		kind: z71.ZodLiteral<"signal">;
+		signalId: z71.core.$ZodBranded<z71.ZodString, "sig", "out">;
+		observedAt: z71.ZodISODateTime;
+	}, z71.core.$strip>, z71.ZodObject<{
+		kind: z71.ZodLiteral<"web_page">;
+		url: z71.ZodString;
+		retrievedAt: z71.ZodISODateTime;
+	}, z71.core.$strip>, z71.ZodObject<{
+		kind: z71.ZodLiteral<"moment">;
+		callId: z71.core.$ZodBranded<z71.ZodString, "call", "out">;
+		dealRecordId: z71.core.$ZodBranded<z71.ZodString, "deal", "out">;
+	}, z71.core.$strip>, z71.ZodObject<{
+		kind: z71.ZodLiteral<"document">;
+		documentId: z71.core.$ZodBranded<z71.ZodString, "doc", "out">;
+		page: z71.ZodNullable<z71.ZodNumber>;
+	}, z71.core.$strip>], "kind">, z71.ZodObject<{
+		applies: z71.ZodBoolean;
+		score: z71.ZodOptional<z71.ZodNumber>;
+	}, z71.core.$strip>>>;
+	ungrounded: z71.ZodBoolean;
+	wonDealCount: z71.ZodNumber;
+	checks: z71.ZodArray<z71.ZodObject<{
+		check: z71.ZodEnum<{
 			banned_phrase: "banned_phrase";
 			citations_resolve: "citations_resolve";
 			claims_supported: "claims_supported";
 			length: "length";
 			name_match: "name_match";
 		}>;
-		result: z65.ZodEnum<{
+		result: z71.ZodEnum<{
 			fail: "fail";
 			pass: "pass";
 		}>;
-		count: z65.ZodNumber;
-	}, z65.core.$strict>>;
-	autoSendable: z65.ZodBoolean;
-	brandVoiceId: z65.core.$ZodBranded<z65.ZodString, "bvo", "out">;
-	voiceVersion: z65.ZodNumber;
-	briefId: z65.ZodNullable<z65.core.$ZodBranded<z65.ZodString, "brf", "out">>;
-	model: z65.ZodString;
-	createdAt: z65.ZodISODateTime;
-	updatedAt: z65.ZodISODateTime;
-}, z65.core.$strict>;
+		count: z71.ZodNumber;
+	}, z71.core.$strict>>;
+	autoSendable: z71.ZodBoolean;
+	brandVoiceId: z71.core.$ZodBranded<z71.ZodString, "bvo", "out">;
+	voiceVersion: z71.ZodNumber;
+	briefId: z71.ZodNullable<z71.core.$ZodBranded<z71.ZodString, "brf", "out">>;
+	model: z71.ZodString;
+	createdAt: z71.ZodISODateTime;
+	updatedAt: z71.ZodISODateTime;
+}, z71.core.$strict>;
 /** A Draft. */
-type OutreachDraft = z65.infer<typeof outreachDraftSchema>;
+type OutreachDraft = z71.infer<typeof outreachDraftSchema>;
 /** The body to write a Draft for a Prospect, optionally for a Step of a Campaign and with an angle. */
-declare const createDraftRequestSchema: z65.ZodObject<{
-	prospectId: z65.core.$ZodBranded<z65.ZodString, "prs", "out">;
-	campaignId: z65.ZodOptional<z65.core.$ZodBranded<z65.ZodString, "cpg", "out">>;
-	stepKey: z65.ZodOptional<z65.ZodString>;
-	goal: z65.ZodOptional<z65.ZodPipe<z65.ZodString, z65.ZodString>>;
-	angle: z65.ZodOptional<z65.ZodPipe<z65.ZodString, z65.ZodString>>;
-}, z65.core.$strict>;
+declare const createDraftRequestSchema: z71.ZodObject<{
+	prospectId: z71.core.$ZodBranded<z71.ZodString, "prs", "out">;
+	campaignId: z71.ZodOptional<z71.core.$ZodBranded<z71.ZodString, "cpg", "out">>;
+	stepKey: z71.ZodOptional<z71.ZodString>;
+	goal: z71.ZodOptional<z71.ZodPipe<z71.ZodString, z71.ZodString>>;
+	angle: z71.ZodOptional<z71.ZodPipe<z71.ZodString, z71.ZodString>>;
+}, z71.core.$strict>;
 /** The body to write a Draft. */
-type CreateDraftRequest = z65.infer<typeof createDraftRequestSchema>;
+type CreateDraftRequest = z71.infer<typeof createDraftRequestSchema>;
 /** The body to edit a Draft: the revision the caller read and the new subject and/or body. */
-declare const editDraftRequestSchema: z65.ZodObject<{
-	expectedRevision: z65.ZodNumber;
-	subject: z65.ZodOptional<z65.ZodPipe<z65.ZodString, z65.ZodString>>;
-	body: z65.ZodOptional<z65.ZodPipe<z65.ZodString, z65.ZodString>>;
-}, z65.core.$strict>;
+declare const editDraftRequestSchema: z71.ZodObject<{
+	expectedRevision: z71.ZodNumber;
+	subject: z71.ZodOptional<z71.ZodPipe<z71.ZodString, z71.ZodString>>;
+	body: z71.ZodOptional<z71.ZodPipe<z71.ZodString, z71.ZodString>>;
+}, z71.core.$strict>;
 /** The body to edit a Draft. */
-type EditDraftRequest = z65.infer<typeof editDraftRequestSchema>;
+type EditDraftRequest = z71.infer<typeof editDraftRequestSchema>;
 /** The body to write a Draft again: a new angle and/or tone, for the same Prospect and Step. */
-declare const regenerateDraftRequestSchema: z65.ZodObject<{
-	angle: z65.ZodOptional<z65.ZodPipe<z65.ZodString, z65.ZodString>>;
-	tone: z65.ZodOptional<z65.ZodPipe<z65.ZodString, z65.ZodString>>;
-}, z65.core.$strict>;
+declare const regenerateDraftRequestSchema: z71.ZodObject<{
+	angle: z71.ZodOptional<z71.ZodPipe<z71.ZodString, z71.ZodString>>;
+	tone: z71.ZodOptional<z71.ZodPipe<z71.ZodString, z71.ZodString>>;
+}, z71.core.$strict>;
 /** The body to write a Draft again. */
-type RegenerateDraftRequest = z65.infer<typeof regenerateDraftRequestSchema>;
+type RegenerateDraftRequest = z71.infer<typeof regenerateDraftRequestSchema>;
 /** The query of a Draft list: cursor and limit (at most 100), and filters by Prospect, Campaign and whether it is ungrounded. */
-declare const listDraftsQuerySchema: z65.ZodObject<{
-	cursor: z65.ZodOptional<z65.ZodString>;
-	limit: z65.ZodDefault<z65.ZodPipe<z65.ZodPipe<z65.ZodUnion<readonly [z65.ZodNumber, z65.ZodString]>, z65.ZodTransform<number, string | number>>, z65.ZodNumber>>;
-	prospectId: z65.ZodOptional<z65.core.$ZodBranded<z65.ZodString, "prs", "out">>;
-	campaignId: z65.ZodOptional<z65.core.$ZodBranded<z65.ZodString, "cpg", "out">>;
-	ungrounded: z65.ZodOptional<z65.ZodUnion<readonly [z65.ZodBoolean, z65.ZodPipe<z65.ZodEnum<{
+declare const listDraftsQuerySchema: z71.ZodObject<{
+	cursor: z71.ZodOptional<z71.ZodString>;
+	limit: z71.ZodDefault<z71.ZodPipe<z71.ZodPipe<z71.ZodUnion<readonly [z71.ZodNumber, z71.ZodString]>, z71.ZodTransform<number, string | number>>, z71.ZodNumber>>;
+	prospectId: z71.ZodOptional<z71.core.$ZodBranded<z71.ZodString, "prs", "out">>;
+	campaignId: z71.ZodOptional<z71.core.$ZodBranded<z71.ZodString, "cpg", "out">>;
+	ungrounded: z71.ZodOptional<z71.ZodUnion<readonly [z71.ZodBoolean, z71.ZodPipe<z71.ZodEnum<{
 		false: "false";
 		true: "true";
-	}>, z65.ZodTransform<boolean, "false" | "true">>]>>;
-}, z65.core.$strip>;
+	}>, z71.ZodTransform<boolean, "false" | "true">>]>>;
+}, z71.core.$strip>;
 /** The query of a Draft list. */
-type ListDraftsQuery = z65.infer<typeof listDraftsQuerySchema>;
+type ListDraftsQuery = z71.infer<typeof listDraftsQuerySchema>;
 /** One page of Drafts, newest first (by `createdAt`, then id). */
-declare const listDraftsResponseSchema: z65.ZodObject<{
-	items: z65.ZodArray<z65.ZodObject<{
-		id: z65.core.$ZodBranded<z65.ZodString, "drf", "out">;
-		prospectId: z65.core.$ZodBranded<z65.ZodString, "prs", "out">;
-		campaignId: z65.ZodNullable<z65.core.$ZodBranded<z65.ZodString, "cpg", "out">>;
-		stepKey: z65.ZodNullable<z65.ZodString>;
-		channel: z65.ZodEnum<{
+declare const listDraftsResponseSchema: z71.ZodObject<{
+	items: z71.ZodArray<z71.ZodObject<{
+		id: z71.core.$ZodBranded<z71.ZodString, "drf", "out">;
+		prospectId: z71.core.$ZodBranded<z71.ZodString, "prs", "out">;
+		campaignId: z71.ZodNullable<z71.core.$ZodBranded<z71.ZodString, "cpg", "out">>;
+		stepKey: z71.ZodNullable<z71.ZodString>;
+		channel: z71.ZodEnum<{
 			email: "email";
 		}>;
-		goal: z65.ZodPipe<z65.ZodString, z65.ZodString>;
-		language: z65.ZodEnum<{
+		goal: z71.ZodPipe<z71.ZodString, z71.ZodString>;
+		language: z71.ZodEnum<{
 			en: "en";
 		}>;
-		subject: z65.ZodPipe<z65.ZodString, z65.ZodString>;
-		body: z65.ZodPipe<z65.ZodString, z65.ZodString>;
-		revision: z65.ZodNumber;
-		source: z65.ZodEnum<{
+		subject: z71.ZodPipe<z71.ZodString, z71.ZodString>;
+		body: z71.ZodPipe<z71.ZodString, z71.ZodString>;
+		revision: z71.ZodNumber;
+		source: z71.ZodEnum<{
 			edited: "edited";
 			generated: "generated";
 		}>;
-		citations: z65.ZodArray<z65.ZodIntersection<z65.ZodDiscriminatedUnion<[z65.ZodObject<{
-			kind: z65.ZodLiteral<"prospect_field">;
-			prospectId: z65.core.$ZodBranded<z65.ZodString, "prs", "out">;
-			field: z65.ZodEnum<{
+		citations: z71.ZodArray<z71.ZodIntersection<z71.ZodDiscriminatedUnion<[z71.ZodObject<{
+			kind: z71.ZodLiteral<"prospect_field">;
+			prospectId: z71.core.$ZodBranded<z71.ZodString, "prs", "out">;
+			field: z71.ZodEnum<{
 				email: "email";
 				firstName: "firstName";
 				jobTitle: "jobTitle";
@@ -14787,53 +16586,53 @@ declare const listDraftsResponseSchema: z65.ZodObject<{
 				linkedinUrl: "linkedinUrl";
 				phone: "phone";
 			}>;
-		}, z65.core.$strip>, z65.ZodObject<{
-			kind: z65.ZodLiteral<"signal">;
-			signalId: z65.core.$ZodBranded<z65.ZodString, "sig", "out">;
-			observedAt: z65.ZodISODateTime;
-		}, z65.core.$strip>, z65.ZodObject<{
-			kind: z65.ZodLiteral<"web_page">;
-			url: z65.ZodString;
-			retrievedAt: z65.ZodISODateTime;
-		}, z65.core.$strip>, z65.ZodObject<{
-			kind: z65.ZodLiteral<"moment">;
-			callId: z65.core.$ZodBranded<z65.ZodString, "call", "out">;
-			dealRecordId: z65.core.$ZodBranded<z65.ZodString, "deal", "out">;
-		}, z65.core.$strip>, z65.ZodObject<{
-			kind: z65.ZodLiteral<"document">;
-			documentId: z65.core.$ZodBranded<z65.ZodString, "doc", "out">;
-			page: z65.ZodNullable<z65.ZodNumber>;
-		}, z65.core.$strip>], "kind">, z65.ZodObject<{
-			applies: z65.ZodBoolean;
-			score: z65.ZodOptional<z65.ZodNumber>;
-		}, z65.core.$strip>>>;
-		ungrounded: z65.ZodBoolean;
-		wonDealCount: z65.ZodNumber;
-		checks: z65.ZodArray<z65.ZodObject<{
-			check: z65.ZodEnum<{
+		}, z71.core.$strip>, z71.ZodObject<{
+			kind: z71.ZodLiteral<"signal">;
+			signalId: z71.core.$ZodBranded<z71.ZodString, "sig", "out">;
+			observedAt: z71.ZodISODateTime;
+		}, z71.core.$strip>, z71.ZodObject<{
+			kind: z71.ZodLiteral<"web_page">;
+			url: z71.ZodString;
+			retrievedAt: z71.ZodISODateTime;
+		}, z71.core.$strip>, z71.ZodObject<{
+			kind: z71.ZodLiteral<"moment">;
+			callId: z71.core.$ZodBranded<z71.ZodString, "call", "out">;
+			dealRecordId: z71.core.$ZodBranded<z71.ZodString, "deal", "out">;
+		}, z71.core.$strip>, z71.ZodObject<{
+			kind: z71.ZodLiteral<"document">;
+			documentId: z71.core.$ZodBranded<z71.ZodString, "doc", "out">;
+			page: z71.ZodNullable<z71.ZodNumber>;
+		}, z71.core.$strip>], "kind">, z71.ZodObject<{
+			applies: z71.ZodBoolean;
+			score: z71.ZodOptional<z71.ZodNumber>;
+		}, z71.core.$strip>>>;
+		ungrounded: z71.ZodBoolean;
+		wonDealCount: z71.ZodNumber;
+		checks: z71.ZodArray<z71.ZodObject<{
+			check: z71.ZodEnum<{
 				banned_phrase: "banned_phrase";
 				citations_resolve: "citations_resolve";
 				claims_supported: "claims_supported";
 				length: "length";
 				name_match: "name_match";
 			}>;
-			result: z65.ZodEnum<{
+			result: z71.ZodEnum<{
 				fail: "fail";
 				pass: "pass";
 			}>;
-			count: z65.ZodNumber;
-		}, z65.core.$strict>>;
-		autoSendable: z65.ZodBoolean;
-		brandVoiceId: z65.core.$ZodBranded<z65.ZodString, "bvo", "out">;
-		voiceVersion: z65.ZodNumber;
-		briefId: z65.ZodNullable<z65.core.$ZodBranded<z65.ZodString, "brf", "out">>;
-		model: z65.ZodString;
-		createdAt: z65.ZodISODateTime;
-		updatedAt: z65.ZodISODateTime;
-	}, z65.core.$strict>>;
-	nextCursor: z65.ZodNullable<z65.ZodString>;
-}, z65.core.$strip>;
-import { ErrorDefinition as ErrorDefinition_8gwh4515 } from "..";
+			count: z71.ZodNumber;
+		}, z71.core.$strict>>;
+		autoSendable: z71.ZodBoolean;
+		brandVoiceId: z71.core.$ZodBranded<z71.ZodString, "bvo", "out">;
+		voiceVersion: z71.ZodNumber;
+		briefId: z71.ZodNullable<z71.core.$ZodBranded<z71.ZodString, "brf", "out">>;
+		model: z71.ZodString;
+		createdAt: z71.ZodISODateTime;
+		updatedAt: z71.ZodISODateTime;
+	}, z71.core.$strict>>;
+	nextCursor: z71.ZodNullable<z71.ZodString>;
+}, z71.core.$strip>;
+import { ErrorDefinition as ErrorDefinition_8gwh4516 } from "..";
 /**
 * The errors the messaging routes return, as `area.reason` codes. A role that is not allowed is
 * the common `auth.forbidden`. A Prospect, Campaign, Research Brief or Draft outside the caller's
@@ -14857,60 +16656,60 @@ import { ErrorDefinition as ErrorDefinition_8gwh4515 } from "..";
 *   `request.invalid`, as `campaign.invalid_sequence` does for its schema.
 */
 declare const MESSAGING_ERRORS: {
-	readonly "draft.budget_exceeded": ErrorDefinition_8gwh4515<"draft.budget_exceeded">;
-	readonly "draft.invalid_state": ErrorDefinition_8gwh4515<"draft.invalid_state">;
-	readonly "draft.model_unavailable": ErrorDefinition_8gwh4515<"draft.model_unavailable">;
-	readonly "draft.no_prospect_data": ErrorDefinition_8gwh4515<"draft.no_prospect_data">;
-	readonly "draft.not_found": ErrorDefinition_8gwh4515<"draft.not_found">;
-	readonly "preview.too_many_prospects": ErrorDefinition_8gwh4515<"preview.too_many_prospects">;
-	readonly "research.not_found": ErrorDefinition_8gwh4515<"research.not_found">;
-	readonly "research.timeout": ErrorDefinition_8gwh4515<"research.timeout">;
-	readonly "voice.invalid": ErrorDefinition_8gwh4515<"voice.invalid">;
-	readonly "voice.not_found": ErrorDefinition_8gwh4515<"voice.not_found">;
-	readonly "voice.version_conflict": ErrorDefinition_8gwh4515<"voice.version_conflict">;
+	readonly "draft.budget_exceeded": ErrorDefinition_8gwh4516<"draft.budget_exceeded">;
+	readonly "draft.invalid_state": ErrorDefinition_8gwh4516<"draft.invalid_state">;
+	readonly "draft.model_unavailable": ErrorDefinition_8gwh4516<"draft.model_unavailable">;
+	readonly "draft.no_prospect_data": ErrorDefinition_8gwh4516<"draft.no_prospect_data">;
+	readonly "draft.not_found": ErrorDefinition_8gwh4516<"draft.not_found">;
+	readonly "preview.too_many_prospects": ErrorDefinition_8gwh4516<"preview.too_many_prospects">;
+	readonly "research.not_found": ErrorDefinition_8gwh4516<"research.not_found">;
+	readonly "research.timeout": ErrorDefinition_8gwh4516<"research.timeout">;
+	readonly "voice.invalid": ErrorDefinition_8gwh4516<"voice.invalid">;
+	readonly "voice.not_found": ErrorDefinition_8gwh4516<"voice.not_found">;
+	readonly "voice.version_conflict": ErrorDefinition_8gwh4516<"voice.version_conflict">;
 };
 /** An error code the messaging routes return. */
 type MessagingErrorCode = keyof typeof MESSAGING_ERRORS;
-import { z as z66 } from "zod";
+import { z as z72 } from "zod";
 /** `draft.created` (version 1): a Draft was written for a Prospect. Ids and values only; never the subject or body. */
 declare const draftCreatedEvent: {
 	type: "draft.created";
 	version: 1;
-	schema: z66.ZodObject<{
-		id: z66.core.$ZodBranded<z66.ZodString, "evt", "out">;
-		occurredAt: z66.ZodISODateTime;
-		organizationId: z66.core.$ZodBranded<z66.ZodString, "org", "out">;
-		region: z66.ZodEnum<{
+	schema: z72.ZodObject<{
+		id: z72.core.$ZodBranded<z72.ZodString, "evt", "out">;
+		occurredAt: z72.ZodISODateTime;
+		organizationId: z72.core.$ZodBranded<z72.ZodString, "org", "out">;
+		region: z72.ZodEnum<{
 			eu: "eu";
 			us: "us";
 		}>;
-		type: z66.ZodLiteral<"draft.created">;
-		version: z66.ZodLiteral<1>;
-		data: z66.ZodObject<{
-			draftId: z66.core.$ZodBranded<z66.ZodString, "drf", "out">;
-			prospectId: z66.core.$ZodBranded<z66.ZodString, "prs", "out">;
-			campaignId: z66.ZodNullable<z66.core.$ZodBranded<z66.ZodString, "cpg", "out">>;
-			stepKey: z66.ZodNullable<z66.ZodString>;
-			channel: z66.ZodEnum<{
+		type: z72.ZodLiteral<"draft.created">;
+		version: z72.ZodLiteral<1>;
+		data: z72.ZodObject<{
+			draftId: z72.core.$ZodBranded<z72.ZodString, "drf", "out">;
+			prospectId: z72.core.$ZodBranded<z72.ZodString, "prs", "out">;
+			campaignId: z72.ZodNullable<z72.core.$ZodBranded<z72.ZodString, "cpg", "out">>;
+			stepKey: z72.ZodNullable<z72.ZodString>;
+			channel: z72.ZodEnum<{
 				email: "email";
 			}>;
-			ungrounded: z66.ZodBoolean;
-			checksPassed: z66.ZodBoolean;
-			voiceVersion: z66.ZodNumber;
-			createdAt: z66.ZodISODateTime;
-		}, z66.core.$strict>;
-	}, z66.core.$strip>;
+			ungrounded: z72.ZodBoolean;
+			checksPassed: z72.ZodBoolean;
+			voiceVersion: z72.ZodNumber;
+			createdAt: z72.ZodISODateTime;
+		}, z72.core.$strict>;
+	}, z72.core.$strip>;
 	parse: (input: unknown) => {
-		id: string & z66.$brand<"evt">;
+		id: string & z72.$brand<"evt">;
 		occurredAt: string;
-		organizationId: string & z66.$brand<"org">;
+		organizationId: string & z72.$brand<"org">;
 		region: "eu" | "us";
 		type: "draft.created";
 		version: 1;
 		data: {
-			draftId: string & z66.$brand<"drf">;
-			prospectId: string & z66.$brand<"prs">;
-			campaignId: (string & z66.$brand<"cpg">) | null;
+			draftId: string & z72.$brand<"drf">;
+			prospectId: string & z72.$brand<"prs">;
+			campaignId: (string & z72.$brand<"cpg">) | null;
 			stepKey: string | null;
 			channel: "email";
 			ungrounded: boolean;
@@ -14919,17 +16718,17 @@ declare const draftCreatedEvent: {
 			createdAt: string;
 		};
 	};
-	safeParse: (input: unknown) => z66.ZodSafeParseResult<{
-		id: string & z66.$brand<"evt">;
+	safeParse: (input: unknown) => z72.ZodSafeParseResult<{
+		id: string & z72.$brand<"evt">;
 		occurredAt: string;
-		organizationId: string & z66.$brand<"org">;
+		organizationId: string & z72.$brand<"org">;
 		region: "eu" | "us";
 		type: "draft.created";
 		version: 1;
 		data: {
-			draftId: string & z66.$brand<"drf">;
-			prospectId: string & z66.$brand<"prs">;
-			campaignId: (string & z66.$brand<"cpg">) | null;
+			draftId: string & z72.$brand<"drf">;
+			prospectId: string & z72.$brand<"prs">;
+			campaignId: (string & z72.$brand<"cpg">) | null;
 			stepKey: string | null;
 			channel: "email";
 			ungrounded: boolean;
@@ -14945,54 +16744,54 @@ declare const APPROVAL_REASONS: readonly ["ungrounded", "check_failed", "review_
 declare const draftApprovalRequiredEvent: {
 	type: "draft.approved_required";
 	version: 1;
-	schema: z66.ZodObject<{
-		id: z66.core.$ZodBranded<z66.ZodString, "evt", "out">;
-		occurredAt: z66.ZodISODateTime;
-		organizationId: z66.core.$ZodBranded<z66.ZodString, "org", "out">;
-		region: z66.ZodEnum<{
+	schema: z72.ZodObject<{
+		id: z72.core.$ZodBranded<z72.ZodString, "evt", "out">;
+		occurredAt: z72.ZodISODateTime;
+		organizationId: z72.core.$ZodBranded<z72.ZodString, "org", "out">;
+		region: z72.ZodEnum<{
 			eu: "eu";
 			us: "us";
 		}>;
-		type: z66.ZodLiteral<"draft.approved_required">;
-		version: z66.ZodLiteral<1>;
-		data: z66.ZodObject<{
-			draftId: z66.core.$ZodBranded<z66.ZodString, "drf", "out">;
-			prospectId: z66.core.$ZodBranded<z66.ZodString, "prs", "out">;
-			campaignId: z66.ZodNullable<z66.core.$ZodBranded<z66.ZodString, "cpg", "out">>;
-			reasons: z66.ZodArray<z66.ZodEnum<{
+		type: z72.ZodLiteral<"draft.approved_required">;
+		version: z72.ZodLiteral<1>;
+		data: z72.ZodObject<{
+			draftId: z72.core.$ZodBranded<z72.ZodString, "drf", "out">;
+			prospectId: z72.core.$ZodBranded<z72.ZodString, "prs", "out">;
+			campaignId: z72.ZodNullable<z72.core.$ZodBranded<z72.ZodString, "cpg", "out">>;
+			reasons: z72.ZodArray<z72.ZodEnum<{
 				check_failed: "check_failed";
 				review_mode: "review_mode";
 				ungrounded: "ungrounded";
 			}>>;
-			requiredAt: z66.ZodISODateTime;
-		}, z66.core.$strict>;
-	}, z66.core.$strip>;
+			requiredAt: z72.ZodISODateTime;
+		}, z72.core.$strict>;
+	}, z72.core.$strip>;
 	parse: (input: unknown) => {
-		id: string & z66.$brand<"evt">;
+		id: string & z72.$brand<"evt">;
 		occurredAt: string;
-		organizationId: string & z66.$brand<"org">;
+		organizationId: string & z72.$brand<"org">;
 		region: "eu" | "us";
 		type: "draft.approved_required";
 		version: 1;
 		data: {
-			draftId: string & z66.$brand<"drf">;
-			prospectId: string & z66.$brand<"prs">;
-			campaignId: (string & z66.$brand<"cpg">) | null;
+			draftId: string & z72.$brand<"drf">;
+			prospectId: string & z72.$brand<"prs">;
+			campaignId: (string & z72.$brand<"cpg">) | null;
 			reasons: ("check_failed" | "review_mode" | "ungrounded")[];
 			requiredAt: string;
 		};
 	};
-	safeParse: (input: unknown) => z66.ZodSafeParseResult<{
-		id: string & z66.$brand<"evt">;
+	safeParse: (input: unknown) => z72.ZodSafeParseResult<{
+		id: string & z72.$brand<"evt">;
 		occurredAt: string;
-		organizationId: string & z66.$brand<"org">;
+		organizationId: string & z72.$brand<"org">;
 		region: "eu" | "us";
 		type: "draft.approved_required";
 		version: 1;
 		data: {
-			draftId: string & z66.$brand<"drf">;
-			prospectId: string & z66.$brand<"prs">;
-			campaignId: (string & z66.$brand<"cpg">) | null;
+			draftId: string & z72.$brand<"drf">;
+			prospectId: string & z72.$brand<"prs">;
+			campaignId: (string & z72.$brand<"cpg">) | null;
 			reasons: ("check_failed" | "review_mode" | "ungrounded")[];
 			requiredAt: string;
 		};
@@ -15003,41 +16802,41 @@ declare const MESSAGING_EVENTS: {
 	readonly "draft.created": {
 		type: "draft.created";
 		version: 1;
-		schema: z66.ZodObject<{
-			id: z66.core.$ZodBranded<z66.ZodString, "evt", "out">;
-			occurredAt: z66.ZodISODateTime;
-			organizationId: z66.core.$ZodBranded<z66.ZodString, "org", "out">;
-			region: z66.ZodEnum<{
+		schema: z72.ZodObject<{
+			id: z72.core.$ZodBranded<z72.ZodString, "evt", "out">;
+			occurredAt: z72.ZodISODateTime;
+			organizationId: z72.core.$ZodBranded<z72.ZodString, "org", "out">;
+			region: z72.ZodEnum<{
 				eu: "eu";
 				us: "us";
 			}>;
-			type: z66.ZodLiteral<"draft.created">;
-			version: z66.ZodLiteral<1>;
-			data: z66.ZodObject<{
-				draftId: z66.core.$ZodBranded<z66.ZodString, "drf", "out">;
-				prospectId: z66.core.$ZodBranded<z66.ZodString, "prs", "out">;
-				campaignId: z66.ZodNullable<z66.core.$ZodBranded<z66.ZodString, "cpg", "out">>;
-				stepKey: z66.ZodNullable<z66.ZodString>;
-				channel: z66.ZodEnum<{
+			type: z72.ZodLiteral<"draft.created">;
+			version: z72.ZodLiteral<1>;
+			data: z72.ZodObject<{
+				draftId: z72.core.$ZodBranded<z72.ZodString, "drf", "out">;
+				prospectId: z72.core.$ZodBranded<z72.ZodString, "prs", "out">;
+				campaignId: z72.ZodNullable<z72.core.$ZodBranded<z72.ZodString, "cpg", "out">>;
+				stepKey: z72.ZodNullable<z72.ZodString>;
+				channel: z72.ZodEnum<{
 					email: "email";
 				}>;
-				ungrounded: z66.ZodBoolean;
-				checksPassed: z66.ZodBoolean;
-				voiceVersion: z66.ZodNumber;
-				createdAt: z66.ZodISODateTime;
-			}, z66.core.$strict>;
-		}, z66.core.$strip>;
+				ungrounded: z72.ZodBoolean;
+				checksPassed: z72.ZodBoolean;
+				voiceVersion: z72.ZodNumber;
+				createdAt: z72.ZodISODateTime;
+			}, z72.core.$strict>;
+		}, z72.core.$strip>;
 		parse: (input: unknown) => {
-			id: string & z66.$brand<"evt">;
+			id: string & z72.$brand<"evt">;
 			occurredAt: string;
-			organizationId: string & z66.$brand<"org">;
+			organizationId: string & z72.$brand<"org">;
 			region: "eu" | "us";
 			type: "draft.created";
 			version: 1;
 			data: {
-				draftId: string & z66.$brand<"drf">;
-				prospectId: string & z66.$brand<"prs">;
-				campaignId: (string & z66.$brand<"cpg">) | null;
+				draftId: string & z72.$brand<"drf">;
+				prospectId: string & z72.$brand<"prs">;
+				campaignId: (string & z72.$brand<"cpg">) | null;
 				stepKey: string | null;
 				channel: "email";
 				ungrounded: boolean;
@@ -15046,17 +16845,17 @@ declare const MESSAGING_EVENTS: {
 				createdAt: string;
 			};
 		};
-		safeParse: (input: unknown) => z66.ZodSafeParseResult<{
-			id: string & z66.$brand<"evt">;
+		safeParse: (input: unknown) => z72.ZodSafeParseResult<{
+			id: string & z72.$brand<"evt">;
 			occurredAt: string;
-			organizationId: string & z66.$brand<"org">;
+			organizationId: string & z72.$brand<"org">;
 			region: "eu" | "us";
 			type: "draft.created";
 			version: 1;
 			data: {
-				draftId: string & z66.$brand<"drf">;
-				prospectId: string & z66.$brand<"prs">;
-				campaignId: (string & z66.$brand<"cpg">) | null;
+				draftId: string & z72.$brand<"drf">;
+				prospectId: string & z72.$brand<"prs">;
+				campaignId: (string & z72.$brand<"cpg">) | null;
 				stepKey: string | null;
 				channel: "email";
 				ungrounded: boolean;
@@ -15069,54 +16868,54 @@ declare const MESSAGING_EVENTS: {
 	readonly "draft.approved_required": {
 		type: "draft.approved_required";
 		version: 1;
-		schema: z66.ZodObject<{
-			id: z66.core.$ZodBranded<z66.ZodString, "evt", "out">;
-			occurredAt: z66.ZodISODateTime;
-			organizationId: z66.core.$ZodBranded<z66.ZodString, "org", "out">;
-			region: z66.ZodEnum<{
+		schema: z72.ZodObject<{
+			id: z72.core.$ZodBranded<z72.ZodString, "evt", "out">;
+			occurredAt: z72.ZodISODateTime;
+			organizationId: z72.core.$ZodBranded<z72.ZodString, "org", "out">;
+			region: z72.ZodEnum<{
 				eu: "eu";
 				us: "us";
 			}>;
-			type: z66.ZodLiteral<"draft.approved_required">;
-			version: z66.ZodLiteral<1>;
-			data: z66.ZodObject<{
-				draftId: z66.core.$ZodBranded<z66.ZodString, "drf", "out">;
-				prospectId: z66.core.$ZodBranded<z66.ZodString, "prs", "out">;
-				campaignId: z66.ZodNullable<z66.core.$ZodBranded<z66.ZodString, "cpg", "out">>;
-				reasons: z66.ZodArray<z66.ZodEnum<{
+			type: z72.ZodLiteral<"draft.approved_required">;
+			version: z72.ZodLiteral<1>;
+			data: z72.ZodObject<{
+				draftId: z72.core.$ZodBranded<z72.ZodString, "drf", "out">;
+				prospectId: z72.core.$ZodBranded<z72.ZodString, "prs", "out">;
+				campaignId: z72.ZodNullable<z72.core.$ZodBranded<z72.ZodString, "cpg", "out">>;
+				reasons: z72.ZodArray<z72.ZodEnum<{
 					check_failed: "check_failed";
 					review_mode: "review_mode";
 					ungrounded: "ungrounded";
 				}>>;
-				requiredAt: z66.ZodISODateTime;
-			}, z66.core.$strict>;
-		}, z66.core.$strip>;
+				requiredAt: z72.ZodISODateTime;
+			}, z72.core.$strict>;
+		}, z72.core.$strip>;
 		parse: (input: unknown) => {
-			id: string & z66.$brand<"evt">;
+			id: string & z72.$brand<"evt">;
 			occurredAt: string;
-			organizationId: string & z66.$brand<"org">;
+			organizationId: string & z72.$brand<"org">;
 			region: "eu" | "us";
 			type: "draft.approved_required";
 			version: 1;
 			data: {
-				draftId: string & z66.$brand<"drf">;
-				prospectId: string & z66.$brand<"prs">;
-				campaignId: (string & z66.$brand<"cpg">) | null;
+				draftId: string & z72.$brand<"drf">;
+				prospectId: string & z72.$brand<"prs">;
+				campaignId: (string & z72.$brand<"cpg">) | null;
 				reasons: ("check_failed" | "review_mode" | "ungrounded")[];
 				requiredAt: string;
 			};
 		};
-		safeParse: (input: unknown) => z66.ZodSafeParseResult<{
-			id: string & z66.$brand<"evt">;
+		safeParse: (input: unknown) => z72.ZodSafeParseResult<{
+			id: string & z72.$brand<"evt">;
 			occurredAt: string;
-			organizationId: string & z66.$brand<"org">;
+			organizationId: string & z72.$brand<"org">;
 			region: "eu" | "us";
 			type: "draft.approved_required";
 			version: 1;
 			data: {
-				draftId: string & z66.$brand<"drf">;
-				prospectId: string & z66.$brand<"prs">;
-				campaignId: (string & z66.$brand<"cpg">) | null;
+				draftId: string & z72.$brand<"drf">;
+				prospectId: string & z72.$brand<"prs">;
+				campaignId: (string & z72.$brand<"cpg">) | null;
 				reasons: ("check_failed" | "review_mode" | "ungrounded")[];
 				requiredAt: string;
 			};
@@ -15125,11 +16924,11 @@ declare const MESSAGING_EVENTS: {
 };
 /** The type of a messaging event. */
 type MessagingEventType = keyof typeof MESSAGING_EVENTS;
-import { z as z67 } from "zod";
+import { z as z73 } from "zod";
 /** Why a preview row has no Draft: a closed list of the `area.reason` codes that can stop one Prospect. */
 declare const PREVIEW_FAILURE_CODES: readonly ["draft.no_prospect_data", "draft.model_unavailable", "draft.budget_exceeded", "research.timeout"];
 /** Why a preview row has no Draft. */
-declare const previewFailureCodeSchema: z67.ZodEnum<{
+declare const previewFailureCodeSchema: z73.ZodEnum<{
 	"draft.budget_exceeded": "draft.budget_exceeded";
 	"draft.model_unavailable": "draft.model_unavailable";
 	"draft.no_prospect_data": "draft.no_prospect_data";
@@ -15139,25 +16938,25 @@ declare const previewFailureCodeSchema: z67.ZodEnum<{
 * The body to preview a Campaign's Sequence at a version: one to five Prospects, unique, and the
 * Step to show (the first email Step when left out). More than five is `preview.too_many_prospects`.
 */
-declare const previewRequestSchema: z67.ZodObject<{
-	sequenceVersion: z67.ZodNumber;
-	stepKey: z67.ZodOptional<z67.ZodString>;
-	prospectIds: z67.ZodArray<z67.core.$ZodBranded<z67.ZodString, "prs", "out">>;
-}, z67.core.$strict>;
+declare const previewRequestSchema: z73.ZodObject<{
+	sequenceVersion: z73.ZodNumber;
+	stepKey: z73.ZodOptional<z73.ZodString>;
+	prospectIds: z73.ZodArray<z73.core.$ZodBranded<z73.ZodString, "prs", "out">>;
+}, z73.core.$strict>;
 /** The body to preview a Campaign's Sequence. */
-type PreviewRequest = z67.infer<typeof previewRequestSchema>;
+type PreviewRequest = z73.infer<typeof previewRequestSchema>;
 /** One Prospect's preview: the Research Brief and Draft, or the `failureCode` that stopped it. Nothing is sent. */
-declare const previewItemSchema: z67.ZodObject<{
-	prospectId: z67.core.$ZodBranded<z67.ZodString, "prs", "out">;
-	brief: z67.ZodNullable<z67.ZodObject<{
-		id: z67.core.$ZodBranded<z67.ZodString, "brf", "out">;
-		prospectId: z67.core.$ZodBranded<z67.ZodString, "prs", "out">;
-		statements: z67.ZodArray<z67.ZodObject<{
-			text: z67.ZodPipe<z67.ZodString, z67.ZodString>;
-			source: z67.ZodDiscriminatedUnion<[z67.ZodObject<{
-				kind: z67.ZodLiteral<"prospect_field">;
-				prospectId: z67.core.$ZodBranded<z67.ZodString, "prs", "out">;
-				field: z67.ZodEnum<{
+declare const previewItemSchema: z73.ZodObject<{
+	prospectId: z73.core.$ZodBranded<z73.ZodString, "prs", "out">;
+	brief: z73.ZodNullable<z73.ZodObject<{
+		id: z73.core.$ZodBranded<z73.ZodString, "brf", "out">;
+		prospectId: z73.core.$ZodBranded<z73.ZodString, "prs", "out">;
+		statements: z73.ZodArray<z73.ZodObject<{
+			text: z73.ZodPipe<z73.ZodString, z73.ZodString>;
+			source: z73.ZodDiscriminatedUnion<[z73.ZodObject<{
+				kind: z73.ZodLiteral<"prospect_field">;
+				prospectId: z73.core.$ZodBranded<z73.ZodString, "prs", "out">;
+				field: z73.ZodEnum<{
 					email: "email";
 					firstName: "firstName";
 					jobTitle: "jobTitle";
@@ -15165,34 +16964,34 @@ declare const previewItemSchema: z67.ZodObject<{
 					linkedinUrl: "linkedinUrl";
 					phone: "phone";
 				}>;
-			}, z67.core.$strip>, z67.ZodObject<{
-				kind: z67.ZodLiteral<"signal">;
-				signalId: z67.core.$ZodBranded<z67.ZodString, "sig", "out">;
-				observedAt: z67.ZodISODateTime;
-			}, z67.core.$strip>, z67.ZodObject<{
-				kind: z67.ZodLiteral<"web_page">;
-				url: z67.ZodString;
-				retrievedAt: z67.ZodISODateTime;
-			}, z67.core.$strip>, z67.ZodObject<{
-				kind: z67.ZodLiteral<"moment">;
-				callId: z67.core.$ZodBranded<z67.ZodString, "call", "out">;
-				dealRecordId: z67.core.$ZodBranded<z67.ZodString, "deal", "out">;
-			}, z67.core.$strip>, z67.ZodObject<{
-				kind: z67.ZodLiteral<"document">;
-				documentId: z67.core.$ZodBranded<z67.ZodString, "doc", "out">;
-				page: z67.ZodNullable<z67.ZodNumber>;
-			}, z67.core.$strip>], "kind">;
-		}, z67.core.$strict>>;
-		angle: z67.ZodObject<{
-			text: z67.ZodPipe<z67.ZodString, z67.ZodString>;
-			origin: z67.ZodEnum<{
+			}, z73.core.$strip>, z73.ZodObject<{
+				kind: z73.ZodLiteral<"signal">;
+				signalId: z73.core.$ZodBranded<z73.ZodString, "sig", "out">;
+				observedAt: z73.ZodISODateTime;
+			}, z73.core.$strip>, z73.ZodObject<{
+				kind: z73.ZodLiteral<"web_page">;
+				url: z73.ZodString;
+				retrievedAt: z73.ZodISODateTime;
+			}, z73.core.$strip>, z73.ZodObject<{
+				kind: z73.ZodLiteral<"moment">;
+				callId: z73.core.$ZodBranded<z73.ZodString, "call", "out">;
+				dealRecordId: z73.core.$ZodBranded<z73.ZodString, "deal", "out">;
+			}, z73.core.$strip>, z73.ZodObject<{
+				kind: z73.ZodLiteral<"document">;
+				documentId: z73.core.$ZodBranded<z73.ZodString, "doc", "out">;
+				page: z73.ZodNullable<z73.ZodNumber>;
+			}, z73.core.$strip>], "kind">;
+		}, z73.core.$strict>>;
+		angle: z73.ZodObject<{
+			text: z73.ZodPipe<z73.ZodString, z73.ZodString>;
+			origin: z73.ZodEnum<{
 				model_default: "model_default";
 				won_deals: "won_deals";
 			}>;
-			sources: z67.ZodArray<z67.ZodDiscriminatedUnion<[z67.ZodObject<{
-				kind: z67.ZodLiteral<"prospect_field">;
-				prospectId: z67.core.$ZodBranded<z67.ZodString, "prs", "out">;
-				field: z67.ZodEnum<{
+			sources: z73.ZodArray<z73.ZodDiscriminatedUnion<[z73.ZodObject<{
+				kind: z73.ZodLiteral<"prospect_field">;
+				prospectId: z73.core.$ZodBranded<z73.ZodString, "prs", "out">;
+				field: z73.ZodEnum<{
 					email: "email";
 					firstName: "firstName";
 					jobTitle: "jobTitle";
@@ -15200,56 +16999,56 @@ declare const previewItemSchema: z67.ZodObject<{
 					linkedinUrl: "linkedinUrl";
 					phone: "phone";
 				}>;
-			}, z67.core.$strip>, z67.ZodObject<{
-				kind: z67.ZodLiteral<"signal">;
-				signalId: z67.core.$ZodBranded<z67.ZodString, "sig", "out">;
-				observedAt: z67.ZodISODateTime;
-			}, z67.core.$strip>, z67.ZodObject<{
-				kind: z67.ZodLiteral<"web_page">;
-				url: z67.ZodString;
-				retrievedAt: z67.ZodISODateTime;
-			}, z67.core.$strip>, z67.ZodObject<{
-				kind: z67.ZodLiteral<"moment">;
-				callId: z67.core.$ZodBranded<z67.ZodString, "call", "out">;
-				dealRecordId: z67.core.$ZodBranded<z67.ZodString, "deal", "out">;
-			}, z67.core.$strip>, z67.ZodObject<{
-				kind: z67.ZodLiteral<"document">;
-				documentId: z67.core.$ZodBranded<z67.ZodString, "doc", "out">;
-				page: z67.ZodNullable<z67.ZodNumber>;
-			}, z67.core.$strip>], "kind">>;
-		}, z67.core.$strict>;
-		droppedCount: z67.ZodNumber;
-		prospectUpdatedAt: z67.ZodISODateTime;
-		language: z67.ZodEnum<{
+			}, z73.core.$strip>, z73.ZodObject<{
+				kind: z73.ZodLiteral<"signal">;
+				signalId: z73.core.$ZodBranded<z73.ZodString, "sig", "out">;
+				observedAt: z73.ZodISODateTime;
+			}, z73.core.$strip>, z73.ZodObject<{
+				kind: z73.ZodLiteral<"web_page">;
+				url: z73.ZodString;
+				retrievedAt: z73.ZodISODateTime;
+			}, z73.core.$strip>, z73.ZodObject<{
+				kind: z73.ZodLiteral<"moment">;
+				callId: z73.core.$ZodBranded<z73.ZodString, "call", "out">;
+				dealRecordId: z73.core.$ZodBranded<z73.ZodString, "deal", "out">;
+			}, z73.core.$strip>, z73.ZodObject<{
+				kind: z73.ZodLiteral<"document">;
+				documentId: z73.core.$ZodBranded<z73.ZodString, "doc", "out">;
+				page: z73.ZodNullable<z73.ZodNumber>;
+			}, z73.core.$strip>], "kind">>;
+		}, z73.core.$strict>;
+		droppedCount: z73.ZodNumber;
+		prospectUpdatedAt: z73.ZodISODateTime;
+		language: z73.ZodEnum<{
 			en: "en";
 		}>;
-		model: z67.ZodString;
-		createdAt: z67.ZodISODateTime;
-		expiresAt: z67.ZodISODateTime;
-	}, z67.core.$strict>>;
-	draft: z67.ZodNullable<z67.ZodObject<{
-		id: z67.core.$ZodBranded<z67.ZodString, "drf", "out">;
-		prospectId: z67.core.$ZodBranded<z67.ZodString, "prs", "out">;
-		campaignId: z67.ZodNullable<z67.core.$ZodBranded<z67.ZodString, "cpg", "out">>;
-		stepKey: z67.ZodNullable<z67.ZodString>;
-		channel: z67.ZodEnum<{
+		model: z73.ZodString;
+		createdAt: z73.ZodISODateTime;
+		expiresAt: z73.ZodISODateTime;
+	}, z73.core.$strict>>;
+	draft: z73.ZodNullable<z73.ZodObject<{
+		id: z73.core.$ZodBranded<z73.ZodString, "drf", "out">;
+		prospectId: z73.core.$ZodBranded<z73.ZodString, "prs", "out">;
+		campaignId: z73.ZodNullable<z73.core.$ZodBranded<z73.ZodString, "cpg", "out">>;
+		stepKey: z73.ZodNullable<z73.ZodString>;
+		channel: z73.ZodEnum<{
 			email: "email";
 		}>;
-		goal: z67.ZodPipe<z67.ZodString, z67.ZodString>;
-		language: z67.ZodEnum<{
+		goal: z73.ZodPipe<z73.ZodString, z73.ZodString>;
+		language: z73.ZodEnum<{
 			en: "en";
 		}>;
-		subject: z67.ZodPipe<z67.ZodString, z67.ZodString>;
-		body: z67.ZodPipe<z67.ZodString, z67.ZodString>;
-		revision: z67.ZodNumber;
-		source: z67.ZodEnum<{
+		subject: z73.ZodPipe<z73.ZodString, z73.ZodString>;
+		body: z73.ZodPipe<z73.ZodString, z73.ZodString>;
+		revision: z73.ZodNumber;
+		source: z73.ZodEnum<{
 			edited: "edited";
 			generated: "generated";
 		}>;
-		citations: z67.ZodArray<z67.ZodIntersection<z67.ZodDiscriminatedUnion<[z67.ZodObject<{
-			kind: z67.ZodLiteral<"prospect_field">;
-			prospectId: z67.core.$ZodBranded<z67.ZodString, "prs", "out">;
-			field: z67.ZodEnum<{
+		citations: z73.ZodArray<z73.ZodIntersection<z73.ZodDiscriminatedUnion<[z73.ZodObject<{
+			kind: z73.ZodLiteral<"prospect_field">;
+			prospectId: z73.core.$ZodBranded<z73.ZodString, "prs", "out">;
+			field: z73.ZodEnum<{
 				email: "email";
 				firstName: "firstName";
 				jobTitle: "jobTitle";
@@ -15257,74 +17056,74 @@ declare const previewItemSchema: z67.ZodObject<{
 				linkedinUrl: "linkedinUrl";
 				phone: "phone";
 			}>;
-		}, z67.core.$strip>, z67.ZodObject<{
-			kind: z67.ZodLiteral<"signal">;
-			signalId: z67.core.$ZodBranded<z67.ZodString, "sig", "out">;
-			observedAt: z67.ZodISODateTime;
-		}, z67.core.$strip>, z67.ZodObject<{
-			kind: z67.ZodLiteral<"web_page">;
-			url: z67.ZodString;
-			retrievedAt: z67.ZodISODateTime;
-		}, z67.core.$strip>, z67.ZodObject<{
-			kind: z67.ZodLiteral<"moment">;
-			callId: z67.core.$ZodBranded<z67.ZodString, "call", "out">;
-			dealRecordId: z67.core.$ZodBranded<z67.ZodString, "deal", "out">;
-		}, z67.core.$strip>, z67.ZodObject<{
-			kind: z67.ZodLiteral<"document">;
-			documentId: z67.core.$ZodBranded<z67.ZodString, "doc", "out">;
-			page: z67.ZodNullable<z67.ZodNumber>;
-		}, z67.core.$strip>], "kind">, z67.ZodObject<{
-			applies: z67.ZodBoolean;
-			score: z67.ZodOptional<z67.ZodNumber>;
-		}, z67.core.$strip>>>;
-		ungrounded: z67.ZodBoolean;
-		wonDealCount: z67.ZodNumber;
-		checks: z67.ZodArray<z67.ZodObject<{
-			check: z67.ZodEnum<{
+		}, z73.core.$strip>, z73.ZodObject<{
+			kind: z73.ZodLiteral<"signal">;
+			signalId: z73.core.$ZodBranded<z73.ZodString, "sig", "out">;
+			observedAt: z73.ZodISODateTime;
+		}, z73.core.$strip>, z73.ZodObject<{
+			kind: z73.ZodLiteral<"web_page">;
+			url: z73.ZodString;
+			retrievedAt: z73.ZodISODateTime;
+		}, z73.core.$strip>, z73.ZodObject<{
+			kind: z73.ZodLiteral<"moment">;
+			callId: z73.core.$ZodBranded<z73.ZodString, "call", "out">;
+			dealRecordId: z73.core.$ZodBranded<z73.ZodString, "deal", "out">;
+		}, z73.core.$strip>, z73.ZodObject<{
+			kind: z73.ZodLiteral<"document">;
+			documentId: z73.core.$ZodBranded<z73.ZodString, "doc", "out">;
+			page: z73.ZodNullable<z73.ZodNumber>;
+		}, z73.core.$strip>], "kind">, z73.ZodObject<{
+			applies: z73.ZodBoolean;
+			score: z73.ZodOptional<z73.ZodNumber>;
+		}, z73.core.$strip>>>;
+		ungrounded: z73.ZodBoolean;
+		wonDealCount: z73.ZodNumber;
+		checks: z73.ZodArray<z73.ZodObject<{
+			check: z73.ZodEnum<{
 				banned_phrase: "banned_phrase";
 				citations_resolve: "citations_resolve";
 				claims_supported: "claims_supported";
 				length: "length";
 				name_match: "name_match";
 			}>;
-			result: z67.ZodEnum<{
+			result: z73.ZodEnum<{
 				fail: "fail";
 				pass: "pass";
 			}>;
-			count: z67.ZodNumber;
-		}, z67.core.$strict>>;
-		autoSendable: z67.ZodBoolean;
-		brandVoiceId: z67.core.$ZodBranded<z67.ZodString, "bvo", "out">;
-		voiceVersion: z67.ZodNumber;
-		briefId: z67.ZodNullable<z67.core.$ZodBranded<z67.ZodString, "brf", "out">>;
-		model: z67.ZodString;
-		createdAt: z67.ZodISODateTime;
-		updatedAt: z67.ZodISODateTime;
-	}, z67.core.$strict>>;
-	failureCode: z67.ZodNullable<z67.ZodEnum<{
+			count: z73.ZodNumber;
+		}, z73.core.$strict>>;
+		autoSendable: z73.ZodBoolean;
+		brandVoiceId: z73.core.$ZodBranded<z73.ZodString, "bvo", "out">;
+		voiceVersion: z73.ZodNumber;
+		briefId: z73.ZodNullable<z73.core.$ZodBranded<z73.ZodString, "brf", "out">>;
+		model: z73.ZodString;
+		createdAt: z73.ZodISODateTime;
+		updatedAt: z73.ZodISODateTime;
+	}, z73.core.$strict>>;
+	failureCode: z73.ZodNullable<z73.ZodEnum<{
 		"draft.budget_exceeded": "draft.budget_exceeded";
 		"draft.model_unavailable": "draft.model_unavailable";
 		"draft.no_prospect_data": "draft.no_prospect_data";
 		"research.timeout": "research.timeout";
 	}>>;
-}, z67.core.$strict>;
+}, z73.core.$strict>;
 /** One Prospect's preview. */
-type PreviewItem = z67.infer<typeof previewItemSchema>;
+type PreviewItem = z73.infer<typeof previewItemSchema>;
 /** The result of a preview: one item per Prospect, in request order, and the Sequence version shown. */
-declare const previewResultSchema: z67.ZodObject<{
-	sequenceVersion: z67.ZodNumber;
-	stepKey: z67.ZodString;
-	items: z67.ZodArray<z67.ZodObject<{
-		prospectId: z67.core.$ZodBranded<z67.ZodString, "prs", "out">;
-		brief: z67.ZodNullable<z67.ZodObject<{
-			id: z67.core.$ZodBranded<z67.ZodString, "brf", "out">;
-			prospectId: z67.core.$ZodBranded<z67.ZodString, "prs", "out">;
-			statements: z67.ZodArray<z67.ZodObject<{
-				text: z67.ZodPipe<z67.ZodString, z67.ZodString>;
-				source: z67.ZodDiscriminatedUnion<[z67.ZodObject<{
-					kind: z67.ZodLiteral<"prospect_field">;
-					prospectId: z67.core.$ZodBranded<z67.ZodString, "prs", "out">;
-					field: z67.ZodEnum<{
+declare const previewResultSchema: z73.ZodObject<{
+	sequenceVersion: z73.ZodNumber;
+	stepKey: z73.ZodString;
+	items: z73.ZodArray<z73.ZodObject<{
+		prospectId: z73.core.$ZodBranded<z73.ZodString, "prs", "out">;
+		brief: z73.ZodNullable<z73.ZodObject<{
+			id: z73.core.$ZodBranded<z73.ZodString, "brf", "out">;
+			prospectId: z73.core.$ZodBranded<z73.ZodString, "prs", "out">;
+			statements: z73.ZodArray<z73.ZodObject<{
+				text: z73.ZodPipe<z73.ZodString, z73.ZodString>;
+				source: z73.ZodDiscriminatedUnion<[z73.ZodObject<{
+					kind: z73.ZodLiteral<"prospect_field">;
+					prospectId: z73.core.$ZodBranded<z73.ZodString, "prs", "out">;
+					field: z73.ZodEnum<{
 						email: "email";
 						firstName: "firstName";
 						jobTitle: "jobTitle";
@@ -15332,34 +17131,34 @@ declare const previewResultSchema: z67.ZodObject<{
 						linkedinUrl: "linkedinUrl";
 						phone: "phone";
 					}>;
-				}, z67.core.$strip>, z67.ZodObject<{
-					kind: z67.ZodLiteral<"signal">;
-					signalId: z67.core.$ZodBranded<z67.ZodString, "sig", "out">;
-					observedAt: z67.ZodISODateTime;
-				}, z67.core.$strip>, z67.ZodObject<{
-					kind: z67.ZodLiteral<"web_page">;
-					url: z67.ZodString;
-					retrievedAt: z67.ZodISODateTime;
-				}, z67.core.$strip>, z67.ZodObject<{
-					kind: z67.ZodLiteral<"moment">;
-					callId: z67.core.$ZodBranded<z67.ZodString, "call", "out">;
-					dealRecordId: z67.core.$ZodBranded<z67.ZodString, "deal", "out">;
-				}, z67.core.$strip>, z67.ZodObject<{
-					kind: z67.ZodLiteral<"document">;
-					documentId: z67.core.$ZodBranded<z67.ZodString, "doc", "out">;
-					page: z67.ZodNullable<z67.ZodNumber>;
-				}, z67.core.$strip>], "kind">;
-			}, z67.core.$strict>>;
-			angle: z67.ZodObject<{
-				text: z67.ZodPipe<z67.ZodString, z67.ZodString>;
-				origin: z67.ZodEnum<{
+				}, z73.core.$strip>, z73.ZodObject<{
+					kind: z73.ZodLiteral<"signal">;
+					signalId: z73.core.$ZodBranded<z73.ZodString, "sig", "out">;
+					observedAt: z73.ZodISODateTime;
+				}, z73.core.$strip>, z73.ZodObject<{
+					kind: z73.ZodLiteral<"web_page">;
+					url: z73.ZodString;
+					retrievedAt: z73.ZodISODateTime;
+				}, z73.core.$strip>, z73.ZodObject<{
+					kind: z73.ZodLiteral<"moment">;
+					callId: z73.core.$ZodBranded<z73.ZodString, "call", "out">;
+					dealRecordId: z73.core.$ZodBranded<z73.ZodString, "deal", "out">;
+				}, z73.core.$strip>, z73.ZodObject<{
+					kind: z73.ZodLiteral<"document">;
+					documentId: z73.core.$ZodBranded<z73.ZodString, "doc", "out">;
+					page: z73.ZodNullable<z73.ZodNumber>;
+				}, z73.core.$strip>], "kind">;
+			}, z73.core.$strict>>;
+			angle: z73.ZodObject<{
+				text: z73.ZodPipe<z73.ZodString, z73.ZodString>;
+				origin: z73.ZodEnum<{
 					model_default: "model_default";
 					won_deals: "won_deals";
 				}>;
-				sources: z67.ZodArray<z67.ZodDiscriminatedUnion<[z67.ZodObject<{
-					kind: z67.ZodLiteral<"prospect_field">;
-					prospectId: z67.core.$ZodBranded<z67.ZodString, "prs", "out">;
-					field: z67.ZodEnum<{
+				sources: z73.ZodArray<z73.ZodDiscriminatedUnion<[z73.ZodObject<{
+					kind: z73.ZodLiteral<"prospect_field">;
+					prospectId: z73.core.$ZodBranded<z73.ZodString, "prs", "out">;
+					field: z73.ZodEnum<{
 						email: "email";
 						firstName: "firstName";
 						jobTitle: "jobTitle";
@@ -15367,56 +17166,56 @@ declare const previewResultSchema: z67.ZodObject<{
 						linkedinUrl: "linkedinUrl";
 						phone: "phone";
 					}>;
-				}, z67.core.$strip>, z67.ZodObject<{
-					kind: z67.ZodLiteral<"signal">;
-					signalId: z67.core.$ZodBranded<z67.ZodString, "sig", "out">;
-					observedAt: z67.ZodISODateTime;
-				}, z67.core.$strip>, z67.ZodObject<{
-					kind: z67.ZodLiteral<"web_page">;
-					url: z67.ZodString;
-					retrievedAt: z67.ZodISODateTime;
-				}, z67.core.$strip>, z67.ZodObject<{
-					kind: z67.ZodLiteral<"moment">;
-					callId: z67.core.$ZodBranded<z67.ZodString, "call", "out">;
-					dealRecordId: z67.core.$ZodBranded<z67.ZodString, "deal", "out">;
-				}, z67.core.$strip>, z67.ZodObject<{
-					kind: z67.ZodLiteral<"document">;
-					documentId: z67.core.$ZodBranded<z67.ZodString, "doc", "out">;
-					page: z67.ZodNullable<z67.ZodNumber>;
-				}, z67.core.$strip>], "kind">>;
-			}, z67.core.$strict>;
-			droppedCount: z67.ZodNumber;
-			prospectUpdatedAt: z67.ZodISODateTime;
-			language: z67.ZodEnum<{
+				}, z73.core.$strip>, z73.ZodObject<{
+					kind: z73.ZodLiteral<"signal">;
+					signalId: z73.core.$ZodBranded<z73.ZodString, "sig", "out">;
+					observedAt: z73.ZodISODateTime;
+				}, z73.core.$strip>, z73.ZodObject<{
+					kind: z73.ZodLiteral<"web_page">;
+					url: z73.ZodString;
+					retrievedAt: z73.ZodISODateTime;
+				}, z73.core.$strip>, z73.ZodObject<{
+					kind: z73.ZodLiteral<"moment">;
+					callId: z73.core.$ZodBranded<z73.ZodString, "call", "out">;
+					dealRecordId: z73.core.$ZodBranded<z73.ZodString, "deal", "out">;
+				}, z73.core.$strip>, z73.ZodObject<{
+					kind: z73.ZodLiteral<"document">;
+					documentId: z73.core.$ZodBranded<z73.ZodString, "doc", "out">;
+					page: z73.ZodNullable<z73.ZodNumber>;
+				}, z73.core.$strip>], "kind">>;
+			}, z73.core.$strict>;
+			droppedCount: z73.ZodNumber;
+			prospectUpdatedAt: z73.ZodISODateTime;
+			language: z73.ZodEnum<{
 				en: "en";
 			}>;
-			model: z67.ZodString;
-			createdAt: z67.ZodISODateTime;
-			expiresAt: z67.ZodISODateTime;
-		}, z67.core.$strict>>;
-		draft: z67.ZodNullable<z67.ZodObject<{
-			id: z67.core.$ZodBranded<z67.ZodString, "drf", "out">;
-			prospectId: z67.core.$ZodBranded<z67.ZodString, "prs", "out">;
-			campaignId: z67.ZodNullable<z67.core.$ZodBranded<z67.ZodString, "cpg", "out">>;
-			stepKey: z67.ZodNullable<z67.ZodString>;
-			channel: z67.ZodEnum<{
+			model: z73.ZodString;
+			createdAt: z73.ZodISODateTime;
+			expiresAt: z73.ZodISODateTime;
+		}, z73.core.$strict>>;
+		draft: z73.ZodNullable<z73.ZodObject<{
+			id: z73.core.$ZodBranded<z73.ZodString, "drf", "out">;
+			prospectId: z73.core.$ZodBranded<z73.ZodString, "prs", "out">;
+			campaignId: z73.ZodNullable<z73.core.$ZodBranded<z73.ZodString, "cpg", "out">>;
+			stepKey: z73.ZodNullable<z73.ZodString>;
+			channel: z73.ZodEnum<{
 				email: "email";
 			}>;
-			goal: z67.ZodPipe<z67.ZodString, z67.ZodString>;
-			language: z67.ZodEnum<{
+			goal: z73.ZodPipe<z73.ZodString, z73.ZodString>;
+			language: z73.ZodEnum<{
 				en: "en";
 			}>;
-			subject: z67.ZodPipe<z67.ZodString, z67.ZodString>;
-			body: z67.ZodPipe<z67.ZodString, z67.ZodString>;
-			revision: z67.ZodNumber;
-			source: z67.ZodEnum<{
+			subject: z73.ZodPipe<z73.ZodString, z73.ZodString>;
+			body: z73.ZodPipe<z73.ZodString, z73.ZodString>;
+			revision: z73.ZodNumber;
+			source: z73.ZodEnum<{
 				edited: "edited";
 				generated: "generated";
 			}>;
-			citations: z67.ZodArray<z67.ZodIntersection<z67.ZodDiscriminatedUnion<[z67.ZodObject<{
-				kind: z67.ZodLiteral<"prospect_field">;
-				prospectId: z67.core.$ZodBranded<z67.ZodString, "prs", "out">;
-				field: z67.ZodEnum<{
+			citations: z73.ZodArray<z73.ZodIntersection<z73.ZodDiscriminatedUnion<[z73.ZodObject<{
+				kind: z73.ZodLiteral<"prospect_field">;
+				prospectId: z73.core.$ZodBranded<z73.ZodString, "prs", "out">;
+				field: z73.ZodEnum<{
 					email: "email";
 					firstName: "firstName";
 					jobTitle: "jobTitle";
@@ -15424,74 +17223,74 @@ declare const previewResultSchema: z67.ZodObject<{
 					linkedinUrl: "linkedinUrl";
 					phone: "phone";
 				}>;
-			}, z67.core.$strip>, z67.ZodObject<{
-				kind: z67.ZodLiteral<"signal">;
-				signalId: z67.core.$ZodBranded<z67.ZodString, "sig", "out">;
-				observedAt: z67.ZodISODateTime;
-			}, z67.core.$strip>, z67.ZodObject<{
-				kind: z67.ZodLiteral<"web_page">;
-				url: z67.ZodString;
-				retrievedAt: z67.ZodISODateTime;
-			}, z67.core.$strip>, z67.ZodObject<{
-				kind: z67.ZodLiteral<"moment">;
-				callId: z67.core.$ZodBranded<z67.ZodString, "call", "out">;
-				dealRecordId: z67.core.$ZodBranded<z67.ZodString, "deal", "out">;
-			}, z67.core.$strip>, z67.ZodObject<{
-				kind: z67.ZodLiteral<"document">;
-				documentId: z67.core.$ZodBranded<z67.ZodString, "doc", "out">;
-				page: z67.ZodNullable<z67.ZodNumber>;
-			}, z67.core.$strip>], "kind">, z67.ZodObject<{
-				applies: z67.ZodBoolean;
-				score: z67.ZodOptional<z67.ZodNumber>;
-			}, z67.core.$strip>>>;
-			ungrounded: z67.ZodBoolean;
-			wonDealCount: z67.ZodNumber;
-			checks: z67.ZodArray<z67.ZodObject<{
-				check: z67.ZodEnum<{
+			}, z73.core.$strip>, z73.ZodObject<{
+				kind: z73.ZodLiteral<"signal">;
+				signalId: z73.core.$ZodBranded<z73.ZodString, "sig", "out">;
+				observedAt: z73.ZodISODateTime;
+			}, z73.core.$strip>, z73.ZodObject<{
+				kind: z73.ZodLiteral<"web_page">;
+				url: z73.ZodString;
+				retrievedAt: z73.ZodISODateTime;
+			}, z73.core.$strip>, z73.ZodObject<{
+				kind: z73.ZodLiteral<"moment">;
+				callId: z73.core.$ZodBranded<z73.ZodString, "call", "out">;
+				dealRecordId: z73.core.$ZodBranded<z73.ZodString, "deal", "out">;
+			}, z73.core.$strip>, z73.ZodObject<{
+				kind: z73.ZodLiteral<"document">;
+				documentId: z73.core.$ZodBranded<z73.ZodString, "doc", "out">;
+				page: z73.ZodNullable<z73.ZodNumber>;
+			}, z73.core.$strip>], "kind">, z73.ZodObject<{
+				applies: z73.ZodBoolean;
+				score: z73.ZodOptional<z73.ZodNumber>;
+			}, z73.core.$strip>>>;
+			ungrounded: z73.ZodBoolean;
+			wonDealCount: z73.ZodNumber;
+			checks: z73.ZodArray<z73.ZodObject<{
+				check: z73.ZodEnum<{
 					banned_phrase: "banned_phrase";
 					citations_resolve: "citations_resolve";
 					claims_supported: "claims_supported";
 					length: "length";
 					name_match: "name_match";
 				}>;
-				result: z67.ZodEnum<{
+				result: z73.ZodEnum<{
 					fail: "fail";
 					pass: "pass";
 				}>;
-				count: z67.ZodNumber;
-			}, z67.core.$strict>>;
-			autoSendable: z67.ZodBoolean;
-			brandVoiceId: z67.core.$ZodBranded<z67.ZodString, "bvo", "out">;
-			voiceVersion: z67.ZodNumber;
-			briefId: z67.ZodNullable<z67.core.$ZodBranded<z67.ZodString, "brf", "out">>;
-			model: z67.ZodString;
-			createdAt: z67.ZodISODateTime;
-			updatedAt: z67.ZodISODateTime;
-		}, z67.core.$strict>>;
-		failureCode: z67.ZodNullable<z67.ZodEnum<{
+				count: z73.ZodNumber;
+			}, z73.core.$strict>>;
+			autoSendable: z73.ZodBoolean;
+			brandVoiceId: z73.core.$ZodBranded<z73.ZodString, "bvo", "out">;
+			voiceVersion: z73.ZodNumber;
+			briefId: z73.ZodNullable<z73.core.$ZodBranded<z73.ZodString, "brf", "out">>;
+			model: z73.ZodString;
+			createdAt: z73.ZodISODateTime;
+			updatedAt: z73.ZodISODateTime;
+		}, z73.core.$strict>>;
+		failureCode: z73.ZodNullable<z73.ZodEnum<{
 			"draft.budget_exceeded": "draft.budget_exceeded";
 			"draft.model_unavailable": "draft.model_unavailable";
 			"draft.no_prospect_data": "draft.no_prospect_data";
 			"research.timeout": "research.timeout";
 		}>>;
-	}, z67.core.$strict>>;
-}, z67.core.$strict>;
+	}, z73.core.$strict>>;
+}, z73.core.$strict>;
 /** The result of a preview. */
-type PreviewResult = z67.infer<typeof previewResultSchema>;
+type PreviewResult = z73.infer<typeof previewResultSchema>;
 /** The body to accept a preview, so the Campaign counts as previewed at that Sequence version. */
-declare const acceptPreviewRequestSchema: z67.ZodObject<{
-	sequenceVersion: z67.ZodNumber;
-}, z67.core.$strict>;
+declare const acceptPreviewRequestSchema: z73.ZodObject<{
+	sequenceVersion: z73.ZodNumber;
+}, z73.core.$strict>;
 /** The body to accept a preview. */
-type AcceptPreviewRequest = z67.infer<typeof acceptPreviewRequestSchema>;
-import { z as z68 } from "zod";
+type AcceptPreviewRequest = z73.infer<typeof acceptPreviewRequestSchema>;
+import { z as z74 } from "zod";
 /** One statement of a Research Brief: a fact about the Prospect and the one source it rests on. A statement with no source is never kept. */
-declare const briefStatementSchema: z68.ZodObject<{
-	text: z68.ZodPipe<z68.ZodString, z68.ZodString>;
-	source: z68.ZodDiscriminatedUnion<[z68.ZodObject<{
-		kind: z68.ZodLiteral<"prospect_field">;
-		prospectId: z68.core.$ZodBranded<z68.ZodString, "prs", "out">;
-		field: z68.ZodEnum<{
+declare const briefStatementSchema: z74.ZodObject<{
+	text: z74.ZodPipe<z74.ZodString, z74.ZodString>;
+	source: z74.ZodDiscriminatedUnion<[z74.ZodObject<{
+		kind: z74.ZodLiteral<"prospect_field">;
+		prospectId: z74.core.$ZodBranded<z74.ZodString, "prs", "out">;
+		field: z74.ZodEnum<{
 			email: "email";
 			firstName: "firstName";
 			jobTitle: "jobTitle";
@@ -15499,30 +17298,30 @@ declare const briefStatementSchema: z68.ZodObject<{
 			linkedinUrl: "linkedinUrl";
 			phone: "phone";
 		}>;
-	}, z68.core.$strip>, z68.ZodObject<{
-		kind: z68.ZodLiteral<"signal">;
-		signalId: z68.core.$ZodBranded<z68.ZodString, "sig", "out">;
-		observedAt: z68.ZodISODateTime;
-	}, z68.core.$strip>, z68.ZodObject<{
-		kind: z68.ZodLiteral<"web_page">;
-		url: z68.ZodString;
-		retrievedAt: z68.ZodISODateTime;
-	}, z68.core.$strip>, z68.ZodObject<{
-		kind: z68.ZodLiteral<"moment">;
-		callId: z68.core.$ZodBranded<z68.ZodString, "call", "out">;
-		dealRecordId: z68.core.$ZodBranded<z68.ZodString, "deal", "out">;
-	}, z68.core.$strip>, z68.ZodObject<{
-		kind: z68.ZodLiteral<"document">;
-		documentId: z68.core.$ZodBranded<z68.ZodString, "doc", "out">;
-		page: z68.ZodNullable<z68.ZodNumber>;
-	}, z68.core.$strip>], "kind">;
-}, z68.core.$strict>;
+	}, z74.core.$strip>, z74.ZodObject<{
+		kind: z74.ZodLiteral<"signal">;
+		signalId: z74.core.$ZodBranded<z74.ZodString, "sig", "out">;
+		observedAt: z74.ZodISODateTime;
+	}, z74.core.$strip>, z74.ZodObject<{
+		kind: z74.ZodLiteral<"web_page">;
+		url: z74.ZodString;
+		retrievedAt: z74.ZodISODateTime;
+	}, z74.core.$strip>, z74.ZodObject<{
+		kind: z74.ZodLiteral<"moment">;
+		callId: z74.core.$ZodBranded<z74.ZodString, "call", "out">;
+		dealRecordId: z74.core.$ZodBranded<z74.ZodString, "deal", "out">;
+	}, z74.core.$strip>, z74.ZodObject<{
+		kind: z74.ZodLiteral<"document">;
+		documentId: z74.core.$ZodBranded<z74.ZodString, "doc", "out">;
+		page: z74.ZodNullable<z74.ZodNumber>;
+	}, z74.core.$strip>], "kind">;
+}, z74.core.$strict>;
 /** One statement of a Research Brief. */
-type BriefStatement = z68.infer<typeof briefStatementSchema>;
+type BriefStatement = z74.infer<typeof briefStatementSchema>;
 /** Where the suggested angle came from: the Organization's won Deals, or the model's default when it has none. */
 declare const ANGLE_ORIGINS: readonly ["won_deals", "model_default"];
 /** Where the suggested angle came from. */
-declare const angleOriginSchema: z68.ZodEnum<{
+declare const angleOriginSchema: z74.ZodEnum<{
 	model_default: "model_default";
 	won_deals: "won_deals";
 }>;
@@ -15530,16 +17329,16 @@ declare const angleOriginSchema: z68.ZodEnum<{
 * The angle a Draft is told to take, with where it came from and what backs it. An angle from
 * `won_deals` cites at least one Moment; one from `model_default` cites nothing and says so.
 */
-declare const briefAngleSchema: z68.ZodObject<{
-	text: z68.ZodPipe<z68.ZodString, z68.ZodString>;
-	origin: z68.ZodEnum<{
+declare const briefAngleSchema: z74.ZodObject<{
+	text: z74.ZodPipe<z74.ZodString, z74.ZodString>;
+	origin: z74.ZodEnum<{
 		model_default: "model_default";
 		won_deals: "won_deals";
 	}>;
-	sources: z68.ZodArray<z68.ZodDiscriminatedUnion<[z68.ZodObject<{
-		kind: z68.ZodLiteral<"prospect_field">;
-		prospectId: z68.core.$ZodBranded<z68.ZodString, "prs", "out">;
-		field: z68.ZodEnum<{
+	sources: z74.ZodArray<z74.ZodDiscriminatedUnion<[z74.ZodObject<{
+		kind: z74.ZodLiteral<"prospect_field">;
+		prospectId: z74.core.$ZodBranded<z74.ZodString, "prs", "out">;
+		field: z74.ZodEnum<{
 			email: "email";
 			firstName: "firstName";
 			jobTitle: "jobTitle";
@@ -15547,41 +17346,41 @@ declare const briefAngleSchema: z68.ZodObject<{
 			linkedinUrl: "linkedinUrl";
 			phone: "phone";
 		}>;
-	}, z68.core.$strip>, z68.ZodObject<{
-		kind: z68.ZodLiteral<"signal">;
-		signalId: z68.core.$ZodBranded<z68.ZodString, "sig", "out">;
-		observedAt: z68.ZodISODateTime;
-	}, z68.core.$strip>, z68.ZodObject<{
-		kind: z68.ZodLiteral<"web_page">;
-		url: z68.ZodString;
-		retrievedAt: z68.ZodISODateTime;
-	}, z68.core.$strip>, z68.ZodObject<{
-		kind: z68.ZodLiteral<"moment">;
-		callId: z68.core.$ZodBranded<z68.ZodString, "call", "out">;
-		dealRecordId: z68.core.$ZodBranded<z68.ZodString, "deal", "out">;
-	}, z68.core.$strip>, z68.ZodObject<{
-		kind: z68.ZodLiteral<"document">;
-		documentId: z68.core.$ZodBranded<z68.ZodString, "doc", "out">;
-		page: z68.ZodNullable<z68.ZodNumber>;
-	}, z68.core.$strip>], "kind">>;
-}, z68.core.$strict>;
+	}, z74.core.$strip>, z74.ZodObject<{
+		kind: z74.ZodLiteral<"signal">;
+		signalId: z74.core.$ZodBranded<z74.ZodString, "sig", "out">;
+		observedAt: z74.ZodISODateTime;
+	}, z74.core.$strip>, z74.ZodObject<{
+		kind: z74.ZodLiteral<"web_page">;
+		url: z74.ZodString;
+		retrievedAt: z74.ZodISODateTime;
+	}, z74.core.$strip>, z74.ZodObject<{
+		kind: z74.ZodLiteral<"moment">;
+		callId: z74.core.$ZodBranded<z74.ZodString, "call", "out">;
+		dealRecordId: z74.core.$ZodBranded<z74.ZodString, "deal", "out">;
+	}, z74.core.$strip>, z74.ZodObject<{
+		kind: z74.ZodLiteral<"document">;
+		documentId: z74.core.$ZodBranded<z74.ZodString, "doc", "out">;
+		page: z74.ZodNullable<z74.ZodNumber>;
+	}, z74.core.$strip>], "kind">>;
+}, z74.core.$strict>;
 /** The angle of a Research Brief. */
-type BriefAngle = z68.infer<typeof briefAngleSchema>;
+type BriefAngle = z74.infer<typeof briefAngleSchema>;
 /**
 * A Research Brief: the cited facts about one Prospect that a Draft is written from. Every
 * statement carries exactly one source; `droppedCount` is how many the model proposed that had none
 * or whose source did not resolve, and were left out. It is cached until `expiresAt` and stale as
 * soon as the Prospect's record changes after `prospectUpdatedAt`. Model output: untrusted data.
 */
-declare const researchBriefSchema: z68.ZodObject<{
-	id: z68.core.$ZodBranded<z68.ZodString, "brf", "out">;
-	prospectId: z68.core.$ZodBranded<z68.ZodString, "prs", "out">;
-	statements: z68.ZodArray<z68.ZodObject<{
-		text: z68.ZodPipe<z68.ZodString, z68.ZodString>;
-		source: z68.ZodDiscriminatedUnion<[z68.ZodObject<{
-			kind: z68.ZodLiteral<"prospect_field">;
-			prospectId: z68.core.$ZodBranded<z68.ZodString, "prs", "out">;
-			field: z68.ZodEnum<{
+declare const researchBriefSchema: z74.ZodObject<{
+	id: z74.core.$ZodBranded<z74.ZodString, "brf", "out">;
+	prospectId: z74.core.$ZodBranded<z74.ZodString, "prs", "out">;
+	statements: z74.ZodArray<z74.ZodObject<{
+		text: z74.ZodPipe<z74.ZodString, z74.ZodString>;
+		source: z74.ZodDiscriminatedUnion<[z74.ZodObject<{
+			kind: z74.ZodLiteral<"prospect_field">;
+			prospectId: z74.core.$ZodBranded<z74.ZodString, "prs", "out">;
+			field: z74.ZodEnum<{
 				email: "email";
 				firstName: "firstName";
 				jobTitle: "jobTitle";
@@ -15589,34 +17388,34 @@ declare const researchBriefSchema: z68.ZodObject<{
 				linkedinUrl: "linkedinUrl";
 				phone: "phone";
 			}>;
-		}, z68.core.$strip>, z68.ZodObject<{
-			kind: z68.ZodLiteral<"signal">;
-			signalId: z68.core.$ZodBranded<z68.ZodString, "sig", "out">;
-			observedAt: z68.ZodISODateTime;
-		}, z68.core.$strip>, z68.ZodObject<{
-			kind: z68.ZodLiteral<"web_page">;
-			url: z68.ZodString;
-			retrievedAt: z68.ZodISODateTime;
-		}, z68.core.$strip>, z68.ZodObject<{
-			kind: z68.ZodLiteral<"moment">;
-			callId: z68.core.$ZodBranded<z68.ZodString, "call", "out">;
-			dealRecordId: z68.core.$ZodBranded<z68.ZodString, "deal", "out">;
-		}, z68.core.$strip>, z68.ZodObject<{
-			kind: z68.ZodLiteral<"document">;
-			documentId: z68.core.$ZodBranded<z68.ZodString, "doc", "out">;
-			page: z68.ZodNullable<z68.ZodNumber>;
-		}, z68.core.$strip>], "kind">;
-	}, z68.core.$strict>>;
-	angle: z68.ZodObject<{
-		text: z68.ZodPipe<z68.ZodString, z68.ZodString>;
-		origin: z68.ZodEnum<{
+		}, z74.core.$strip>, z74.ZodObject<{
+			kind: z74.ZodLiteral<"signal">;
+			signalId: z74.core.$ZodBranded<z74.ZodString, "sig", "out">;
+			observedAt: z74.ZodISODateTime;
+		}, z74.core.$strip>, z74.ZodObject<{
+			kind: z74.ZodLiteral<"web_page">;
+			url: z74.ZodString;
+			retrievedAt: z74.ZodISODateTime;
+		}, z74.core.$strip>, z74.ZodObject<{
+			kind: z74.ZodLiteral<"moment">;
+			callId: z74.core.$ZodBranded<z74.ZodString, "call", "out">;
+			dealRecordId: z74.core.$ZodBranded<z74.ZodString, "deal", "out">;
+		}, z74.core.$strip>, z74.ZodObject<{
+			kind: z74.ZodLiteral<"document">;
+			documentId: z74.core.$ZodBranded<z74.ZodString, "doc", "out">;
+			page: z74.ZodNullable<z74.ZodNumber>;
+		}, z74.core.$strip>], "kind">;
+	}, z74.core.$strict>>;
+	angle: z74.ZodObject<{
+		text: z74.ZodPipe<z74.ZodString, z74.ZodString>;
+		origin: z74.ZodEnum<{
 			model_default: "model_default";
 			won_deals: "won_deals";
 		}>;
-		sources: z68.ZodArray<z68.ZodDiscriminatedUnion<[z68.ZodObject<{
-			kind: z68.ZodLiteral<"prospect_field">;
-			prospectId: z68.core.$ZodBranded<z68.ZodString, "prs", "out">;
-			field: z68.ZodEnum<{
+		sources: z74.ZodArray<z74.ZodDiscriminatedUnion<[z74.ZodObject<{
+			kind: z74.ZodLiteral<"prospect_field">;
+			prospectId: z74.core.$ZodBranded<z74.ZodString, "prs", "out">;
+			field: z74.ZodEnum<{
 				email: "email";
 				firstName: "firstName";
 				jobTitle: "jobTitle";
@@ -15624,57 +17423,57 @@ declare const researchBriefSchema: z68.ZodObject<{
 				linkedinUrl: "linkedinUrl";
 				phone: "phone";
 			}>;
-		}, z68.core.$strip>, z68.ZodObject<{
-			kind: z68.ZodLiteral<"signal">;
-			signalId: z68.core.$ZodBranded<z68.ZodString, "sig", "out">;
-			observedAt: z68.ZodISODateTime;
-		}, z68.core.$strip>, z68.ZodObject<{
-			kind: z68.ZodLiteral<"web_page">;
-			url: z68.ZodString;
-			retrievedAt: z68.ZodISODateTime;
-		}, z68.core.$strip>, z68.ZodObject<{
-			kind: z68.ZodLiteral<"moment">;
-			callId: z68.core.$ZodBranded<z68.ZodString, "call", "out">;
-			dealRecordId: z68.core.$ZodBranded<z68.ZodString, "deal", "out">;
-		}, z68.core.$strip>, z68.ZodObject<{
-			kind: z68.ZodLiteral<"document">;
-			documentId: z68.core.$ZodBranded<z68.ZodString, "doc", "out">;
-			page: z68.ZodNullable<z68.ZodNumber>;
-		}, z68.core.$strip>], "kind">>;
-	}, z68.core.$strict>;
-	droppedCount: z68.ZodNumber;
-	prospectUpdatedAt: z68.ZodISODateTime;
-	language: z68.ZodEnum<{
+		}, z74.core.$strip>, z74.ZodObject<{
+			kind: z74.ZodLiteral<"signal">;
+			signalId: z74.core.$ZodBranded<z74.ZodString, "sig", "out">;
+			observedAt: z74.ZodISODateTime;
+		}, z74.core.$strip>, z74.ZodObject<{
+			kind: z74.ZodLiteral<"web_page">;
+			url: z74.ZodString;
+			retrievedAt: z74.ZodISODateTime;
+		}, z74.core.$strip>, z74.ZodObject<{
+			kind: z74.ZodLiteral<"moment">;
+			callId: z74.core.$ZodBranded<z74.ZodString, "call", "out">;
+			dealRecordId: z74.core.$ZodBranded<z74.ZodString, "deal", "out">;
+		}, z74.core.$strip>, z74.ZodObject<{
+			kind: z74.ZodLiteral<"document">;
+			documentId: z74.core.$ZodBranded<z74.ZodString, "doc", "out">;
+			page: z74.ZodNullable<z74.ZodNumber>;
+		}, z74.core.$strip>], "kind">>;
+	}, z74.core.$strict>;
+	droppedCount: z74.ZodNumber;
+	prospectUpdatedAt: z74.ZodISODateTime;
+	language: z74.ZodEnum<{
 		en: "en";
 	}>;
-	model: z68.ZodString;
-	createdAt: z68.ZodISODateTime;
-	expiresAt: z68.ZodISODateTime;
-}, z68.core.$strict>;
+	model: z74.ZodString;
+	createdAt: z74.ZodISODateTime;
+	expiresAt: z74.ZodISODateTime;
+}, z74.core.$strict>;
 /** A Research Brief. */
-type ResearchBrief = z68.infer<typeof researchBriefSchema>;
+type ResearchBrief = z74.infer<typeof researchBriefSchema>;
 /** The body to make a Research Brief: `refresh` builds a new one even when a cached one is still fresh. */
-declare const createBriefRequestSchema: z68.ZodObject<{
-	refresh: z68.ZodDefault<z68.ZodBoolean>;
-}, z68.core.$strict>;
+declare const createBriefRequestSchema: z74.ZodObject<{
+	refresh: z74.ZodDefault<z74.ZodBoolean>;
+}, z74.core.$strict>;
 /** The body to make a Research Brief. */
-type CreateBriefRequest = z68.infer<typeof createBriefRequestSchema>;
+type CreateBriefRequest = z74.infer<typeof createBriefRequestSchema>;
 /** The query of a Research Brief list: cursor and limit (at most 100). */
-declare const listBriefsQuerySchema: z68.ZodObject<{
-	cursor: z68.ZodOptional<z68.ZodString>;
-	limit: z68.ZodDefault<z68.ZodPipe<z68.ZodPipe<z68.ZodUnion<readonly [z68.ZodNumber, z68.ZodString]>, z68.ZodTransform<number, string | number>>, z68.ZodNumber>>;
-}, z68.core.$strip>;
+declare const listBriefsQuerySchema: z74.ZodObject<{
+	cursor: z74.ZodOptional<z74.ZodString>;
+	limit: z74.ZodDefault<z74.ZodPipe<z74.ZodPipe<z74.ZodUnion<readonly [z74.ZodNumber, z74.ZodString]>, z74.ZodTransform<number, string | number>>, z74.ZodNumber>>;
+}, z74.core.$strip>;
 /** One page of Research Briefs, newest first (by `createdAt`, then id). */
-declare const listBriefsResponseSchema: z68.ZodObject<{
-	items: z68.ZodArray<z68.ZodObject<{
-		id: z68.core.$ZodBranded<z68.ZodString, "brf", "out">;
-		prospectId: z68.core.$ZodBranded<z68.ZodString, "prs", "out">;
-		statements: z68.ZodArray<z68.ZodObject<{
-			text: z68.ZodPipe<z68.ZodString, z68.ZodString>;
-			source: z68.ZodDiscriminatedUnion<[z68.ZodObject<{
-				kind: z68.ZodLiteral<"prospect_field">;
-				prospectId: z68.core.$ZodBranded<z68.ZodString, "prs", "out">;
-				field: z68.ZodEnum<{
+declare const listBriefsResponseSchema: z74.ZodObject<{
+	items: z74.ZodArray<z74.ZodObject<{
+		id: z74.core.$ZodBranded<z74.ZodString, "brf", "out">;
+		prospectId: z74.core.$ZodBranded<z74.ZodString, "prs", "out">;
+		statements: z74.ZodArray<z74.ZodObject<{
+			text: z74.ZodPipe<z74.ZodString, z74.ZodString>;
+			source: z74.ZodDiscriminatedUnion<[z74.ZodObject<{
+				kind: z74.ZodLiteral<"prospect_field">;
+				prospectId: z74.core.$ZodBranded<z74.ZodString, "prs", "out">;
+				field: z74.ZodEnum<{
 					email: "email";
 					firstName: "firstName";
 					jobTitle: "jobTitle";
@@ -15682,34 +17481,34 @@ declare const listBriefsResponseSchema: z68.ZodObject<{
 					linkedinUrl: "linkedinUrl";
 					phone: "phone";
 				}>;
-			}, z68.core.$strip>, z68.ZodObject<{
-				kind: z68.ZodLiteral<"signal">;
-				signalId: z68.core.$ZodBranded<z68.ZodString, "sig", "out">;
-				observedAt: z68.ZodISODateTime;
-			}, z68.core.$strip>, z68.ZodObject<{
-				kind: z68.ZodLiteral<"web_page">;
-				url: z68.ZodString;
-				retrievedAt: z68.ZodISODateTime;
-			}, z68.core.$strip>, z68.ZodObject<{
-				kind: z68.ZodLiteral<"moment">;
-				callId: z68.core.$ZodBranded<z68.ZodString, "call", "out">;
-				dealRecordId: z68.core.$ZodBranded<z68.ZodString, "deal", "out">;
-			}, z68.core.$strip>, z68.ZodObject<{
-				kind: z68.ZodLiteral<"document">;
-				documentId: z68.core.$ZodBranded<z68.ZodString, "doc", "out">;
-				page: z68.ZodNullable<z68.ZodNumber>;
-			}, z68.core.$strip>], "kind">;
-		}, z68.core.$strict>>;
-		angle: z68.ZodObject<{
-			text: z68.ZodPipe<z68.ZodString, z68.ZodString>;
-			origin: z68.ZodEnum<{
+			}, z74.core.$strip>, z74.ZodObject<{
+				kind: z74.ZodLiteral<"signal">;
+				signalId: z74.core.$ZodBranded<z74.ZodString, "sig", "out">;
+				observedAt: z74.ZodISODateTime;
+			}, z74.core.$strip>, z74.ZodObject<{
+				kind: z74.ZodLiteral<"web_page">;
+				url: z74.ZodString;
+				retrievedAt: z74.ZodISODateTime;
+			}, z74.core.$strip>, z74.ZodObject<{
+				kind: z74.ZodLiteral<"moment">;
+				callId: z74.core.$ZodBranded<z74.ZodString, "call", "out">;
+				dealRecordId: z74.core.$ZodBranded<z74.ZodString, "deal", "out">;
+			}, z74.core.$strip>, z74.ZodObject<{
+				kind: z74.ZodLiteral<"document">;
+				documentId: z74.core.$ZodBranded<z74.ZodString, "doc", "out">;
+				page: z74.ZodNullable<z74.ZodNumber>;
+			}, z74.core.$strip>], "kind">;
+		}, z74.core.$strict>>;
+		angle: z74.ZodObject<{
+			text: z74.ZodPipe<z74.ZodString, z74.ZodString>;
+			origin: z74.ZodEnum<{
 				model_default: "model_default";
 				won_deals: "won_deals";
 			}>;
-			sources: z68.ZodArray<z68.ZodDiscriminatedUnion<[z68.ZodObject<{
-				kind: z68.ZodLiteral<"prospect_field">;
-				prospectId: z68.core.$ZodBranded<z68.ZodString, "prs", "out">;
-				field: z68.ZodEnum<{
+			sources: z74.ZodArray<z74.ZodDiscriminatedUnion<[z74.ZodObject<{
+				kind: z74.ZodLiteral<"prospect_field">;
+				prospectId: z74.core.$ZodBranded<z74.ZodString, "prs", "out">;
+				field: z74.ZodEnum<{
 					email: "email";
 					firstName: "firstName";
 					jobTitle: "jobTitle";
@@ -15717,35 +17516,35 @@ declare const listBriefsResponseSchema: z68.ZodObject<{
 					linkedinUrl: "linkedinUrl";
 					phone: "phone";
 				}>;
-			}, z68.core.$strip>, z68.ZodObject<{
-				kind: z68.ZodLiteral<"signal">;
-				signalId: z68.core.$ZodBranded<z68.ZodString, "sig", "out">;
-				observedAt: z68.ZodISODateTime;
-			}, z68.core.$strip>, z68.ZodObject<{
-				kind: z68.ZodLiteral<"web_page">;
-				url: z68.ZodString;
-				retrievedAt: z68.ZodISODateTime;
-			}, z68.core.$strip>, z68.ZodObject<{
-				kind: z68.ZodLiteral<"moment">;
-				callId: z68.core.$ZodBranded<z68.ZodString, "call", "out">;
-				dealRecordId: z68.core.$ZodBranded<z68.ZodString, "deal", "out">;
-			}, z68.core.$strip>, z68.ZodObject<{
-				kind: z68.ZodLiteral<"document">;
-				documentId: z68.core.$ZodBranded<z68.ZodString, "doc", "out">;
-				page: z68.ZodNullable<z68.ZodNumber>;
-			}, z68.core.$strip>], "kind">>;
-		}, z68.core.$strict>;
-		droppedCount: z68.ZodNumber;
-		prospectUpdatedAt: z68.ZodISODateTime;
-		language: z68.ZodEnum<{
+			}, z74.core.$strip>, z74.ZodObject<{
+				kind: z74.ZodLiteral<"signal">;
+				signalId: z74.core.$ZodBranded<z74.ZodString, "sig", "out">;
+				observedAt: z74.ZodISODateTime;
+			}, z74.core.$strip>, z74.ZodObject<{
+				kind: z74.ZodLiteral<"web_page">;
+				url: z74.ZodString;
+				retrievedAt: z74.ZodISODateTime;
+			}, z74.core.$strip>, z74.ZodObject<{
+				kind: z74.ZodLiteral<"moment">;
+				callId: z74.core.$ZodBranded<z74.ZodString, "call", "out">;
+				dealRecordId: z74.core.$ZodBranded<z74.ZodString, "deal", "out">;
+			}, z74.core.$strip>, z74.ZodObject<{
+				kind: z74.ZodLiteral<"document">;
+				documentId: z74.core.$ZodBranded<z74.ZodString, "doc", "out">;
+				page: z74.ZodNullable<z74.ZodNumber>;
+			}, z74.core.$strip>], "kind">>;
+		}, z74.core.$strict>;
+		droppedCount: z74.ZodNumber;
+		prospectUpdatedAt: z74.ZodISODateTime;
+		language: z74.ZodEnum<{
 			en: "en";
 		}>;
-		model: z68.ZodString;
-		createdAt: z68.ZodISODateTime;
-		expiresAt: z68.ZodISODateTime;
-	}, z68.core.$strict>>;
-	nextCursor: z68.ZodNullable<z68.ZodString>;
-}, z68.core.$strip>;
+		model: z74.ZodString;
+		createdAt: z74.ZodISODateTime;
+		expiresAt: z74.ZodISODateTime;
+	}, z74.core.$strict>>;
+	nextCursor: z74.ZodNullable<z74.ZodString>;
+}, z74.core.$strip>;
 /** Every role: each researches and drafts for the Prospects they may see. */
 declare const MESSAGING_ALL_ROLES: readonly ["owner", "admin", "manager", "rep"];
 /** The roles that change the Brand Voice. */
@@ -15761,7 +17560,7 @@ type MessagingRoute = InboundRoute<MessagingErrorCode | CampaignErrorCode | Pros
 * `/v1/outreach-drafts` because the inbox owns `/v1/drafts`; both use the `drf_` id.
 */
 declare const MESSAGING_ROUTES: Readonly<Record<MessagingRouteName, MessagingRoute>>;
-import { z as z69 } from "zod";
+import { z as z75 } from "zod";
 /** The most Prospects one preview request may name. */
 declare const MAX_PREVIEW_PROSPECTS = 5;
 /** The most statements one Research Brief holds. */
@@ -15791,78 +17590,78 @@ declare const MAX_VOICE_LENGTH_CHARACTERS = 5e3;
 /** The longest web address a Citation holds, in characters. */
 declare const MAX_CITATION_URL_LENGTH = 2048;
 /** Text of 1 to `maxLength` characters, trimmed, with no control character; line breaks are allowed when `multiline`. */
-declare function messagingTextSchema(maxLength: number, multiline?: boolean): z69.ZodPipe<z69.ZodString, z69.ZodString>;
+declare function messagingTextSchema(maxLength: number, multiline?: boolean): z75.ZodPipe<z75.ZodString, z75.ZodString>;
 /** A web address a Citation points at: http or https, no credentials, at most 2048 characters. */
-declare const citationUrlSchema: z69.ZodString;
+declare const citationUrlSchema: z75.ZodString;
 /** The channels a Draft is written for. A closed list; email only until messaging channels ship. */
 declare const DRAFT_CHANNELS: readonly ["email"];
 /** A channel a Draft is written for. */
-declare const draftChannelSchema: z69.ZodEnum<{
+declare const draftChannelSchema: z75.ZodEnum<{
 	email: "email";
 }>;
 /** The channel of a Draft. */
-type DraftChannel = z69.infer<typeof draftChannelSchema>;
-import { z as z70 } from "zod";
+type DraftChannel = z75.infer<typeof draftChannelSchema>;
+import { z as z76 } from "zod";
 /** The settings of a Brand Voice, as an Owner or Admin writes them. Unknown fields are rejected. */
-declare const brandVoiceSettingsSchema: z70.ZodObject<{
-	tone: z70.ZodPipe<z70.ZodString, z70.ZodString>;
-	preferredWords: z70.ZodDefault<z70.ZodArray<z70.ZodPipe<z70.ZodString, z70.ZodString>>>;
-	bannedPhrases: z70.ZodDefault<z70.ZodArray<z70.ZodPipe<z70.ZodString, z70.ZodString>>>;
-	signOff: z70.ZodDefault<z70.ZodNullable<z70.ZodPipe<z70.ZodString, z70.ZodString>>>;
-	maxLengthCharacters: z70.ZodDefault<z70.ZodNumber>;
-}, z70.core.$strict>;
+declare const brandVoiceSettingsSchema: z76.ZodObject<{
+	tone: z76.ZodPipe<z76.ZodString, z76.ZodString>;
+	preferredWords: z76.ZodDefault<z76.ZodArray<z76.ZodPipe<z76.ZodString, z76.ZodString>>>;
+	bannedPhrases: z76.ZodDefault<z76.ZodArray<z76.ZodPipe<z76.ZodString, z76.ZodString>>>;
+	signOff: z76.ZodDefault<z76.ZodNullable<z76.ZodPipe<z76.ZodString, z76.ZodString>>>;
+	maxLengthCharacters: z76.ZodDefault<z76.ZodNumber>;
+}, z76.core.$strict>;
 /** The settings of a Brand Voice. */
-type BrandVoiceSettings = z70.infer<typeof brandVoiceSettingsSchema>;
+type BrandVoiceSettings = z76.infer<typeof brandVoiceSettingsSchema>;
 /**
 * A Brand Voice: how an Organization's outreach sounds. There is one per Organization; each change
 * saves a new `version` (the id changes with it), so a Draft names the exact version it was
 * written with. It is a style guide for the drafter, never a way to skip a check.
 */
-declare const brandVoiceSchema: z70.ZodObject<{
-	tone: z70.ZodPipe<z70.ZodString, z70.ZodString>;
-	preferredWords: z70.ZodDefault<z70.ZodArray<z70.ZodPipe<z70.ZodString, z70.ZodString>>>;
-	bannedPhrases: z70.ZodDefault<z70.ZodArray<z70.ZodPipe<z70.ZodString, z70.ZodString>>>;
-	signOff: z70.ZodDefault<z70.ZodNullable<z70.ZodPipe<z70.ZodString, z70.ZodString>>>;
-	maxLengthCharacters: z70.ZodDefault<z70.ZodNumber>;
-	id: z70.core.$ZodBranded<z70.ZodString, "bvo", "out">;
-	version: z70.ZodNumber;
-	createdByMembershipId: z70.core.$ZodBranded<z70.ZodString, "mem", "out">;
-	createdAt: z70.ZodISODateTime;
-}, z70.core.$strict>;
+declare const brandVoiceSchema: z76.ZodObject<{
+	tone: z76.ZodPipe<z76.ZodString, z76.ZodString>;
+	preferredWords: z76.ZodDefault<z76.ZodArray<z76.ZodPipe<z76.ZodString, z76.ZodString>>>;
+	bannedPhrases: z76.ZodDefault<z76.ZodArray<z76.ZodPipe<z76.ZodString, z76.ZodString>>>;
+	signOff: z76.ZodDefault<z76.ZodNullable<z76.ZodPipe<z76.ZodString, z76.ZodString>>>;
+	maxLengthCharacters: z76.ZodDefault<z76.ZodNumber>;
+	id: z76.core.$ZodBranded<z76.ZodString, "bvo", "out">;
+	version: z76.ZodNumber;
+	createdByMembershipId: z76.core.$ZodBranded<z76.ZodString, "mem", "out">;
+	createdAt: z76.ZodISODateTime;
+}, z76.core.$strict>;
 /** A Brand Voice. */
-type BrandVoice = z70.infer<typeof brandVoiceSchema>;
+type BrandVoice = z76.infer<typeof brandVoiceSchema>;
 /** The body to save a new Brand Voice version: the settings and the version the caller read (0 when none exists yet). */
-declare const setBrandVoiceRequestSchema: z70.ZodObject<{
-	tone: z70.ZodPipe<z70.ZodString, z70.ZodString>;
-	preferredWords: z70.ZodDefault<z70.ZodArray<z70.ZodPipe<z70.ZodString, z70.ZodString>>>;
-	bannedPhrases: z70.ZodDefault<z70.ZodArray<z70.ZodPipe<z70.ZodString, z70.ZodString>>>;
-	signOff: z70.ZodDefault<z70.ZodNullable<z70.ZodPipe<z70.ZodString, z70.ZodString>>>;
-	maxLengthCharacters: z70.ZodDefault<z70.ZodNumber>;
-	expectedVersion: z70.ZodNumber;
-}, z70.core.$strict>;
+declare const setBrandVoiceRequestSchema: z76.ZodObject<{
+	tone: z76.ZodPipe<z76.ZodString, z76.ZodString>;
+	preferredWords: z76.ZodDefault<z76.ZodArray<z76.ZodPipe<z76.ZodString, z76.ZodString>>>;
+	bannedPhrases: z76.ZodDefault<z76.ZodArray<z76.ZodPipe<z76.ZodString, z76.ZodString>>>;
+	signOff: z76.ZodDefault<z76.ZodNullable<z76.ZodPipe<z76.ZodString, z76.ZodString>>>;
+	maxLengthCharacters: z76.ZodDefault<z76.ZodNumber>;
+	expectedVersion: z76.ZodNumber;
+}, z76.core.$strict>;
 /** The body to save a new Brand Voice version. */
-type SetBrandVoiceRequest = z70.infer<typeof setBrandVoiceRequestSchema>;
+type SetBrandVoiceRequest = z76.infer<typeof setBrandVoiceRequestSchema>;
 /** The query of a Brand Voice version list: cursor and limit (at most 100). */
-declare const listBrandVoiceVersionsQuerySchema: z70.ZodObject<{
-	cursor: z70.ZodOptional<z70.ZodString>;
-	limit: z70.ZodDefault<z70.ZodPipe<z70.ZodPipe<z70.ZodUnion<readonly [z70.ZodNumber, z70.ZodString]>, z70.ZodTransform<number, string | number>>, z70.ZodNumber>>;
-}, z70.core.$strip>;
+declare const listBrandVoiceVersionsQuerySchema: z76.ZodObject<{
+	cursor: z76.ZodOptional<z76.ZodString>;
+	limit: z76.ZodDefault<z76.ZodPipe<z76.ZodPipe<z76.ZodUnion<readonly [z76.ZodNumber, z76.ZodString]>, z76.ZodTransform<number, string | number>>, z76.ZodNumber>>;
+}, z76.core.$strip>;
 /** One page of Brand Voice versions, newest first. */
-declare const listBrandVoiceVersionsResponseSchema: z70.ZodObject<{
-	items: z70.ZodArray<z70.ZodObject<{
-		tone: z70.ZodPipe<z70.ZodString, z70.ZodString>;
-		preferredWords: z70.ZodDefault<z70.ZodArray<z70.ZodPipe<z70.ZodString, z70.ZodString>>>;
-		bannedPhrases: z70.ZodDefault<z70.ZodArray<z70.ZodPipe<z70.ZodString, z70.ZodString>>>;
-		signOff: z70.ZodDefault<z70.ZodNullable<z70.ZodPipe<z70.ZodString, z70.ZodString>>>;
-		maxLengthCharacters: z70.ZodDefault<z70.ZodNumber>;
-		id: z70.core.$ZodBranded<z70.ZodString, "bvo", "out">;
-		version: z70.ZodNumber;
-		createdByMembershipId: z70.core.$ZodBranded<z70.ZodString, "mem", "out">;
-		createdAt: z70.ZodISODateTime;
-	}, z70.core.$strict>>;
-	nextCursor: z70.ZodNullable<z70.ZodString>;
-}, z70.core.$strip>;
-import { z as z71 } from "zod";
+declare const listBrandVoiceVersionsResponseSchema: z76.ZodObject<{
+	items: z76.ZodArray<z76.ZodObject<{
+		tone: z76.ZodPipe<z76.ZodString, z76.ZodString>;
+		preferredWords: z76.ZodDefault<z76.ZodArray<z76.ZodPipe<z76.ZodString, z76.ZodString>>>;
+		bannedPhrases: z76.ZodDefault<z76.ZodArray<z76.ZodPipe<z76.ZodString, z76.ZodString>>>;
+		signOff: z76.ZodDefault<z76.ZodNullable<z76.ZodPipe<z76.ZodString, z76.ZodString>>>;
+		maxLengthCharacters: z76.ZodDefault<z76.ZodNumber>;
+		id: z76.core.$ZodBranded<z76.ZodString, "bvo", "out">;
+		version: z76.ZodNumber;
+		createdByMembershipId: z76.core.$ZodBranded<z76.ZodString, "mem", "out">;
+		createdAt: z76.ZodISODateTime;
+	}, z76.core.$strict>>;
+	nextCursor: z76.ZodNullable<z76.ZodString>;
+}, z76.core.$strip>;
+import { z as z77 } from "zod";
 /** The largest page any list endpoint returns. */
 declare const MAX_PAGE_SIZE = 100;
 /** The page size used when a request does not ask for one. */
@@ -15870,17 +17669,17 @@ declare const DEFAULT_PAGE_SIZE = 25;
 /** The longest cursor accepted or produced; about 380 bytes of JSON. */
 declare const MAX_CURSOR_LENGTH = 512;
 /** The query parameters of a list request: an optional cursor and a bounded limit (from a number or digit string). */
-declare const pageQuerySchema: z71.ZodObject<{
-	cursor: z71.ZodOptional<z71.ZodString>;
-	limit: z71.ZodDefault<z71.ZodPipe<z71.ZodPipe<z71.ZodUnion<readonly [z71.ZodNumber, z71.ZodString]>, z71.ZodTransform<number, string | number>>, z71.ZodNumber>>;
-}, z71.core.$strip>;
+declare const pageQuerySchema: z77.ZodObject<{
+	cursor: z77.ZodOptional<z77.ZodString>;
+	limit: z77.ZodDefault<z77.ZodPipe<z77.ZodPipe<z77.ZodUnion<readonly [z77.ZodNumber, z77.ZodString]>, z77.ZodTransform<number, string | number>>, z77.ZodNumber>>;
+}, z77.core.$strip>;
 /** The parsed query parameters of a list request. */
-type PageQuery = z71.infer<typeof pageQuerySchema>;
+type PageQuery = z77.infer<typeof pageQuerySchema>;
 /** Builds the schema of one page of `itemSchema` items and the cursor for the next page, or null at the end. */
-declare function pageSchema<T extends z71.ZodType>(itemSchema: T): z71.ZodObject<{
-	items: z71.ZodArray<T>;
-	nextCursor: z71.ZodNullable<z71.ZodString>;
-}, z71.core.$strip>;
+declare function pageSchema<T extends z77.ZodType>(itemSchema: T): z77.ZodObject<{
+	items: z77.ZodArray<T>;
+	nextCursor: z77.ZodNullable<z77.ZodString>;
+}, z77.core.$strip>;
 /** One page of items, as returned by a list endpoint. */
 type Page<T> = {
 	items: T[];
@@ -15897,9 +17696,9 @@ declare function encodeCursor(value: unknown): string;
 * Decodes a cursor made by {@link encodeCursor}; returns undefined, never throws, for anything
 * invalid. The decoded value is client-controlled input: use it as a position only.
 */
-declare function decodeCursor<T extends z71.ZodType>(text: string, schema: T): z71.output<T> | undefined;
-import { z as z72 } from "zod";
-import { ErrorDefinition as ErrorDefinition_8gwh4516 } from "..";
+declare function decodeCursor<T extends z77.ZodType>(text: string, schema: T): z77.output<T> | undefined;
+import { z as z78 } from "zod";
+import { ErrorDefinition as ErrorDefinition_8gwh4517 } from "..";
 /**
 * The errors the playbook service returns, as `area.reason` codes. No body carries a file name,
 * file content or text taken from a document: every message is fixed. A role that is not allowed
@@ -15912,11 +17711,11 @@ import { ErrorDefinition as ErrorDefinition_8gwh4516 } from "..";
 * tombstone: once purged the record is gone and the answer is `document.not_found` (404).
 */
 declare const PLAYBOOK_ERRORS: {
-	readonly "document.not_found": ErrorDefinition_8gwh4516<"document.not_found">;
-	readonly "document.not_restorable": ErrorDefinition_8gwh4516<"document.not_restorable">;
-	readonly "document.quota_exceeded": ErrorDefinition_8gwh4516<"document.quota_exceeded">;
-	readonly "document.too_large": ErrorDefinition_8gwh4516<"document.too_large">;
-	readonly "document.unsupported_type": ErrorDefinition_8gwh4516<"document.unsupported_type">;
+	readonly "document.not_found": ErrorDefinition_8gwh4517<"document.not_found">;
+	readonly "document.not_restorable": ErrorDefinition_8gwh4517<"document.not_restorable">;
+	readonly "document.quota_exceeded": ErrorDefinition_8gwh4517<"document.quota_exceeded">;
+	readonly "document.too_large": ErrorDefinition_8gwh4517<"document.too_large">;
+	readonly "document.unsupported_type": ErrorDefinition_8gwh4517<"document.unsupported_type">;
 };
 /** A code from the {@link PLAYBOOK_ERRORS} registry. */
 type PlaybookErrorCode = keyof typeof PLAYBOOK_ERRORS;
@@ -15957,31 +17756,31 @@ declare const MAX_CITATION_REFS = 20;
 * Deal (`callId` and `dealRecordId`, opaque ids) or a page of a Playbook document. Unknown fields
 * are rejected.
 */
-declare const citationRefSchema: z72.ZodDiscriminatedUnion<[z72.ZodObject<{
-	kind: z72.ZodLiteral<"moment">;
-	callId: z72.core.$ZodBranded<z72.ZodString, "call", "out">;
-	dealRecordId: z72.core.$ZodBranded<z72.ZodString, "deal", "out">;
-}, z72.core.$strict>, z72.ZodObject<{
-	kind: z72.ZodLiteral<"document">;
-	documentId: z72.core.$ZodBranded<z72.ZodString, "doc", "out">;
-	page: z72.ZodNullable<z72.ZodNumber>;
-}, z72.core.$strict>], "kind">;
+declare const citationRefSchema: z78.ZodDiscriminatedUnion<[z78.ZodObject<{
+	kind: z78.ZodLiteral<"moment">;
+	callId: z78.core.$ZodBranded<z78.ZodString, "call", "out">;
+	dealRecordId: z78.core.$ZodBranded<z78.ZodString, "deal", "out">;
+}, z78.core.$strict>, z78.ZodObject<{
+	kind: z78.ZodLiteral<"document">;
+	documentId: z78.core.$ZodBranded<z78.ZodString, "doc", "out">;
+	page: z78.ZodNullable<z78.ZodNumber>;
+}, z78.core.$strict>], "kind">;
 /** What a Citation points at in the Playbook. */
-type CitationRef = z72.infer<typeof citationRefSchema>;
+type CitationRef = z78.infer<typeof citationRefSchema>;
 /** The request to resolve Citations: one to `MAX_CITATION_REFS` references, in the order wanted back. */
-declare const resolveCitationsRequestSchema: z72.ZodObject<{
-	refs: z72.ZodArray<z72.ZodDiscriminatedUnion<[z72.ZodObject<{
-		kind: z72.ZodLiteral<"moment">;
-		callId: z72.core.$ZodBranded<z72.ZodString, "call", "out">;
-		dealRecordId: z72.core.$ZodBranded<z72.ZodString, "deal", "out">;
-	}, z72.core.$strict>, z72.ZodObject<{
-		kind: z72.ZodLiteral<"document">;
-		documentId: z72.core.$ZodBranded<z72.ZodString, "doc", "out">;
-		page: z72.ZodNullable<z72.ZodNumber>;
-	}, z72.core.$strict>], "kind">>;
-}, z72.core.$strict>;
+declare const resolveCitationsRequestSchema: z78.ZodObject<{
+	refs: z78.ZodArray<z78.ZodDiscriminatedUnion<[z78.ZodObject<{
+		kind: z78.ZodLiteral<"moment">;
+		callId: z78.core.$ZodBranded<z78.ZodString, "call", "out">;
+		dealRecordId: z78.core.$ZodBranded<z78.ZodString, "deal", "out">;
+	}, z78.core.$strict>, z78.ZodObject<{
+		kind: z78.ZodLiteral<"document">;
+		documentId: z78.core.$ZodBranded<z78.ZodString, "doc", "out">;
+		page: z78.ZodNullable<z78.ZodNumber>;
+	}, z78.core.$strict>], "kind">>;
+}, z78.core.$strict>;
 /** The request to resolve Citations. */
-type ResolveCitationsRequest = z72.infer<typeof resolveCitationsRequestSchema>;
+type ResolveCitationsRequest = z78.infer<typeof resolveCitationsRequestSchema>;
 /**
 * One resolved Citation. `available` carries the text to show (snippets of at most 512 characters:
 * what the Prospect said and what the Rep said next for a Moment, the file name and passage for a
@@ -15990,63 +17789,63 @@ type ResolveCitationsRequest = z72.infer<typeof resolveCitationsRequestSchema>;
 * a removed item cannot leak what it pointed at. It never carries the customer's `dealId`, name or
 * amount. The snippets are tenant text: never logged.
 */
-declare const resolvedCitationSchema: z72.ZodUnion<readonly [z72.ZodObject<{
-	state: z72.ZodLiteral<"available">;
-	kind: z72.ZodLiteral<"moment">;
-	callId: z72.core.$ZodBranded<z72.ZodString, "call", "out">;
-	dealRecordId: z72.core.$ZodBranded<z72.ZodString, "deal", "out">;
-	prospect: z72.ZodString;
-	repNext: z72.ZodString;
-}, z72.core.$strip>, z72.ZodObject<{
-	state: z72.ZodLiteral<"available">;
-	kind: z72.ZodLiteral<"document">;
-	documentId: z72.core.$ZodBranded<z72.ZodString, "doc", "out">;
-	page: z72.ZodNullable<z72.ZodNumber>;
-	fileName: z72.ZodPipe<z72.ZodPipe<z72.ZodString, z72.ZodTransform<string, string>>, z72.ZodString>;
-	snippet: z72.ZodString;
-}, z72.core.$strip>, z72.ZodObject<{
-	state: z72.ZodLiteral<"removed">;
-	kind: z72.ZodLiteral<"moment">;
-	callId: z72.core.$ZodBranded<z72.ZodString, "call", "out">;
-	dealRecordId: z72.core.$ZodBranded<z72.ZodString, "deal", "out">;
-}, z72.core.$strip>, z72.ZodObject<{
-	state: z72.ZodLiteral<"removed">;
-	kind: z72.ZodLiteral<"document">;
-	documentId: z72.core.$ZodBranded<z72.ZodString, "doc", "out">;
-	page: z72.ZodNullable<z72.ZodNumber>;
-}, z72.core.$strip>]>;
+declare const resolvedCitationSchema: z78.ZodUnion<readonly [z78.ZodObject<{
+	state: z78.ZodLiteral<"available">;
+	kind: z78.ZodLiteral<"moment">;
+	callId: z78.core.$ZodBranded<z78.ZodString, "call", "out">;
+	dealRecordId: z78.core.$ZodBranded<z78.ZodString, "deal", "out">;
+	prospect: z78.ZodString;
+	repNext: z78.ZodString;
+}, z78.core.$strip>, z78.ZodObject<{
+	state: z78.ZodLiteral<"available">;
+	kind: z78.ZodLiteral<"document">;
+	documentId: z78.core.$ZodBranded<z78.ZodString, "doc", "out">;
+	page: z78.ZodNullable<z78.ZodNumber>;
+	fileName: z78.ZodPipe<z78.ZodPipe<z78.ZodString, z78.ZodTransform<string, string>>, z78.ZodString>;
+	snippet: z78.ZodString;
+}, z78.core.$strip>, z78.ZodObject<{
+	state: z78.ZodLiteral<"removed">;
+	kind: z78.ZodLiteral<"moment">;
+	callId: z78.core.$ZodBranded<z78.ZodString, "call", "out">;
+	dealRecordId: z78.core.$ZodBranded<z78.ZodString, "deal", "out">;
+}, z78.core.$strip>, z78.ZodObject<{
+	state: z78.ZodLiteral<"removed">;
+	kind: z78.ZodLiteral<"document">;
+	documentId: z78.core.$ZodBranded<z78.ZodString, "doc", "out">;
+	page: z78.ZodNullable<z78.ZodNumber>;
+}, z78.core.$strip>]>;
 /** One resolved Citation. */
-type ResolvedCitation = z72.infer<typeof resolvedCitationSchema>;
+type ResolvedCitation = z78.infer<typeof resolvedCitationSchema>;
 /** The answer to a resolve request: one item per reference, in request order. */
-declare const resolveCitationsResponseSchema: z72.ZodObject<{
-	items: z72.ZodArray<z72.ZodUnion<readonly [z72.ZodObject<{
-		state: z72.ZodLiteral<"available">;
-		kind: z72.ZodLiteral<"moment">;
-		callId: z72.core.$ZodBranded<z72.ZodString, "call", "out">;
-		dealRecordId: z72.core.$ZodBranded<z72.ZodString, "deal", "out">;
-		prospect: z72.ZodString;
-		repNext: z72.ZodString;
-	}, z72.core.$strip>, z72.ZodObject<{
-		state: z72.ZodLiteral<"available">;
-		kind: z72.ZodLiteral<"document">;
-		documentId: z72.core.$ZodBranded<z72.ZodString, "doc", "out">;
-		page: z72.ZodNullable<z72.ZodNumber>;
-		fileName: z72.ZodPipe<z72.ZodPipe<z72.ZodString, z72.ZodTransform<string, string>>, z72.ZodString>;
-		snippet: z72.ZodString;
-	}, z72.core.$strip>, z72.ZodObject<{
-		state: z72.ZodLiteral<"removed">;
-		kind: z72.ZodLiteral<"moment">;
-		callId: z72.core.$ZodBranded<z72.ZodString, "call", "out">;
-		dealRecordId: z72.core.$ZodBranded<z72.ZodString, "deal", "out">;
-	}, z72.core.$strip>, z72.ZodObject<{
-		state: z72.ZodLiteral<"removed">;
-		kind: z72.ZodLiteral<"document">;
-		documentId: z72.core.$ZodBranded<z72.ZodString, "doc", "out">;
-		page: z72.ZodNullable<z72.ZodNumber>;
-	}, z72.core.$strip>]>>;
-}, z72.core.$strip>;
+declare const resolveCitationsResponseSchema: z78.ZodObject<{
+	items: z78.ZodArray<z78.ZodUnion<readonly [z78.ZodObject<{
+		state: z78.ZodLiteral<"available">;
+		kind: z78.ZodLiteral<"moment">;
+		callId: z78.core.$ZodBranded<z78.ZodString, "call", "out">;
+		dealRecordId: z78.core.$ZodBranded<z78.ZodString, "deal", "out">;
+		prospect: z78.ZodString;
+		repNext: z78.ZodString;
+	}, z78.core.$strip>, z78.ZodObject<{
+		state: z78.ZodLiteral<"available">;
+		kind: z78.ZodLiteral<"document">;
+		documentId: z78.core.$ZodBranded<z78.ZodString, "doc", "out">;
+		page: z78.ZodNullable<z78.ZodNumber>;
+		fileName: z78.ZodPipe<z78.ZodPipe<z78.ZodString, z78.ZodTransform<string, string>>, z78.ZodString>;
+		snippet: z78.ZodString;
+	}, z78.core.$strip>, z78.ZodObject<{
+		state: z78.ZodLiteral<"removed">;
+		kind: z78.ZodLiteral<"moment">;
+		callId: z78.core.$ZodBranded<z78.ZodString, "call", "out">;
+		dealRecordId: z78.core.$ZodBranded<z78.ZodString, "deal", "out">;
+	}, z78.core.$strip>, z78.ZodObject<{
+		state: z78.ZodLiteral<"removed">;
+		kind: z78.ZodLiteral<"document">;
+		documentId: z78.core.$ZodBranded<z78.ZodString, "doc", "out">;
+		page: z78.ZodNullable<z78.ZodNumber>;
+	}, z78.core.$strip>]>>;
+}, z78.core.$strip>;
 /** The answer to a resolve request. */
-type ResolveCitationsResponse = z72.infer<typeof resolveCitationsResponseSchema>;
+type ResolveCitationsResponse = z78.infer<typeof resolveCitationsResponseSchema>;
 /** The citation routes, by name. */
 type CitationRouteName = "resolveCitations";
 /**
@@ -16088,7 +17887,7 @@ type SalesHistoryRoute = {
 * Transcript, audio or a turn. Reads are Owner and Admin only ({@link SALES_HISTORY_READ_ROLES}).
 */
 declare const SALES_HISTORY_ROUTES: Readonly<Record<SalesHistoryRouteName, SalesHistoryRoute>>;
-import { z as z73 } from "zod";
+import { z as z79 } from "zod";
 /** The most Moments a search returns (the `limit` ceiling). */
 declare const MAX_SEARCH_LIMIT = 20;
 /** How many Moments a search returns when `limit` is left out. */
@@ -16102,39 +17901,39 @@ declare const MAX_MOMENT_SNIPPET_CHARACTERS = 512;
 /** The most candidate Moments a search looks at before it keeps the best `limit`; it bounds `evidence`. */
 declare const MAX_SEARCH_CANDIDATES = 100;
 /** One turn of the live conversation: who spoke (`rep` or `prospect`) and what was said. Tenant conversation text: never logged. */
-declare const searchTurnSchema: z73.ZodObject<{
-	role: z73.ZodEnum<{
+declare const searchTurnSchema: z79.ZodObject<{
+	role: z79.ZodEnum<{
 		prospect: "prospect";
 		rep: "rep";
 	}>;
-	text: z73.ZodString;
-}, z73.core.$strict>;
+	text: z79.ZodString;
+}, z79.core.$strict>;
 /** One turn of the live conversation. */
-type SearchTurn = z73.infer<typeof searchTurnSchema>;
+type SearchTurn = z79.infer<typeof searchTurnSchema>;
 /**
 * The body of a search over won Deals: the latest turns of the conversation (1 to
 * `MAX_SEARCH_TURNS`, at most `MAX_SEARCH_TEXT_CHARACTERS` code points in all) and an optional
 * `limit` (1 to `MAX_SEARCH_LIMIT`, default `DEFAULT_SEARCH_LIMIT`). It is conversation text of the
 * Organization, so it is sent in a body and never logged. An unknown key is rejected.
 */
-declare const searchMomentsRequestSchema: z73.ZodObject<{
-	turns: z73.ZodArray<z73.ZodObject<{
-		role: z73.ZodEnum<{
+declare const searchMomentsRequestSchema: z79.ZodObject<{
+	turns: z79.ZodArray<z79.ZodObject<{
+		role: z79.ZodEnum<{
 			prospect: "prospect";
 			rep: "rep";
 		}>;
-		text: z73.ZodString;
-	}, z73.core.$strict>>;
-	limit: z73.ZodDefault<z73.ZodNumber>;
-}, z73.core.$strict>;
+		text: z79.ZodString;
+	}, z79.core.$strict>>;
+	limit: z79.ZodDefault<z79.ZodNumber>;
+}, z79.core.$strict>;
 /** The body of a search over won Deals, with the default limit applied. */
-type SearchMomentsRequest = z73.infer<typeof searchMomentsRequestSchema>;
+type SearchMomentsRequest = z79.infer<typeof searchMomentsRequestSchema>;
 /**
 * A short piece of a Moment's text: at most `MAX_MOMENT_SNIPPET_CHARACTERS` code points, possibly
 * empty, well-formed and with no control or bidirectional character (newlines and tabs included),
 * the same rule as a speaker excerpt. Build one with {@link momentSnippet}. Tenant Transcript text.
 */
-declare const momentSnippetSchema: z73.ZodString;
+declare const momentSnippetSchema: z79.ZodString;
 /**
 * Makes a snippet from stored Transcript text: whitespace collapsed, control and bidirectional
 * characters removed and the text cut to `MAX_MOMENT_SNIPPET_CHARACTERS` code points at a word
@@ -16147,42 +17946,42 @@ declare function momentSnippet(text: string): string;
 * It never carries the customer's `dealId`, name or amount; unknown fields are dropped. The
 * snippets are tenant Transcript text: never logged.
 */
-declare const momentMatchSchema: z73.ZodObject<{
-	callId: z73.core.$ZodBranded<z73.ZodString, "call", "out">;
-	dealRecordId: z73.core.$ZodBranded<z73.ZodString, "deal", "out">;
-	score: z73.ZodNumber;
-	prospect: z73.ZodString;
-	repNext: z73.ZodString;
-}, z73.core.$strip>;
+declare const momentMatchSchema: z79.ZodObject<{
+	callId: z79.core.$ZodBranded<z79.ZodString, "call", "out">;
+	dealRecordId: z79.core.$ZodBranded<z79.ZodString, "deal", "out">;
+	score: z79.ZodNumber;
+	prospect: z79.ZodString;
+	repNext: z79.ZodString;
+}, z79.core.$strip>;
 /** One similar Moment from a won Deal. */
-type MomentMatch = z73.infer<typeof momentMatchSchema>;
+type MomentMatch = z79.infer<typeof momentMatchSchema>;
 /** How much a search found: `moments` candidates that may be returned and the distinct won Deals (`deals`) among them, both at most `MAX_SEARCH_CANDIDATES`. */
-declare const searchEvidenceSchema: z73.ZodObject<{
-	moments: z73.ZodNumber;
-	deals: z73.ZodNumber;
-}, z73.core.$strip>;
+declare const searchEvidenceSchema: z79.ZodObject<{
+	moments: z79.ZodNumber;
+	deals: z79.ZodNumber;
+}, z79.core.$strip>;
 /** How much a search found. */
-type SearchEvidence = z73.infer<typeof searchEvidenceSchema>;
+type SearchEvidence = z79.infer<typeof searchEvidenceSchema>;
 /**
 * The answer to a search: the best matches, at most `MAX_SEARCH_LIMIT`, best first, and the
 * evidence. There is no cursor: the result is a bounded top-k. The items are the first of the
 * `moments` candidates and the Deals are among them, so neither count is above `evidence.moments`, and `evidence.deals` is at least the number of distinct Deals among the items.
 */
-declare const searchMomentsResponseSchema: z73.ZodObject<{
-	items: z73.ZodArray<z73.ZodObject<{
-		callId: z73.core.$ZodBranded<z73.ZodString, "call", "out">;
-		dealRecordId: z73.core.$ZodBranded<z73.ZodString, "deal", "out">;
-		score: z73.ZodNumber;
-		prospect: z73.ZodString;
-		repNext: z73.ZodString;
-	}, z73.core.$strip>>;
-	evidence: z73.ZodObject<{
-		moments: z73.ZodNumber;
-		deals: z73.ZodNumber;
-	}, z73.core.$strip>;
-}, z73.core.$strip>;
+declare const searchMomentsResponseSchema: z79.ZodObject<{
+	items: z79.ZodArray<z79.ZodObject<{
+		callId: z79.core.$ZodBranded<z79.ZodString, "call", "out">;
+		dealRecordId: z79.core.$ZodBranded<z79.ZodString, "deal", "out">;
+		score: z79.ZodNumber;
+		prospect: z79.ZodString;
+		repNext: z79.ZodString;
+	}, z79.core.$strip>>;
+	evidence: z79.ZodObject<{
+		moments: z79.ZodNumber;
+		deals: z79.ZodNumber;
+	}, z79.core.$strip>;
+}, z79.core.$strip>;
 /** The answer to a search. */
-type SearchMomentsResponse = z73.infer<typeof searchMomentsResponseSchema>;
+type SearchMomentsResponse = z79.infer<typeof searchMomentsResponseSchema>;
 /**
 * The text that is embedded for a window of turns: one `Rep: ` or `Prospect: ` line per turn,
 * joined by a newline. The indexer (a Moment's text) and the search (the query) both call this, so
@@ -16192,16 +17991,16 @@ type SearchMomentsResponse = z73.infer<typeof searchMomentsResponseSchema>;
 */
 declare function momentQueryText(turns: readonly SearchTurn[]): string;
 /** The body of a search over Playbook documents: the same turns and limit as {@link searchMomentsRequestSchema}, with the same bounds. Tenant conversation text: never logged. */
-declare const searchDocumentsRequestSchema: z73.ZodObject<{
-	turns: z73.ZodArray<z73.ZodObject<{
-		role: z73.ZodEnum<{
+declare const searchDocumentsRequestSchema: z79.ZodObject<{
+	turns: z79.ZodArray<z79.ZodObject<{
+		role: z79.ZodEnum<{
 			prospect: "prospect";
 			rep: "rep";
 		}>;
-		text: z73.ZodString;
-	}, z73.core.$strict>>;
-	limit: z73.ZodDefault<z73.ZodNumber>;
-}, z73.core.$strict>;
+		text: z79.ZodString;
+	}, z79.core.$strict>>;
+	limit: z79.ZodDefault<z79.ZodNumber>;
+}, z79.core.$strict>;
 /**
 * The text that is embedded to search Playbook documents: each turn's text trimmed and joined by a
 * newline, with no role labels, because document chunks are embedded as plain text and a label
@@ -16220,43 +18019,43 @@ type SearchDocumentsRequest = SearchMomentsRequest;
 * decides by media type. One item per chunk. Unknown fields are dropped. The snippet is the
 * Organization's own sales material: never log it.
 */
-declare const documentMatchSchema: z73.ZodObject<{
-	documentId: z73.core.$ZodBranded<z73.ZodString, "doc", "out">;
-	fileName: z73.ZodPipe<z73.ZodPipe<z73.ZodString, z73.ZodTransform<string, string>>, z73.ZodString>;
-	page: z73.ZodNullable<z73.ZodNumber>;
-	score: z73.ZodNumber;
-	snippet: z73.ZodString;
-}, z73.core.$strip>;
+declare const documentMatchSchema: z79.ZodObject<{
+	documentId: z79.core.$ZodBranded<z79.ZodString, "doc", "out">;
+	fileName: z79.ZodPipe<z79.ZodPipe<z79.ZodString, z79.ZodTransform<string, string>>, z79.ZodString>;
+	page: z79.ZodNullable<z79.ZodNumber>;
+	score: z79.ZodNumber;
+	snippet: z79.ZodString;
+}, z79.core.$strip>;
 /** One matching passage of a Playbook document. */
-type DocumentMatch = z73.infer<typeof documentMatchSchema>;
+type DocumentMatch = z79.infer<typeof documentMatchSchema>;
 /** How much a document search found: `chunks` that may be returned and the distinct `documents` among them, both at most `MAX_SEARCH_CANDIDATES`. */
-declare const documentSearchEvidenceSchema: z73.ZodObject<{
-	chunks: z73.ZodNumber;
-	documents: z73.ZodNumber;
-}, z73.core.$strip>;
+declare const documentSearchEvidenceSchema: z79.ZodObject<{
+	chunks: z79.ZodNumber;
+	documents: z79.ZodNumber;
+}, z79.core.$strip>;
 /** How much a document search found. */
-type DocumentSearchEvidence = z73.infer<typeof documentSearchEvidenceSchema>;
+type DocumentSearchEvidence = z79.infer<typeof documentSearchEvidenceSchema>;
 /**
 * The answer to a document search: the best passages, at most `MAX_SEARCH_LIMIT`, best first, and
 * the evidence. There is no cursor. As for Moments, neither the items nor the documents exceed
 * `evidence.chunks`, and `evidence.documents` is at least the number of distinct documents among
 * the items.
 */
-declare const searchDocumentsResponseSchema: z73.ZodObject<{
-	items: z73.ZodArray<z73.ZodObject<{
-		documentId: z73.core.$ZodBranded<z73.ZodString, "doc", "out">;
-		fileName: z73.ZodPipe<z73.ZodPipe<z73.ZodString, z73.ZodTransform<string, string>>, z73.ZodString>;
-		page: z73.ZodNullable<z73.ZodNumber>;
-		score: z73.ZodNumber;
-		snippet: z73.ZodString;
-	}, z73.core.$strip>>;
-	evidence: z73.ZodObject<{
-		chunks: z73.ZodNumber;
-		documents: z73.ZodNumber;
-	}, z73.core.$strip>;
-}, z73.core.$strip>;
+declare const searchDocumentsResponseSchema: z79.ZodObject<{
+	items: z79.ZodArray<z79.ZodObject<{
+		documentId: z79.core.$ZodBranded<z79.ZodString, "doc", "out">;
+		fileName: z79.ZodPipe<z79.ZodPipe<z79.ZodString, z79.ZodTransform<string, string>>, z79.ZodString>;
+		page: z79.ZodNullable<z79.ZodNumber>;
+		score: z79.ZodNumber;
+		snippet: z79.ZodString;
+	}, z79.core.$strip>>;
+	evidence: z79.ZodObject<{
+		chunks: z79.ZodNumber;
+		documents: z79.ZodNumber;
+	}, z79.core.$strip>;
+}, z79.core.$strip>;
 /** The answer to a document search. */
-type SearchDocumentsResponse = z73.infer<typeof searchDocumentsResponseSchema>;
+type SearchDocumentsResponse = z79.infer<typeof searchDocumentsResponseSchema>;
 /** The search routes, by name. */
 type SearchRouteName = "searchMoments" | "searchDocuments";
 /**
@@ -16265,7 +18064,7 @@ type SearchRouteName = "searchMoments" | "searchDocuments";
 * that reads the Playbook. They use existing codes only, so they have no domain code of their own.
 */
 declare const SEARCH_ROUTES: Readonly<Record<SearchRouteName, PlaybookRoute>>;
-import { ErrorDefinition as ErrorDefinition_8gwh4517 } from "..";
+import { ErrorDefinition as ErrorDefinition_8gwh4518 } from "..";
 /** Every Playbook route name: the document routes of 0.7.0, the sales-history routes, the search routes and the citation route. */
 type AllPlaybookRouteName = PlaybookRouteName | SalesHistoryRouteName | SearchRouteName | CitationRouteName;
 /**
@@ -16276,30 +18075,30 @@ type AllPlaybookRouteName = PlaybookRouteName | SalesHistoryRouteName | SearchRo
 declare const ALL_PLAYBOOK_ROUTES: Readonly<Record<AllPlaybookRouteName, PlaybookRoute | SalesHistoryRoute>>;
 /** Every Playbook error code in one registry: the document codes of 0.7.0 and the sales-history codes. */
 declare const ALL_PLAYBOOK_ERRORS: Readonly<{
-	"call.content_in_other_deal": ErrorDefinition_8gwh4517<"call.content_in_other_deal">;
-	"call.not_found": ErrorDefinition_8gwh4517<"call.not_found">;
-	"call.not_restorable": ErrorDefinition_8gwh4517<"call.not_restorable">;
-	"call.quota_exceeded": ErrorDefinition_8gwh4517<"call.quota_exceeded">;
-	"call.rep_invalid": ErrorDefinition_8gwh4517<"call.rep_invalid">;
-	"call.rep_not_changeable": ErrorDefinition_8gwh4517<"call.rep_not_changeable">;
-	"call.too_large": ErrorDefinition_8gwh4517<"call.too_large">;
-	"call.unsupported_type": ErrorDefinition_8gwh4517<"call.unsupported_type">;
-	"deal.not_found": ErrorDefinition_8gwh4517<"deal.not_found">;
-	"deal_import.busy": ErrorDefinition_8gwh4517<"deal_import.busy">;
-	"deal_import.header_invalid": ErrorDefinition_8gwh4517<"deal_import.header_invalid">;
-	"deal_import.not_found": ErrorDefinition_8gwh4517<"deal_import.not_found">;
-	"deal_import.too_large": ErrorDefinition_8gwh4517<"deal_import.too_large">;
-	"deal_import.unsupported_type": ErrorDefinition_8gwh4517<"deal_import.unsupported_type">;
-	"document.not_found": ErrorDefinition_8gwh4517<"document.not_found">;
-	"document.not_restorable": ErrorDefinition_8gwh4517<"document.not_restorable">;
-	"document.quota_exceeded": ErrorDefinition_8gwh4517<"document.quota_exceeded">;
-	"document.too_large": ErrorDefinition_8gwh4517<"document.too_large">;
-	"document.unsupported_type": ErrorDefinition_8gwh4517<"document.unsupported_type">;
-	"rights.confirmation_required": ErrorDefinition_8gwh4517<"rights.confirmation_required">;
-	"rights.version_outdated": ErrorDefinition_8gwh4517<"rights.version_outdated">;
+	"call.content_in_other_deal": ErrorDefinition_8gwh4518<"call.content_in_other_deal">;
+	"call.not_found": ErrorDefinition_8gwh4518<"call.not_found">;
+	"call.not_restorable": ErrorDefinition_8gwh4518<"call.not_restorable">;
+	"call.quota_exceeded": ErrorDefinition_8gwh4518<"call.quota_exceeded">;
+	"call.rep_invalid": ErrorDefinition_8gwh4518<"call.rep_invalid">;
+	"call.rep_not_changeable": ErrorDefinition_8gwh4518<"call.rep_not_changeable">;
+	"call.too_large": ErrorDefinition_8gwh4518<"call.too_large">;
+	"call.unsupported_type": ErrorDefinition_8gwh4518<"call.unsupported_type">;
+	"deal.not_found": ErrorDefinition_8gwh4518<"deal.not_found">;
+	"deal_import.busy": ErrorDefinition_8gwh4518<"deal_import.busy">;
+	"deal_import.header_invalid": ErrorDefinition_8gwh4518<"deal_import.header_invalid">;
+	"deal_import.not_found": ErrorDefinition_8gwh4518<"deal_import.not_found">;
+	"deal_import.too_large": ErrorDefinition_8gwh4518<"deal_import.too_large">;
+	"deal_import.unsupported_type": ErrorDefinition_8gwh4518<"deal_import.unsupported_type">;
+	"document.not_found": ErrorDefinition_8gwh4518<"document.not_found">;
+	"document.not_restorable": ErrorDefinition_8gwh4518<"document.not_restorable">;
+	"document.quota_exceeded": ErrorDefinition_8gwh4518<"document.quota_exceeded">;
+	"document.too_large": ErrorDefinition_8gwh4518<"document.too_large">;
+	"document.unsupported_type": ErrorDefinition_8gwh4518<"document.unsupported_type">;
+	"rights.confirmation_required": ErrorDefinition_8gwh4518<"rights.confirmation_required">;
+	"rights.version_outdated": ErrorDefinition_8gwh4518<"rights.version_outdated">;
 }>;
-import { z as z75 } from "zod";
-import { z as z74 } from "zod";
+import { z as z81 } from "zod";
+import { z as z80 } from "zod";
 /**
 * The states a Call is in (ADR 0018, with ADR 0016). A Transcript goes `uploaded`, `processing`,
 * `ready`; a Recording goes `uploaded`, `transcribing`, then `awaiting_rep` (no Rep chosen yet) or
@@ -16311,7 +18110,7 @@ import { z as z74 } from "zod";
 */
 declare const CALL_STATES: readonly ["uploaded", "transcribing", "awaiting_rep", "processing", "ready", "failed", "deleted"];
 /** The state of a Call. */
-declare const callStateSchema: z74.ZodEnum<{
+declare const callStateSchema: z80.ZodEnum<{
 	awaiting_rep: "awaiting_rep";
 	deleted: "deleted";
 	failed: "failed";
@@ -16321,7 +18120,7 @@ declare const callStateSchema: z74.ZodEnum<{
 	uploaded: "uploaded";
 }>;
 /** The state of a Call. */
-type CallState = z74.infer<typeof callStateSchema>;
+type CallState = z80.infer<typeof callStateSchema>;
 /**
 * Why a Call ended in `failed`: a closed list the portal maps to its own wording, never free text.
 * `too_long` is found by the job from the audio, not at upload, so it is a reason and not an HTTP
@@ -16330,7 +18129,7 @@ type CallState = z74.infer<typeof callStateSchema>;
 */
 declare const CALL_FAILURE_REASONS: readonly ["no_turns", "too_few_speakers", "too_many_speakers", "rep_label_not_found", "not_per_side", "too_long", "transcription_failed", "transcription_timed_out", "unreadable", "processing_failed"];
 /** Why a Call ended in `failed`. */
-declare const callFailureReasonSchema: z74.ZodEnum<{
+declare const callFailureReasonSchema: z80.ZodEnum<{
 	no_turns: "no_turns";
 	not_per_side: "not_per_side";
 	processing_failed: "processing_failed";
@@ -16343,16 +18142,16 @@ declare const callFailureReasonSchema: z74.ZodEnum<{
 	unreadable: "unreadable";
 }>;
 /** Why a Call ended in `failed`. */
-type CallFailureReason = z74.infer<typeof callFailureReasonSchema>;
+type CallFailureReason = z80.infer<typeof callFailureReasonSchema>;
 /** What a Call was uploaded as: a written Transcript or an audio Recording. */
 declare const CALL_KINDS: readonly ["transcript", "recording"];
 /** What a Call was uploaded as. */
-declare const callKindSchema: z74.ZodEnum<{
+declare const callKindSchema: z80.ZodEnum<{
 	recording: "recording";
 	transcript: "transcript";
 }>;
 /** What a Call was uploaded as. */
-type CallKind = z74.infer<typeof callKindSchema>;
+type CallKind = z80.infer<typeof callKindSchema>;
 /** The lead's default (ADR 0018, refinements; not the owner's): the Transcript extensions accepted: plain text, WebVTT, SRT and a JSON turn list. */
 declare const ACCEPTED_TRANSCRIPT_EXTENSIONS: readonly [".txt", ".vtt", ".srt", ".json"];
 /** The lead's default (ADR 0018, refinements; not the owner's): the Recording extensions accepted. */
@@ -16362,7 +18161,7 @@ type AcceptedCallExtension = (typeof ACCEPTED_TRANSCRIPT_EXTENSIONS)[number] | (
 /** The media type of a stored Call file, as the service detected it from the content. */
 declare const CALL_MEDIA_TYPES: readonly ["text/plain", "text/vtt", "application/x-subrip", "application/json", "audio/mpeg", "audio/mp4", "audio/wav", "audio/ogg", "audio/webm", "audio/flac"];
 /** The media type of a stored Call file. */
-declare const callMediaTypeSchema: z74.ZodEnum<{
+declare const callMediaTypeSchema: z80.ZodEnum<{
 	"application/json": "application/json";
 	"application/x-subrip": "application/x-subrip";
 	"audio/flac": "audio/flac";
@@ -16375,7 +18174,7 @@ declare const callMediaTypeSchema: z74.ZodEnum<{
 	"text/vtt": "text/vtt";
 }>;
 /** The media type of a stored Call file. */
-type CallMediaType = z74.infer<typeof callMediaTypeSchema>;
+type CallMediaType = z80.infer<typeof callMediaTypeSchema>;
 /** The media type each accepted Call extension stands for. */
 declare const MEDIA_TYPE_BY_CALL_EXTENSION: Readonly<Record<AcceptedCallExtension, CallMediaType>>;
 /** The lead's default (ADR 0018, refinements; not the owner's): the largest Transcript accepted, 5 MB counted as 5 * 1024 * 1024 bytes. */
@@ -16411,7 +18210,7 @@ declare function normaliseSpeakerLabel(label: string): string;
 * treat it as untrusted text, and it never appears in an error body. It is compared exactly and
 * case-sensitively with the labels in the file.
 */
-declare const speakerLabelSchema: z74.ZodPipe<z74.ZodPipe<z74.ZodString, z74.ZodTransform<string, string>>, z74.ZodString>;
+declare const speakerLabelSchema: z80.ZodPipe<z80.ZodPipe<z80.ZodString, z80.ZodTransform<string, string>>, z80.ZodString>;
 /** The most Unicode code points of a speaker excerpt, the ellipsis included. */
 declare const MAX_SPEAKER_EXCERPT_LENGTH = 240;
 /**
@@ -16433,16 +18232,16 @@ declare function speakerExcerpt(turns: readonly string[]): string;
 * Rep. The label is untrusted text from the file and the excerpt is tenant Transcript text: both
 * are returned only to the owning Organization's Owner and Admin and are never logged.
 */
-declare const speakerExcerptSchema: z74.ZodObject<{
-	label: z74.ZodPipe<z74.ZodPipe<z74.ZodString, z74.ZodTransform<string, string>>, z74.ZodString>;
-	excerpt: z74.ZodString;
-}, z74.core.$strict>;
+declare const speakerExcerptSchema: z80.ZodObject<{
+	label: z80.ZodPipe<z80.ZodPipe<z80.ZodString, z80.ZodTransform<string, string>>, z80.ZodString>;
+	excerpt: z80.ZodString;
+}, z80.core.$strict>;
 /** One speaker of a Call with a short excerpt. */
-type SpeakerExcerpt = z74.infer<typeof speakerExcerptSchema>;
+type SpeakerExcerpt = z80.infer<typeof speakerExcerptSchema>;
 /** The channels of a per-side Recording: the left one or the right one. */
 declare const CALL_CHANNELS: readonly ["left", "right"];
 /** A channel of a per-side Recording. */
-declare const callChannelSchema: z74.ZodEnum<{
+declare const callChannelSchema: z80.ZodEnum<{
 	left: "left";
 	right: "right";
 }>;
@@ -16451,18 +18250,18 @@ declare const callChannelSchema: z74.ZodEnum<{
 * `awaiting_rep`) or a channel (a per-side Recording). A Recording whose Rep is not yet known has
 * no choice at all (`null` on the Call, an absent `rep` at upload).
 */
-declare const repChoiceSchema: z74.ZodDiscriminatedUnion<[z74.ZodObject<{
-	by: z74.ZodLiteral<"speaker">;
-	label: z74.ZodPipe<z74.ZodPipe<z74.ZodString, z74.ZodTransform<string, string>>, z74.ZodString>;
-}, z74.core.$strict>, z74.ZodObject<{
-	by: z74.ZodLiteral<"channel">;
-	channel: z74.ZodEnum<{
+declare const repChoiceSchema: z80.ZodDiscriminatedUnion<[z80.ZodObject<{
+	by: z80.ZodLiteral<"speaker">;
+	label: z80.ZodPipe<z80.ZodPipe<z80.ZodString, z80.ZodTransform<string, string>>, z80.ZodString>;
+}, z80.core.$strict>, z80.ZodObject<{
+	by: z80.ZodLiteral<"channel">;
+	channel: z80.ZodEnum<{
 		left: "left";
 		right: "right";
 	}>;
-}, z74.core.$strict>], "by">;
+}, z80.core.$strict>], "by">;
 /** Which side of a Call is the Rep. */
-type RepChoice = z74.infer<typeof repChoiceSchema>;
+type RepChoice = z80.infer<typeof repChoiceSchema>;
 /**
 * Whether a Rep choice suits a Call of this kind, for the one moment named. At `upload`, a
 * Transcript needs a speaker label (ADR 0018, refinements), and a Recording takes a channel (the
@@ -16521,22 +18320,22 @@ declare function repChangeAllowed(state: CallState, failureReason: CallFailureRe
 * label and names only labels in `speakerLabels`; a speaker with no text is left out. It is tenant
 * Transcript text, returned only to the owning Organization's Owner and Admin, and never logged.
 */
-declare const callSchema: z75.ZodObject<{
-	id: z75.core.$ZodBranded<z75.ZodString, "call", "out">;
-	dealId: z75.ZodPipe<z75.ZodPipe<z75.ZodString, z75.ZodTransform<string, string>>, z75.ZodString>;
-	dealRecordId: z75.core.$ZodBranded<z75.ZodString, "deal", "out">;
-	dealOutcome: z75.ZodEnum<{
+declare const callSchema: z81.ZodObject<{
+	id: z81.core.$ZodBranded<z81.ZodString, "call", "out">;
+	dealId: z81.ZodPipe<z81.ZodPipe<z81.ZodString, z81.ZodTransform<string, string>>, z81.ZodString>;
+	dealRecordId: z81.core.$ZodBranded<z81.ZodString, "deal", "out">;
+	dealOutcome: z81.ZodEnum<{
 		lost: "lost";
 		open: "open";
 		won: "won";
 	}>;
-	inSearch: z75.ZodBoolean;
-	kind: z75.ZodEnum<{
+	inSearch: z81.ZodBoolean;
+	kind: z81.ZodEnum<{
 		recording: "recording";
 		transcript: "transcript";
 	}>;
-	fileName: z75.ZodPipe<z75.ZodPipe<z75.ZodString, z75.ZodTransform<string, string>>, z75.ZodString>;
-	mediaType: z75.ZodEnum<{
+	fileName: z81.ZodPipe<z81.ZodPipe<z81.ZodString, z81.ZodTransform<string, string>>, z81.ZodString>;
+	mediaType: z81.ZodEnum<{
 		"application/json": "application/json";
 		"application/x-subrip": "application/x-subrip";
 		"audio/flac": "audio/flac";
@@ -16548,9 +18347,9 @@ declare const callSchema: z75.ZodObject<{
 		"text/plain": "text/plain";
 		"text/vtt": "text/vtt";
 	}>;
-	sizeBytes: z75.ZodNumber;
-	durationSeconds: z75.ZodNullable<z75.ZodNumber>;
-	state: z75.ZodEnum<{
+	sizeBytes: z81.ZodNumber;
+	durationSeconds: z81.ZodNullable<z81.ZodNumber>;
+	state: z81.ZodEnum<{
 		awaiting_rep: "awaiting_rep";
 		deleted: "deleted";
 		failed: "failed";
@@ -16559,7 +18358,7 @@ declare const callSchema: z75.ZodObject<{
 		transcribing: "transcribing";
 		uploaded: "uploaded";
 	}>;
-	failureReason: z75.ZodNullable<z75.ZodEnum<{
+	failureReason: z81.ZodNullable<z81.ZodEnum<{
 		no_turns: "no_turns";
 		not_per_side: "not_per_side";
 		processing_failed: "processing_failed";
@@ -16571,29 +18370,29 @@ declare const callSchema: z75.ZodObject<{
 		transcription_timed_out: "transcription_timed_out";
 		unreadable: "unreadable";
 	}>>;
-	rep: z75.ZodNullable<z75.ZodDiscriminatedUnion<[z75.ZodObject<{
-		by: z75.ZodLiteral<"speaker">;
-		label: z75.ZodPipe<z75.ZodPipe<z75.ZodString, z75.ZodTransform<string, string>>, z75.ZodString>;
-	}, z75.core.$strict>, z75.ZodObject<{
-		by: z75.ZodLiteral<"channel">;
-		channel: z75.ZodEnum<{
+	rep: z81.ZodNullable<z81.ZodDiscriminatedUnion<[z81.ZodObject<{
+		by: z81.ZodLiteral<"speaker">;
+		label: z81.ZodPipe<z81.ZodPipe<z81.ZodString, z81.ZodTransform<string, string>>, z81.ZodString>;
+	}, z81.core.$strict>, z81.ZodObject<{
+		by: z81.ZodLiteral<"channel">;
+		channel: z81.ZodEnum<{
 			left: "left";
 			right: "right";
 		}>;
-	}, z75.core.$strict>], "by">>;
-	speakerLabels: z75.ZodArray<z75.ZodPipe<z75.ZodPipe<z75.ZodString, z75.ZodTransform<string, string>>, z75.ZodString>>;
-	speakers: z75.ZodOptional<z75.ZodArray<z75.ZodObject<{
-		label: z75.ZodPipe<z75.ZodPipe<z75.ZodString, z75.ZodTransform<string, string>>, z75.ZodString>;
-		excerpt: z75.ZodString;
-	}, z75.core.$strict>>>;
-	deletedAt: z75.ZodNullable<z75.ZodISODateTime>;
-	purgeAt: z75.ZodNullable<z75.ZodISODateTime>;
-	uploadedByUserId: z75.core.$ZodBranded<z75.ZodString, "usr", "out">;
-	createdAt: z75.ZodISODateTime;
-	updatedAt: z75.ZodISODateTime;
-}, z75.core.$strip>;
+	}, z81.core.$strict>], "by">>;
+	speakerLabels: z81.ZodArray<z81.ZodPipe<z81.ZodPipe<z81.ZodString, z81.ZodTransform<string, string>>, z81.ZodString>>;
+	speakers: z81.ZodOptional<z81.ZodArray<z81.ZodObject<{
+		label: z81.ZodPipe<z81.ZodPipe<z81.ZodString, z81.ZodTransform<string, string>>, z81.ZodString>;
+		excerpt: z81.ZodString;
+	}, z81.core.$strict>>>;
+	deletedAt: z81.ZodNullable<z81.ZodISODateTime>;
+	purgeAt: z81.ZodNullable<z81.ZodISODateTime>;
+	uploadedByUserId: z81.core.$ZodBranded<z81.ZodString, "usr", "out">;
+	createdAt: z81.ZodISODateTime;
+	updatedAt: z81.ZodISODateTime;
+}, z81.core.$strip>;
 /** A Call as the service returns it. */
-type Call = z75.infer<typeof callSchema>;
+type Call = z81.infer<typeof callSchema>;
 /** The most characters the `rep` form field may hold; a longer text is refused without being parsed. */
 declare const MAX_REP_FIELD_LENGTH = 512;
 /**
@@ -16604,12 +18403,12 @@ declare const MAX_REP_FIELD_LENGTH = 512;
 * for a Recording that will wait in `awaiting_rep`. The request carries an `Idempotency-Key`
 * header. Parse the text of `rep` with {@link parseRepField}.
 */
-declare const uploadCallFieldsSchema: z75.ZodObject<{
-	dealId: z75.ZodPipe<z75.ZodPipe<z75.ZodString, z75.ZodTransform<string, string>>, z75.ZodString>;
-	rep: z75.ZodOptional<z75.ZodString>;
-}, z75.core.$strict>;
+declare const uploadCallFieldsSchema: z81.ZodObject<{
+	dealId: z81.ZodPipe<z81.ZodPipe<z81.ZodString, z81.ZodTransform<string, string>>, z81.ZodString>;
+	rep: z81.ZodOptional<z81.ZodString>;
+}, z81.core.$strict>;
 /** The text fields of the multipart upload of a Call. */
-type UploadCallFields = z75.infer<typeof uploadCallFieldsSchema>;
+type UploadCallFields = z81.infer<typeof uploadCallFieldsSchema>;
 /** What {@link parseRepField} answers: a Rep choice, no Rep at all (the field was not sent), or an invalid field. */
 type ParseRepFieldResult = {
 	readonly ok: true;
@@ -16626,21 +18425,21 @@ type ParseRepFieldResult = {
 */
 declare function parseRepField(text: string | undefined): ParseRepFieldResult;
 /** The path parameters of a request about one Call. */
-declare const callParamsSchema: z75.ZodObject<{
-	callId: z75.core.$ZodBranded<z75.ZodString, "call", "out">;
-}, z75.core.$strict>;
+declare const callParamsSchema: z81.ZodObject<{
+	callId: z81.core.$ZodBranded<z81.ZodString, "call", "out">;
+}, z81.core.$strict>;
 /** The path parameters of a request about one Call. */
-type CallParams = z75.infer<typeof callParamsSchema>;
+type CallParams = z81.infer<typeof callParamsSchema>;
 /**
 * The query parameters of a request to list Calls: a page, and optionally one `state` and one
 * `dealRecordId` (the Deal's opaque id; the customer's deal id never goes in a query string). With no `state`, every Call that is not `deleted` is listed; `state=deleted` lists
 * those that can still be restored, and `state=awaiting_rep` the ones waiting for a Rep. An
 * unknown parameter is rejected.
 */
-declare const listCallsQuerySchema: z75.ZodObject<{
-	cursor: z75.ZodOptional<z75.ZodString>;
-	limit: z75.ZodDefault<z75.ZodPipe<z75.ZodPipe<z75.ZodUnion<readonly [z75.ZodNumber, z75.ZodString]>, z75.ZodTransform<number, string | number>>, z75.ZodNumber>>;
-	state: z75.ZodOptional<z75.ZodEnum<{
+declare const listCallsQuerySchema: z81.ZodObject<{
+	cursor: z81.ZodOptional<z81.ZodString>;
+	limit: z81.ZodDefault<z81.ZodPipe<z81.ZodPipe<z81.ZodUnion<readonly [z81.ZodNumber, z81.ZodString]>, z81.ZodTransform<number, string | number>>, z81.ZodNumber>>;
+	state: z81.ZodOptional<z81.ZodEnum<{
 		awaiting_rep: "awaiting_rep";
 		deleted: "deleted";
 		failed: "failed";
@@ -16649,31 +18448,31 @@ declare const listCallsQuerySchema: z75.ZodObject<{
 		transcribing: "transcribing";
 		uploaded: "uploaded";
 	}>>;
-	dealRecordId: z75.ZodOptional<z75.core.$ZodBranded<z75.ZodString, "deal", "out">>;
-}, z75.core.$strict>;
+	dealRecordId: z81.ZodOptional<z81.core.$ZodBranded<z81.ZodString, "deal", "out">>;
+}, z81.core.$strict>;
 /** The query parameters of a request to list Calls. */
-type ListCallsQuery = z75.infer<typeof listCallsQuerySchema>;
+type ListCallsQuery = z81.infer<typeof listCallsQuerySchema>;
 /**
 * A Call in a list: a {@link callSchema} Call without `speakers`, and strict, so one that carries
 * excerpts is refused. Only the single-Call read returns speaker excerpts, which keeps a page of up
 * to 100 Calls from carrying up to 20 excerpts each of tenant Transcript text.
 */
-declare const callListItemSchema: z75.ZodObject<{
-	id: z75.core.$ZodBranded<z75.ZodString, "call", "out">;
-	dealId: z75.ZodPipe<z75.ZodPipe<z75.ZodString, z75.ZodTransform<string, string>>, z75.ZodString>;
-	dealRecordId: z75.core.$ZodBranded<z75.ZodString, "deal", "out">;
-	dealOutcome: z75.ZodEnum<{
+declare const callListItemSchema: z81.ZodObject<{
+	id: z81.core.$ZodBranded<z81.ZodString, "call", "out">;
+	dealId: z81.ZodPipe<z81.ZodPipe<z81.ZodString, z81.ZodTransform<string, string>>, z81.ZodString>;
+	dealRecordId: z81.core.$ZodBranded<z81.ZodString, "deal", "out">;
+	dealOutcome: z81.ZodEnum<{
 		lost: "lost";
 		open: "open";
 		won: "won";
 	}>;
-	inSearch: z75.ZodBoolean;
-	kind: z75.ZodEnum<{
+	inSearch: z81.ZodBoolean;
+	kind: z81.ZodEnum<{
 		recording: "recording";
 		transcript: "transcript";
 	}>;
-	fileName: z75.ZodPipe<z75.ZodPipe<z75.ZodString, z75.ZodTransform<string, string>>, z75.ZodString>;
-	mediaType: z75.ZodEnum<{
+	fileName: z81.ZodPipe<z81.ZodPipe<z81.ZodString, z81.ZodTransform<string, string>>, z81.ZodString>;
+	mediaType: z81.ZodEnum<{
 		"application/json": "application/json";
 		"application/x-subrip": "application/x-subrip";
 		"audio/flac": "audio/flac";
@@ -16685,9 +18484,9 @@ declare const callListItemSchema: z75.ZodObject<{
 		"text/plain": "text/plain";
 		"text/vtt": "text/vtt";
 	}>;
-	sizeBytes: z75.ZodNumber;
-	durationSeconds: z75.ZodNullable<z75.ZodNumber>;
-	state: z75.ZodEnum<{
+	sizeBytes: z81.ZodNumber;
+	durationSeconds: z81.ZodNullable<z81.ZodNumber>;
+	state: z81.ZodEnum<{
 		awaiting_rep: "awaiting_rep";
 		deleted: "deleted";
 		failed: "failed";
@@ -16696,7 +18495,7 @@ declare const callListItemSchema: z75.ZodObject<{
 		transcribing: "transcribing";
 		uploaded: "uploaded";
 	}>;
-	failureReason: z75.ZodNullable<z75.ZodEnum<{
+	failureReason: z81.ZodNullable<z81.ZodEnum<{
 		no_turns: "no_turns";
 		not_per_side: "not_per_side";
 		processing_failed: "processing_failed";
@@ -16708,41 +18507,41 @@ declare const callListItemSchema: z75.ZodObject<{
 		transcription_timed_out: "transcription_timed_out";
 		unreadable: "unreadable";
 	}>>;
-	rep: z75.ZodNullable<z75.ZodDiscriminatedUnion<[z75.ZodObject<{
-		by: z75.ZodLiteral<"speaker">;
-		label: z75.ZodPipe<z75.ZodPipe<z75.ZodString, z75.ZodTransform<string, string>>, z75.ZodString>;
-	}, z75.core.$strict>, z75.ZodObject<{
-		by: z75.ZodLiteral<"channel">;
-		channel: z75.ZodEnum<{
+	rep: z81.ZodNullable<z81.ZodDiscriminatedUnion<[z81.ZodObject<{
+		by: z81.ZodLiteral<"speaker">;
+		label: z81.ZodPipe<z81.ZodPipe<z81.ZodString, z81.ZodTransform<string, string>>, z81.ZodString>;
+	}, z81.core.$strict>, z81.ZodObject<{
+		by: z81.ZodLiteral<"channel">;
+		channel: z81.ZodEnum<{
 			left: "left";
 			right: "right";
 		}>;
-	}, z75.core.$strict>], "by">>;
-	speakerLabels: z75.ZodArray<z75.ZodPipe<z75.ZodPipe<z75.ZodString, z75.ZodTransform<string, string>>, z75.ZodString>>;
-	deletedAt: z75.ZodNullable<z75.ZodISODateTime>;
-	purgeAt: z75.ZodNullable<z75.ZodISODateTime>;
-	uploadedByUserId: z75.core.$ZodBranded<z75.ZodString, "usr", "out">;
-	createdAt: z75.ZodISODateTime;
-	updatedAt: z75.ZodISODateTime;
-}, z75.core.$strict>;
+	}, z81.core.$strict>], "by">>;
+	speakerLabels: z81.ZodArray<z81.ZodPipe<z81.ZodPipe<z81.ZodString, z81.ZodTransform<string, string>>, z81.ZodString>>;
+	deletedAt: z81.ZodNullable<z81.ZodISODateTime>;
+	purgeAt: z81.ZodNullable<z81.ZodISODateTime>;
+	uploadedByUserId: z81.core.$ZodBranded<z81.ZodString, "usr", "out">;
+	createdAt: z81.ZodISODateTime;
+	updatedAt: z81.ZodISODateTime;
+}, z81.core.$strict>;
 /** One page of Calls, without speaker excerpts. */
-declare const listCallsResponseSchema: z75.ZodObject<{
-	items: z75.ZodArray<z75.ZodObject<{
-		id: z75.core.$ZodBranded<z75.ZodString, "call", "out">;
-		dealId: z75.ZodPipe<z75.ZodPipe<z75.ZodString, z75.ZodTransform<string, string>>, z75.ZodString>;
-		dealRecordId: z75.core.$ZodBranded<z75.ZodString, "deal", "out">;
-		dealOutcome: z75.ZodEnum<{
+declare const listCallsResponseSchema: z81.ZodObject<{
+	items: z81.ZodArray<z81.ZodObject<{
+		id: z81.core.$ZodBranded<z81.ZodString, "call", "out">;
+		dealId: z81.ZodPipe<z81.ZodPipe<z81.ZodString, z81.ZodTransform<string, string>>, z81.ZodString>;
+		dealRecordId: z81.core.$ZodBranded<z81.ZodString, "deal", "out">;
+		dealOutcome: z81.ZodEnum<{
 			lost: "lost";
 			open: "open";
 			won: "won";
 		}>;
-		inSearch: z75.ZodBoolean;
-		kind: z75.ZodEnum<{
+		inSearch: z81.ZodBoolean;
+		kind: z81.ZodEnum<{
 			recording: "recording";
 			transcript: "transcript";
 		}>;
-		fileName: z75.ZodPipe<z75.ZodPipe<z75.ZodString, z75.ZodTransform<string, string>>, z75.ZodString>;
-		mediaType: z75.ZodEnum<{
+		fileName: z81.ZodPipe<z81.ZodPipe<z81.ZodString, z81.ZodTransform<string, string>>, z81.ZodString>;
+		mediaType: z81.ZodEnum<{
 			"application/json": "application/json";
 			"application/x-subrip": "application/x-subrip";
 			"audio/flac": "audio/flac";
@@ -16754,9 +18553,9 @@ declare const listCallsResponseSchema: z75.ZodObject<{
 			"text/plain": "text/plain";
 			"text/vtt": "text/vtt";
 		}>;
-		sizeBytes: z75.ZodNumber;
-		durationSeconds: z75.ZodNullable<z75.ZodNumber>;
-		state: z75.ZodEnum<{
+		sizeBytes: z81.ZodNumber;
+		durationSeconds: z81.ZodNullable<z81.ZodNumber>;
+		state: z81.ZodEnum<{
 			awaiting_rep: "awaiting_rep";
 			deleted: "deleted";
 			failed: "failed";
@@ -16765,7 +18564,7 @@ declare const listCallsResponseSchema: z75.ZodObject<{
 			transcribing: "transcribing";
 			uploaded: "uploaded";
 		}>;
-		failureReason: z75.ZodNullable<z75.ZodEnum<{
+		failureReason: z81.ZodNullable<z81.ZodEnum<{
 			no_turns: "no_turns";
 			not_per_side: "not_per_side";
 			processing_failed: "processing_failed";
@@ -16777,58 +18576,58 @@ declare const listCallsResponseSchema: z75.ZodObject<{
 			transcription_timed_out: "transcription_timed_out";
 			unreadable: "unreadable";
 		}>>;
-		rep: z75.ZodNullable<z75.ZodDiscriminatedUnion<[z75.ZodObject<{
-			by: z75.ZodLiteral<"speaker">;
-			label: z75.ZodPipe<z75.ZodPipe<z75.ZodString, z75.ZodTransform<string, string>>, z75.ZodString>;
-		}, z75.core.$strict>, z75.ZodObject<{
-			by: z75.ZodLiteral<"channel">;
-			channel: z75.ZodEnum<{
+		rep: z81.ZodNullable<z81.ZodDiscriminatedUnion<[z81.ZodObject<{
+			by: z81.ZodLiteral<"speaker">;
+			label: z81.ZodPipe<z81.ZodPipe<z81.ZodString, z81.ZodTransform<string, string>>, z81.ZodString>;
+		}, z81.core.$strict>, z81.ZodObject<{
+			by: z81.ZodLiteral<"channel">;
+			channel: z81.ZodEnum<{
 				left: "left";
 				right: "right";
 			}>;
-		}, z75.core.$strict>], "by">>;
-		speakerLabels: z75.ZodArray<z75.ZodPipe<z75.ZodPipe<z75.ZodString, z75.ZodTransform<string, string>>, z75.ZodString>>;
-		deletedAt: z75.ZodNullable<z75.ZodISODateTime>;
-		purgeAt: z75.ZodNullable<z75.ZodISODateTime>;
-		uploadedByUserId: z75.core.$ZodBranded<z75.ZodString, "usr", "out">;
-		createdAt: z75.ZodISODateTime;
-		updatedAt: z75.ZodISODateTime;
-	}, z75.core.$strict>>;
-	nextCursor: z75.ZodNullable<z75.ZodString>;
-}, z75.core.$strip>;
+		}, z81.core.$strict>], "by">>;
+		speakerLabels: z81.ZodArray<z81.ZodPipe<z81.ZodPipe<z81.ZodString, z81.ZodTransform<string, string>>, z81.ZodString>>;
+		deletedAt: z81.ZodNullable<z81.ZodISODateTime>;
+		purgeAt: z81.ZodNullable<z81.ZodISODateTime>;
+		uploadedByUserId: z81.core.$ZodBranded<z81.ZodString, "usr", "out">;
+		createdAt: z81.ZodISODateTime;
+		updatedAt: z81.ZodISODateTime;
+	}, z81.core.$strict>>;
+	nextCursor: z81.ZodNullable<z81.ZodString>;
+}, z81.core.$strip>;
 /** One page of Calls. */
-type ListCallsResponse = z75.infer<typeof listCallsResponseSchema>;
+type ListCallsResponse = z81.infer<typeof listCallsResponseSchema>;
 /**
 * The body of the request that picks or changes a Call's Rep: a required choice (`null` is not a
 * choice). It is for a Call `awaiting_rep`, `ready` or `failed`, otherwise `call.rep_not_changeable`;
 * a choice that does not suit the Call's kind or, for a speaker, is not among its labels is
 * `call.rep_invalid`. It is idempotent by end state.
 */
-declare const setCallRepRequestSchema: z75.ZodObject<{
-	rep: z75.ZodDiscriminatedUnion<[z75.ZodObject<{
-		by: z75.ZodLiteral<"speaker">;
-		label: z75.ZodPipe<z75.ZodPipe<z75.ZodString, z75.ZodTransform<string, string>>, z75.ZodString>;
-	}, z75.core.$strict>, z75.ZodObject<{
-		by: z75.ZodLiteral<"channel">;
-		channel: z75.ZodEnum<{
+declare const setCallRepRequestSchema: z81.ZodObject<{
+	rep: z81.ZodDiscriminatedUnion<[z81.ZodObject<{
+		by: z81.ZodLiteral<"speaker">;
+		label: z81.ZodPipe<z81.ZodPipe<z81.ZodString, z81.ZodTransform<string, string>>, z81.ZodString>;
+	}, z81.core.$strict>, z81.ZodObject<{
+		by: z81.ZodLiteral<"channel">;
+		channel: z81.ZodEnum<{
 			left: "left";
 			right: "right";
 		}>;
-	}, z75.core.$strict>], "by">;
-}, z75.core.$strict>;
+	}, z81.core.$strict>], "by">;
+}, z81.core.$strict>;
 /** The body of the request that picks or changes a Call's Rep. */
-type SetCallRepRequest = z75.infer<typeof setCallRepRequestSchema>;
+type SetCallRepRequest = z81.infer<typeof setCallRepRequestSchema>;
 /** What the service reads off the file part of a Call upload, and the kind it was recognised as. */
-declare const uploadCallFileSchema: z75.ZodObject<{
-	fileName: z75.ZodPipe<z75.ZodPipe<z75.ZodString, z75.ZodTransform<string, string>>, z75.ZodString>;
-	declaredMediaType: z75.ZodNullable<z75.ZodString>;
-	sizeBytes: z75.ZodNumber;
-}, z75.core.$strict>;
+declare const uploadCallFileSchema: z81.ZodObject<{
+	fileName: z81.ZodPipe<z81.ZodPipe<z81.ZodString, z81.ZodTransform<string, string>>, z81.ZodString>;
+	declaredMediaType: z81.ZodNullable<z81.ZodString>;
+	sizeBytes: z81.ZodNumber;
+}, z81.core.$strict>;
 /** The answer of {@link checkCallFile}: the parsed file and its kind, or the one error code to return. */
 type CheckCallFileResult = {
 	readonly ok: true;
 	readonly kind: CallKind;
-	readonly file: z75.infer<typeof uploadCallFileSchema>;
+	readonly file: z81.infer<typeof uploadCallFileSchema>;
 } | {
 	readonly ok: false;
 	readonly code: "call.too_large" | "call.unsupported_type" | "request.invalid";
@@ -16847,13 +18646,13 @@ type CheckCallFileResult = {
 */
 declare function checkCallFile(input: unknown): CheckCallFileResult;
 /** The position a Call list continues from: `createdAt`, then the Call's own `id`. It never holds a deal id. */
-declare const callCursorSchema: z75.ZodObject<{
-	createdAt: z75.ZodISODateTime;
-	id: z75.core.$ZodBranded<z75.ZodString, "call", "out">;
-}, z75.core.$strict>;
+declare const callCursorSchema: z81.ZodObject<{
+	createdAt: z81.ZodISODateTime;
+	id: z81.core.$ZodBranded<z81.ZodString, "call", "out">;
+}, z81.core.$strict>;
 /** The position a Call list continues from. */
-type CallCursor = z75.infer<typeof callCursorSchema>;
-import { z as z76 } from "zod";
+type CallCursor = z81.infer<typeof callCursorSchema>;
+import { z as z82 } from "zod";
 /**
 * A Deal as the service returns it. A Deal is named by the Organization's own `dealId` (customer
 * text, never logged, never in a URL path) and addressed by its opaque `id` (`deal_…`). It is never
@@ -16865,120 +18664,120 @@ import { z as z76 } from "zod";
 * Outcome sequence the re-tag job uses is not here. The service must send the output of
 * `dealSchema.parse(row)`.
 */
-declare const dealSchema: z76.ZodObject<{
-	id: z76.core.$ZodBranded<z76.ZodString, "deal", "out">;
-	dealId: z76.ZodPipe<z76.ZodPipe<z76.ZodString, z76.ZodTransform<string, string>>, z76.ZodString>;
-	name: z76.ZodNullable<z76.ZodPipe<z76.ZodString, z76.ZodString>>;
-	outcome: z76.ZodEnum<{
+declare const dealSchema: z82.ZodObject<{
+	id: z82.core.$ZodBranded<z82.ZodString, "deal", "out">;
+	dealId: z82.ZodPipe<z82.ZodPipe<z82.ZodString, z82.ZodTransform<string, string>>, z82.ZodString>;
+	name: z82.ZodNullable<z82.ZodPipe<z82.ZodString, z82.ZodString>>;
+	outcome: z82.ZodEnum<{
 		lost: "lost";
 		open: "open";
 		won: "won";
 	}>;
-	closedAt: z76.ZodNullable<z76.ZodISODate>;
-	amount: z76.ZodNullable<z76.ZodString>;
-	currency: z76.ZodNullable<z76.ZodString>;
-	callCount: z76.ZodNumber;
-	appearedInImport: z76.ZodBoolean;
-	createdAt: z76.ZodISODateTime;
-	updatedAt: z76.ZodISODateTime;
-}, z76.core.$strip>;
+	closedAt: z82.ZodNullable<z82.ZodISODate>;
+	amount: z82.ZodNullable<z82.ZodString>;
+	currency: z82.ZodNullable<z82.ZodString>;
+	callCount: z82.ZodNumber;
+	appearedInImport: z82.ZodBoolean;
+	createdAt: z82.ZodISODateTime;
+	updatedAt: z82.ZodISODateTime;
+}, z82.core.$strip>;
 /** A Deal as the service returns it. */
-type Deal = z76.infer<typeof dealSchema>;
+type Deal = z82.infer<typeof dealSchema>;
 /** The path parameters of a request about one Deal: its opaque id, never the customer's deal id. */
-declare const dealParamsSchema: z76.ZodObject<{
-	dealRecordId: z76.core.$ZodBranded<z76.ZodString, "deal", "out">;
-}, z76.core.$strict>;
+declare const dealParamsSchema: z82.ZodObject<{
+	dealRecordId: z82.core.$ZodBranded<z82.ZodString, "deal", "out">;
+}, z82.core.$strict>;
 /** The path parameters of a request about one Deal. */
-type DealParams = z76.infer<typeof dealParamsSchema>;
+type DealParams = z82.infer<typeof dealParamsSchema>;
 /**
 * The query parameters of a request to list Deals: a page, and optionally one `outcome` and
 * `appearedInImport` (`true` or `false`). `appearedInImport=false` lists the Deals that have Calls
 * but never appeared in a CSV. An unknown parameter is rejected.
 */
-declare const listDealsQuerySchema: z76.ZodObject<{
-	cursor: z76.ZodOptional<z76.ZodString>;
-	limit: z76.ZodDefault<z76.ZodPipe<z76.ZodPipe<z76.ZodUnion<readonly [z76.ZodNumber, z76.ZodString]>, z76.ZodTransform<number, string | number>>, z76.ZodNumber>>;
-	outcome: z76.ZodOptional<z76.ZodEnum<{
+declare const listDealsQuerySchema: z82.ZodObject<{
+	cursor: z82.ZodOptional<z82.ZodString>;
+	limit: z82.ZodDefault<z82.ZodPipe<z82.ZodPipe<z82.ZodUnion<readonly [z82.ZodNumber, z82.ZodString]>, z82.ZodTransform<number, string | number>>, z82.ZodNumber>>;
+	outcome: z82.ZodOptional<z82.ZodEnum<{
 		lost: "lost";
 		open: "open";
 		won: "won";
 	}>>;
-	appearedInImport: z76.ZodOptional<z76.ZodPipe<z76.ZodEnum<{
+	appearedInImport: z82.ZodOptional<z82.ZodPipe<z82.ZodEnum<{
 		false: "false";
 		true: "true";
-	}>, z76.ZodTransform<boolean, "false" | "true">>>;
-}, z76.core.$strict>;
+	}>, z82.ZodTransform<boolean, "false" | "true">>>;
+}, z82.core.$strict>;
 /** The query parameters of a request to list Deals. */
-type ListDealsQuery = z76.infer<typeof listDealsQuerySchema>;
+type ListDealsQuery = z82.infer<typeof listDealsQuerySchema>;
 /** One page of Deals. */
-declare const listDealsResponseSchema: z76.ZodObject<{
-	items: z76.ZodArray<z76.ZodObject<{
-		id: z76.core.$ZodBranded<z76.ZodString, "deal", "out">;
-		dealId: z76.ZodPipe<z76.ZodPipe<z76.ZodString, z76.ZodTransform<string, string>>, z76.ZodString>;
-		name: z76.ZodNullable<z76.ZodPipe<z76.ZodString, z76.ZodString>>;
-		outcome: z76.ZodEnum<{
+declare const listDealsResponseSchema: z82.ZodObject<{
+	items: z82.ZodArray<z82.ZodObject<{
+		id: z82.core.$ZodBranded<z82.ZodString, "deal", "out">;
+		dealId: z82.ZodPipe<z82.ZodPipe<z82.ZodString, z82.ZodTransform<string, string>>, z82.ZodString>;
+		name: z82.ZodNullable<z82.ZodPipe<z82.ZodString, z82.ZodString>>;
+		outcome: z82.ZodEnum<{
 			lost: "lost";
 			open: "open";
 			won: "won";
 		}>;
-		closedAt: z76.ZodNullable<z76.ZodISODate>;
-		amount: z76.ZodNullable<z76.ZodString>;
-		currency: z76.ZodNullable<z76.ZodString>;
-		callCount: z76.ZodNumber;
-		appearedInImport: z76.ZodBoolean;
-		createdAt: z76.ZodISODateTime;
-		updatedAt: z76.ZodISODateTime;
-	}, z76.core.$strip>>;
-	nextCursor: z76.ZodNullable<z76.ZodString>;
-}, z76.core.$strip>;
+		closedAt: z82.ZodNullable<z82.ZodISODate>;
+		amount: z82.ZodNullable<z82.ZodString>;
+		currency: z82.ZodNullable<z82.ZodString>;
+		callCount: z82.ZodNumber;
+		appearedInImport: z82.ZodBoolean;
+		createdAt: z82.ZodISODateTime;
+		updatedAt: z82.ZodISODateTime;
+	}, z82.core.$strip>>;
+	nextCursor: z82.ZodNullable<z82.ZodString>;
+}, z82.core.$strip>;
 /** One page of Deals. */
-type ListDealsResponse = z76.infer<typeof listDealsResponseSchema>;
+type ListDealsResponse = z82.infer<typeof listDealsResponseSchema>;
 /**
 * The body of the request that sets or corrects a Deal's Outcome (Owner and Admin, any Deal, even
 * a decided one): the `outcome` and an optional `closedAt`, which an `open` Deal may carry too (an
 * expected close date), as in the CSV. It is idempotent by end state, and a change queues the
 * re-tag of the Deal's Moments.
 */
-declare const setDealOutcomeRequestSchema: z76.ZodObject<{
-	outcome: z76.ZodEnum<{
+declare const setDealOutcomeRequestSchema: z82.ZodObject<{
+	outcome: z82.ZodEnum<{
 		lost: "lost";
 		open: "open";
 		won: "won";
 	}>;
-	closedAt: z76.ZodOptional<z76.ZodNullable<z76.ZodISODate>>;
-}, z76.core.$strict>;
+	closedAt: z82.ZodOptional<z82.ZodNullable<z82.ZodISODate>>;
+}, z82.core.$strict>;
 /** The body of the request that sets or corrects a Deal's Outcome. */
-type SetDealOutcomeRequest = z76.infer<typeof setDealOutcomeRequestSchema>;
+type SetDealOutcomeRequest = z82.infer<typeof setDealOutcomeRequestSchema>;
 /**
 * The body of the request that finds a Deal by the customer's deal id, so the id goes in a POST
 * body and never in a URL. The answer is the Deal, or `deal.not_found`. Matching is exact after the
 * trim.
 */
-declare const lookupDealRequestSchema: z76.ZodObject<{
-	dealId: z76.ZodPipe<z76.ZodPipe<z76.ZodString, z76.ZodTransform<string, string>>, z76.ZodString>;
-}, z76.core.$strict>;
+declare const lookupDealRequestSchema: z82.ZodObject<{
+	dealId: z82.ZodPipe<z82.ZodPipe<z82.ZodString, z82.ZodTransform<string, string>>, z82.ZodString>;
+}, z82.core.$strict>;
 /** The body of the request that finds a Deal by the customer's deal id. */
-type LookupDealRequest = z76.infer<typeof lookupDealRequestSchema>;
+type LookupDealRequest = z82.infer<typeof lookupDealRequestSchema>;
 /** The position a Deal list continues from: `createdAt`, then the Deal's opaque `id`, never the customer's deal id. */
-declare const dealCursorSchema: z76.ZodObject<{
-	createdAt: z76.ZodISODateTime;
-	id: z76.core.$ZodBranded<z76.ZodString, "deal", "out">;
-}, z76.core.$strict>;
+declare const dealCursorSchema: z82.ZodObject<{
+	createdAt: z82.ZodISODateTime;
+	id: z82.core.$ZodBranded<z82.ZodString, "deal", "out">;
+}, z82.core.$strict>;
 /** The position a Deal list continues from. */
-type DealCursor = z76.infer<typeof dealCursorSchema>;
+type DealCursor = z82.infer<typeof dealCursorSchema>;
 /** The position a Deal import list continues from: `createdAt`, then the import's `id`. */
-declare const dealImportCursorSchema: z76.ZodObject<{
-	createdAt: z76.ZodISODateTime;
-	id: z76.core.$ZodBranded<z76.ZodString, "dimp", "out">;
-}, z76.core.$strict>;
+declare const dealImportCursorSchema: z82.ZodObject<{
+	createdAt: z82.ZodISODateTime;
+	id: z82.core.$ZodBranded<z82.ZodString, "dimp", "out">;
+}, z82.core.$strict>;
 /** The position a Deal import list continues from. */
-type DealImportCursor = z76.infer<typeof dealImportCursorSchema>;
+type DealImportCursor = z82.infer<typeof dealImportCursorSchema>;
 /** The position an import report continues from: the `rowNumber` of the last row returned. */
-declare const dealImportRowCursorSchema: z76.ZodObject<{
-	rowNumber: z76.ZodNumber;
-}, z76.core.$strict>;
+declare const dealImportRowCursorSchema: z82.ZodObject<{
+	rowNumber: z82.ZodNumber;
+}, z82.core.$strict>;
 /** The position an import report continues from. */
-type DealImportRowCursor = z76.infer<typeof dealImportRowCursorSchema>;
+type DealImportRowCursor = z82.infer<typeof dealImportRowCursorSchema>;
 /** The fields of the multipart upload of a Deal import: the CSV is the one file part (`file`), with no other part. The request carries an `Idempotency-Key` header. */
 declare const DEAL_IMPORT_FILE_FIELD = "file";
 /**
@@ -16986,67 +18785,67 @@ declare const DEAL_IMPORT_FILE_FIELD = "file";
 * `null` until `completed`; `failureReason` is set exactly when `state` is `failed`. The report is
 * the paginated rows ({@link listDealImportRowsResponseSchema}).
 */
-declare const dealImportSchema: z76.ZodObject<{
-	id: z76.core.$ZodBranded<z76.ZodString, "dimp", "out">;
-	state: z76.ZodEnum<{
+declare const dealImportSchema: z82.ZodObject<{
+	id: z82.core.$ZodBranded<z82.ZodString, "dimp", "out">;
+	state: z82.ZodEnum<{
 		completed: "completed";
 		failed: "failed";
 		processing: "processing";
 		uploaded: "uploaded";
 	}>;
-	failureReason: z76.ZodNullable<z76.ZodEnum<{
+	failureReason: z82.ZodNullable<z82.ZodEnum<{
 		processing_failed: "processing_failed";
 		too_many_rows: "too_many_rows";
 		unreadable: "unreadable";
 	}>>;
-	rowCount: z76.ZodNullable<z76.ZodNumber>;
-	appliedCount: z76.ZodNullable<z76.ZodNumber>;
-	rejectedCount: z76.ZodNullable<z76.ZodNumber>;
-	uploadedByUserId: z76.core.$ZodBranded<z76.ZodString, "usr", "out">;
-	createdAt: z76.ZodISODateTime;
-	updatedAt: z76.ZodISODateTime;
-}, z76.core.$strip>;
+	rowCount: z82.ZodNullable<z82.ZodNumber>;
+	appliedCount: z82.ZodNullable<z82.ZodNumber>;
+	rejectedCount: z82.ZodNullable<z82.ZodNumber>;
+	uploadedByUserId: z82.core.$ZodBranded<z82.ZodString, "usr", "out">;
+	createdAt: z82.ZodISODateTime;
+	updatedAt: z82.ZodISODateTime;
+}, z82.core.$strip>;
 /** A Deal import as the service returns it. */
-type DealImport = z76.infer<typeof dealImportSchema>;
+type DealImport = z82.infer<typeof dealImportSchema>;
 /** The path parameters of a request about one Deal import. */
-declare const dealImportParamsSchema: z76.ZodObject<{
-	importId: z76.core.$ZodBranded<z76.ZodString, "dimp", "out">;
-}, z76.core.$strict>;
+declare const dealImportParamsSchema: z82.ZodObject<{
+	importId: z82.core.$ZodBranded<z82.ZodString, "dimp", "out">;
+}, z82.core.$strict>;
 /** The path parameters of a request about one Deal import. */
-type DealImportParams = z76.infer<typeof dealImportParamsSchema>;
+type DealImportParams = z82.infer<typeof dealImportParamsSchema>;
 /** The query parameters of a request to list Deal imports: a page. An unknown parameter is rejected. */
-declare const listDealImportsQuerySchema: z76.ZodObject<{
-	cursor: z76.ZodOptional<z76.ZodString>;
-	limit: z76.ZodDefault<z76.ZodPipe<z76.ZodPipe<z76.ZodUnion<readonly [z76.ZodNumber, z76.ZodString]>, z76.ZodTransform<number, string | number>>, z76.ZodNumber>>;
-}, z76.core.$strict>;
+declare const listDealImportsQuerySchema: z82.ZodObject<{
+	cursor: z82.ZodOptional<z82.ZodString>;
+	limit: z82.ZodDefault<z82.ZodPipe<z82.ZodPipe<z82.ZodUnion<readonly [z82.ZodNumber, z82.ZodString]>, z82.ZodTransform<number, string | number>>, z82.ZodNumber>>;
+}, z82.core.$strict>;
 /** The query parameters of a request to list Deal imports. */
-type ListDealImportsQuery = z76.infer<typeof listDealImportsQuerySchema>;
+type ListDealImportsQuery = z82.infer<typeof listDealImportsQuerySchema>;
 /** One page of Deal imports. */
-declare const listDealImportsResponseSchema: z76.ZodObject<{
-	items: z76.ZodArray<z76.ZodObject<{
-		id: z76.core.$ZodBranded<z76.ZodString, "dimp", "out">;
-		state: z76.ZodEnum<{
+declare const listDealImportsResponseSchema: z82.ZodObject<{
+	items: z82.ZodArray<z82.ZodObject<{
+		id: z82.core.$ZodBranded<z82.ZodString, "dimp", "out">;
+		state: z82.ZodEnum<{
 			completed: "completed";
 			failed: "failed";
 			processing: "processing";
 			uploaded: "uploaded";
 		}>;
-		failureReason: z76.ZodNullable<z76.ZodEnum<{
+		failureReason: z82.ZodNullable<z82.ZodEnum<{
 			processing_failed: "processing_failed";
 			too_many_rows: "too_many_rows";
 			unreadable: "unreadable";
 		}>>;
-		rowCount: z76.ZodNullable<z76.ZodNumber>;
-		appliedCount: z76.ZodNullable<z76.ZodNumber>;
-		rejectedCount: z76.ZodNullable<z76.ZodNumber>;
-		uploadedByUserId: z76.core.$ZodBranded<z76.ZodString, "usr", "out">;
-		createdAt: z76.ZodISODateTime;
-		updatedAt: z76.ZodISODateTime;
-	}, z76.core.$strip>>;
-	nextCursor: z76.ZodNullable<z76.ZodString>;
-}, z76.core.$strip>;
+		rowCount: z82.ZodNullable<z82.ZodNumber>;
+		appliedCount: z82.ZodNullable<z82.ZodNumber>;
+		rejectedCount: z82.ZodNullable<z82.ZodNumber>;
+		uploadedByUserId: z82.core.$ZodBranded<z82.ZodString, "usr", "out">;
+		createdAt: z82.ZodISODateTime;
+		updatedAt: z82.ZodISODateTime;
+	}, z82.core.$strip>>;
+	nextCursor: z82.ZodNullable<z82.ZodString>;
+}, z82.core.$strip>;
 /** One page of Deal imports. */
-type ListDealImportsResponse = z76.infer<typeof listDealImportsResponseSchema>;
+type ListDealImportsResponse = z82.infer<typeof listDealImportsResponseSchema>;
 /**
 * One row of an import report: the CSV `rowNumber`, the record number with the header as record 1
 * (so the first data row is 2). A quoted cell that spans lines is one record, so `rowNumber` can
@@ -17055,14 +18854,14 @@ type ListDealImportsResponse = z76.infer<typeof listDealImportsResponseSchema>;
 * id, so a bad cell is never echoed), the `result` and, for a rejected row, the `reason`. `reason`
 * is `null` exactly when the result is `applied`. No other cell is ever part of a report.
 */
-declare const dealImportRowSchema: z76.ZodObject<{
-	rowNumber: z76.ZodNumber;
-	dealId: z76.ZodNullable<z76.ZodPipe<z76.ZodPipe<z76.ZodString, z76.ZodTransform<string, string>>, z76.ZodString>>;
-	result: z76.ZodEnum<{
+declare const dealImportRowSchema: z82.ZodObject<{
+	rowNumber: z82.ZodNumber;
+	dealId: z82.ZodNullable<z82.ZodPipe<z82.ZodPipe<z82.ZodString, z82.ZodTransform<string, string>>, z82.ZodString>>;
+	result: z82.ZodEnum<{
 		applied: "applied";
 		rejected: "rejected";
 	}>;
-	reason: z76.ZodNullable<z76.ZodEnum<{
+	reason: z82.ZodNullable<z82.ZodEnum<{
 		blank_row: "blank_row";
 		deal_limit_reached: "deal_limit_reached";
 		duplicate_in_file: "duplicate_in_file";
@@ -17075,30 +18874,30 @@ declare const dealImportRowSchema: z76.ZodObject<{
 		outcome_already_decided: "outcome_already_decided";
 		wrong_column_count: "wrong_column_count";
 	}>>;
-}, z76.core.$strip>;
+}, z82.core.$strip>;
 /** One row of an import report. */
-type DealImportRow = z76.infer<typeof dealImportRowSchema>;
+type DealImportRow = z82.infer<typeof dealImportRowSchema>;
 /** The query parameters of a request to read an import's rows: a page, and optionally only the `rejected` or only the `applied` rows. Rows are in CSV order. An unknown parameter is rejected. */
-declare const listDealImportRowsQuerySchema: z76.ZodObject<{
-	cursor: z76.ZodOptional<z76.ZodString>;
-	limit: z76.ZodDefault<z76.ZodPipe<z76.ZodPipe<z76.ZodUnion<readonly [z76.ZodNumber, z76.ZodString]>, z76.ZodTransform<number, string | number>>, z76.ZodNumber>>;
-	result: z76.ZodOptional<z76.ZodEnum<{
+declare const listDealImportRowsQuerySchema: z82.ZodObject<{
+	cursor: z82.ZodOptional<z82.ZodString>;
+	limit: z82.ZodDefault<z82.ZodPipe<z82.ZodPipe<z82.ZodUnion<readonly [z82.ZodNumber, z82.ZodString]>, z82.ZodTransform<number, string | number>>, z82.ZodNumber>>;
+	result: z82.ZodOptional<z82.ZodEnum<{
 		applied: "applied";
 		rejected: "rejected";
 	}>>;
-}, z76.core.$strict>;
+}, z82.core.$strict>;
 /** The query parameters of a request to read an import's rows. */
-type ListDealImportRowsQuery = z76.infer<typeof listDealImportRowsQuerySchema>;
+type ListDealImportRowsQuery = z82.infer<typeof listDealImportRowsQuerySchema>;
 /** One page of an import report. */
-declare const listDealImportRowsResponseSchema: z76.ZodObject<{
-	items: z76.ZodArray<z76.ZodObject<{
-		rowNumber: z76.ZodNumber;
-		dealId: z76.ZodNullable<z76.ZodPipe<z76.ZodPipe<z76.ZodString, z76.ZodTransform<string, string>>, z76.ZodString>>;
-		result: z76.ZodEnum<{
+declare const listDealImportRowsResponseSchema: z82.ZodObject<{
+	items: z82.ZodArray<z82.ZodObject<{
+		rowNumber: z82.ZodNumber;
+		dealId: z82.ZodNullable<z82.ZodPipe<z82.ZodPipe<z82.ZodString, z82.ZodTransform<string, string>>, z82.ZodString>>;
+		result: z82.ZodEnum<{
 			applied: "applied";
 			rejected: "rejected";
 		}>;
-		reason: z76.ZodNullable<z76.ZodEnum<{
+		reason: z82.ZodNullable<z82.ZodEnum<{
 			blank_row: "blank_row";
 			deal_limit_reached: "deal_limit_reached";
 			duplicate_in_file: "duplicate_in_file";
@@ -17111,22 +18910,22 @@ declare const listDealImportRowsResponseSchema: z76.ZodObject<{
 			outcome_already_decided: "outcome_already_decided";
 			wrong_column_count: "wrong_column_count";
 		}>>;
-	}, z76.core.$strip>>;
-	nextCursor: z76.ZodNullable<z76.ZodString>;
-}, z76.core.$strip>;
+	}, z82.core.$strip>>;
+	nextCursor: z82.ZodNullable<z82.ZodString>;
+}, z82.core.$strip>;
 /** One page of an import report. */
-type ListDealImportRowsResponse = z76.infer<typeof listDealImportRowsResponseSchema>;
-import { z as z77 } from "zod";
+type ListDealImportRowsResponse = z82.infer<typeof listDealImportRowsResponseSchema>;
+import { z as z83 } from "zod";
 /** The Outcome of a Deal: `won`, `lost` or still `open` (glossary). */
 declare const OUTCOMES: readonly ["won", "lost", "open"];
 /** The Outcome of a Deal. */
-declare const outcomeSchema: z77.ZodEnum<{
+declare const outcomeSchema: z83.ZodEnum<{
 	lost: "lost";
 	open: "open";
 	won: "won";
 }>;
 /** The Outcome of a Deal. */
-type Outcome = z77.infer<typeof outcomeSchema>;
+type Outcome = z83.infer<typeof outcomeSchema>;
 /** The ticket's choice (ADR 0018 leaves it open): the longest deal id, in Unicode code points, after trimming. */
 declare const MAX_DEAL_ID_LENGTH = 128;
 /** The most UTF-8 bytes a stored deal id can take: 128 code points at 4 bytes each. A column must allow this many bytes. */
@@ -17149,19 +18948,19 @@ declare function normaliseDealId(dealId: string): string;
 * ids equal. It is compared exactly and case-sensitively after the trim ({@link normaliseDealId}).
 * It is the only free-text cell an import report may echo, and untrusted text for display.
 */
-declare const dealIdSchema: z77.ZodPipe<z77.ZodPipe<z77.ZodString, z77.ZodTransform<string, string>>, z77.ZodString>;
+declare const dealIdSchema: z83.ZodPipe<z83.ZodPipe<z83.ZodString, z83.ZodTransform<string, string>>, z83.ZodString>;
 /** A deal id. */
-type DealId = z77.infer<typeof dealIdSchema>;
+type DealId = z83.infer<typeof dealIdSchema>;
 /** The longest Deal name, in Unicode code points, once trimmed. */
 declare const MAX_DEAL_NAME_LENGTH = 200;
 /** The most UTF-8 bytes a stored Deal name can take: 200 code points at 4 bytes each. A column must allow this many bytes. */
 declare const MAX_DEAL_NAME_BYTES: number;
 /** A Deal's optional name: trimmed, 1 to 200 well-formed Unicode code points (at most `MAX_DEAL_NAME_BYTES` bytes), no control character. Untrusted text for display, never logged. */
-declare const dealNameSchema: z77.ZodPipe<z77.ZodString, z77.ZodString>;
+declare const dealNameSchema: z83.ZodPipe<z83.ZodString, z83.ZodString>;
 /** A money amount as a decimal string, never a float: not negative, at most 15 integer digits (the maximum is 999999999999999.99) and 2 fraction digits, no leading zero beyond a single `0`. */
-declare const dealAmountSchema: z77.ZodString;
+declare const dealAmountSchema: z83.ZodString;
 /** A currency as an upper-case ISO 4217 code of three letters. */
-declare const dealCurrencySchema: z77.ZodString;
+declare const dealCurrencySchema: z83.ZodString;
 /** The lead's default (ADR 0018, refinements; not the owner's): the largest CSV accepted, 10 MB counted as 10 * 1024 * 1024 bytes. */
 declare const MAX_DEAL_IMPORT_BYTES: number;
 /** The lead's default (ADR 0018, refinements; not the owner's): the most data rows in one CSV. */
@@ -17224,33 +19023,33 @@ declare function checkDealImportHeaderText(text: string): CheckDealImportHeaderT
 /** The states a Deal import is in: `uploaded`, then `processing`, then `completed` or `failed`. */
 declare const DEAL_IMPORT_STATES: readonly ["uploaded", "processing", "completed", "failed"];
 /** The state of a Deal import. */
-declare const dealImportStateSchema: z77.ZodEnum<{
+declare const dealImportStateSchema: z83.ZodEnum<{
 	completed: "completed";
 	failed: "failed";
 	processing: "processing";
 	uploaded: "uploaded";
 }>;
 /** The state of a Deal import. */
-type DealImportState = z77.infer<typeof dealImportStateSchema>;
+type DealImportState = z83.infer<typeof dealImportStateSchema>;
 /** Why a whole import ended `failed`: a closed list. A bad row is not a failure of the import. */
 declare const DEAL_IMPORT_FAILURE_REASONS: readonly ["too_many_rows", "unreadable", "processing_failed"];
 /** Why a whole import ended `failed`. */
-declare const dealImportFailureReasonSchema: z77.ZodEnum<{
+declare const dealImportFailureReasonSchema: z83.ZodEnum<{
 	processing_failed: "processing_failed";
 	too_many_rows: "too_many_rows";
 	unreadable: "unreadable";
 }>;
 /** Why a whole import ended `failed`. */
-type DealImportFailureReason = z77.infer<typeof dealImportFailureReasonSchema>;
+type DealImportFailureReason = z83.infer<typeof dealImportFailureReasonSchema>;
 /** The result of one CSV row: `applied`, or `rejected` with a reason. */
 declare const DEAL_IMPORT_ROW_RESULTS: readonly ["applied", "rejected"];
 /** The result of one CSV row. */
-declare const dealImportRowResultSchema: z77.ZodEnum<{
+declare const dealImportRowResultSchema: z83.ZodEnum<{
 	applied: "applied";
 	rejected: "rejected";
 }>;
 /** The result of one CSV row. */
-type DealImportRowResult = z77.infer<typeof dealImportRowResultSchema>;
+type DealImportRowResult = z83.infer<typeof dealImportRowResultSchema>;
 /**
 * Why a row was rejected: a closed list, never a cell. A row is rejected, not silently dropped,
 * and never an HTTP error. `outcome_already_decided` is a row for a Deal already `won` or `lost`
@@ -17259,7 +19058,7 @@ type DealImportRowResult = z77.infer<typeof dealImportRowResultSchema>;
 */
 declare const DEAL_IMPORT_ROW_REASONS: readonly ["wrong_column_count", "invalid_deal_id", "duplicate_in_file", "invalid_outcome", "invalid_closed_at", "invalid_amount", "invalid_currency", "invalid_name", "outcome_already_decided", "deal_limit_reached", "blank_row"];
 /** Why a row was rejected. */
-declare const dealImportRowReasonSchema: z77.ZodEnum<{
+declare const dealImportRowReasonSchema: z83.ZodEnum<{
 	blank_row: "blank_row";
 	deal_limit_reached: "deal_limit_reached";
 	duplicate_in_file: "duplicate_in_file";
@@ -17273,7 +19072,7 @@ declare const dealImportRowReasonSchema: z77.ZodEnum<{
 	wrong_column_count: "wrong_column_count";
 }>;
 /** Why a row was rejected. */
-type DealImportRowReason = z77.infer<typeof dealImportRowReasonSchema>;
+type DealImportRowReason = z83.infer<typeof dealImportRowReasonSchema>;
 /** The answer of a CSV cell parser: the parsed value, or not valid. */
 type CellResult<T> = {
 	readonly ok: true;
@@ -17288,7 +19087,7 @@ declare const DEAL_CLOSED_AT_MAX_YEAR = 2100;
 /** Reads the `outcome` cell: `won`, `lost` or `open`, compared case-insensitively after trimming. A blank cell is not valid: the column is required. */
 declare function parseOutcomeCell(cell: string): CellResult<Outcome>;
 /** A calendar date as `YYYY-MM-DD`, with no time and no time zone, a real day (2026-02-30 is refused) in the years 1970 to 2100, as the CSV `closed_at` accepts. Used for a Deal's `closedAt`. */
-declare const calendarDateSchema: z77.ZodISODate;
+declare const calendarDateSchema: z83.ZodISODate;
 /**
 * Reads the `closed_at` cell. Blank is none (`null`); `won` and `lost` do not require it, and an
 * `open` Deal may carry an expected close date. Otherwise it is a plain calendar date `YYYY-MM-DD`
@@ -17395,7 +19194,7 @@ declare function parseCsv(text: string, options?: CsvOptions): CsvResult;
 declare function firstCsvRecord(text: string, options?: CsvOptions): FirstCsvRecordResult;
 /** Whether a CSV record is a blank line: one empty cell. A caller reports an interior one as a rejected `blank_row` row; it counts in the record number. {@link parseCsv} already drops a trailing run. */
 declare function isBlankCsvRecord(record: readonly string[]): boolean;
-import { z as z78 } from "zod";
+import { z as z84 } from "zod";
 /**
 * A Playbook document as the service returns it. It names the file but never carries its content,
 * and no text taken from it. The extension of `fileName` and `mediaType` are not checked against each other: that agreement is
@@ -17406,40 +19205,40 @@ import { z as z78 } from "zod";
 * `null` until ingestion has counted the pages. The service must send the output of
 * `documentSchema.parse(row)`, never the row.
 */
-declare const documentSchema: z78.ZodObject<{
-	id: z78.core.$ZodBranded<z78.ZodString, "doc", "out">;
-	fileName: z78.ZodPipe<z78.ZodPipe<z78.ZodString, z78.ZodTransform<string, string>>, z78.ZodString>;
-	mediaType: z78.ZodEnum<{
+declare const documentSchema: z84.ZodObject<{
+	id: z84.core.$ZodBranded<z84.ZodString, "doc", "out">;
+	fileName: z84.ZodPipe<z84.ZodPipe<z84.ZodString, z84.ZodTransform<string, string>>, z84.ZodString>;
+	mediaType: z84.ZodEnum<{
 		"application/pdf": "application/pdf";
 		"application/vnd.openxmlformats-officedocument.presentationml.presentation": "application/vnd.openxmlformats-officedocument.presentationml.presentation";
 		"application/vnd.openxmlformats-officedocument.wordprocessingml.document": "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 		"text/markdown": "text/markdown";
 		"text/plain": "text/plain";
 	}>;
-	sizeBytes: z78.ZodNumber;
-	pageCount: z78.ZodNullable<z78.ZodNumber>;
-	state: z78.ZodEnum<{
+	sizeBytes: z84.ZodNumber;
+	pageCount: z84.ZodNullable<z84.ZodNumber>;
+	state: z84.ZodEnum<{
 		deleted: "deleted";
 		failed: "failed";
 		processing: "processing";
 		ready: "ready";
 		uploaded: "uploaded";
 	}>;
-	failureReason: z78.ZodNullable<z78.ZodEnum<{
+	failureReason: z84.ZodNullable<z84.ZodEnum<{
 		no_text: "no_text";
 		password_protected: "password_protected";
 		processing_failed: "processing_failed";
 		too_many_pages: "too_many_pages";
 		unreadable: "unreadable";
 	}>>;
-	deletedAt: z78.ZodNullable<z78.ZodISODateTime>;
-	purgeAt: z78.ZodNullable<z78.ZodISODateTime>;
-	uploadedByUserId: z78.core.$ZodBranded<z78.ZodString, "usr", "out">;
-	createdAt: z78.ZodISODateTime;
-	updatedAt: z78.ZodISODateTime;
-}, z78.core.$strip>;
+	deletedAt: z84.ZodNullable<z84.ZodISODateTime>;
+	purgeAt: z84.ZodNullable<z84.ZodISODateTime>;
+	uploadedByUserId: z84.core.$ZodBranded<z84.ZodString, "usr", "out">;
+	createdAt: z84.ZodISODateTime;
+	updatedAt: z84.ZodISODateTime;
+}, z84.core.$strip>;
 /** A Playbook document as the service returns it. */
-type PlaybookDocument = z78.infer<typeof documentSchema>;
+type PlaybookDocument = z84.infer<typeof documentSchema>;
 /** The name of the multipart form field that carries the file. */
 declare const UPLOAD_FILE_FIELD = "file";
 /** The content type of an upload request: `multipart/form-data` with one file part named {@link UPLOAD_FILE_FIELD}. */
@@ -17455,84 +19254,84 @@ declare const UPLOAD_CONTENT_TYPE = "multipart/form-data";
 * `request.invalid` (400). A service calls {@link checkUploadFile}, which runs it after the size
 * and type checks so each gets its own code.
 */
-declare const uploadDocumentFileSchema: z78.ZodObject<{
-	fileName: z78.ZodPipe<z78.ZodPipe<z78.ZodString, z78.ZodTransform<string, string>>, z78.ZodString>;
-	declaredMediaType: z78.ZodNullable<z78.ZodString>;
-	sizeBytes: z78.ZodNumber;
-}, z78.core.$strict>;
+declare const uploadDocumentFileSchema: z84.ZodObject<{
+	fileName: z84.ZodPipe<z84.ZodPipe<z84.ZodString, z84.ZodTransform<string, string>>, z84.ZodString>;
+	declaredMediaType: z84.ZodNullable<z84.ZodString>;
+	sizeBytes: z84.ZodNumber;
+}, z84.core.$strict>;
 /** What the service reads off the file part of an upload. */
-type UploadDocumentFile = z78.infer<typeof uploadDocumentFileSchema>;
+type UploadDocumentFile = z84.infer<typeof uploadDocumentFileSchema>;
 /** The path parameters of a request about one document. */
-declare const documentParamsSchema: z78.ZodObject<{
-	documentId: z78.core.$ZodBranded<z78.ZodString, "doc", "out">;
-}, z78.core.$strict>;
+declare const documentParamsSchema: z84.ZodObject<{
+	documentId: z84.core.$ZodBranded<z84.ZodString, "doc", "out">;
+}, z84.core.$strict>;
 /** The path parameters of a request about one document. */
-type DocumentParams = z78.infer<typeof documentParamsSchema>;
+type DocumentParams = z84.infer<typeof documentParamsSchema>;
 /**
 * The query parameters of a request to list documents: a page, and optionally one `state`. With
 * no `state`, every document that is not `deleted` is listed; `state=deleted` lists the documents
 * that can still be restored. An unknown parameter is rejected.
 */
-declare const listDocumentsQuerySchema: z78.ZodObject<{
-	cursor: z78.ZodOptional<z78.ZodString>;
-	limit: z78.ZodDefault<z78.ZodPipe<z78.ZodPipe<z78.ZodUnion<readonly [z78.ZodNumber, z78.ZodString]>, z78.ZodTransform<number, string | number>>, z78.ZodNumber>>;
-	state: z78.ZodOptional<z78.ZodEnum<{
+declare const listDocumentsQuerySchema: z84.ZodObject<{
+	cursor: z84.ZodOptional<z84.ZodString>;
+	limit: z84.ZodDefault<z84.ZodPipe<z84.ZodPipe<z84.ZodUnion<readonly [z84.ZodNumber, z84.ZodString]>, z84.ZodTransform<number, string | number>>, z84.ZodNumber>>;
+	state: z84.ZodOptional<z84.ZodEnum<{
 		deleted: "deleted";
 		failed: "failed";
 		processing: "processing";
 		ready: "ready";
 		uploaded: "uploaded";
 	}>>;
-}, z78.core.$strict>;
+}, z84.core.$strict>;
 /** The query parameters of a request to list documents. */
-type ListDocumentsQuery = z78.infer<typeof listDocumentsQuerySchema>;
+type ListDocumentsQuery = z84.infer<typeof listDocumentsQuerySchema>;
 /** One page of documents. */
-declare const listDocumentsResponseSchema: z78.ZodObject<{
-	items: z78.ZodArray<z78.ZodObject<{
-		id: z78.core.$ZodBranded<z78.ZodString, "doc", "out">;
-		fileName: z78.ZodPipe<z78.ZodPipe<z78.ZodString, z78.ZodTransform<string, string>>, z78.ZodString>;
-		mediaType: z78.ZodEnum<{
+declare const listDocumentsResponseSchema: z84.ZodObject<{
+	items: z84.ZodArray<z84.ZodObject<{
+		id: z84.core.$ZodBranded<z84.ZodString, "doc", "out">;
+		fileName: z84.ZodPipe<z84.ZodPipe<z84.ZodString, z84.ZodTransform<string, string>>, z84.ZodString>;
+		mediaType: z84.ZodEnum<{
 			"application/pdf": "application/pdf";
 			"application/vnd.openxmlformats-officedocument.presentationml.presentation": "application/vnd.openxmlformats-officedocument.presentationml.presentation";
 			"application/vnd.openxmlformats-officedocument.wordprocessingml.document": "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 			"text/markdown": "text/markdown";
 			"text/plain": "text/plain";
 		}>;
-		sizeBytes: z78.ZodNumber;
-		pageCount: z78.ZodNullable<z78.ZodNumber>;
-		state: z78.ZodEnum<{
+		sizeBytes: z84.ZodNumber;
+		pageCount: z84.ZodNullable<z84.ZodNumber>;
+		state: z84.ZodEnum<{
 			deleted: "deleted";
 			failed: "failed";
 			processing: "processing";
 			ready: "ready";
 			uploaded: "uploaded";
 		}>;
-		failureReason: z78.ZodNullable<z78.ZodEnum<{
+		failureReason: z84.ZodNullable<z84.ZodEnum<{
 			no_text: "no_text";
 			password_protected: "password_protected";
 			processing_failed: "processing_failed";
 			too_many_pages: "too_many_pages";
 			unreadable: "unreadable";
 		}>>;
-		deletedAt: z78.ZodNullable<z78.ZodISODateTime>;
-		purgeAt: z78.ZodNullable<z78.ZodISODateTime>;
-		uploadedByUserId: z78.core.$ZodBranded<z78.ZodString, "usr", "out">;
-		createdAt: z78.ZodISODateTime;
-		updatedAt: z78.ZodISODateTime;
-	}, z78.core.$strip>>;
-	nextCursor: z78.ZodNullable<z78.ZodString>;
-}, z78.core.$strip>;
+		deletedAt: z84.ZodNullable<z84.ZodISODateTime>;
+		purgeAt: z84.ZodNullable<z84.ZodISODateTime>;
+		uploadedByUserId: z84.core.$ZodBranded<z84.ZodString, "usr", "out">;
+		createdAt: z84.ZodISODateTime;
+		updatedAt: z84.ZodISODateTime;
+	}, z84.core.$strip>>;
+	nextCursor: z84.ZodNullable<z84.ZodString>;
+}, z84.core.$strip>;
 /** One page of documents. */
-type ListDocumentsResponse = z78.infer<typeof listDocumentsResponseSchema>;
+type ListDocumentsResponse = z84.infer<typeof listDocumentsResponseSchema>;
 /**
 * Internal: the path parameters of the call that removes everything an Organization has in the
 * Playbook. The Organization is named in the path, never taken from the caller's token.
 */
-declare const internalRemoveOrganizationDocumentsParamsSchema: z78.ZodObject<{
-	organizationId: z78.core.$ZodBranded<z78.ZodString, "org", "out">;
-}, z78.core.$strict>;
+declare const internalRemoveOrganizationDocumentsParamsSchema: z84.ZodObject<{
+	organizationId: z84.core.$ZodBranded<z84.ZodString, "org", "out">;
+}, z84.core.$strict>;
 /** Internal: the path parameters of the remove-everything call. */
-type InternalRemoveOrganizationDocumentsParams = z78.infer<typeof internalRemoveOrganizationDocumentsParamsSchema>;
+type InternalRemoveOrganizationDocumentsParams = z84.infer<typeof internalRemoveOrganizationDocumentsParamsSchema>;
 /**
 * Internal: `POST /internal/playbook/organizations/{organizationId}/remove-all`, for offboarding
 * and erasure; no caller yet. The body is empty. It cancels ingestion in flight and removes every
@@ -17542,16 +19341,16 @@ type InternalRemoveOrganizationDocumentsParams = z78.infer<typeof internalRemove
 * or nobody ever stored anything, so a repeat under any key answers the same and success does not
 * mean this call removed anything. It returns no domain error code.
 */
-declare const internalRemoveOrganizationDocumentsRequestSchema: z78.ZodObject<{}, z78.core.$strict>;
+declare const internalRemoveOrganizationDocumentsRequestSchema: z84.ZodObject<{}, z84.core.$strict>;
 /** Internal: the body of the remove-everything call. */
-type InternalRemoveOrganizationDocumentsRequest = z78.infer<typeof internalRemoveOrganizationDocumentsRequestSchema>;
+type InternalRemoveOrganizationDocumentsRequest = z84.infer<typeof internalRemoveOrganizationDocumentsRequestSchema>;
 /** Internal: the answer to the remove-everything call: always `removed`. */
-declare const internalRemoveOrganizationDocumentsResponseSchema: z78.ZodObject<{
-	organizationId: z78.core.$ZodBranded<z78.ZodString, "org", "out">;
-	status: z78.ZodLiteral<"removed">;
-}, z78.core.$strip>;
+declare const internalRemoveOrganizationDocumentsResponseSchema: z84.ZodObject<{
+	organizationId: z84.core.$ZodBranded<z84.ZodString, "org", "out">;
+	status: z84.ZodLiteral<"removed">;
+}, z84.core.$strip>;
 /** Internal: the answer to the remove-everything call. */
-type InternalRemoveOrganizationDocumentsResponse = z78.infer<typeof internalRemoveOrganizationDocumentsResponseSchema>;
+type InternalRemoveOrganizationDocumentsResponse = z84.infer<typeof internalRemoveOrganizationDocumentsResponseSchema>;
 /** The answer of {@link checkUploadFile}: the parsed file, or the one error code to return. */
 type CheckUploadFileResult = {
 	readonly ok: true;
@@ -17574,13 +19373,13 @@ type CheckUploadFileResult = {
 * the stored name. The result carries no name or content, so it is safe to log and to return.
 */
 declare function checkUploadFile(input: unknown): CheckUploadFileResult;
-import { z as z79 } from "zod";
+import { z as z85 } from "zod";
 /** The payload of {@link DOCUMENT_UPLOADED_MESSAGE}: the document to ingest. */
-declare const documentUploadedPayloadSchema: z79.ZodObject<{
-	documentId: z79.core.$ZodBranded<z79.ZodString, "doc", "out">;
-}, z79.core.$strict>;
+declare const documentUploadedPayloadSchema: z85.ZodObject<{
+	documentId: z85.core.$ZodBranded<z85.ZodString, "doc", "out">;
+}, z85.core.$strict>;
 /** The payload of {@link DOCUMENT_UPLOADED_MESSAGE}. */
-type DocumentUploadedPayload = z79.infer<typeof documentUploadedPayloadSchema>;
+type DocumentUploadedPayload = z85.infer<typeof documentUploadedPayloadSchema>;
 /**
 * The message that starts ingestion of a document: published after an upload is stored, and again
 * when a soft-deleted document is restored (it is re-ingested from the kept file). The job is
@@ -17590,9 +19389,9 @@ declare const DOCUMENT_UPLOADED_MESSAGE: {
 	readonly type: "playbook.document_uploaded";
 	readonly version: 1;
 	readonly scope: "organization";
-	readonly payload: z79.ZodObject<{
-		documentId: z79.core.$ZodBranded<z79.ZodString, "doc", "out">;
-	}, z79.core.$strict>;
+	readonly payload: z85.ZodObject<{
+		documentId: z85.core.$ZodBranded<z85.ZodString, "doc", "out">;
+	}, z85.core.$strict>;
 };
 /** The largest `deletionSeq`: the db column is a Postgres `integer`, so the message cannot carry more. */
 declare const MAX_DELETION_SEQ = 2147483647;
@@ -17605,12 +19404,12 @@ declare const MAX_DELETION_SEQ = 2147483647;
 * is not on the public document schema. Only a delete that changes the state bumps it: a repeated
 * delete of an already deleted document does not bump the sequence and does not publish again.
 */
-declare const documentDeletedPayloadSchema: z79.ZodObject<{
-	documentId: z79.core.$ZodBranded<z79.ZodString, "doc", "out">;
-	deletionSeq: z79.ZodNumber;
-}, z79.core.$strict>;
+declare const documentDeletedPayloadSchema: z85.ZodObject<{
+	documentId: z85.core.$ZodBranded<z85.ZodString, "doc", "out">;
+	deletionSeq: z85.ZodNumber;
+}, z85.core.$strict>;
 /** The payload of {@link DOCUMENT_DELETED_MESSAGE}. */
-type DocumentDeletedPayload = z79.infer<typeof documentDeletedPayloadSchema>;
+type DocumentDeletedPayload = z85.infer<typeof documentDeletedPayloadSchema>;
 /**
 * The message that queues the removal of a deleted document's vectors, published by the delete
 * request. It is cleanup only: search hides a deleted document by its state, never by this job.
@@ -17619,28 +19418,28 @@ declare const DOCUMENT_DELETED_MESSAGE: {
 	readonly type: "playbook.document_deleted";
 	readonly version: 1;
 	readonly scope: "organization";
-	readonly payload: z79.ZodObject<{
-		documentId: z79.core.$ZodBranded<z79.ZodString, "doc", "out">;
-		deletionSeq: z79.ZodNumber;
-	}, z79.core.$strict>;
+	readonly payload: z85.ZodObject<{
+		documentId: z85.core.$ZodBranded<z85.ZodString, "doc", "out">;
+		deletionSeq: z85.ZodNumber;
+	}, z85.core.$strict>;
 };
-import { z as z80 } from "zod";
+import { z as z86 } from "zod";
 /** The largest wording version number; versions are positive integers, one for each entry of `RIGHTS_WORDINGS`. */
 declare const MAX_RIGHTS_WORDING_VERSION = 1e6;
 /** The version of the rights-confirmation wording: a positive integer. The text of each version is in `RIGHTS_WORDINGS`. */
-declare const rightsWordingVersionSchema: z80.ZodNumber;
+declare const rightsWordingVersionSchema: z86.ZodNumber;
 /**
 * The recorded confirmation (ADR 0018, choice 12): that an Owner or Admin confirmed the
 * Organization may share its Recordings and Transcripts, with the `wordingVersion` shown, who
 * (`confirmedByUserId`) and when. There is one per Organization; a new one replaces it.
 */
-declare const rightsConfirmationSchema: z80.ZodObject<{
-	wordingVersion: z80.ZodNumber;
-	confirmedByUserId: z80.core.$ZodBranded<z80.ZodString, "usr", "out">;
-	confirmedAt: z80.ZodISODateTime;
-}, z80.core.$strip>;
+declare const rightsConfirmationSchema: z86.ZodObject<{
+	wordingVersion: z86.ZodNumber;
+	confirmedByUserId: z86.core.$ZodBranded<z86.ZodString, "usr", "out">;
+	confirmedAt: z86.ZodISODateTime;
+}, z86.core.$strip>;
 /** The recorded confirmation. */
-type RightsConfirmation = z80.infer<typeof rightsConfirmationSchema>;
+type RightsConfirmation = z86.infer<typeof rightsConfirmationSchema>;
 /**
 * The answer to reading the confirmation: the `currentWordingVersion` the portal must show,
 * the stored `confirmation` (`null` if none) and `confirmed`, true only when the stored version
@@ -17652,34 +19451,34 @@ type RightsConfirmation = z80.infer<typeof rightsConfirmationSchema>;
 * shows the text for the version it sends from `rightsWordingFor`, and confirms that version only. Uploads of Calls are refused with `rights.confirmation_required` unless
 * `confirmed`; existing Calls stay and stay searchable.
 */
-declare const rightsStatusSchema: z80.ZodObject<{
-	currentWordingVersion: z80.ZodNumber;
-	confirmation: z80.ZodNullable<z80.ZodObject<{
-		wordingVersion: z80.ZodNumber;
-		confirmedByUserId: z80.core.$ZodBranded<z80.ZodString, "usr", "out">;
-		confirmedAt: z80.ZodISODateTime;
-	}, z80.core.$strip>>;
-	confirmed: z80.ZodBoolean;
-	currentWording: z80.ZodOptional<z80.ZodObject<{
-		heading: z80.ZodString;
-		paragraphs: z80.ZodArray<z80.ZodString>;
-		checkbox: z80.ZodString;
-		draft: z80.ZodOptional<z80.ZodLiteral<true>>;
-	}, z80.core.$strict>>;
-}, z80.core.$strip>;
+declare const rightsStatusSchema: z86.ZodObject<{
+	currentWordingVersion: z86.ZodNumber;
+	confirmation: z86.ZodNullable<z86.ZodObject<{
+		wordingVersion: z86.ZodNumber;
+		confirmedByUserId: z86.core.$ZodBranded<z86.ZodString, "usr", "out">;
+		confirmedAt: z86.ZodISODateTime;
+	}, z86.core.$strip>>;
+	confirmed: z86.ZodBoolean;
+	currentWording: z86.ZodOptional<z86.ZodObject<{
+		heading: z86.ZodString;
+		paragraphs: z86.ZodArray<z86.ZodString>;
+		checkbox: z86.ZodString;
+		draft: z86.ZodOptional<z86.ZodLiteral<true>>;
+	}, z86.core.$strict>>;
+}, z86.core.$strip>;
 /** The answer to reading the confirmation. */
-type RightsStatus = z80.infer<typeof rightsStatusSchema>;
+type RightsStatus = z86.infer<typeof rightsStatusSchema>;
 /**
 * The body of the request that records the confirmation: the `wordingVersion` the member was shown,
 * which must be the current one (else `rights.version_outdated`). Who and when come from the token
 * and the clock, never from the body. Idempotent by end state.
 */
-declare const confirmRightsRequestSchema: z80.ZodObject<{
-	wordingVersion: z80.ZodNumber;
-}, z80.core.$strict>;
+declare const confirmRightsRequestSchema: z86.ZodObject<{
+	wordingVersion: z86.ZodNumber;
+}, z86.core.$strict>;
 /** The body of the request that records the confirmation. */
-type ConfirmRightsRequest = z80.infer<typeof confirmRightsRequestSchema>;
-import { z as z81 } from "zod";
+type ConfirmRightsRequest = z86.infer<typeof confirmRightsRequestSchema>;
+import { z as z87 } from "zod";
 /** The longest heading of a wording, in Unicode code points. */
 declare const MAX_RIGHTS_HEADING_LENGTH = 200;
 /** The most paragraphs a wording may have. */
@@ -17692,14 +19491,14 @@ declare const MAX_RIGHTS_TEXT_LENGTH = 2e3;
 * written, never interpolated with a name or a value. `draft` is true while a lawyer has not
 * checked the text; the screen says so.
 */
-declare const rightsWordingSchema: z81.ZodObject<{
-	heading: z81.ZodString;
-	paragraphs: z81.ZodArray<z81.ZodString>;
-	checkbox: z81.ZodString;
-	draft: z81.ZodOptional<z81.ZodLiteral<true>>;
-}, z81.core.$strict>;
+declare const rightsWordingSchema: z87.ZodObject<{
+	heading: z87.ZodString;
+	paragraphs: z87.ZodArray<z87.ZodString>;
+	checkbox: z87.ZodString;
+	draft: z87.ZodOptional<z87.ZodLiteral<true>>;
+}, z87.core.$strict>;
 /** The text of one version of the rights confirmation. */
-type RightsWording = z81.infer<typeof rightsWordingSchema>;
+type RightsWording = z87.infer<typeof rightsWordingSchema>;
 /**
 * The text of every version of the rights confirmation (ADR 0018, choice 12), keyed by version,
 * frozen. A version is published once and never edited: a change to the text is a new version here
@@ -17715,106 +19514,106 @@ declare const RIGHTS_WORDINGS: Readonly<Record<number, RightsWording>>;
 declare const CURRENT_RIGHTS_WORDING_VERSION: number;
 /** The text of a version, or undefined when the contract has none; a version without text cannot be confirmed. */
 declare function rightsWordingFor(version: number): RightsWording | undefined;
-import { z as z82 } from "zod";
+import { z as z88 } from "zod";
 /** The largest Outcome or Rep sequence: the db column is a Postgres `integer`, like {@link MAX_DELETION_SEQ}. */
 declare const MAX_SEQ = 2147483647;
 /** The payload of {@link CALL_UPLOADED_MESSAGE}. */
-declare const callUploadedPayloadSchema: z82.ZodObject<{
-	callId: z82.core.$ZodBranded<z82.ZodString, "call", "out">;
-}, z82.core.$strict>;
+declare const callUploadedPayloadSchema: z88.ZodObject<{
+	callId: z88.core.$ZodBranded<z88.ZodString, "call", "out">;
+}, z88.core.$strict>;
 /** The payload of {@link CALL_UPLOADED_MESSAGE}. */
-type CallUploadedPayload = z82.infer<typeof callUploadedPayloadSchema>;
+type CallUploadedPayload = z88.infer<typeof callUploadedPayloadSchema>;
 /** Starts ingestion of a Call: transcription of a Recording, or parsing of a Transcript. Published after the upload is stored and again on restore (the kept Transcript is reused, never transcribed twice). */
 declare const CALL_UPLOADED_MESSAGE: {
 	readonly type: "playbook.call_uploaded";
 	readonly version: 1;
 	readonly scope: "organization";
-	readonly payload: z82.ZodObject<{
-		callId: z82.core.$ZodBranded<z82.ZodString, "call", "out">;
-	}, z82.core.$strict>;
+	readonly payload: z88.ZodObject<{
+		callId: z88.core.$ZodBranded<z88.ZodString, "call", "out">;
+	}, z88.core.$strict>;
 };
 /** The payload of {@link CALL_TRANSCRIBED_MESSAGE}. */
-declare const callTranscribedPayloadSchema: z82.ZodObject<{
-	callId: z82.core.$ZodBranded<z82.ZodString, "call", "out">;
-}, z82.core.$strict>;
+declare const callTranscribedPayloadSchema: z88.ZodObject<{
+	callId: z88.core.$ZodBranded<z88.ZodString, "call", "out">;
+}, z88.core.$strict>;
 /** The payload of {@link CALL_TRANSCRIBED_MESSAGE}. */
-type CallTranscribedPayload = z82.infer<typeof callTranscribedPayloadSchema>;
+type CallTranscribedPayload = z88.infer<typeof callTranscribedPayloadSchema>;
 /** Moves a Recording from transcription to building Moments, published when the Transcript is stored and the Rep is known (a per-side Recording, or one whose Rep was picked). A Call with no Rep waits in `awaiting_rep` and publishes `playbook.call_rep_changed` when it is picked. */
 declare const CALL_TRANSCRIBED_MESSAGE: {
 	readonly type: "playbook.call_transcribed";
 	readonly version: 1;
 	readonly scope: "organization";
-	readonly payload: z82.ZodObject<{
-		callId: z82.core.$ZodBranded<z82.ZodString, "call", "out">;
-	}, z82.core.$strict>;
+	readonly payload: z88.ZodObject<{
+		callId: z88.core.$ZodBranded<z88.ZodString, "call", "out">;
+	}, z88.core.$strict>;
 };
 /** The payload of {@link CALL_REP_CHANGED_MESSAGE}: the Call and its `repSeq`. */
-declare const callRepChangedPayloadSchema: z82.ZodObject<{
-	callId: z82.core.$ZodBranded<z82.ZodString, "call", "out">;
-	repSeq: z82.ZodNumber;
-}, z82.core.$strict>;
+declare const callRepChangedPayloadSchema: z88.ZodObject<{
+	callId: z88.core.$ZodBranded<z88.ZodString, "call", "out">;
+	repSeq: z88.ZodNumber;
+}, z88.core.$strict>;
 /** The payload of {@link CALL_REP_CHANGED_MESSAGE}. */
-type CallRepChangedPayload = z82.infer<typeof callRepChangedPayloadSchema>;
+type CallRepChangedPayload = z88.infer<typeof callRepChangedPayloadSchema>;
 /** Rebuilds a Call's Moments after its Rep is picked or changed. The service bumps `repSeq` in the same write as the change; the job applies only when the Call's stored sequence equals this one, and the Call is out of search until it finishes. */
 declare const CALL_REP_CHANGED_MESSAGE: {
 	readonly type: "playbook.call_rep_changed";
 	readonly version: 1;
 	readonly scope: "organization";
-	readonly payload: z82.ZodObject<{
-		callId: z82.core.$ZodBranded<z82.ZodString, "call", "out">;
-		repSeq: z82.ZodNumber;
-	}, z82.core.$strict>;
+	readonly payload: z88.ZodObject<{
+		callId: z88.core.$ZodBranded<z88.ZodString, "call", "out">;
+		repSeq: z88.ZodNumber;
+	}, z88.core.$strict>;
 };
 /** The payload of {@link CALL_DELETED_MESSAGE}: the Call and its `deletionSeq`. */
-declare const callDeletedPayloadSchema: z82.ZodObject<{
-	callId: z82.core.$ZodBranded<z82.ZodString, "call", "out">;
-	deletionSeq: z82.ZodNumber;
-}, z82.core.$strict>;
+declare const callDeletedPayloadSchema: z88.ZodObject<{
+	callId: z88.core.$ZodBranded<z88.ZodString, "call", "out">;
+	deletionSeq: z88.ZodNumber;
+}, z88.core.$strict>;
 /** The payload of {@link CALL_DELETED_MESSAGE}. */
-type CallDeletedPayload = z82.infer<typeof callDeletedPayloadSchema>;
+type CallDeletedPayload = z88.infer<typeof callDeletedPayloadSchema>;
 /** Queues the removal of a deleted Call's Moments and vectors, as `playbook.document_deleted` does for a document: it applies only if the Call is still deleted and its stored `deletionSeq` equals this one. Only a delete that changes the state bumps it or publishes. Search hides a deleted Call by its state, never by this job. */
 declare const CALL_DELETED_MESSAGE: {
 	readonly type: "playbook.call_deleted";
 	readonly version: 1;
 	readonly scope: "organization";
-	readonly payload: z82.ZodObject<{
-		callId: z82.core.$ZodBranded<z82.ZodString, "call", "out">;
-		deletionSeq: z82.ZodNumber;
-	}, z82.core.$strict>;
+	readonly payload: z88.ZodObject<{
+		callId: z88.core.$ZodBranded<z88.ZodString, "call", "out">;
+		deletionSeq: z88.ZodNumber;
+	}, z88.core.$strict>;
 };
 /** The payload of {@link DEAL_OUTCOME_CHANGED_MESSAGE}: the Deal's opaque id (never the customer's text) and its `outcomeSeq`. */
-declare const dealOutcomeChangedPayloadSchema: z82.ZodObject<{
-	dealRecordId: z82.core.$ZodBranded<z82.ZodString, "deal", "out">;
-	outcomeSeq: z82.ZodNumber;
-}, z82.core.$strict>;
+declare const dealOutcomeChangedPayloadSchema: z88.ZodObject<{
+	dealRecordId: z88.core.$ZodBranded<z88.ZodString, "deal", "out">;
+	outcomeSeq: z88.ZodNumber;
+}, z88.core.$strict>;
 /** The payload of {@link DEAL_OUTCOME_CHANGED_MESSAGE}. */
-type DealOutcomeChangedPayload = z82.infer<typeof dealOutcomeChangedPayloadSchema>;
+type DealOutcomeChangedPayload = z88.infer<typeof dealOutcomeChangedPayloadSchema>;
 /** Re-tags a Deal's Moments in the index after its Outcome changes. The job reads the current Outcome from the database and applies only when the Deal's stored `outcomeSeq` equals this one, so two changes cannot finish in the wrong order. */
 declare const DEAL_OUTCOME_CHANGED_MESSAGE: {
 	readonly type: "playbook.deal_outcome_changed";
 	readonly version: 1;
 	readonly scope: "organization";
-	readonly payload: z82.ZodObject<{
-		dealRecordId: z82.core.$ZodBranded<z82.ZodString, "deal", "out">;
-		outcomeSeq: z82.ZodNumber;
-	}, z82.core.$strict>;
+	readonly payload: z88.ZodObject<{
+		dealRecordId: z88.core.$ZodBranded<z88.ZodString, "deal", "out">;
+		outcomeSeq: z88.ZodNumber;
+	}, z88.core.$strict>;
 };
 /** The payload of {@link DEAL_IMPORT_UPLOADED_MESSAGE}. */
-declare const dealImportUploadedPayloadSchema: z82.ZodObject<{
-	importId: z82.core.$ZodBranded<z82.ZodString, "dimp", "out">;
-}, z82.core.$strict>;
+declare const dealImportUploadedPayloadSchema: z88.ZodObject<{
+	importId: z88.core.$ZodBranded<z88.ZodString, "dimp", "out">;
+}, z88.core.$strict>;
 /** The payload of {@link DEAL_IMPORT_UPLOADED_MESSAGE}. */
-type DealImportUploadedPayload = z82.infer<typeof dealImportUploadedPayloadSchema>;
+type DealImportUploadedPayload = z88.infer<typeof dealImportUploadedPayloadSchema>;
 /** Starts the processing of an uploaded CSV. The job is idempotent and resumable, keyed on the import. */
 declare const DEAL_IMPORT_UPLOADED_MESSAGE: {
 	readonly type: "playbook.deal_import_uploaded";
 	readonly version: 1;
 	readonly scope: "organization";
-	readonly payload: z82.ZodObject<{
-		importId: z82.core.$ZodBranded<z82.ZodString, "dimp", "out">;
-	}, z82.core.$strict>;
+	readonly payload: z88.ZodObject<{
+		importId: z88.core.$ZodBranded<z88.ZodString, "dimp", "out">;
+	}, z88.core.$strict>;
 };
-import { z as z83 } from "zod";
+import { z as z89 } from "zod";
 /**
 * The states a Playbook document is in, in the order a document passes through them (ADR 0016).
 * `deleted` means soft-deleted and awaiting purge. The db library builds its column from this
@@ -17822,7 +19621,7 @@ import { z as z83 } from "zod";
 */
 declare const DOCUMENT_STATES: readonly ["uploaded", "processing", "ready", "failed", "deleted"];
 /** The state of a Playbook document. */
-declare const documentStateSchema: z83.ZodEnum<{
+declare const documentStateSchema: z89.ZodEnum<{
 	deleted: "deleted";
 	failed: "failed";
 	processing: "processing";
@@ -17830,7 +19629,7 @@ declare const documentStateSchema: z83.ZodEnum<{
 	uploaded: "uploaded";
 }>;
 /** The state of a Playbook document. */
-type DocumentState = z83.infer<typeof documentStateSchema>;
+type DocumentState = z89.infer<typeof documentStateSchema>;
 /**
 * Why a document ended in `failed`: a closed list the portal maps to its own wording. Never free
 * text, so a reason cannot carry the content or name of a file. This list is the lead's reading
@@ -17838,7 +19637,7 @@ type DocumentState = z83.infer<typeof documentStateSchema>;
 */
 declare const DOCUMENT_FAILURE_REASONS: readonly ["too_many_pages", "unreadable", "password_protected", "no_text", "processing_failed"];
 /** Why a document ended in `failed`. */
-declare const documentFailureReasonSchema: z83.ZodEnum<{
+declare const documentFailureReasonSchema: z89.ZodEnum<{
 	no_text: "no_text";
 	password_protected: "password_protected";
 	processing_failed: "processing_failed";
@@ -17846,7 +19645,7 @@ declare const documentFailureReasonSchema: z83.ZodEnum<{
 	unreadable: "unreadable";
 }>;
 /** Why a document ended in `failed`. */
-type DocumentFailureReason = z83.infer<typeof documentFailureReasonSchema>;
+type DocumentFailureReason = z89.infer<typeof documentFailureReasonSchema>;
 /** Owner's choice (ADR 0016, choice 2): the file extensions phase 1 accepts, lower case with the dot. */
 declare const ACCEPTED_DOCUMENT_EXTENSIONS: readonly [".pdf", ".docx", ".pptx", ".txt", ".md"];
 /** An accepted file extension. */
@@ -17854,7 +19653,7 @@ type AcceptedDocumentExtension = (typeof ACCEPTED_DOCUMENT_EXTENSIONS)[number];
 /** Owner's choice (ADR 0016, choice 2): the media types phase 1 accepts, one for each accepted extension. */
 declare const ACCEPTED_DOCUMENT_MEDIA_TYPES: readonly ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/vnd.openxmlformats-officedocument.presentationml.presentation", "text/plain", "text/markdown"];
 /** The media type of a stored document, as the service detected it from the content. */
-declare const documentMediaTypeSchema: z83.ZodEnum<{
+declare const documentMediaTypeSchema: z89.ZodEnum<{
 	"application/pdf": "application/pdf";
 	"application/vnd.openxmlformats-officedocument.presentationml.presentation": "application/vnd.openxmlformats-officedocument.presentationml.presentation";
 	"application/vnd.openxmlformats-officedocument.wordprocessingml.document": "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -17862,7 +19661,7 @@ declare const documentMediaTypeSchema: z83.ZodEnum<{
 	"text/plain": "text/plain";
 }>;
 /** The media type of a stored document. */
-type DocumentMediaType = z83.infer<typeof documentMediaTypeSchema>;
+type DocumentMediaType = z89.infer<typeof documentMediaTypeSchema>;
 /** The media type each accepted extension stands for. */
 declare const MEDIA_TYPE_BY_EXTENSION: Readonly<Record<AcceptedDocumentExtension, DocumentMediaType>>;
 /** Owner's choice (ADR 0016, choice 2): the largest file accepted, 25 MB counted as 25 * 1024 * 1024 bytes. */
@@ -17904,29 +19703,29 @@ declare function documentExtension(fileName: string): AcceptedDocumentExtension 
 * no extension to disguise. Zero-width characters other than in the stem are allowed, so display
 * code must still treat a name as untrusted text. A name is never part of an error body.
 */
-declare const documentFileNameSchema: z83.ZodPipe<z83.ZodPipe<z83.ZodString, z83.ZodTransform<string, string>>, z83.ZodString>;
+declare const documentFileNameSchema: z89.ZodPipe<z89.ZodPipe<z89.ZodString, z89.ZodTransform<string, string>>, z89.ZodString>;
 /** The name of an uploaded file. */
-type DocumentFileName = z83.infer<typeof documentFileNameSchema>;
+type DocumentFileName = z89.infer<typeof documentFileNameSchema>;
 /**
 * The type check of an upload, on the file name in its stored form (control and bidirectional
 * characters stripped, then trimmed): it must end in an accepted extension. A failure is
 * `document.unsupported_type` (415). Services call `checkUploadFile`, not this. The service also inspects the content, because the name
 * and the declared type are untrusted.
 */
-declare const documentTypeCheckSchema: z83.ZodPipe<z83.ZodPipe<z83.ZodString, z83.ZodTransform<string, string>>, z83.ZodString>;
+declare const documentTypeCheckSchema: z89.ZodPipe<z89.ZodPipe<z89.ZodString, z89.ZodTransform<string, string>>, z89.ZodString>;
 /**
 * The size check of an upload, on the byte count: at most {@link MAX_DOCUMENT_BYTES}. A failure
 * is `document.too_large` (413). Services call `checkUploadFile`, not this. Emptiness is not checked here: an empty file fails the upload
 * schema as `request.invalid`.
 */
-declare const documentSizeCheckSchema: z83.ZodNumber;
+declare const documentSizeCheckSchema: z89.ZodNumber;
 /** Lower-cases a media type and drops its parameters, so `Text/Plain; charset=utf-8` becomes `text/plain`. */
 declare function normaliseMediaType(mediaType: string): string;
 /** Whether text holds a control or bidirectional character (the ones a file name has stripped), so an identifier can refuse it. */
 declare function hasStrippableCharacter(text: string): boolean;
 /** Whether text is well-formed UTF-16: no lone surrogate. */
 declare function isWellFormedText(text: string): boolean;
-import { z as z84 } from "zod";
+import { z as z90 } from "zod";
 /**
 * `prospect.created` (version 1): a Prospect was created. Carries ids and the Source kind, no
 * personal data; a consumer that needs the person reads the Prospect from core.
@@ -17934,54 +19733,54 @@ import { z as z84 } from "zod";
 declare const prospectCreatedEvent: {
 	type: "prospect.created";
 	version: 1;
-	schema: z84.ZodObject<{
-		id: z84.core.$ZodBranded<z84.ZodString, "evt", "out">;
-		occurredAt: z84.ZodISODateTime;
-		organizationId: z84.core.$ZodBranded<z84.ZodString, "org", "out">;
-		region: z84.ZodEnum<{
+	schema: z90.ZodObject<{
+		id: z90.core.$ZodBranded<z90.ZodString, "evt", "out">;
+		occurredAt: z90.ZodISODateTime;
+		organizationId: z90.core.$ZodBranded<z90.ZodString, "org", "out">;
+		region: z90.ZodEnum<{
 			eu: "eu";
 			us: "us";
 		}>;
-		type: z84.ZodLiteral<"prospect.created">;
-		version: z84.ZodLiteral<1>;
-		data: z84.ZodObject<{
-			prospectId: z84.core.$ZodBranded<z84.ZodString, "prs", "out">;
-			companyId: z84.ZodNullable<z84.core.$ZodBranded<z84.ZodString, "pco", "out">>;
-			ownerMembershipId: z84.ZodNullable<z84.core.$ZodBranded<z84.ZodString, "mem", "out">>;
-			source: z84.ZodUnion<readonly [z84.ZodEnum<{
+		type: z90.ZodLiteral<"prospect.created">;
+		version: z90.ZodLiteral<1>;
+		data: z90.ZodObject<{
+			prospectId: z90.core.$ZodBranded<z90.ZodString, "prs", "out">;
+			companyId: z90.ZodNullable<z90.core.$ZodBranded<z90.ZodString, "pco", "out">>;
+			ownerMembershipId: z90.ZodNullable<z90.core.$ZodBranded<z90.ZodString, "mem", "out">>;
+			source: z90.ZodUnion<readonly [z90.ZodEnum<{
 				"crm:hubspot": "crm:hubspot";
 				"crm:salesforce": "crm:salesforce";
 				form: "form";
 				import: "import";
 				manual: "manual";
-			}>, z84.ZodString]>;
-		}, z84.core.$strict>;
-	}, z84.core.$strip>;
+			}>, z90.ZodString]>;
+		}, z90.core.$strict>;
+	}, z90.core.$strip>;
 	parse: (input: unknown) => {
-		id: string & z84.$brand<"evt">;
+		id: string & z90.$brand<"evt">;
 		occurredAt: string;
-		organizationId: string & z84.$brand<"org">;
+		organizationId: string & z90.$brand<"org">;
 		region: "eu" | "us";
 		type: "prospect.created";
 		version: 1;
 		data: {
-			prospectId: string & z84.$brand<"prs">;
-			companyId: (string & z84.$brand<"pco">) | null;
-			ownerMembershipId: (string & z84.$brand<"mem">) | null;
+			prospectId: string & z90.$brand<"prs">;
+			companyId: (string & z90.$brand<"pco">) | null;
+			ownerMembershipId: (string & z90.$brand<"mem">) | null;
 			source: string;
 		};
 	};
-	safeParse: (input: unknown) => z84.ZodSafeParseResult<{
-		id: string & z84.$brand<"evt">;
+	safeParse: (input: unknown) => z90.ZodSafeParseResult<{
+		id: string & z90.$brand<"evt">;
 		occurredAt: string;
-		organizationId: string & z84.$brand<"org">;
+		organizationId: string & z90.$brand<"org">;
 		region: "eu" | "us";
 		type: "prospect.created";
 		version: 1;
 		data: {
-			prospectId: string & z84.$brand<"prs">;
-			companyId: (string & z84.$brand<"pco">) | null;
-			ownerMembershipId: (string & z84.$brand<"mem">) | null;
+			prospectId: string & z90.$brand<"prs">;
+			companyId: (string & z90.$brand<"pco">) | null;
+			ownerMembershipId: (string & z90.$brand<"mem">) | null;
 			source: string;
 		};
 	}>;
@@ -17994,19 +19793,19 @@ declare const prospectCreatedEvent: {
 declare const prospectUpdatedEvent: {
 	type: "prospect.updated";
 	version: 1;
-	schema: z84.ZodObject<{
-		id: z84.core.$ZodBranded<z84.ZodString, "evt", "out">;
-		occurredAt: z84.ZodISODateTime;
-		organizationId: z84.core.$ZodBranded<z84.ZodString, "org", "out">;
-		region: z84.ZodEnum<{
+	schema: z90.ZodObject<{
+		id: z90.core.$ZodBranded<z90.ZodString, "evt", "out">;
+		occurredAt: z90.ZodISODateTime;
+		organizationId: z90.core.$ZodBranded<z90.ZodString, "org", "out">;
+		region: z90.ZodEnum<{
 			eu: "eu";
 			us: "us";
 		}>;
-		type: z84.ZodLiteral<"prospect.updated">;
-		version: z84.ZodLiteral<1>;
-		data: z84.ZodObject<{
-			prospectId: z84.core.$ZodBranded<z84.ZodString, "prs", "out">;
-			changedFields: z84.ZodArray<z84.ZodEnum<{
+		type: z90.ZodLiteral<"prospect.updated">;
+		version: z90.ZodLiteral<1>;
+		data: z90.ZodObject<{
+			prospectId: z90.core.$ZodBranded<z90.ZodString, "prs", "out">;
+			changedFields: z90.ZodArray<z90.ZodEnum<{
 				email: "email";
 				firstName: "firstName";
 				jobTitle: "jobTitle";
@@ -18014,27 +19813,27 @@ declare const prospectUpdatedEvent: {
 				linkedinUrl: "linkedinUrl";
 				phone: "phone";
 			}>>;
-			ownerChanged: z84.ZodBoolean;
-			companyChanged: z84.ZodBoolean;
-			statusChanged: z84.ZodBoolean;
-			source: z84.ZodUnion<readonly [z84.ZodEnum<{
+			ownerChanged: z90.ZodBoolean;
+			companyChanged: z90.ZodBoolean;
+			statusChanged: z90.ZodBoolean;
+			source: z90.ZodUnion<readonly [z90.ZodEnum<{
 				"crm:hubspot": "crm:hubspot";
 				"crm:salesforce": "crm:salesforce";
 				form: "form";
 				import: "import";
 				manual: "manual";
-			}>, z84.ZodString]>;
-		}, z84.core.$strict>;
-	}, z84.core.$strip>;
+			}>, z90.ZodString]>;
+		}, z90.core.$strict>;
+	}, z90.core.$strip>;
 	parse: (input: unknown) => {
-		id: string & z84.$brand<"evt">;
+		id: string & z90.$brand<"evt">;
 		occurredAt: string;
-		organizationId: string & z84.$brand<"org">;
+		organizationId: string & z90.$brand<"org">;
 		region: "eu" | "us";
 		type: "prospect.updated";
 		version: 1;
 		data: {
-			prospectId: string & z84.$brand<"prs">;
+			prospectId: string & z90.$brand<"prs">;
 			changedFields: ("email" | "firstName" | "jobTitle" | "lastName" | "linkedinUrl" | "phone")[];
 			ownerChanged: boolean;
 			companyChanged: boolean;
@@ -18042,15 +19841,15 @@ declare const prospectUpdatedEvent: {
 			source: string;
 		};
 	};
-	safeParse: (input: unknown) => z84.ZodSafeParseResult<{
-		id: string & z84.$brand<"evt">;
+	safeParse: (input: unknown) => z90.ZodSafeParseResult<{
+		id: string & z90.$brand<"evt">;
 		occurredAt: string;
-		organizationId: string & z84.$brand<"org">;
+		organizationId: string & z90.$brand<"org">;
 		region: "eu" | "us";
 		type: "prospect.updated";
 		version: 1;
 		data: {
-			prospectId: string & z84.$brand<"prs">;
+			prospectId: string & z90.$brand<"prs">;
 			changedFields: ("email" | "firstName" | "jobTitle" | "lastName" | "linkedinUrl" | "phone")[];
 			ownerChanged: boolean;
 			companyChanged: boolean;
@@ -18063,46 +19862,46 @@ declare const prospectUpdatedEvent: {
 declare const prospectMergedEvent: {
 	type: "prospect.merged";
 	version: 1;
-	schema: z84.ZodObject<{
-		id: z84.core.$ZodBranded<z84.ZodString, "evt", "out">;
-		occurredAt: z84.ZodISODateTime;
-		organizationId: z84.core.$ZodBranded<z84.ZodString, "org", "out">;
-		region: z84.ZodEnum<{
+	schema: z90.ZodObject<{
+		id: z90.core.$ZodBranded<z90.ZodString, "evt", "out">;
+		occurredAt: z90.ZodISODateTime;
+		organizationId: z90.core.$ZodBranded<z90.ZodString, "org", "out">;
+		region: z90.ZodEnum<{
 			eu: "eu";
 			us: "us";
 		}>;
-		type: z84.ZodLiteral<"prospect.merged">;
-		version: z84.ZodLiteral<1>;
-		data: z84.ZodObject<{
-			mergeId: z84.core.$ZodBranded<z84.ZodString, "pmrg", "out">;
-			survivorProspectId: z84.core.$ZodBranded<z84.ZodString, "prs", "out">;
-			mergedProspectIds: z84.ZodArray<z84.core.$ZodBranded<z84.ZodString, "prs", "out">>;
-		}, z84.core.$strict>;
-	}, z84.core.$strip>;
+		type: z90.ZodLiteral<"prospect.merged">;
+		version: z90.ZodLiteral<1>;
+		data: z90.ZodObject<{
+			mergeId: z90.core.$ZodBranded<z90.ZodString, "pmrg", "out">;
+			survivorProspectId: z90.core.$ZodBranded<z90.ZodString, "prs", "out">;
+			mergedProspectIds: z90.ZodArray<z90.core.$ZodBranded<z90.ZodString, "prs", "out">>;
+		}, z90.core.$strict>;
+	}, z90.core.$strip>;
 	parse: (input: unknown) => {
-		id: string & z84.$brand<"evt">;
+		id: string & z90.$brand<"evt">;
 		occurredAt: string;
-		organizationId: string & z84.$brand<"org">;
+		organizationId: string & z90.$brand<"org">;
 		region: "eu" | "us";
 		type: "prospect.merged";
 		version: 1;
 		data: {
-			mergeId: string & z84.$brand<"pmrg">;
-			survivorProspectId: string & z84.$brand<"prs">;
-			mergedProspectIds: (string & z84.$brand<"prs">)[];
+			mergeId: string & z90.$brand<"pmrg">;
+			survivorProspectId: string & z90.$brand<"prs">;
+			mergedProspectIds: (string & z90.$brand<"prs">)[];
 		};
 	};
-	safeParse: (input: unknown) => z84.ZodSafeParseResult<{
-		id: string & z84.$brand<"evt">;
+	safeParse: (input: unknown) => z90.ZodSafeParseResult<{
+		id: string & z90.$brand<"evt">;
 		occurredAt: string;
-		organizationId: string & z84.$brand<"org">;
+		organizationId: string & z90.$brand<"org">;
 		region: "eu" | "us";
 		type: "prospect.merged";
 		version: 1;
 		data: {
-			mergeId: string & z84.$brand<"pmrg">;
-			survivorProspectId: string & z84.$brand<"prs">;
-			mergedProspectIds: (string & z84.$brand<"prs">)[];
+			mergeId: string & z90.$brand<"pmrg">;
+			survivorProspectId: string & z90.$brand<"prs">;
+			mergedProspectIds: (string & z90.$brand<"prs">)[];
 		};
 	}>;
 };
@@ -18110,46 +19909,46 @@ declare const prospectMergedEvent: {
 declare const prospectMergeUndoneEvent: {
 	type: "prospect.merge_undone";
 	version: 1;
-	schema: z84.ZodObject<{
-		id: z84.core.$ZodBranded<z84.ZodString, "evt", "out">;
-		occurredAt: z84.ZodISODateTime;
-		organizationId: z84.core.$ZodBranded<z84.ZodString, "org", "out">;
-		region: z84.ZodEnum<{
+	schema: z90.ZodObject<{
+		id: z90.core.$ZodBranded<z90.ZodString, "evt", "out">;
+		occurredAt: z90.ZodISODateTime;
+		organizationId: z90.core.$ZodBranded<z90.ZodString, "org", "out">;
+		region: z90.ZodEnum<{
 			eu: "eu";
 			us: "us";
 		}>;
-		type: z84.ZodLiteral<"prospect.merge_undone">;
-		version: z84.ZodLiteral<1>;
-		data: z84.ZodObject<{
-			mergeId: z84.core.$ZodBranded<z84.ZodString, "pmrg", "out">;
-			survivorProspectId: z84.core.$ZodBranded<z84.ZodString, "prs", "out">;
-			restoredProspectIds: z84.ZodArray<z84.core.$ZodBranded<z84.ZodString, "prs", "out">>;
-		}, z84.core.$strict>;
-	}, z84.core.$strip>;
+		type: z90.ZodLiteral<"prospect.merge_undone">;
+		version: z90.ZodLiteral<1>;
+		data: z90.ZodObject<{
+			mergeId: z90.core.$ZodBranded<z90.ZodString, "pmrg", "out">;
+			survivorProspectId: z90.core.$ZodBranded<z90.ZodString, "prs", "out">;
+			restoredProspectIds: z90.ZodArray<z90.core.$ZodBranded<z90.ZodString, "prs", "out">>;
+		}, z90.core.$strict>;
+	}, z90.core.$strip>;
 	parse: (input: unknown) => {
-		id: string & z84.$brand<"evt">;
+		id: string & z90.$brand<"evt">;
 		occurredAt: string;
-		organizationId: string & z84.$brand<"org">;
+		organizationId: string & z90.$brand<"org">;
 		region: "eu" | "us";
 		type: "prospect.merge_undone";
 		version: 1;
 		data: {
-			mergeId: string & z84.$brand<"pmrg">;
-			survivorProspectId: string & z84.$brand<"prs">;
-			restoredProspectIds: (string & z84.$brand<"prs">)[];
+			mergeId: string & z90.$brand<"pmrg">;
+			survivorProspectId: string & z90.$brand<"prs">;
+			restoredProspectIds: (string & z90.$brand<"prs">)[];
 		};
 	};
-	safeParse: (input: unknown) => z84.ZodSafeParseResult<{
-		id: string & z84.$brand<"evt">;
+	safeParse: (input: unknown) => z90.ZodSafeParseResult<{
+		id: string & z90.$brand<"evt">;
 		occurredAt: string;
-		organizationId: string & z84.$brand<"org">;
+		organizationId: string & z90.$brand<"org">;
 		region: "eu" | "us";
 		type: "prospect.merge_undone";
 		version: 1;
 		data: {
-			mergeId: string & z84.$brand<"pmrg">;
-			survivorProspectId: string & z84.$brand<"prs">;
-			restoredProspectIds: (string & z84.$brand<"prs">)[];
+			mergeId: string & z90.$brand<"pmrg">;
+			survivorProspectId: string & z90.$brand<"prs">;
+			restoredProspectIds: (string & z90.$brand<"prs">)[];
 		};
 	}>;
 };
@@ -18160,40 +19959,40 @@ declare const prospectMergeUndoneEvent: {
 declare const prospectErasedEvent: {
 	type: "prospect.erased";
 	version: 1;
-	schema: z84.ZodObject<{
-		id: z84.core.$ZodBranded<z84.ZodString, "evt", "out">;
-		occurredAt: z84.ZodISODateTime;
-		organizationId: z84.core.$ZodBranded<z84.ZodString, "org", "out">;
-		region: z84.ZodEnum<{
+	schema: z90.ZodObject<{
+		id: z90.core.$ZodBranded<z90.ZodString, "evt", "out">;
+		occurredAt: z90.ZodISODateTime;
+		organizationId: z90.core.$ZodBranded<z90.ZodString, "org", "out">;
+		region: z90.ZodEnum<{
 			eu: "eu";
 			us: "us";
 		}>;
-		type: z84.ZodLiteral<"prospect.erased">;
-		version: z84.ZodLiteral<1>;
-		data: z84.ZodObject<{
-			prospectId: z84.core.$ZodBranded<z84.ZodString, "prs", "out">;
-		}, z84.core.$strict>;
-	}, z84.core.$strip>;
+		type: z90.ZodLiteral<"prospect.erased">;
+		version: z90.ZodLiteral<1>;
+		data: z90.ZodObject<{
+			prospectId: z90.core.$ZodBranded<z90.ZodString, "prs", "out">;
+		}, z90.core.$strict>;
+	}, z90.core.$strip>;
 	parse: (input: unknown) => {
-		id: string & z84.$brand<"evt">;
+		id: string & z90.$brand<"evt">;
 		occurredAt: string;
-		organizationId: string & z84.$brand<"org">;
+		organizationId: string & z90.$brand<"org">;
 		region: "eu" | "us";
 		type: "prospect.erased";
 		version: 1;
 		data: {
-			prospectId: string & z84.$brand<"prs">;
+			prospectId: string & z90.$brand<"prs">;
 		};
 	};
-	safeParse: (input: unknown) => z84.ZodSafeParseResult<{
-		id: string & z84.$brand<"evt">;
+	safeParse: (input: unknown) => z90.ZodSafeParseResult<{
+		id: string & z90.$brand<"evt">;
 		occurredAt: string;
-		organizationId: string & z84.$brand<"org">;
+		organizationId: string & z90.$brand<"org">;
 		region: "eu" | "us";
 		type: "prospect.erased";
 		version: 1;
 		data: {
-			prospectId: string & z84.$brand<"prs">;
+			prospectId: string & z90.$brand<"prs">;
 		};
 	}>;
 };
@@ -18202,54 +20001,54 @@ declare const PROSPECT_EVENTS: {
 	readonly "prospect.created": {
 		type: "prospect.created";
 		version: 1;
-		schema: z84.ZodObject<{
-			id: z84.core.$ZodBranded<z84.ZodString, "evt", "out">;
-			occurredAt: z84.ZodISODateTime;
-			organizationId: z84.core.$ZodBranded<z84.ZodString, "org", "out">;
-			region: z84.ZodEnum<{
+		schema: z90.ZodObject<{
+			id: z90.core.$ZodBranded<z90.ZodString, "evt", "out">;
+			occurredAt: z90.ZodISODateTime;
+			organizationId: z90.core.$ZodBranded<z90.ZodString, "org", "out">;
+			region: z90.ZodEnum<{
 				eu: "eu";
 				us: "us";
 			}>;
-			type: z84.ZodLiteral<"prospect.created">;
-			version: z84.ZodLiteral<1>;
-			data: z84.ZodObject<{
-				prospectId: z84.core.$ZodBranded<z84.ZodString, "prs", "out">;
-				companyId: z84.ZodNullable<z84.core.$ZodBranded<z84.ZodString, "pco", "out">>;
-				ownerMembershipId: z84.ZodNullable<z84.core.$ZodBranded<z84.ZodString, "mem", "out">>;
-				source: z84.ZodUnion<readonly [z84.ZodEnum<{
+			type: z90.ZodLiteral<"prospect.created">;
+			version: z90.ZodLiteral<1>;
+			data: z90.ZodObject<{
+				prospectId: z90.core.$ZodBranded<z90.ZodString, "prs", "out">;
+				companyId: z90.ZodNullable<z90.core.$ZodBranded<z90.ZodString, "pco", "out">>;
+				ownerMembershipId: z90.ZodNullable<z90.core.$ZodBranded<z90.ZodString, "mem", "out">>;
+				source: z90.ZodUnion<readonly [z90.ZodEnum<{
 					"crm:hubspot": "crm:hubspot";
 					"crm:salesforce": "crm:salesforce";
 					form: "form";
 					import: "import";
 					manual: "manual";
-				}>, z84.ZodString]>;
-			}, z84.core.$strict>;
-		}, z84.core.$strip>;
+				}>, z90.ZodString]>;
+			}, z90.core.$strict>;
+		}, z90.core.$strip>;
 		parse: (input: unknown) => {
-			id: string & z84.$brand<"evt">;
+			id: string & z90.$brand<"evt">;
 			occurredAt: string;
-			organizationId: string & z84.$brand<"org">;
+			organizationId: string & z90.$brand<"org">;
 			region: "eu" | "us";
 			type: "prospect.created";
 			version: 1;
 			data: {
-				prospectId: string & z84.$brand<"prs">;
-				companyId: (string & z84.$brand<"pco">) | null;
-				ownerMembershipId: (string & z84.$brand<"mem">) | null;
+				prospectId: string & z90.$brand<"prs">;
+				companyId: (string & z90.$brand<"pco">) | null;
+				ownerMembershipId: (string & z90.$brand<"mem">) | null;
 				source: string;
 			};
 		};
-		safeParse: (input: unknown) => z84.ZodSafeParseResult<{
-			id: string & z84.$brand<"evt">;
+		safeParse: (input: unknown) => z90.ZodSafeParseResult<{
+			id: string & z90.$brand<"evt">;
 			occurredAt: string;
-			organizationId: string & z84.$brand<"org">;
+			organizationId: string & z90.$brand<"org">;
 			region: "eu" | "us";
 			type: "prospect.created";
 			version: 1;
 			data: {
-				prospectId: string & z84.$brand<"prs">;
-				companyId: (string & z84.$brand<"pco">) | null;
-				ownerMembershipId: (string & z84.$brand<"mem">) | null;
+				prospectId: string & z90.$brand<"prs">;
+				companyId: (string & z90.$brand<"pco">) | null;
+				ownerMembershipId: (string & z90.$brand<"mem">) | null;
 				source: string;
 			};
 		}>;
@@ -18257,19 +20056,19 @@ declare const PROSPECT_EVENTS: {
 	readonly "prospect.updated": {
 		type: "prospect.updated";
 		version: 1;
-		schema: z84.ZodObject<{
-			id: z84.core.$ZodBranded<z84.ZodString, "evt", "out">;
-			occurredAt: z84.ZodISODateTime;
-			organizationId: z84.core.$ZodBranded<z84.ZodString, "org", "out">;
-			region: z84.ZodEnum<{
+		schema: z90.ZodObject<{
+			id: z90.core.$ZodBranded<z90.ZodString, "evt", "out">;
+			occurredAt: z90.ZodISODateTime;
+			organizationId: z90.core.$ZodBranded<z90.ZodString, "org", "out">;
+			region: z90.ZodEnum<{
 				eu: "eu";
 				us: "us";
 			}>;
-			type: z84.ZodLiteral<"prospect.updated">;
-			version: z84.ZodLiteral<1>;
-			data: z84.ZodObject<{
-				prospectId: z84.core.$ZodBranded<z84.ZodString, "prs", "out">;
-				changedFields: z84.ZodArray<z84.ZodEnum<{
+			type: z90.ZodLiteral<"prospect.updated">;
+			version: z90.ZodLiteral<1>;
+			data: z90.ZodObject<{
+				prospectId: z90.core.$ZodBranded<z90.ZodString, "prs", "out">;
+				changedFields: z90.ZodArray<z90.ZodEnum<{
 					email: "email";
 					firstName: "firstName";
 					jobTitle: "jobTitle";
@@ -18277,27 +20076,27 @@ declare const PROSPECT_EVENTS: {
 					linkedinUrl: "linkedinUrl";
 					phone: "phone";
 				}>>;
-				ownerChanged: z84.ZodBoolean;
-				companyChanged: z84.ZodBoolean;
-				statusChanged: z84.ZodBoolean;
-				source: z84.ZodUnion<readonly [z84.ZodEnum<{
+				ownerChanged: z90.ZodBoolean;
+				companyChanged: z90.ZodBoolean;
+				statusChanged: z90.ZodBoolean;
+				source: z90.ZodUnion<readonly [z90.ZodEnum<{
 					"crm:hubspot": "crm:hubspot";
 					"crm:salesforce": "crm:salesforce";
 					form: "form";
 					import: "import";
 					manual: "manual";
-				}>, z84.ZodString]>;
-			}, z84.core.$strict>;
-		}, z84.core.$strip>;
+				}>, z90.ZodString]>;
+			}, z90.core.$strict>;
+		}, z90.core.$strip>;
 		parse: (input: unknown) => {
-			id: string & z84.$brand<"evt">;
+			id: string & z90.$brand<"evt">;
 			occurredAt: string;
-			organizationId: string & z84.$brand<"org">;
+			organizationId: string & z90.$brand<"org">;
 			region: "eu" | "us";
 			type: "prospect.updated";
 			version: 1;
 			data: {
-				prospectId: string & z84.$brand<"prs">;
+				prospectId: string & z90.$brand<"prs">;
 				changedFields: ("email" | "firstName" | "jobTitle" | "lastName" | "linkedinUrl" | "phone")[];
 				ownerChanged: boolean;
 				companyChanged: boolean;
@@ -18305,15 +20104,15 @@ declare const PROSPECT_EVENTS: {
 				source: string;
 			};
 		};
-		safeParse: (input: unknown) => z84.ZodSafeParseResult<{
-			id: string & z84.$brand<"evt">;
+		safeParse: (input: unknown) => z90.ZodSafeParseResult<{
+			id: string & z90.$brand<"evt">;
 			occurredAt: string;
-			organizationId: string & z84.$brand<"org">;
+			organizationId: string & z90.$brand<"org">;
 			region: "eu" | "us";
 			type: "prospect.updated";
 			version: 1;
 			data: {
-				prospectId: string & z84.$brand<"prs">;
+				prospectId: string & z90.$brand<"prs">;
 				changedFields: ("email" | "firstName" | "jobTitle" | "lastName" | "linkedinUrl" | "phone")[];
 				ownerChanged: boolean;
 				companyChanged: boolean;
@@ -18325,139 +20124,139 @@ declare const PROSPECT_EVENTS: {
 	readonly "prospect.merged": {
 		type: "prospect.merged";
 		version: 1;
-		schema: z84.ZodObject<{
-			id: z84.core.$ZodBranded<z84.ZodString, "evt", "out">;
-			occurredAt: z84.ZodISODateTime;
-			organizationId: z84.core.$ZodBranded<z84.ZodString, "org", "out">;
-			region: z84.ZodEnum<{
+		schema: z90.ZodObject<{
+			id: z90.core.$ZodBranded<z90.ZodString, "evt", "out">;
+			occurredAt: z90.ZodISODateTime;
+			organizationId: z90.core.$ZodBranded<z90.ZodString, "org", "out">;
+			region: z90.ZodEnum<{
 				eu: "eu";
 				us: "us";
 			}>;
-			type: z84.ZodLiteral<"prospect.merged">;
-			version: z84.ZodLiteral<1>;
-			data: z84.ZodObject<{
-				mergeId: z84.core.$ZodBranded<z84.ZodString, "pmrg", "out">;
-				survivorProspectId: z84.core.$ZodBranded<z84.ZodString, "prs", "out">;
-				mergedProspectIds: z84.ZodArray<z84.core.$ZodBranded<z84.ZodString, "prs", "out">>;
-			}, z84.core.$strict>;
-		}, z84.core.$strip>;
+			type: z90.ZodLiteral<"prospect.merged">;
+			version: z90.ZodLiteral<1>;
+			data: z90.ZodObject<{
+				mergeId: z90.core.$ZodBranded<z90.ZodString, "pmrg", "out">;
+				survivorProspectId: z90.core.$ZodBranded<z90.ZodString, "prs", "out">;
+				mergedProspectIds: z90.ZodArray<z90.core.$ZodBranded<z90.ZodString, "prs", "out">>;
+			}, z90.core.$strict>;
+		}, z90.core.$strip>;
 		parse: (input: unknown) => {
-			id: string & z84.$brand<"evt">;
+			id: string & z90.$brand<"evt">;
 			occurredAt: string;
-			organizationId: string & z84.$brand<"org">;
+			organizationId: string & z90.$brand<"org">;
 			region: "eu" | "us";
 			type: "prospect.merged";
 			version: 1;
 			data: {
-				mergeId: string & z84.$brand<"pmrg">;
-				survivorProspectId: string & z84.$brand<"prs">;
-				mergedProspectIds: (string & z84.$brand<"prs">)[];
+				mergeId: string & z90.$brand<"pmrg">;
+				survivorProspectId: string & z90.$brand<"prs">;
+				mergedProspectIds: (string & z90.$brand<"prs">)[];
 			};
 		};
-		safeParse: (input: unknown) => z84.ZodSafeParseResult<{
-			id: string & z84.$brand<"evt">;
+		safeParse: (input: unknown) => z90.ZodSafeParseResult<{
+			id: string & z90.$brand<"evt">;
 			occurredAt: string;
-			organizationId: string & z84.$brand<"org">;
+			organizationId: string & z90.$brand<"org">;
 			region: "eu" | "us";
 			type: "prospect.merged";
 			version: 1;
 			data: {
-				mergeId: string & z84.$brand<"pmrg">;
-				survivorProspectId: string & z84.$brand<"prs">;
-				mergedProspectIds: (string & z84.$brand<"prs">)[];
+				mergeId: string & z90.$brand<"pmrg">;
+				survivorProspectId: string & z90.$brand<"prs">;
+				mergedProspectIds: (string & z90.$brand<"prs">)[];
 			};
 		}>;
 	};
 	readonly "prospect.merge_undone": {
 		type: "prospect.merge_undone";
 		version: 1;
-		schema: z84.ZodObject<{
-			id: z84.core.$ZodBranded<z84.ZodString, "evt", "out">;
-			occurredAt: z84.ZodISODateTime;
-			organizationId: z84.core.$ZodBranded<z84.ZodString, "org", "out">;
-			region: z84.ZodEnum<{
+		schema: z90.ZodObject<{
+			id: z90.core.$ZodBranded<z90.ZodString, "evt", "out">;
+			occurredAt: z90.ZodISODateTime;
+			organizationId: z90.core.$ZodBranded<z90.ZodString, "org", "out">;
+			region: z90.ZodEnum<{
 				eu: "eu";
 				us: "us";
 			}>;
-			type: z84.ZodLiteral<"prospect.merge_undone">;
-			version: z84.ZodLiteral<1>;
-			data: z84.ZodObject<{
-				mergeId: z84.core.$ZodBranded<z84.ZodString, "pmrg", "out">;
-				survivorProspectId: z84.core.$ZodBranded<z84.ZodString, "prs", "out">;
-				restoredProspectIds: z84.ZodArray<z84.core.$ZodBranded<z84.ZodString, "prs", "out">>;
-			}, z84.core.$strict>;
-		}, z84.core.$strip>;
+			type: z90.ZodLiteral<"prospect.merge_undone">;
+			version: z90.ZodLiteral<1>;
+			data: z90.ZodObject<{
+				mergeId: z90.core.$ZodBranded<z90.ZodString, "pmrg", "out">;
+				survivorProspectId: z90.core.$ZodBranded<z90.ZodString, "prs", "out">;
+				restoredProspectIds: z90.ZodArray<z90.core.$ZodBranded<z90.ZodString, "prs", "out">>;
+			}, z90.core.$strict>;
+		}, z90.core.$strip>;
 		parse: (input: unknown) => {
-			id: string & z84.$brand<"evt">;
+			id: string & z90.$brand<"evt">;
 			occurredAt: string;
-			organizationId: string & z84.$brand<"org">;
+			organizationId: string & z90.$brand<"org">;
 			region: "eu" | "us";
 			type: "prospect.merge_undone";
 			version: 1;
 			data: {
-				mergeId: string & z84.$brand<"pmrg">;
-				survivorProspectId: string & z84.$brand<"prs">;
-				restoredProspectIds: (string & z84.$brand<"prs">)[];
+				mergeId: string & z90.$brand<"pmrg">;
+				survivorProspectId: string & z90.$brand<"prs">;
+				restoredProspectIds: (string & z90.$brand<"prs">)[];
 			};
 		};
-		safeParse: (input: unknown) => z84.ZodSafeParseResult<{
-			id: string & z84.$brand<"evt">;
+		safeParse: (input: unknown) => z90.ZodSafeParseResult<{
+			id: string & z90.$brand<"evt">;
 			occurredAt: string;
-			organizationId: string & z84.$brand<"org">;
+			organizationId: string & z90.$brand<"org">;
 			region: "eu" | "us";
 			type: "prospect.merge_undone";
 			version: 1;
 			data: {
-				mergeId: string & z84.$brand<"pmrg">;
-				survivorProspectId: string & z84.$brand<"prs">;
-				restoredProspectIds: (string & z84.$brand<"prs">)[];
+				mergeId: string & z90.$brand<"pmrg">;
+				survivorProspectId: string & z90.$brand<"prs">;
+				restoredProspectIds: (string & z90.$brand<"prs">)[];
 			};
 		}>;
 	};
 	readonly "prospect.erased": {
 		type: "prospect.erased";
 		version: 1;
-		schema: z84.ZodObject<{
-			id: z84.core.$ZodBranded<z84.ZodString, "evt", "out">;
-			occurredAt: z84.ZodISODateTime;
-			organizationId: z84.core.$ZodBranded<z84.ZodString, "org", "out">;
-			region: z84.ZodEnum<{
+		schema: z90.ZodObject<{
+			id: z90.core.$ZodBranded<z90.ZodString, "evt", "out">;
+			occurredAt: z90.ZodISODateTime;
+			organizationId: z90.core.$ZodBranded<z90.ZodString, "org", "out">;
+			region: z90.ZodEnum<{
 				eu: "eu";
 				us: "us";
 			}>;
-			type: z84.ZodLiteral<"prospect.erased">;
-			version: z84.ZodLiteral<1>;
-			data: z84.ZodObject<{
-				prospectId: z84.core.$ZodBranded<z84.ZodString, "prs", "out">;
-			}, z84.core.$strict>;
-		}, z84.core.$strip>;
+			type: z90.ZodLiteral<"prospect.erased">;
+			version: z90.ZodLiteral<1>;
+			data: z90.ZodObject<{
+				prospectId: z90.core.$ZodBranded<z90.ZodString, "prs", "out">;
+			}, z90.core.$strict>;
+		}, z90.core.$strip>;
 		parse: (input: unknown) => {
-			id: string & z84.$brand<"evt">;
+			id: string & z90.$brand<"evt">;
 			occurredAt: string;
-			organizationId: string & z84.$brand<"org">;
+			organizationId: string & z90.$brand<"org">;
 			region: "eu" | "us";
 			type: "prospect.erased";
 			version: 1;
 			data: {
-				prospectId: string & z84.$brand<"prs">;
+				prospectId: string & z90.$brand<"prs">;
 			};
 		};
-		safeParse: (input: unknown) => z84.ZodSafeParseResult<{
-			id: string & z84.$brand<"evt">;
+		safeParse: (input: unknown) => z90.ZodSafeParseResult<{
+			id: string & z90.$brand<"evt">;
 			occurredAt: string;
-			organizationId: string & z84.$brand<"org">;
+			organizationId: string & z90.$brand<"org">;
 			region: "eu" | "us";
 			type: "prospect.erased";
 			version: 1;
 			data: {
-				prospectId: string & z84.$brand<"prs">;
+				prospectId: string & z90.$brand<"prs">;
 			};
 		}>;
 	};
 };
 /** The type of a Prospect event. */
 type ProspectEventType = keyof typeof PROSPECT_EVENTS;
-import { z as z85 } from "zod";
+import { z as z91 } from "zod";
 /** The largest import file, in bytes (10 MB). */
 declare const MAX_PROSPECT_IMPORT_BYTES: number;
 /** The most data rows an import may hold. */
@@ -18473,40 +20272,40 @@ declare const PROSPECT_IMPORT_COLUMNS: readonly ["first_name", "last_name", "ema
 /** The states of an import; `completed` and `failed` are final. */
 declare const PROSPECT_IMPORT_STATES: readonly ["uploaded", "processing", "completed", "failed"];
 /** The state of an import. */
-declare const prospectImportStateSchema: z85.ZodEnum<{
+declare const prospectImportStateSchema: z91.ZodEnum<{
 	completed: "completed";
 	failed: "failed";
 	processing: "processing";
 	uploaded: "uploaded";
 }>;
 /** The state of an import. */
-type ProspectImportState = z85.infer<typeof prospectImportStateSchema>;
+type ProspectImportState = z91.infer<typeof prospectImportStateSchema>;
 /** Why a whole import failed after it was accepted. */
 declare const PROSPECT_IMPORT_FAILURE_REASONS: readonly ["too_many_rows", "unreadable"];
 /** Why a whole import failed. */
-declare const prospectImportFailureReasonSchema: z85.ZodEnum<{
+declare const prospectImportFailureReasonSchema: z91.ZodEnum<{
 	too_many_rows: "too_many_rows";
 	unreadable: "unreadable";
 }>;
 /** Why a whole import failed. */
-type ProspectImportFailureReason = z85.infer<typeof prospectImportFailureReasonSchema>;
+type ProspectImportFailureReason = z91.infer<typeof prospectImportFailureReasonSchema>;
 /** What happened to one row. */
 declare const PROSPECT_IMPORT_ROW_RESULTS: readonly ["created", "updated", "skipped", "rejected"];
 /** What happened to one row. */
-declare const prospectImportRowResultSchema: z85.ZodEnum<{
+declare const prospectImportRowResultSchema: z91.ZodEnum<{
 	created: "created";
 	rejected: "rejected";
 	skipped: "skipped";
 	updated: "updated";
 }>;
 /** What happened to one row. */
-type ProspectImportRowResult = z85.infer<typeof prospectImportRowResultSchema>;
+type ProspectImportRowResult = z91.infer<typeof prospectImportRowResultSchema>;
 /** Why a row was skipped: the file changes nothing for it. */
 declare const PROSPECT_IMPORT_SKIP_REASONS: readonly ["no_change", "manual_values_kept"];
 /** Why a row was rejected: the row is not applied and the file needs fixing. */
 declare const PROSPECT_IMPORT_REJECT_REASONS: readonly ["wrong_column_count", "blank_row", "missing_identity", "invalid_email", "invalid_phone", "invalid_linkedin_url", "invalid_name", "invalid_job_title", "invalid_company", "invalid_tags", "owner_not_found", "owner_not_allowed", "duplicate_in_file", "identity_conflict"];
 /** Why a row was skipped or rejected. */
-declare const prospectImportRowReasonSchema: z85.ZodEnum<{
+declare const prospectImportRowReasonSchema: z91.ZodEnum<{
 	blank_row: "blank_row";
 	duplicate_in_file: "duplicate_in_file";
 	identity_conflict: "identity_conflict";
@@ -18525,98 +20324,98 @@ declare const prospectImportRowReasonSchema: z85.ZodEnum<{
 	wrong_column_count: "wrong_column_count";
 }>;
 /** Why a row was skipped or rejected. */
-type ProspectImportRowReason = z85.infer<typeof prospectImportRowReasonSchema>;
+type ProspectImportRowReason = z91.infer<typeof prospectImportRowReasonSchema>;
 /**
 * A Prospect import as core returns it. It carries no file name and no cell. The counts are
 * `null` until `completed`, then `rowCount` is the sum of the other four; `failureReason` is set
 * exactly when `state` is `failed`. The report is the paginated rows. An import is a queued,
 * idempotent and resumable job, so the page can be closed and the import read again by id.
 */
-declare const prospectImportSchema: z85.ZodObject<{
-	id: z85.core.$ZodBranded<z85.ZodString, "pimp", "out">;
-	state: z85.ZodEnum<{
+declare const prospectImportSchema: z91.ZodObject<{
+	id: z91.core.$ZodBranded<z91.ZodString, "pimp", "out">;
+	state: z91.ZodEnum<{
 		completed: "completed";
 		failed: "failed";
 		processing: "processing";
 		uploaded: "uploaded";
 	}>;
-	failureReason: z85.ZodNullable<z85.ZodEnum<{
+	failureReason: z91.ZodNullable<z91.ZodEnum<{
 		too_many_rows: "too_many_rows";
 		unreadable: "unreadable";
 	}>>;
-	rowCount: z85.ZodNullable<z85.ZodNumber>;
-	createdCount: z85.ZodNullable<z85.ZodNumber>;
-	updatedCount: z85.ZodNullable<z85.ZodNumber>;
-	skippedCount: z85.ZodNullable<z85.ZodNumber>;
-	rejectedCount: z85.ZodNullable<z85.ZodNumber>;
-	uploadedByUserId: z85.core.$ZodBranded<z85.ZodString, "usr", "out">;
-	createdAt: z85.ZodISODateTime;
-	updatedAt: z85.ZodISODateTime;
-}, z85.core.$strip>;
+	rowCount: z91.ZodNullable<z91.ZodNumber>;
+	createdCount: z91.ZodNullable<z91.ZodNumber>;
+	updatedCount: z91.ZodNullable<z91.ZodNumber>;
+	skippedCount: z91.ZodNullable<z91.ZodNumber>;
+	rejectedCount: z91.ZodNullable<z91.ZodNumber>;
+	uploadedByUserId: z91.core.$ZodBranded<z91.ZodString, "usr", "out">;
+	createdAt: z91.ZodISODateTime;
+	updatedAt: z91.ZodISODateTime;
+}, z91.core.$strip>;
 /** A Prospect import as core returns it. */
-type ProspectImport = z85.infer<typeof prospectImportSchema>;
+type ProspectImport = z91.infer<typeof prospectImportSchema>;
 /** The path parameters of a request about one import. */
-declare const prospectImportParamsSchema: z85.ZodObject<{
-	importId: z85.core.$ZodBranded<z85.ZodString, "pimp", "out">;
-}, z85.core.$strict>;
+declare const prospectImportParamsSchema: z91.ZodObject<{
+	importId: z91.core.$ZodBranded<z91.ZodString, "pimp", "out">;
+}, z91.core.$strict>;
 /** The path parameters of a request about one import. */
-type ProspectImportParams = z85.infer<typeof prospectImportParamsSchema>;
+type ProspectImportParams = z91.infer<typeof prospectImportParamsSchema>;
 /** The query parameters of a request to list imports: a page. */
-declare const listProspectImportsQuerySchema: z85.ZodObject<{
-	cursor: z85.ZodOptional<z85.ZodString>;
-	limit: z85.ZodDefault<z85.ZodPipe<z85.ZodPipe<z85.ZodUnion<readonly [z85.ZodNumber, z85.ZodString]>, z85.ZodTransform<number, string | number>>, z85.ZodNumber>>;
-}, z85.core.$strict>;
+declare const listProspectImportsQuerySchema: z91.ZodObject<{
+	cursor: z91.ZodOptional<z91.ZodString>;
+	limit: z91.ZodDefault<z91.ZodPipe<z91.ZodPipe<z91.ZodUnion<readonly [z91.ZodNumber, z91.ZodString]>, z91.ZodTransform<number, string | number>>, z91.ZodNumber>>;
+}, z91.core.$strict>;
 /** The query parameters of a request to list imports. */
-type ListProspectImportsQuery = z85.infer<typeof listProspectImportsQuerySchema>;
+type ListProspectImportsQuery = z91.infer<typeof listProspectImportsQuerySchema>;
 /** One page of imports, newest first (by `createdAt`, then id, both descending). */
-declare const listProspectImportsResponseSchema: z85.ZodObject<{
-	items: z85.ZodArray<z85.ZodObject<{
-		id: z85.core.$ZodBranded<z85.ZodString, "pimp", "out">;
-		state: z85.ZodEnum<{
+declare const listProspectImportsResponseSchema: z91.ZodObject<{
+	items: z91.ZodArray<z91.ZodObject<{
+		id: z91.core.$ZodBranded<z91.ZodString, "pimp", "out">;
+		state: z91.ZodEnum<{
 			completed: "completed";
 			failed: "failed";
 			processing: "processing";
 			uploaded: "uploaded";
 		}>;
-		failureReason: z85.ZodNullable<z85.ZodEnum<{
+		failureReason: z91.ZodNullable<z91.ZodEnum<{
 			too_many_rows: "too_many_rows";
 			unreadable: "unreadable";
 		}>>;
-		rowCount: z85.ZodNullable<z85.ZodNumber>;
-		createdCount: z85.ZodNullable<z85.ZodNumber>;
-		updatedCount: z85.ZodNullable<z85.ZodNumber>;
-		skippedCount: z85.ZodNullable<z85.ZodNumber>;
-		rejectedCount: z85.ZodNullable<z85.ZodNumber>;
-		uploadedByUserId: z85.core.$ZodBranded<z85.ZodString, "usr", "out">;
-		createdAt: z85.ZodISODateTime;
-		updatedAt: z85.ZodISODateTime;
-	}, z85.core.$strip>>;
-	nextCursor: z85.ZodNullable<z85.ZodString>;
-}, z85.core.$strip>;
+		rowCount: z91.ZodNullable<z91.ZodNumber>;
+		createdCount: z91.ZodNullable<z91.ZodNumber>;
+		updatedCount: z91.ZodNullable<z91.ZodNumber>;
+		skippedCount: z91.ZodNullable<z91.ZodNumber>;
+		rejectedCount: z91.ZodNullable<z91.ZodNumber>;
+		uploadedByUserId: z91.core.$ZodBranded<z91.ZodString, "usr", "out">;
+		createdAt: z91.ZodISODateTime;
+		updatedAt: z91.ZodISODateTime;
+	}, z91.core.$strip>>;
+	nextCursor: z91.ZodNullable<z91.ZodString>;
+}, z91.core.$strip>;
 /** One page of imports. */
-type ListProspectImportsResponse = z85.infer<typeof listProspectImportsResponseSchema>;
+type ListProspectImportsResponse = z91.infer<typeof listProspectImportsResponseSchema>;
 /** The position in an import list. */
-declare const prospectImportCursorSchema: z85.ZodObject<{
-	createdAt: z85.ZodISODateTime;
-	id: z85.core.$ZodBranded<z85.ZodString, "pimp", "out">;
-}, z85.core.$strict>;
+declare const prospectImportCursorSchema: z91.ZodObject<{
+	createdAt: z91.ZodISODateTime;
+	id: z91.core.$ZodBranded<z91.ZodString, "pimp", "out">;
+}, z91.core.$strict>;
 /** The position in an import list. */
-type ProspectImportCursor = z85.infer<typeof prospectImportCursorSchema>;
+type ProspectImportCursor = z91.infer<typeof prospectImportCursorSchema>;
 /**
 * One row of the report: the record number (the header is record 1, so the first data row is 2),
 * the `result` and, for a skipped or rejected row, the `reason`. `prospectId` is the Prospect the
 * row created or updated (or matched, when skipped) and is `null` for a rejected row. No cell of
 * the file is echoed, so a report carries no personal data.
 */
-declare const prospectImportRowSchema: z85.ZodObject<{
-	rowNumber: z85.ZodNumber;
-	result: z85.ZodEnum<{
+declare const prospectImportRowSchema: z91.ZodObject<{
+	rowNumber: z91.ZodNumber;
+	result: z91.ZodEnum<{
 		created: "created";
 		rejected: "rejected";
 		skipped: "skipped";
 		updated: "updated";
 	}>;
-	reason: z85.ZodNullable<z85.ZodEnum<{
+	reason: z91.ZodNullable<z91.ZodEnum<{
 		blank_row: "blank_row";
 		duplicate_in_file: "duplicate_in_file";
 		identity_conflict: "identity_conflict";
@@ -18634,34 +20433,34 @@ declare const prospectImportRowSchema: z85.ZodObject<{
 		owner_not_found: "owner_not_found";
 		wrong_column_count: "wrong_column_count";
 	}>>;
-	prospectId: z85.ZodNullable<z85.core.$ZodBranded<z85.ZodString, "prs", "out">>;
-}, z85.core.$strip>;
+	prospectId: z91.ZodNullable<z91.core.$ZodBranded<z91.ZodString, "prs", "out">>;
+}, z91.core.$strip>;
 /** One row of an import report. */
-type ProspectImportRow = z85.infer<typeof prospectImportRowSchema>;
+type ProspectImportRow = z91.infer<typeof prospectImportRowSchema>;
 /** The query parameters of a request to read an import's rows: a page and optionally one `result`. Rows are in CSV order. An unknown parameter is refused. */
-declare const listProspectImportRowsQuerySchema: z85.ZodObject<{
-	cursor: z85.ZodOptional<z85.ZodString>;
-	limit: z85.ZodDefault<z85.ZodPipe<z85.ZodPipe<z85.ZodUnion<readonly [z85.ZodNumber, z85.ZodString]>, z85.ZodTransform<number, string | number>>, z85.ZodNumber>>;
-	result: z85.ZodOptional<z85.ZodEnum<{
+declare const listProspectImportRowsQuerySchema: z91.ZodObject<{
+	cursor: z91.ZodOptional<z91.ZodString>;
+	limit: z91.ZodDefault<z91.ZodPipe<z91.ZodPipe<z91.ZodUnion<readonly [z91.ZodNumber, z91.ZodString]>, z91.ZodTransform<number, string | number>>, z91.ZodNumber>>;
+	result: z91.ZodOptional<z91.ZodEnum<{
 		created: "created";
 		rejected: "rejected";
 		skipped: "skipped";
 		updated: "updated";
 	}>>;
-}, z85.core.$strict>;
+}, z91.core.$strict>;
 /** The query parameters of a request to read an import's rows. */
-type ListProspectImportRowsQuery = z85.infer<typeof listProspectImportRowsQuerySchema>;
+type ListProspectImportRowsQuery = z91.infer<typeof listProspectImportRowsQuerySchema>;
 /** One page of an import report. */
-declare const listProspectImportRowsResponseSchema: z85.ZodObject<{
-	items: z85.ZodArray<z85.ZodObject<{
-		rowNumber: z85.ZodNumber;
-		result: z85.ZodEnum<{
+declare const listProspectImportRowsResponseSchema: z91.ZodObject<{
+	items: z91.ZodArray<z91.ZodObject<{
+		rowNumber: z91.ZodNumber;
+		result: z91.ZodEnum<{
 			created: "created";
 			rejected: "rejected";
 			skipped: "skipped";
 			updated: "updated";
 		}>;
-		reason: z85.ZodNullable<z85.ZodEnum<{
+		reason: z91.ZodNullable<z91.ZodEnum<{
 			blank_row: "blank_row";
 			duplicate_in_file: "duplicate_in_file";
 			identity_conflict: "identity_conflict";
@@ -18679,44 +20478,44 @@ declare const listProspectImportRowsResponseSchema: z85.ZodObject<{
 			owner_not_found: "owner_not_found";
 			wrong_column_count: "wrong_column_count";
 		}>>;
-		prospectId: z85.ZodNullable<z85.core.$ZodBranded<z85.ZodString, "prs", "out">>;
-	}, z85.core.$strip>>;
-	nextCursor: z85.ZodNullable<z85.ZodString>;
-}, z85.core.$strip>;
+		prospectId: z91.ZodNullable<z91.core.$ZodBranded<z91.ZodString, "prs", "out">>;
+	}, z91.core.$strip>>;
+	nextCursor: z91.ZodNullable<z91.ZodString>;
+}, z91.core.$strip>;
 /** One page of an import report. */
-type ListProspectImportRowsResponse = z85.infer<typeof listProspectImportRowsResponseSchema>;
+type ListProspectImportRowsResponse = z91.infer<typeof listProspectImportRowsResponseSchema>;
 /** The position in an import report: the record number of the last row of the page. */
-declare const prospectImportRowCursorSchema: z85.ZodObject<{
-	rowNumber: z85.ZodNumber;
-}, z85.core.$strict>;
+declare const prospectImportRowCursorSchema: z91.ZodObject<{
+	rowNumber: z91.ZodNumber;
+}, z91.core.$strict>;
 /** The position in an import report. */
-type ProspectImportRowCursor = z85.infer<typeof prospectImportRowCursorSchema>;
+type ProspectImportRowCursor = z91.infer<typeof prospectImportRowCursorSchema>;
 /** The columns of the downloadable report CSV, in order. */
 declare const PROSPECT_IMPORT_REPORT_COLUMNS: readonly ["row_number", "result", "reason", "prospect_id"];
 /** Why an upload is refused with `prospect.import_invalid`, carried in `details.reason`. */
 declare const PROSPECT_IMPORT_INVALID_REASONS: readonly ["unsupported_type", "too_large", "header_invalid", "too_many_rows"];
 /** The `details` of `prospect.import_invalid`: which check the upload failed. */
-declare const prospectImportInvalidDetailsSchema: z85.ZodObject<{
-	reason: z85.ZodEnum<{
+declare const prospectImportInvalidDetailsSchema: z91.ZodObject<{
+	reason: z91.ZodEnum<{
 		header_invalid: "header_invalid";
 		too_large: "too_large";
 		too_many_rows: "too_many_rows";
 		unsupported_type: "unsupported_type";
 	}>;
-}, z85.core.$strict>;
+}, z91.core.$strict>;
 /** The `details` of `prospect.import_invalid`. */
-type ProspectImportInvalidDetails = z85.infer<typeof prospectImportInvalidDetailsSchema>;
-import { z as z86 } from "zod";
+type ProspectImportInvalidDetails = z91.infer<typeof prospectImportInvalidDetailsSchema>;
+import { z as z92 } from "zod";
 /** How many days after a merge it can be undone (spec M2, story 13). */
 declare const PROSPECT_MERGE_UNDO_DAYS = 30;
 /** The most Prospects one merge folds into the survivor. */
 declare const MAX_MERGED_PROSPECTS = 5;
 /** The path parameters of a request about one merge. */
-declare const prospectMergeParamsSchema: z86.ZodObject<{
-	mergeId: z86.core.$ZodBranded<z86.ZodString, "pmrg", "out">;
-}, z86.core.$strict>;
+declare const prospectMergeParamsSchema: z92.ZodObject<{
+	mergeId: z92.core.$ZodBranded<z92.ZodString, "pmrg", "out">;
+}, z92.core.$strict>;
 /** The path parameters of a request about one merge. */
-type ProspectMergeParams = z86.infer<typeof prospectMergeParamsSchema>;
+type ProspectMergeParams = z92.infer<typeof prospectMergeParamsSchema>;
 /**
 * The body of a request to merge Prospects into the survivor named in the path (`prospectId`).
 * `fieldChoices` says, per field, which of the merging Prospects' value to keep, by Prospect id
@@ -18725,19 +20524,19 @@ type ProspectMergeParams = z86.infer<typeof prospectMergeParamsSchema>;
 * survivor's. Owner and Admin only. A Prospect that is not visible, or already merged, is
 * `prospect.merge_conflict` or `prospect.not_found`. Accepts an `Idempotency-Key` header.
 */
-declare const mergeProspectsRequestSchema: z86.ZodObject<{
-	mergedProspectIds: z86.ZodArray<z86.core.$ZodBranded<z86.ZodString, "prs", "out">>;
-	fieldChoices: z86.ZodDefault<z86.ZodRecord<z86.ZodEnum<{
+declare const mergeProspectsRequestSchema: z92.ZodObject<{
+	mergedProspectIds: z92.ZodArray<z92.core.$ZodBranded<z92.ZodString, "prs", "out">>;
+	fieldChoices: z92.ZodDefault<z92.ZodRecord<z92.ZodEnum<{
 		email: "email";
 		firstName: "firstName";
 		jobTitle: "jobTitle";
 		lastName: "lastName";
 		linkedinUrl: "linkedinUrl";
 		phone: "phone";
-	}> & z86.core.$partial, z86.core.$ZodBranded<z86.ZodString, "prs", "out">>>;
-}, z86.core.$strict>;
+	}> & z92.core.$partial, z92.core.$ZodBranded<z92.ZodString, "prs", "out">>>;
+}, z92.core.$strict>;
 /** The body of a request to merge Prospects. */
-type MergeProspectsRequest = z86.infer<typeof mergeProspectsRequestSchema>;
+type MergeProspectsRequest = z92.infer<typeof mergeProspectsRequestSchema>;
 /** The states of a merge: `merged`, or `undone` once reversed. */
 declare const PROSPECT_MERGE_STATES: readonly ["merged", "undone"];
 /**
@@ -18745,82 +20544,82 @@ declare const PROSPECT_MERGE_STATES: readonly ["merged", "undone"];
 * (thirty days after `createdAt`); later it is `prospect.merge_conflict`. `undoneAt` is set exactly
 * when the state is `undone`. The snapshot that restores both records stays in core and is not returned.
 */
-declare const prospectMergeSchema: z86.ZodObject<{
-	id: z86.core.$ZodBranded<z86.ZodString, "pmrg", "out">;
-	survivorProspectId: z86.core.$ZodBranded<z86.ZodString, "prs", "out">;
-	mergedProspectIds: z86.ZodArray<z86.core.$ZodBranded<z86.ZodString, "prs", "out">>;
-	fieldChoices: z86.ZodRecord<z86.ZodEnum<{
+declare const prospectMergeSchema: z92.ZodObject<{
+	id: z92.core.$ZodBranded<z92.ZodString, "pmrg", "out">;
+	survivorProspectId: z92.core.$ZodBranded<z92.ZodString, "prs", "out">;
+	mergedProspectIds: z92.ZodArray<z92.core.$ZodBranded<z92.ZodString, "prs", "out">>;
+	fieldChoices: z92.ZodRecord<z92.ZodEnum<{
 		email: "email";
 		firstName: "firstName";
 		jobTitle: "jobTitle";
 		lastName: "lastName";
 		linkedinUrl: "linkedinUrl";
 		phone: "phone";
-	}> & z86.core.$partial, z86.core.$ZodBranded<z86.ZodString, "prs", "out">>;
-	state: z86.ZodEnum<{
+	}> & z92.core.$partial, z92.core.$ZodBranded<z92.ZodString, "prs", "out">>;
+	state: z92.ZodEnum<{
 		merged: "merged";
 		undone: "undone";
 	}>;
-	mergedByUserId: z86.core.$ZodBranded<z86.ZodString, "usr", "out">;
-	createdAt: z86.ZodISODateTime;
-	undoableUntil: z86.ZodISODateTime;
-	undoneAt: z86.ZodNullable<z86.ZodISODateTime>;
-}, z86.core.$strip>;
+	mergedByUserId: z92.core.$ZodBranded<z92.ZodString, "usr", "out">;
+	createdAt: z92.ZodISODateTime;
+	undoableUntil: z92.ZodISODateTime;
+	undoneAt: z92.ZodNullable<z92.ZodISODateTime>;
+}, z92.core.$strip>;
 /** A merge record. */
-type ProspectMerge = z86.infer<typeof prospectMergeSchema>;
+type ProspectMerge = z92.infer<typeof prospectMergeSchema>;
 /**
 * The query parameters of a request to list suspected duplicates: a page and optionally the
 * `prospectId` whose duplicates to list. Matching runs on the indexed normalised identities.
 */
-declare const listProspectDuplicatesQuerySchema: z86.ZodObject<{
-	cursor: z86.ZodOptional<z86.ZodString>;
-	limit: z86.ZodDefault<z86.ZodPipe<z86.ZodPipe<z86.ZodUnion<readonly [z86.ZodNumber, z86.ZodString]>, z86.ZodTransform<number, string | number>>, z86.ZodNumber>>;
-	prospectId: z86.ZodOptional<z86.core.$ZodBranded<z86.ZodString, "prs", "out">>;
-}, z86.core.$strict>;
+declare const listProspectDuplicatesQuerySchema: z92.ZodObject<{
+	cursor: z92.ZodOptional<z92.ZodString>;
+	limit: z92.ZodDefault<z92.ZodPipe<z92.ZodPipe<z92.ZodUnion<readonly [z92.ZodNumber, z92.ZodString]>, z92.ZodTransform<number, string | number>>, z92.ZodNumber>>;
+	prospectId: z92.ZodOptional<z92.core.$ZodBranded<z92.ZodString, "prs", "out">>;
+}, z92.core.$strict>;
 /** The query parameters of a request to list suspected duplicates. */
-type ListProspectDuplicatesQuery = z86.infer<typeof listProspectDuplicatesQuerySchema>;
+type ListProspectDuplicatesQuery = z92.infer<typeof listProspectDuplicatesQuerySchema>;
 /** One suspected duplicate: two Prospects (in id order) and the identity kinds they share. */
-declare const prospectDuplicateSchema: z86.ZodObject<{
-	prospectIds: z86.ZodTuple<[z86.core.$ZodBranded<z86.ZodString, "prs", "out">, z86.core.$ZodBranded<z86.ZodString, "prs", "out">], null>;
-	matchedOn: z86.ZodArray<z86.ZodEnum<{
+declare const prospectDuplicateSchema: z92.ZodObject<{
+	prospectIds: z92.ZodTuple<[z92.core.$ZodBranded<z92.ZodString, "prs", "out">, z92.core.$ZodBranded<z92.ZodString, "prs", "out">], null>;
+	matchedOn: z92.ZodArray<z92.ZodEnum<{
 		email: "email";
 		linkedin: "linkedin";
 		phone: "phone";
 	}>>;
-}, z86.core.$strip>;
+}, z92.core.$strip>;
 /** One suspected duplicate. */
-type ProspectDuplicate = z86.infer<typeof prospectDuplicateSchema>;
+type ProspectDuplicate = z92.infer<typeof prospectDuplicateSchema>;
 /** One page of suspected duplicates. */
-declare const listProspectDuplicatesResponseSchema: z86.ZodObject<{
-	items: z86.ZodArray<z86.ZodObject<{
-		prospectIds: z86.ZodTuple<[z86.core.$ZodBranded<z86.ZodString, "prs", "out">, z86.core.$ZodBranded<z86.ZodString, "prs", "out">], null>;
-		matchedOn: z86.ZodArray<z86.ZodEnum<{
+declare const listProspectDuplicatesResponseSchema: z92.ZodObject<{
+	items: z92.ZodArray<z92.ZodObject<{
+		prospectIds: z92.ZodTuple<[z92.core.$ZodBranded<z92.ZodString, "prs", "out">, z92.core.$ZodBranded<z92.ZodString, "prs", "out">], null>;
+		matchedOn: z92.ZodArray<z92.ZodEnum<{
 			email: "email";
 			linkedin: "linkedin";
 			phone: "phone";
 		}>>;
-	}, z86.core.$strip>>;
-	nextCursor: z86.ZodNullable<z86.ZodString>;
-}, z86.core.$strip>;
+	}, z92.core.$strip>>;
+	nextCursor: z92.ZodNullable<z92.ZodString>;
+}, z92.core.$strip>;
 /** One page of suspected duplicates. */
-type ListProspectDuplicatesResponse = z86.infer<typeof listProspectDuplicatesResponseSchema>;
+type ListProspectDuplicatesResponse = z92.infer<typeof listProspectDuplicatesResponseSchema>;
 /** The position in the suspected-duplicate list. */
-declare const prospectDuplicateCursorSchema: z86.ZodObject<{
-	first: z86.core.$ZodBranded<z86.ZodString, "prs", "out">;
-	second: z86.core.$ZodBranded<z86.ZodString, "prs", "out">;
-}, z86.core.$strict>;
+declare const prospectDuplicateCursorSchema: z92.ZodObject<{
+	first: z92.core.$ZodBranded<z92.ZodString, "prs", "out">;
+	second: z92.core.$ZodBranded<z92.ZodString, "prs", "out">;
+}, z92.core.$strict>;
 /** The position in the suspected-duplicate list. */
-type ProspectDuplicateCursor = z86.infer<typeof prospectDuplicateCursorSchema>;
-import { z as z87 } from "zod";
+type ProspectDuplicateCursor = z92.infer<typeof prospectDuplicateCursorSchema>;
+import { z as z93 } from "zod";
 /** The states of a Prospect: `active`, or `archived` to hide it from the default list without erasing it. */
 declare const PROSPECT_STATUSES: readonly ["active", "archived"];
 /** The state of a Prospect. */
-declare const prospectStatusSchema: z87.ZodEnum<{
+declare const prospectStatusSchema: z93.ZodEnum<{
 	active: "active";
 	archived: "archived";
 }>;
 /** The state of a Prospect. */
-type ProspectStatus = z87.infer<typeof prospectStatusSchema>;
+type ProspectStatus = z93.infer<typeof prospectStatusSchema>;
 /**
 * A Prospect as core returns it. `fields` holds the current value of each field that has one, with
 * its Source, time and actor (ADR 0020); a field with no value is absent. `email`, `phone` and
@@ -18828,54 +20627,54 @@ type ProspectStatus = z87.infer<typeof prospectStatusSchema>;
 * normalised LinkedIn address). `source` is the Source kind that created the Prospect.
 * `ownerMembershipId` is the owner Rep's Membership, `null` while unassigned.
 */
-declare const prospectSchema: z87.ZodObject<{
-	id: z87.core.$ZodBranded<z87.ZodString, "prs", "out">;
-	companyId: z87.ZodNullable<z87.core.$ZodBranded<z87.ZodString, "pco", "out">>;
-	ownerMembershipId: z87.ZodNullable<z87.core.$ZodBranded<z87.ZodString, "mem", "out">>;
-	status: z87.ZodEnum<{
+declare const prospectSchema: z93.ZodObject<{
+	id: z93.core.$ZodBranded<z93.ZodString, "prs", "out">;
+	companyId: z93.ZodNullable<z93.core.$ZodBranded<z93.ZodString, "pco", "out">>;
+	ownerMembershipId: z93.ZodNullable<z93.core.$ZodBranded<z93.ZodString, "mem", "out">>;
+	status: z93.ZodEnum<{
 		active: "active";
 		archived: "archived";
 	}>;
-	source: z87.ZodUnion<readonly [z87.ZodEnum<{
+	source: z93.ZodUnion<readonly [z93.ZodEnum<{
 		"crm:hubspot": "crm:hubspot";
 		"crm:salesforce": "crm:salesforce";
 		form: "form";
 		import: "import";
 		manual: "manual";
-	}>, z87.ZodString]>;
-	tags: z87.ZodArray<z87.ZodPipe<z87.ZodString, z87.ZodString>>;
-	notes: z87.ZodNullable<z87.ZodString>;
-	fields: z87.ZodRecord<z87.ZodEnum<{
+	}>, z93.ZodString]>;
+	tags: z93.ZodArray<z93.ZodPipe<z93.ZodString, z93.ZodString>>;
+	notes: z93.ZodNullable<z93.ZodString>;
+	fields: z93.ZodRecord<z93.ZodEnum<{
 		email: "email";
 		firstName: "firstName";
 		jobTitle: "jobTitle";
 		lastName: "lastName";
 		linkedinUrl: "linkedinUrl";
 		phone: "phone";
-	}> & z87.core.$partial, z87.ZodObject<{
-		value: z87.ZodString;
-		source: z87.ZodUnion<readonly [z87.ZodEnum<{
+	}> & z93.core.$partial, z93.ZodObject<{
+		value: z93.ZodString;
+		source: z93.ZodUnion<readonly [z93.ZodEnum<{
 			"crm:hubspot": "crm:hubspot";
 			"crm:salesforce": "crm:salesforce";
 			form: "form";
 			import: "import";
 			manual: "manual";
-		}>, z87.ZodString]>;
-		sourceRef: z87.ZodNullable<z87.ZodString>;
-		setAt: z87.ZodISODateTime;
-		setByUserId: z87.ZodNullable<z87.core.$ZodBranded<z87.ZodString, "usr", "out">>;
-	}, z87.core.$strip>>;
-	createdAt: z87.ZodISODateTime;
-	updatedAt: z87.ZodISODateTime;
-}, z87.core.$strip>;
+		}>, z93.ZodString]>;
+		sourceRef: z93.ZodNullable<z93.ZodString>;
+		setAt: z93.ZodISODateTime;
+		setByUserId: z93.ZodNullable<z93.core.$ZodBranded<z93.ZodString, "usr", "out">>;
+	}, z93.core.$strip>>;
+	createdAt: z93.ZodISODateTime;
+	updatedAt: z93.ZodISODateTime;
+}, z93.core.$strip>;
 /** A Prospect as core returns it. */
-type Prospect = z87.infer<typeof prospectSchema>;
+type Prospect = z93.infer<typeof prospectSchema>;
 /** The path parameters of a request about one Prospect. */
-declare const prospectParamsSchema: z87.ZodObject<{
-	prospectId: z87.core.$ZodBranded<z87.ZodString, "prs", "out">;
-}, z87.core.$strict>;
+declare const prospectParamsSchema: z93.ZodObject<{
+	prospectId: z93.core.$ZodBranded<z93.ZodString, "prs", "out">;
+}, z93.core.$strict>;
 /** The path parameters of a request about one Prospect. */
-type ProspectParams = z87.infer<typeof prospectParamsSchema>;
+type ProspectParams = z93.infer<typeof prospectParamsSchema>;
 /**
 * The body of a request to create a Prospect by hand. It must carry at least one of a name, an
 * email, a phone or a LinkedIn address. The Source is `manual` and the actor the caller, both set
@@ -18885,45 +20684,45 @@ type ProspectParams = z87.infer<typeof prospectParamsSchema>;
 * Organization already has is `prospect.duplicate_identity`. The call accepts an `Idempotency-Key`
 * header (`idempotencyKeySchema`): a replay returns the original Prospect.
 */
-declare const createProspectRequestSchema: z87.ZodObject<{
-	firstName: z87.ZodOptional<z87.ZodPipe<z87.ZodString, z87.ZodString>>;
-	lastName: z87.ZodOptional<z87.ZodPipe<z87.ZodString, z87.ZodString>>;
-	jobTitle: z87.ZodOptional<z87.ZodPipe<z87.ZodString, z87.ZodString>>;
-	email: z87.ZodOptional<z87.ZodPipe<z87.ZodPipe<z87.ZodString, z87.ZodTransform<string, string>>, z87.ZodString>>;
-	phone: z87.ZodOptional<z87.ZodPipe<z87.ZodString, z87.ZodString>>;
-	linkedinUrl: z87.ZodOptional<z87.ZodPipe<z87.ZodString, z87.ZodString>>;
-	companyId: z87.ZodOptional<z87.core.$ZodBranded<z87.ZodString, "pco", "out">>;
-	ownerMembershipId: z87.ZodOptional<z87.core.$ZodBranded<z87.ZodString, "mem", "out">>;
-	tags: z87.ZodOptional<z87.ZodArray<z87.ZodPipe<z87.ZodString, z87.ZodString>>>;
-	notes: z87.ZodOptional<z87.ZodPipe<z87.ZodString, z87.ZodString>>;
-}, z87.core.$strict>;
+declare const createProspectRequestSchema: z93.ZodObject<{
+	firstName: z93.ZodOptional<z93.ZodPipe<z93.ZodString, z93.ZodString>>;
+	lastName: z93.ZodOptional<z93.ZodPipe<z93.ZodString, z93.ZodString>>;
+	jobTitle: z93.ZodOptional<z93.ZodPipe<z93.ZodString, z93.ZodString>>;
+	email: z93.ZodOptional<z93.ZodPipe<z93.ZodPipe<z93.ZodString, z93.ZodTransform<string, string>>, z93.ZodString>>;
+	phone: z93.ZodOptional<z93.ZodPipe<z93.ZodString, z93.ZodString>>;
+	linkedinUrl: z93.ZodOptional<z93.ZodPipe<z93.ZodString, z93.ZodString>>;
+	companyId: z93.ZodOptional<z93.core.$ZodBranded<z93.ZodString, "pco", "out">>;
+	ownerMembershipId: z93.ZodOptional<z93.core.$ZodBranded<z93.ZodString, "mem", "out">>;
+	tags: z93.ZodOptional<z93.ZodArray<z93.ZodPipe<z93.ZodString, z93.ZodString>>>;
+	notes: z93.ZodOptional<z93.ZodPipe<z93.ZodString, z93.ZodString>>;
+}, z93.core.$strict>;
 /** The body of a request to create a Prospect. */
-type CreateProspectRequest = z87.infer<typeof createProspectRequestSchema>;
+type CreateProspectRequest = z93.infer<typeof createProspectRequestSchema>;
 /**
 * The body of a request to edit a Prospect. Only the fields sent change; each is written with the
 * Source `manual`, which beats every other Source (ADR 0020). A `null` clears a field or the
 * Prospect Company, the explicit Rep or Admin action that is the only way to remove a manual
 * value. At least one field is required. Ownership is changed by the owner routes, not here.
 */
-declare const updateProspectRequestSchema: z87.ZodObject<{
-	firstName: z87.ZodOptional<z87.ZodNullable<z87.ZodPipe<z87.ZodString, z87.ZodString>>>;
-	lastName: z87.ZodOptional<z87.ZodNullable<z87.ZodPipe<z87.ZodString, z87.ZodString>>>;
-	jobTitle: z87.ZodOptional<z87.ZodNullable<z87.ZodPipe<z87.ZodString, z87.ZodString>>>;
-	email: z87.ZodOptional<z87.ZodNullable<z87.ZodPipe<z87.ZodPipe<z87.ZodString, z87.ZodTransform<string, string>>, z87.ZodString>>>;
-	phone: z87.ZodOptional<z87.ZodNullable<z87.ZodPipe<z87.ZodString, z87.ZodString>>>;
-	linkedinUrl: z87.ZodOptional<z87.ZodNullable<z87.ZodPipe<z87.ZodString, z87.ZodString>>>;
-	companyId: z87.ZodOptional<z87.ZodNullable<z87.core.$ZodBranded<z87.ZodString, "pco", "out">>>;
-	status: z87.ZodOptional<z87.ZodEnum<{
+declare const updateProspectRequestSchema: z93.ZodObject<{
+	firstName: z93.ZodOptional<z93.ZodNullable<z93.ZodPipe<z93.ZodString, z93.ZodString>>>;
+	lastName: z93.ZodOptional<z93.ZodNullable<z93.ZodPipe<z93.ZodString, z93.ZodString>>>;
+	jobTitle: z93.ZodOptional<z93.ZodNullable<z93.ZodPipe<z93.ZodString, z93.ZodString>>>;
+	email: z93.ZodOptional<z93.ZodNullable<z93.ZodPipe<z93.ZodPipe<z93.ZodString, z93.ZodTransform<string, string>>, z93.ZodString>>>;
+	phone: z93.ZodOptional<z93.ZodNullable<z93.ZodPipe<z93.ZodString, z93.ZodString>>>;
+	linkedinUrl: z93.ZodOptional<z93.ZodNullable<z93.ZodPipe<z93.ZodString, z93.ZodString>>>;
+	companyId: z93.ZodOptional<z93.ZodNullable<z93.core.$ZodBranded<z93.ZodString, "pco", "out">>>;
+	status: z93.ZodOptional<z93.ZodEnum<{
 		active: "active";
 		archived: "archived";
 	}>>;
-	tags: z87.ZodOptional<z87.ZodArray<z87.ZodPipe<z87.ZodString, z87.ZodString>>>;
-	notes: z87.ZodOptional<z87.ZodNullable<z87.ZodPipe<z87.ZodString, z87.ZodString>>>;
-}, z87.core.$strict>;
+	tags: z93.ZodOptional<z93.ZodArray<z93.ZodPipe<z93.ZodString, z93.ZodString>>>;
+	notes: z93.ZodOptional<z93.ZodNullable<z93.ZodPipe<z93.ZodString, z93.ZodString>>>;
+}, z93.core.$strict>;
 /** The body of a request to edit a Prospect. */
-type UpdateProspectRequest = z87.infer<typeof updateProspectRequestSchema>;
+type UpdateProspectRequest = z93.infer<typeof updateProspectRequestSchema>;
 /** The search text of a list request: trimmed, 1 to 100 characters, matched against name, email and company. */
-declare const prospectSearchSchema: z87.ZodPipe<z87.ZodString, z87.ZodString>;
+declare const prospectSearchSchema: z93.ZodPipe<z93.ZodString, z93.ZodString>;
 /**
 * The query parameters of a request to list Prospects: a cursor and a limit of at most 100, and
 * optionally `ownerMembershipId`, `source` (the Source kind that created it), `companyId`,
@@ -18931,83 +20730,83 @@ declare const prospectSearchSchema: z87.ZodPipe<z87.ZodString, z87.ZodString>;
 * token's role and Team membership (a Rep sees what they own, a Manager what their Team's Reps
 * own, Owner and Admin all); a filter can narrow that, never widen it.
 */
-declare const listProspectsQuerySchema: z87.ZodObject<{
-	cursor: z87.ZodOptional<z87.ZodString>;
-	limit: z87.ZodDefault<z87.ZodPipe<z87.ZodPipe<z87.ZodUnion<readonly [z87.ZodNumber, z87.ZodString]>, z87.ZodTransform<number, string | number>>, z87.ZodNumber>>;
-	ownerMembershipId: z87.ZodOptional<z87.core.$ZodBranded<z87.ZodString, "mem", "out">>;
-	source: z87.ZodOptional<z87.ZodUnion<readonly [z87.ZodEnum<{
+declare const listProspectsQuerySchema: z93.ZodObject<{
+	cursor: z93.ZodOptional<z93.ZodString>;
+	limit: z93.ZodDefault<z93.ZodPipe<z93.ZodPipe<z93.ZodUnion<readonly [z93.ZodNumber, z93.ZodString]>, z93.ZodTransform<number, string | number>>, z93.ZodNumber>>;
+	ownerMembershipId: z93.ZodOptional<z93.core.$ZodBranded<z93.ZodString, "mem", "out">>;
+	source: z93.ZodOptional<z93.ZodUnion<readonly [z93.ZodEnum<{
 		"crm:hubspot": "crm:hubspot";
 		"crm:salesforce": "crm:salesforce";
 		form: "form";
 		import: "import";
 		manual: "manual";
-	}>, z87.ZodString]>>;
-	companyId: z87.ZodOptional<z87.core.$ZodBranded<z87.ZodString, "pco", "out">>;
-	status: z87.ZodOptional<z87.ZodEnum<{
+	}>, z93.ZodString]>>;
+	companyId: z93.ZodOptional<z93.core.$ZodBranded<z93.ZodString, "pco", "out">>;
+	status: z93.ZodOptional<z93.ZodEnum<{
 		active: "active";
 		archived: "archived";
 	}>>;
-	q: z87.ZodOptional<z87.ZodPipe<z87.ZodString, z87.ZodString>>;
-}, z87.core.$strict>;
+	q: z93.ZodOptional<z93.ZodPipe<z93.ZodString, z93.ZodString>>;
+}, z93.core.$strict>;
 /** The query parameters of a request to list Prospects. */
-type ListProspectsQuery = z87.infer<typeof listProspectsQuerySchema>;
+type ListProspectsQuery = z93.infer<typeof listProspectsQuerySchema>;
 /** One page of Prospects, newest first (by `createdAt`, then id, both descending). */
-declare const listProspectsResponseSchema: z87.ZodObject<{
-	items: z87.ZodArray<z87.ZodObject<{
-		id: z87.core.$ZodBranded<z87.ZodString, "prs", "out">;
-		companyId: z87.ZodNullable<z87.core.$ZodBranded<z87.ZodString, "pco", "out">>;
-		ownerMembershipId: z87.ZodNullable<z87.core.$ZodBranded<z87.ZodString, "mem", "out">>;
-		status: z87.ZodEnum<{
+declare const listProspectsResponseSchema: z93.ZodObject<{
+	items: z93.ZodArray<z93.ZodObject<{
+		id: z93.core.$ZodBranded<z93.ZodString, "prs", "out">;
+		companyId: z93.ZodNullable<z93.core.$ZodBranded<z93.ZodString, "pco", "out">>;
+		ownerMembershipId: z93.ZodNullable<z93.core.$ZodBranded<z93.ZodString, "mem", "out">>;
+		status: z93.ZodEnum<{
 			active: "active";
 			archived: "archived";
 		}>;
-		source: z87.ZodUnion<readonly [z87.ZodEnum<{
+		source: z93.ZodUnion<readonly [z93.ZodEnum<{
 			"crm:hubspot": "crm:hubspot";
 			"crm:salesforce": "crm:salesforce";
 			form: "form";
 			import: "import";
 			manual: "manual";
-		}>, z87.ZodString]>;
-		tags: z87.ZodArray<z87.ZodPipe<z87.ZodString, z87.ZodString>>;
-		notes: z87.ZodNullable<z87.ZodString>;
-		fields: z87.ZodRecord<z87.ZodEnum<{
+		}>, z93.ZodString]>;
+		tags: z93.ZodArray<z93.ZodPipe<z93.ZodString, z93.ZodString>>;
+		notes: z93.ZodNullable<z93.ZodString>;
+		fields: z93.ZodRecord<z93.ZodEnum<{
 			email: "email";
 			firstName: "firstName";
 			jobTitle: "jobTitle";
 			lastName: "lastName";
 			linkedinUrl: "linkedinUrl";
 			phone: "phone";
-		}> & z87.core.$partial, z87.ZodObject<{
-			value: z87.ZodString;
-			source: z87.ZodUnion<readonly [z87.ZodEnum<{
+		}> & z93.core.$partial, z93.ZodObject<{
+			value: z93.ZodString;
+			source: z93.ZodUnion<readonly [z93.ZodEnum<{
 				"crm:hubspot": "crm:hubspot";
 				"crm:salesforce": "crm:salesforce";
 				form: "form";
 				import: "import";
 				manual: "manual";
-			}>, z87.ZodString]>;
-			sourceRef: z87.ZodNullable<z87.ZodString>;
-			setAt: z87.ZodISODateTime;
-			setByUserId: z87.ZodNullable<z87.core.$ZodBranded<z87.ZodString, "usr", "out">>;
-		}, z87.core.$strip>>;
-		createdAt: z87.ZodISODateTime;
-		updatedAt: z87.ZodISODateTime;
-	}, z87.core.$strip>>;
-	nextCursor: z87.ZodNullable<z87.ZodString>;
-}, z87.core.$strip>;
+			}>, z93.ZodString]>;
+			sourceRef: z93.ZodNullable<z93.ZodString>;
+			setAt: z93.ZodISODateTime;
+			setByUserId: z93.ZodNullable<z93.core.$ZodBranded<z93.ZodString, "usr", "out">>;
+		}, z93.core.$strip>>;
+		createdAt: z93.ZodISODateTime;
+		updatedAt: z93.ZodISODateTime;
+	}, z93.core.$strip>>;
+	nextCursor: z93.ZodNullable<z93.ZodString>;
+}, z93.core.$strip>;
 /** One page of Prospects. */
-type ListProspectsResponse = z87.infer<typeof listProspectsResponseSchema>;
+type ListProspectsResponse = z93.infer<typeof listProspectsResponseSchema>;
 /** The position in a Prospect list: where the last item of the page was. */
-declare const prospectCursorSchema: z87.ZodObject<{
-	createdAt: z87.ZodISODateTime;
-	id: z87.core.$ZodBranded<z87.ZodString, "prs", "out">;
-}, z87.core.$strict>;
+declare const prospectCursorSchema: z93.ZodObject<{
+	createdAt: z93.ZodISODateTime;
+	id: z93.core.$ZodBranded<z93.ZodString, "prs", "out">;
+}, z93.core.$strict>;
 /** The position in a Prospect list. */
-type ProspectCursor = z87.infer<typeof prospectCursorSchema>;
+type ProspectCursor = z93.infer<typeof prospectCursorSchema>;
 /** The path parameters of a request for the history of one Prospect field. */
-declare const prospectFieldParamsSchema: z87.ZodObject<{
-	prospectId: z87.core.$ZodBranded<z87.ZodString, "prs", "out">;
-	field: z87.ZodEnum<{
+declare const prospectFieldParamsSchema: z93.ZodObject<{
+	prospectId: z93.core.$ZodBranded<z93.ZodString, "prs", "out">;
+	field: z93.ZodEnum<{
 		email: "email";
 		firstName: "firstName";
 		jobTitle: "jobTitle";
@@ -19015,56 +20814,56 @@ declare const prospectFieldParamsSchema: z87.ZodObject<{
 		linkedinUrl: "linkedinUrl";
 		phone: "phone";
 	}>;
-}, z87.core.$strict>;
+}, z93.core.$strict>;
 /** The path parameters of a request for the history of one Prospect field. */
-type ProspectFieldParams = z87.infer<typeof prospectFieldParamsSchema>;
+type ProspectFieldParams = z93.infer<typeof prospectFieldParamsSchema>;
 /** The query parameters of a request for a field's history: a page. */
-declare const listFieldHistoryQuerySchema: z87.ZodObject<{
-	cursor: z87.ZodOptional<z87.ZodString>;
-	limit: z87.ZodDefault<z87.ZodPipe<z87.ZodPipe<z87.ZodUnion<readonly [z87.ZodNumber, z87.ZodString]>, z87.ZodTransform<number, string | number>>, z87.ZodNumber>>;
-}, z87.core.$strict>;
+declare const listFieldHistoryQuerySchema: z93.ZodObject<{
+	cursor: z93.ZodOptional<z93.ZodString>;
+	limit: z93.ZodDefault<z93.ZodPipe<z93.ZodPipe<z93.ZodUnion<readonly [z93.ZodNumber, z93.ZodString]>, z93.ZodTransform<number, string | number>>, z93.ZodNumber>>;
+}, z93.core.$strict>;
 /** The query parameters of a request for a field's history. */
-type ListFieldHistoryQuery = z87.infer<typeof listFieldHistoryQuerySchema>;
+type ListFieldHistoryQuery = z93.infer<typeof listFieldHistoryQuerySchema>;
 /** One page of a field's history, newest first; the current value, earlier values and enrichment suggestions all appear, each with its Source. */
-declare const listFieldHistoryResponseSchema: z87.ZodObject<{
-	items: z87.ZodArray<z87.ZodObject<{
-		value: z87.ZodString;
-		source: z87.ZodUnion<readonly [z87.ZodEnum<{
+declare const listFieldHistoryResponseSchema: z93.ZodObject<{
+	items: z93.ZodArray<z93.ZodObject<{
+		value: z93.ZodString;
+		source: z93.ZodUnion<readonly [z93.ZodEnum<{
 			"crm:hubspot": "crm:hubspot";
 			"crm:salesforce": "crm:salesforce";
 			form: "form";
 			import: "import";
 			manual: "manual";
-		}>, z87.ZodString]>;
-		sourceRef: z87.ZodNullable<z87.ZodString>;
-		setAt: z87.ZodISODateTime;
-		setByUserId: z87.ZodNullable<z87.core.$ZodBranded<z87.ZodString, "usr", "out">>;
-		state: z87.ZodEnum<{
+		}>, z93.ZodString]>;
+		sourceRef: z93.ZodNullable<z93.ZodString>;
+		setAt: z93.ZodISODateTime;
+		setByUserId: z93.ZodNullable<z93.core.$ZodBranded<z93.ZodString, "usr", "out">>;
+		state: z93.ZodEnum<{
 			current: "current";
 			suggested: "suggested";
 			superseded: "superseded";
 		}>;
-	}, z87.core.$strip>>;
-	nextCursor: z87.ZodNullable<z87.ZodString>;
-}, z87.core.$strip>;
+	}, z93.core.$strip>>;
+	nextCursor: z93.ZodNullable<z93.ZodString>;
+}, z93.core.$strip>;
 /** One page of a field's history. */
-type ListFieldHistoryResponse = z87.infer<typeof listFieldHistoryResponseSchema>;
+type ListFieldHistoryResponse = z93.infer<typeof listFieldHistoryResponseSchema>;
 /** The position in a field's history. */
-declare const fieldHistoryCursorSchema: z87.ZodObject<{
-	setAt: z87.ZodISODateTime;
-	seq: z87.ZodNumber;
-}, z87.core.$strict>;
+declare const fieldHistoryCursorSchema: z93.ZodObject<{
+	setAt: z93.ZodISODateTime;
+	seq: z93.ZodNumber;
+}, z93.core.$strict>;
 /** The position in a field's history. */
-type FieldHistoryCursor = z87.infer<typeof fieldHistoryCursorSchema>;
+type FieldHistoryCursor = z93.infer<typeof fieldHistoryCursorSchema>;
 /**
 * The body of a request to change a Prospect's owner Rep. The new owner must be a Rep or Manager
 * of the same Organization, else `prospect.forbidden_owner`. Owner and Admin only.
 */
-declare const setProspectOwnerRequestSchema: z87.ZodObject<{
-	ownerMembershipId: z87.core.$ZodBranded<z87.ZodString, "mem", "out">;
-}, z87.core.$strict>;
+declare const setProspectOwnerRequestSchema: z93.ZodObject<{
+	ownerMembershipId: z93.core.$ZodBranded<z93.ZodString, "mem", "out">;
+}, z93.core.$strict>;
 /** The body of a request to change a Prospect's owner. */
-type SetProspectOwnerRequest = z87.infer<typeof setProspectOwnerRequestSchema>;
+type SetProspectOwnerRequest = z93.infer<typeof setProspectOwnerRequestSchema>;
 /** The most Prospects one bulk assignment may name. */
 declare const MAX_BULK_ASSIGN_PROSPECTS = 5e3;
 /** Up to this many Prospects of a bulk assignment are applied before the call answers; more are queued and answered 202. */
@@ -19075,157 +20874,157 @@ declare const BULK_ASSIGN_SYNC_LIMIT = 500;
 * visible is not named in the answer, only counted as `skipped`. Accepts an `Idempotency-Key`
 * header: a retry changes nothing twice.
 */
-declare const bulkAssignProspectsRequestSchema: z87.ZodObject<{
-	prospectIds: z87.ZodArray<z87.core.$ZodBranded<z87.ZodString, "prs", "out">>;
-	ownerMembershipId: z87.core.$ZodBranded<z87.ZodString, "mem", "out">;
-}, z87.core.$strict>;
+declare const bulkAssignProspectsRequestSchema: z93.ZodObject<{
+	prospectIds: z93.ZodArray<z93.core.$ZodBranded<z93.ZodString, "prs", "out">>;
+	ownerMembershipId: z93.core.$ZodBranded<z93.ZodString, "mem", "out">;
+}, z93.core.$strict>;
 /** The body of a request to assign many Prospects. */
-type BulkAssignProspectsRequest = z87.infer<typeof bulkAssignProspectsRequestSchema>;
+type BulkAssignProspectsRequest = z93.infer<typeof bulkAssignProspectsRequestSchema>;
 /** The answer to a bulk assignment: `applied` counts when it ran at once, `queued` when it was handed to a job (then the counts are `null`). */
-declare const bulkAssignProspectsResponseSchema: z87.ZodObject<{
-	state: z87.ZodEnum<{
+declare const bulkAssignProspectsResponseSchema: z93.ZodObject<{
+	state: z93.ZodEnum<{
 		applied: "applied";
 		queued: "queued";
 	}>;
-	requested: z87.ZodNumber;
-	assigned: z87.ZodNullable<z87.ZodNumber>;
-	skipped: z87.ZodNullable<z87.ZodNumber>;
-}, z87.core.$strip>;
+	requested: z93.ZodNumber;
+	assigned: z93.ZodNullable<z93.ZodNumber>;
+	skipped: z93.ZodNullable<z93.ZodNumber>;
+}, z93.core.$strip>;
 /** The answer to a bulk assignment. */
-type BulkAssignProspectsResponse = z87.infer<typeof bulkAssignProspectsResponseSchema>;
+type BulkAssignProspectsResponse = z93.infer<typeof bulkAssignProspectsResponseSchema>;
 /** The answer to an erasure request: it is a queued job, so the Prospect is gone once `prospect.erased` is published. Carries no personal data. */
-declare const eraseProspectResponseSchema: z87.ZodObject<{
-	prospectId: z87.core.$ZodBranded<z87.ZodString, "prs", "out">;
-	state: z87.ZodLiteral<"queued">;
-}, z87.core.$strip>;
+declare const eraseProspectResponseSchema: z93.ZodObject<{
+	prospectId: z93.core.$ZodBranded<z93.ZodString, "prs", "out">;
+	state: z93.ZodLiteral<"queued">;
+}, z93.core.$strip>;
 /** The answer to an erasure request. */
-type EraseProspectResponse = z87.infer<typeof eraseProspectResponseSchema>;
+type EraseProspectResponse = z93.infer<typeof eraseProspectResponseSchema>;
 /**
 * A Prospect Company as core returns it: the name and domain with their Source, time and actor.
 * `domain` is the normalised domain (ASCII-folded host). `name` is always present.
 */
-declare const prospectCompanySchema: z87.ZodObject<{
-	id: z87.core.$ZodBranded<z87.ZodString, "pco", "out">;
-	fields: z87.ZodObject<{
-		name: z87.ZodObject<{
-			value: z87.ZodString;
-			source: z87.ZodUnion<readonly [z87.ZodEnum<{
+declare const prospectCompanySchema: z93.ZodObject<{
+	id: z93.core.$ZodBranded<z93.ZodString, "pco", "out">;
+	fields: z93.ZodObject<{
+		name: z93.ZodObject<{
+			value: z93.ZodString;
+			source: z93.ZodUnion<readonly [z93.ZodEnum<{
 				"crm:hubspot": "crm:hubspot";
 				"crm:salesforce": "crm:salesforce";
 				form: "form";
 				import: "import";
 				manual: "manual";
-			}>, z87.ZodString]>;
-			sourceRef: z87.ZodNullable<z87.ZodString>;
-			setAt: z87.ZodISODateTime;
-			setByUserId: z87.ZodNullable<z87.core.$ZodBranded<z87.ZodString, "usr", "out">>;
-		}, z87.core.$strip>;
-		domain: z87.ZodOptional<z87.ZodObject<{
-			value: z87.ZodString;
-			source: z87.ZodUnion<readonly [z87.ZodEnum<{
+			}>, z93.ZodString]>;
+			sourceRef: z93.ZodNullable<z93.ZodString>;
+			setAt: z93.ZodISODateTime;
+			setByUserId: z93.ZodNullable<z93.core.$ZodBranded<z93.ZodString, "usr", "out">>;
+		}, z93.core.$strip>;
+		domain: z93.ZodOptional<z93.ZodObject<{
+			value: z93.ZodString;
+			source: z93.ZodUnion<readonly [z93.ZodEnum<{
 				"crm:hubspot": "crm:hubspot";
 				"crm:salesforce": "crm:salesforce";
 				form: "form";
 				import: "import";
 				manual: "manual";
-			}>, z87.ZodString]>;
-			sourceRef: z87.ZodNullable<z87.ZodString>;
-			setAt: z87.ZodISODateTime;
-			setByUserId: z87.ZodNullable<z87.core.$ZodBranded<z87.ZodString, "usr", "out">>;
-		}, z87.core.$strip>>;
-	}, z87.core.$strip>;
-	createdAt: z87.ZodISODateTime;
-	updatedAt: z87.ZodISODateTime;
-}, z87.core.$strip>;
+			}>, z93.ZodString]>;
+			sourceRef: z93.ZodNullable<z93.ZodString>;
+			setAt: z93.ZodISODateTime;
+			setByUserId: z93.ZodNullable<z93.core.$ZodBranded<z93.ZodString, "usr", "out">>;
+		}, z93.core.$strip>>;
+	}, z93.core.$strip>;
+	createdAt: z93.ZodISODateTime;
+	updatedAt: z93.ZodISODateTime;
+}, z93.core.$strip>;
 /** A Prospect Company as core returns it. */
-type ProspectCompany = z87.infer<typeof prospectCompanySchema>;
+type ProspectCompany = z93.infer<typeof prospectCompanySchema>;
 /** The path parameters of a request about one Prospect Company. */
-declare const prospectCompanyParamsSchema: z87.ZodObject<{
-	companyId: z87.core.$ZodBranded<z87.ZodString, "pco", "out">;
-}, z87.core.$strict>;
+declare const prospectCompanyParamsSchema: z93.ZodObject<{
+	companyId: z93.core.$ZodBranded<z93.ZodString, "pco", "out">;
+}, z93.core.$strict>;
 /** The path parameters of a request about one Prospect Company. */
-type ProspectCompanyParams = z87.infer<typeof prospectCompanyParamsSchema>;
+type ProspectCompanyParams = z93.infer<typeof prospectCompanyParamsSchema>;
 /** The path parameters of a request for the history of one Prospect Company field. */
-declare const prospectCompanyFieldParamsSchema: z87.ZodObject<{
-	companyId: z87.core.$ZodBranded<z87.ZodString, "pco", "out">;
-	field: z87.ZodEnum<{
+declare const prospectCompanyFieldParamsSchema: z93.ZodObject<{
+	companyId: z93.core.$ZodBranded<z93.ZodString, "pco", "out">;
+	field: z93.ZodEnum<{
 		domain: "domain";
 		name: "name";
 	}>;
-}, z87.core.$strict>;
+}, z93.core.$strict>;
 /** The path parameters of a request for the history of one Prospect Company field. */
-type ProspectCompanyFieldParams = z87.infer<typeof prospectCompanyFieldParamsSchema>;
+type ProspectCompanyFieldParams = z93.infer<typeof prospectCompanyFieldParamsSchema>;
 /**
 * The body of a request to create a Prospect Company, written with the Source `manual`. Accepts an
 * `Idempotency-Key` header: a replay returns the original record.
 */
-declare const createProspectCompanyRequestSchema: z87.ZodObject<{
-	name: z87.ZodPipe<z87.ZodString, z87.ZodString>;
-	domain: z87.ZodOptional<z87.ZodPipe<z87.ZodPipe<z87.ZodString, z87.ZodTransform<string, string>>, z87.ZodString>>;
-}, z87.core.$strict>;
+declare const createProspectCompanyRequestSchema: z93.ZodObject<{
+	name: z93.ZodPipe<z93.ZodString, z93.ZodString>;
+	domain: z93.ZodOptional<z93.ZodPipe<z93.ZodPipe<z93.ZodString, z93.ZodTransform<string, string>>, z93.ZodString>>;
+}, z93.core.$strict>;
 /** The body of a request to create a Prospect Company. */
-type CreateProspectCompanyRequest = z87.infer<typeof createProspectCompanyRequestSchema>;
+type CreateProspectCompanyRequest = z93.infer<typeof createProspectCompanyRequestSchema>;
 /** The body of a request to edit a Prospect Company: only the fields sent change, written with the Source `manual`; `null` clears the domain. At least one field is required. */
-declare const updateProspectCompanyRequestSchema: z87.ZodObject<{
-	name: z87.ZodOptional<z87.ZodPipe<z87.ZodString, z87.ZodString>>;
-	domain: z87.ZodOptional<z87.ZodNullable<z87.ZodPipe<z87.ZodPipe<z87.ZodString, z87.ZodTransform<string, string>>, z87.ZodString>>>;
-}, z87.core.$strict>;
+declare const updateProspectCompanyRequestSchema: z93.ZodObject<{
+	name: z93.ZodOptional<z93.ZodPipe<z93.ZodString, z93.ZodString>>;
+	domain: z93.ZodOptional<z93.ZodNullable<z93.ZodPipe<z93.ZodPipe<z93.ZodString, z93.ZodTransform<string, string>>, z93.ZodString>>>;
+}, z93.core.$strict>;
 /** The body of a request to edit a Prospect Company. */
-type UpdateProspectCompanyRequest = z87.infer<typeof updateProspectCompanyRequestSchema>;
+type UpdateProspectCompanyRequest = z93.infer<typeof updateProspectCompanyRequestSchema>;
 /** The query parameters of a request to list Prospect Companies: a page and optionally a `q` search on name and domain. An unknown parameter is refused. */
-declare const listProspectCompaniesQuerySchema: z87.ZodObject<{
-	cursor: z87.ZodOptional<z87.ZodString>;
-	limit: z87.ZodDefault<z87.ZodPipe<z87.ZodPipe<z87.ZodUnion<readonly [z87.ZodNumber, z87.ZodString]>, z87.ZodTransform<number, string | number>>, z87.ZodNumber>>;
-	q: z87.ZodOptional<z87.ZodPipe<z87.ZodString, z87.ZodString>>;
-}, z87.core.$strict>;
+declare const listProspectCompaniesQuerySchema: z93.ZodObject<{
+	cursor: z93.ZodOptional<z93.ZodString>;
+	limit: z93.ZodDefault<z93.ZodPipe<z93.ZodPipe<z93.ZodUnion<readonly [z93.ZodNumber, z93.ZodString]>, z93.ZodTransform<number, string | number>>, z93.ZodNumber>>;
+	q: z93.ZodOptional<z93.ZodPipe<z93.ZodString, z93.ZodString>>;
+}, z93.core.$strict>;
 /** The query parameters of a request to list Prospect Companies. */
-type ListProspectCompaniesQuery = z87.infer<typeof listProspectCompaniesQuerySchema>;
+type ListProspectCompaniesQuery = z93.infer<typeof listProspectCompaniesQuerySchema>;
 /** One page of Prospect Companies, newest first (by `createdAt`, then id, both descending). */
-declare const listProspectCompaniesResponseSchema: z87.ZodObject<{
-	items: z87.ZodArray<z87.ZodObject<{
-		id: z87.core.$ZodBranded<z87.ZodString, "pco", "out">;
-		fields: z87.ZodObject<{
-			name: z87.ZodObject<{
-				value: z87.ZodString;
-				source: z87.ZodUnion<readonly [z87.ZodEnum<{
+declare const listProspectCompaniesResponseSchema: z93.ZodObject<{
+	items: z93.ZodArray<z93.ZodObject<{
+		id: z93.core.$ZodBranded<z93.ZodString, "pco", "out">;
+		fields: z93.ZodObject<{
+			name: z93.ZodObject<{
+				value: z93.ZodString;
+				source: z93.ZodUnion<readonly [z93.ZodEnum<{
 					"crm:hubspot": "crm:hubspot";
 					"crm:salesforce": "crm:salesforce";
 					form: "form";
 					import: "import";
 					manual: "manual";
-				}>, z87.ZodString]>;
-				sourceRef: z87.ZodNullable<z87.ZodString>;
-				setAt: z87.ZodISODateTime;
-				setByUserId: z87.ZodNullable<z87.core.$ZodBranded<z87.ZodString, "usr", "out">>;
-			}, z87.core.$strip>;
-			domain: z87.ZodOptional<z87.ZodObject<{
-				value: z87.ZodString;
-				source: z87.ZodUnion<readonly [z87.ZodEnum<{
+				}>, z93.ZodString]>;
+				sourceRef: z93.ZodNullable<z93.ZodString>;
+				setAt: z93.ZodISODateTime;
+				setByUserId: z93.ZodNullable<z93.core.$ZodBranded<z93.ZodString, "usr", "out">>;
+			}, z93.core.$strip>;
+			domain: z93.ZodOptional<z93.ZodObject<{
+				value: z93.ZodString;
+				source: z93.ZodUnion<readonly [z93.ZodEnum<{
 					"crm:hubspot": "crm:hubspot";
 					"crm:salesforce": "crm:salesforce";
 					form: "form";
 					import: "import";
 					manual: "manual";
-				}>, z87.ZodString]>;
-				sourceRef: z87.ZodNullable<z87.ZodString>;
-				setAt: z87.ZodISODateTime;
-				setByUserId: z87.ZodNullable<z87.core.$ZodBranded<z87.ZodString, "usr", "out">>;
-			}, z87.core.$strip>>;
-		}, z87.core.$strip>;
-		createdAt: z87.ZodISODateTime;
-		updatedAt: z87.ZodISODateTime;
-	}, z87.core.$strip>>;
-	nextCursor: z87.ZodNullable<z87.ZodString>;
-}, z87.core.$strip>;
+				}>, z93.ZodString]>;
+				sourceRef: z93.ZodNullable<z93.ZodString>;
+				setAt: z93.ZodISODateTime;
+				setByUserId: z93.ZodNullable<z93.core.$ZodBranded<z93.ZodString, "usr", "out">>;
+			}, z93.core.$strip>>;
+		}, z93.core.$strip>;
+		createdAt: z93.ZodISODateTime;
+		updatedAt: z93.ZodISODateTime;
+	}, z93.core.$strip>>;
+	nextCursor: z93.ZodNullable<z93.ZodString>;
+}, z93.core.$strip>;
 /** One page of Prospect Companies. */
-type ListProspectCompaniesResponse = z87.infer<typeof listProspectCompaniesResponseSchema>;
+type ListProspectCompaniesResponse = z93.infer<typeof listProspectCompaniesResponseSchema>;
 /** The position in a Prospect Company list. */
-declare const prospectCompanyCursorSchema: z87.ZodObject<{
-	createdAt: z87.ZodISODateTime;
-	id: z87.core.$ZodBranded<z87.ZodString, "pco", "out">;
-}, z87.core.$strict>;
+declare const prospectCompanyCursorSchema: z93.ZodObject<{
+	createdAt: z93.ZodISODateTime;
+	id: z93.core.$ZodBranded<z93.ZodString, "pco", "out">;
+}, z93.core.$strict>;
 /** The position in a Prospect Company list. */
-type ProspectCompanyCursor = z87.infer<typeof prospectCompanyCursorSchema>;
+type ProspectCompanyCursor = z93.infer<typeof prospectCompanyCursorSchema>;
 /** The roles that may do everything to every Prospect: merge, import, erase, assign in bulk. */
 declare const PROSPECT_ADMIN_ROLES: readonly ["owner", "admin"];
 /** The roles that may create, read and edit Prospects, each within what they may see (a Rep their own, a Manager their Team's Reps', Owner and Admin all). */
@@ -19257,11 +21056,11 @@ type ProspectRoute = {
 * from a body.
 */
 declare const PROSPECT_ROUTES: Readonly<Record<ProspectRouteName, ProspectRoute>>;
-import { z as z88 } from "zod";
+import { z as z94 } from "zod";
 /** True when the text holds a control character; line breaks and tabs are allowed when `allowLineBreaks` is set. */
 declare function hasControlCharacter(text: string, allowLineBreaks: boolean): boolean;
 /** Trimmed text of 1 to `maxLength` characters with no control character; a request value is untrusted text for display code. */
-declare function boundedTextSchema(maxLength: number): z88.ZodPipe<z88.ZodString, z88.ZodString>;
+declare function boundedTextSchema(maxLength: number): z94.ZodPipe<z94.ZodString, z94.ZodString>;
 /** The longest first or last name, in characters. */
 declare const MAX_PROSPECT_NAME_PART_LENGTH = 100;
 /** The longest job title, in characters. */
@@ -19281,46 +21080,46 @@ declare const MAX_PROSPECT_FIELD_VALUE_LENGTH = 320;
 /** The longest Source reference (an import job id, a CRM record id), in characters. */
 declare const MAX_SOURCE_REF_LENGTH = 200;
 /** A first or last name in a request: trimmed, 1 to 100 characters, no control character. */
-declare const prospectNamePartSchema: z88.ZodPipe<z88.ZodString, z88.ZodString>;
+declare const prospectNamePartSchema: z94.ZodPipe<z94.ZodString, z94.ZodString>;
 /** A job title in a request: trimmed, 1 to 200 characters, no control character. */
-declare const prospectJobTitleSchema: z88.ZodPipe<z88.ZodString, z88.ZodString>;
+declare const prospectJobTitleSchema: z94.ZodPipe<z94.ZodString, z94.ZodString>;
 /** A Prospect Company name in a request: trimmed, 1 to 200 characters, no control character. */
-declare const prospectCompanyNameSchema: z88.ZodPipe<z88.ZodString, z88.ZodString>;
+declare const prospectCompanyNameSchema: z94.ZodPipe<z94.ZodString, z94.ZodString>;
 /** Free-text notes on a Prospect: trimmed, 1 to 5,000 characters; line breaks and tabs are allowed, other control characters are not. */
-declare const prospectNotesSchema: z88.ZodPipe<z88.ZodString, z88.ZodString>;
+declare const prospectNotesSchema: z94.ZodPipe<z94.ZodString, z94.ZodString>;
 /** The tags of a Prospect in a request: at most 20, each trimmed and 1 to 50 characters, no duplicates. */
-declare const prospectTagsSchema: z88.ZodArray<z88.ZodPipe<z88.ZodString, z88.ZodString>>;
+declare const prospectTagsSchema: z94.ZodArray<z94.ZodPipe<z94.ZodString, z94.ZodString>>;
 /**
 * A phone number as typed in a request: 3 to 40 characters of digits, spaces, `+`, `(`, `)`, `.`
 * and `-`. Core normalises it to E.164 (ADR 0011) and refuses what it cannot, as `request.invalid`.
 */
-declare const rawPhoneSchema: z88.ZodPipe<z88.ZodString, z88.ZodString>;
+declare const rawPhoneSchema: z94.ZodPipe<z94.ZodString, z94.ZodString>;
 /** A phone number in E.164 form, as a response carries a normalised one: `+` and 7 to 15 digits. */
-declare const e164PhoneSchema: z88.ZodString;
+declare const e164PhoneSchema: z94.ZodString;
 /**
 * A LinkedIn profile address as typed in a request: 1 to 300 characters naming `linkedin.com`.
 * Core normalises it (ADR 0011) and refuses what it cannot, as `request.invalid`.
 */
-declare const rawLinkedinUrlSchema: z88.ZodPipe<z88.ZodString, z88.ZodString>;
+declare const rawLinkedinUrlSchema: z94.ZodPipe<z94.ZodString, z94.ZodString>;
 /**
 * A company web domain in a request: folded to lower case, 3 to 253 characters, dotted ASCII
 * labels of letters, digits and hyphens (an internationalised domain is sent in punycode).
 */
-declare const prospectCompanyDomainSchema: z88.ZodPipe<z88.ZodPipe<z88.ZodString, z88.ZodTransform<string, string>>, z88.ZodString>;
+declare const prospectCompanyDomainSchema: z94.ZodPipe<z94.ZodPipe<z94.ZodString, z94.ZodTransform<string, string>>, z94.ZodString>;
 /** The kinds of identity a Prospect is matched on (ADR 0011). */
 declare const PROSPECT_IDENTITY_KINDS: readonly ["email", "phone", "linkedin"];
 /** The kind of identity a Prospect is matched on. */
-declare const prospectIdentityKindSchema: z88.ZodEnum<{
+declare const prospectIdentityKindSchema: z94.ZodEnum<{
 	email: "email";
 	linkedin: "linkedin";
 	phone: "phone";
 }>;
 /** The kind of identity a Prospect is matched on. */
-type ProspectIdentityKind = z88.infer<typeof prospectIdentityKindSchema>;
+type ProspectIdentityKind = z94.infer<typeof prospectIdentityKindSchema>;
 /** The fields of a Prospect that carry a Source, in the camelCase the API uses. Email, phone and LinkedIn are also its identities. */
 declare const PROSPECT_FIELD_NAMES: readonly ["firstName", "lastName", "jobTitle", "email", "phone", "linkedinUrl"];
 /** The name of a Prospect field that carries a Source. */
-declare const prospectFieldNameSchema: z88.ZodEnum<{
+declare const prospectFieldNameSchema: z94.ZodEnum<{
 	email: "email";
 	firstName: "firstName";
 	jobTitle: "jobTitle";
@@ -19329,16 +21128,16 @@ declare const prospectFieldNameSchema: z88.ZodEnum<{
 	phone: "phone";
 }>;
 /** The name of a Prospect field that carries a Source. */
-type ProspectFieldName = z88.infer<typeof prospectFieldNameSchema>;
+type ProspectFieldName = z94.infer<typeof prospectFieldNameSchema>;
 /** The fields of a Prospect Company that carry a Source. */
 declare const PROSPECT_COMPANY_FIELD_NAMES: readonly ["name", "domain"];
 /** The name of a Prospect Company field that carries a Source. */
-declare const prospectCompanyFieldNameSchema: z88.ZodEnum<{
+declare const prospectCompanyFieldNameSchema: z94.ZodEnum<{
 	domain: "domain";
 	name: "name";
 }>;
 /** The name of a Prospect Company field that carries a Source. */
-type ProspectCompanyFieldName = z88.infer<typeof prospectCompanyFieldNameSchema>;
+type ProspectCompanyFieldName = z94.infer<typeof prospectCompanyFieldNameSchema>;
 /** The most history entries kept per field (ADR 0020 bounds the history); the oldest non-current entries go first. */
 declare const MAX_FIELD_HISTORY_ENTRIES = 50;
 /** The Source kinds that are fixed words; `enrichment:<provider>` is the open one. */
@@ -19348,65 +21147,65 @@ declare const FIXED_SOURCE_KINDS: readonly ["manual", "import", "crm:hubspot", "
 * `enrichment:<provider>` with a provider of 1 to 32 lower-case letters, digits and underscores.
 * Writers never choose it in a request body: core sets it from the route and the token.
 */
-declare const sourceKindSchema: z88.ZodUnion<readonly [z88.ZodEnum<{
+declare const sourceKindSchema: z94.ZodUnion<readonly [z94.ZodEnum<{
 	"crm:hubspot": "crm:hubspot";
 	"crm:salesforce": "crm:salesforce";
 	form: "form";
 	import: "import";
 	manual: "manual";
-}>, z88.ZodString]>;
+}>, z94.ZodString]>;
 /** A Source kind. */
-type SourceKind = z88.infer<typeof sourceKindSchema>;
+type SourceKind = z94.infer<typeof sourceKindSchema>;
 /**
 * A stored value with where it came from, when and who set it (ADR 0020). `sourceRef` names the
 * import job or CRM record and is `null` for manual entry; `setByUserId` is `null` when a system
 * (an import job, a sync, a provider) set the value rather than a person.
 */
-declare const fieldValueSchema: z88.ZodObject<{
-	value: z88.ZodString;
-	source: z88.ZodUnion<readonly [z88.ZodEnum<{
+declare const fieldValueSchema: z94.ZodObject<{
+	value: z94.ZodString;
+	source: z94.ZodUnion<readonly [z94.ZodEnum<{
 		"crm:hubspot": "crm:hubspot";
 		"crm:salesforce": "crm:salesforce";
 		form: "form";
 		import: "import";
 		manual: "manual";
-	}>, z88.ZodString]>;
-	sourceRef: z88.ZodNullable<z88.ZodString>;
-	setAt: z88.ZodISODateTime;
-	setByUserId: z88.ZodNullable<z88.core.$ZodBranded<z88.ZodString, "usr", "out">>;
-}, z88.core.$strip>;
+	}>, z94.ZodString]>;
+	sourceRef: z94.ZodNullable<z94.ZodString>;
+	setAt: z94.ZodISODateTime;
+	setByUserId: z94.ZodNullable<z94.core.$ZodBranded<z94.ZodString, "usr", "out">>;
+}, z94.core.$strip>;
 /** A stored value with its Source, time and actor. */
-type FieldValue = z88.infer<typeof fieldValueSchema>;
+type FieldValue = z94.infer<typeof fieldValueSchema>;
 /** The states of a history entry: `current` is the value in force, `superseded` an earlier one, `suggested` an enrichment value kept beside an own value (ADR 0020). */
 declare const FIELD_HISTORY_STATES: readonly ["current", "superseded", "suggested"];
 /** The state of a history entry. */
-declare const fieldHistoryStateSchema: z88.ZodEnum<{
+declare const fieldHistoryStateSchema: z94.ZodEnum<{
 	current: "current";
 	suggested: "suggested";
 	superseded: "superseded";
 }>;
 /** One entry of a field's history: the value with its Source, time and actor, and whether it is current, superseded or only suggested. */
-declare const fieldHistoryEntrySchema: z88.ZodObject<{
-	value: z88.ZodString;
-	source: z88.ZodUnion<readonly [z88.ZodEnum<{
+declare const fieldHistoryEntrySchema: z94.ZodObject<{
+	value: z94.ZodString;
+	source: z94.ZodUnion<readonly [z94.ZodEnum<{
 		"crm:hubspot": "crm:hubspot";
 		"crm:salesforce": "crm:salesforce";
 		form: "form";
 		import: "import";
 		manual: "manual";
-	}>, z88.ZodString]>;
-	sourceRef: z88.ZodNullable<z88.ZodString>;
-	setAt: z88.ZodISODateTime;
-	setByUserId: z88.ZodNullable<z88.core.$ZodBranded<z88.ZodString, "usr", "out">>;
-	state: z88.ZodEnum<{
+	}>, z94.ZodString]>;
+	sourceRef: z94.ZodNullable<z94.ZodString>;
+	setAt: z94.ZodISODateTime;
+	setByUserId: z94.ZodNullable<z94.core.$ZodBranded<z94.ZodString, "usr", "out">>;
+	state: z94.ZodEnum<{
 		current: "current";
 		suggested: "suggested";
 		superseded: "superseded";
 	}>;
-}, z88.core.$strip>;
+}, z94.core.$strip>;
 /** One entry of a field's history. */
-type FieldHistoryEntry = z88.infer<typeof fieldHistoryEntrySchema>;
-import { z as z89 } from "zod";
+type FieldHistoryEntry = z94.infer<typeof fieldHistoryEntrySchema>;
+import { z as z95 } from "zod";
 /** The longest a Call can last, in seconds: 12 hours. */
 declare const MAX_CALL_DURATION_SECONDS = 43200;
 /**
@@ -19414,26 +21213,26 @@ declare const MAX_CALL_DURATION_SECONDS = 43200;
 * until it has. `aiAssisted` is whether it also told the Prospect an AI takes part (the Copilot,
 * an Agent). Nothing here, and no request, can turn the Disclosure off.
 */
-declare const callDisclosureSchema: z89.ZodObject<{
-	wordingVersion: z89.ZodNullable<z89.ZodNumber>;
-	playedAt: z89.ZodNullable<z89.ZodISODateTime>;
-	aiAssisted: z89.ZodBoolean;
-}, z89.core.$strict>;
+declare const callDisclosureSchema: z95.ZodObject<{
+	wordingVersion: z95.ZodNullable<z95.ZodNumber>;
+	playedAt: z95.ZodNullable<z95.ZodISODateTime>;
+	aiAssisted: z95.ZodBoolean;
+}, z95.core.$strict>;
 /** The Disclosure a Call played. */
-type CallDisclosure = z89.infer<typeof callDisclosureSchema>;
+type CallDisclosure = z95.infer<typeof callDisclosureSchema>;
 /**
 * A Call placed or taken in the Softphone. The Prospect's number is tenant data: it is shown to
 * those who may see the Call and never logged. The invariants of the state machine are checked:
 * `live` and `ended` need a played Disclosure, a Recording exists only after it, `failed` has a
 * reason and nothing else does, and the wrap-up (Deal identifier, note) exists only on `ended`.
 */
-declare const voiceCallSchema: z89.ZodObject<{
-	id: z89.core.$ZodBranded<z89.ZodString, "call", "out">;
-	direction: z89.ZodEnum<{
+declare const voiceCallSchema: z95.ZodObject<{
+	id: z95.core.$ZodBranded<z95.ZodString, "call", "out">;
+	direction: z95.ZodEnum<{
 		inbound: "inbound";
 		outbound: "outbound";
 	}>;
-	state: z89.ZodEnum<{
+	state: z95.ZodEnum<{
 		connecting: "connecting";
 		disclosing: "disclosing";
 		ended: "ended";
@@ -19442,25 +21241,25 @@ declare const voiceCallSchema: z89.ZodObject<{
 		missed: "missed";
 		ringing: "ringing";
 	}>;
-	lineId: z89.core.$ZodBranded<z89.ZodString, "line", "out">;
-	repMembershipId: z89.ZodNullable<z89.core.$ZodBranded<z89.ZodString, "mem", "out">>;
-	prospectId: z89.ZodNullable<z89.core.$ZodBranded<z89.ZodString, "prs", "out">>;
-	prospectNumber: z89.ZodString;
-	disclosure: z89.ZodObject<{
-		wordingVersion: z89.ZodNullable<z89.ZodNumber>;
-		playedAt: z89.ZodNullable<z89.ZodISODateTime>;
-		aiAssisted: z89.ZodBoolean;
-	}, z89.core.$strict>;
-	createdAt: z89.ZodISODateTime;
-	answeredAt: z89.ZodNullable<z89.ZodISODateTime>;
-	endedAt: z89.ZodNullable<z89.ZodISODateTime>;
-	durationSeconds: z89.ZodNullable<z89.ZodNumber>;
-	endedBy: z89.ZodNullable<z89.ZodEnum<{
+	lineId: z95.core.$ZodBranded<z95.ZodString, "line", "out">;
+	repMembershipId: z95.ZodNullable<z95.core.$ZodBranded<z95.ZodString, "mem", "out">>;
+	prospectId: z95.ZodNullable<z95.core.$ZodBranded<z95.ZodString, "prs", "out">>;
+	prospectNumber: z95.ZodString;
+	disclosure: z95.ZodObject<{
+		wordingVersion: z95.ZodNullable<z95.ZodNumber>;
+		playedAt: z95.ZodNullable<z95.ZodISODateTime>;
+		aiAssisted: z95.ZodBoolean;
+	}, z95.core.$strict>;
+	createdAt: z95.ZodISODateTime;
+	answeredAt: z95.ZodNullable<z95.ZodISODateTime>;
+	endedAt: z95.ZodNullable<z95.ZodISODateTime>;
+	durationSeconds: z95.ZodNullable<z95.ZodNumber>;
+	endedBy: z95.ZodNullable<z95.ZodEnum<{
 		prospect: "prospect";
 		rep: "rep";
 		system: "system";
 	}>>;
-	failureReason: z89.ZodNullable<z89.ZodEnum<{
+	failureReason: z95.ZodNullable<z95.ZodEnum<{
 		busy: "busy";
 		carrier_dropped: "carrier_dropped";
 		carrier_rejected: "carrier_rejected";
@@ -19470,31 +21269,31 @@ declare const voiceCallSchema: z89.ZodObject<{
 		rep_unreachable: "rep_unreachable";
 		timeout: "timeout";
 	}>>;
-	dealId: z89.ZodNullable<z89.ZodPipe<z89.ZodPipe<z89.ZodString, z89.ZodTransform<string, string>>, z89.ZodString>>;
-	note: z89.ZodNullable<z89.ZodPipe<z89.ZodString, z89.ZodString>>;
-	recordingState: z89.ZodEnum<{
+	dealId: z95.ZodNullable<z95.ZodPipe<z95.ZodPipe<z95.ZodString, z95.ZodTransform<string, string>>, z95.ZodString>>;
+	note: z95.ZodNullable<z95.ZodPipe<z95.ZodString, z95.ZodString>>;
+	recordingState: z95.ZodEnum<{
 		deleted: "deleted";
 		none: "none";
 		stored: "stored";
 		storing: "storing";
 	}>;
-	transcriptState: z89.ZodEnum<{
+	transcriptState: z95.ZodEnum<{
 		deleted: "deleted";
 		pending: "pending";
 		ready: "ready";
 	}>;
-}, z89.core.$strip>;
+}, z95.core.$strip>;
 /** A Call. */
-type VoiceCall = z89.infer<typeof voiceCallSchema>;
+type VoiceCall = z95.infer<typeof voiceCallSchema>;
 /** The path parameters of a request about one Call. */
-declare const voiceCallParamsSchema: z89.ZodObject<{
-	callId: z89.core.$ZodBranded<z89.ZodString, "call", "out">;
-}, z89.core.$strict>;
+declare const voiceCallParamsSchema: z95.ZodObject<{
+	callId: z95.core.$ZodBranded<z95.ZodString, "call", "out">;
+}, z95.core.$strict>;
 /** The position a Call list resumes from: newest first, by creation time then id. */
-declare const voiceCallCursorSchema: z89.ZodObject<{
-	createdAt: z89.ZodISODateTime;
-	id: z89.core.$ZodBranded<z89.ZodString, "call", "out">;
-}, z89.core.$strict>;
+declare const voiceCallCursorSchema: z95.ZodObject<{
+	createdAt: z95.ZodISODateTime;
+	id: z95.core.$ZodBranded<z95.ZodString, "call", "out">;
+}, z95.core.$strict>;
 /**
 * The body of a request to place a Call to a number from the Rep's browser. The idempotency key is
 * not in the body: see `placeCallHeadersSchema`. `to` is as typed; voice normalises it to
@@ -19502,33 +21301,33 @@ declare const voiceCallCursorSchema: z89.ZodObject<{
 * Rep's own Line when absent. `prospectId` links the Call to a Prospect the caller may see. There is
 * no field that turns off the Disclosure or the Recording.
 */
-declare const placeCallRequestSchema: z89.ZodObject<{
-	to: z89.ZodPipe<z89.ZodString, z89.ZodString>;
-	lineId: z89.ZodOptional<z89.core.$ZodBranded<z89.ZodString, "line", "out">>;
-	prospectId: z89.ZodOptional<z89.core.$ZodBranded<z89.ZodString, "prs", "out">>;
-}, z89.core.$strict>;
+declare const placeCallRequestSchema: z95.ZodObject<{
+	to: z95.ZodPipe<z95.ZodString, z95.ZodString>;
+	lineId: z95.ZodOptional<z95.core.$ZodBranded<z95.ZodString, "line", "out">>;
+	prospectId: z95.ZodOptional<z95.core.$ZodBranded<z95.ZodString, "prs", "out">>;
+}, z95.core.$strict>;
 /**
 * The headers of a request to place a Call. The `Idempotency-Key` header is required (header names
 * arrive lower-cased): a retry of the same key answers the original Call and dials once, and the
 * same key with a different body is `request.idempotency_key_reused`.
 */
-declare const placeCallHeadersSchema: z89.ZodObject<{
-	"idempotency-key": z89.ZodString;
-}, z89.core.$strip>;
+declare const placeCallHeadersSchema: z95.ZodObject<{
+	"idempotency-key": z95.ZodString;
+}, z95.core.$strip>;
 /** The body of a request to place a Call. */
-type PlaceCallRequest = z89.infer<typeof placeCallRequestSchema>;
+type PlaceCallRequest = z95.infer<typeof placeCallRequestSchema>;
 /**
 * A warning for the Rep from the Contact Check on the number: the code of the denial and, for a
 * suppressed number, the reason. A Rep may still call (ADR 0003); the warning is for their eyes.
 */
-declare const contactWarningSchema: z89.ZodObject<{
-	code: z89.ZodEnum<{
+declare const contactWarningSchema: z95.ZodObject<{
+	code: z95.ZodEnum<{
 		"consent.missing": "consent.missing";
 		"consent.suppressed": "consent.suppressed";
 		"consent.unavailable": "consent.unavailable";
 		"consent.withdrawn": "consent.withdrawn";
 	}>;
-	suppressionReason: z89.ZodNullable<z89.ZodEnum<{
+	suppressionReason: z95.ZodNullable<z95.ZodEnum<{
 		bounce: "bounce";
 		complaint: "complaint";
 		crm: "crm";
@@ -19537,18 +21336,18 @@ declare const contactWarningSchema: z89.ZodObject<{
 		stop: "stop";
 		unsubscribe: "unsubscribe";
 	}>>;
-}, z89.core.$strict>;
+}, z95.core.$strict>;
 /** A warning from the Contact Check. */
-type ContactWarning = z89.infer<typeof contactWarningSchema>;
+type ContactWarning = z95.infer<typeof contactWarningSchema>;
 /** The answer to placing a Call: the Call, as it stands, and any warnings from the Contact Check. */
-declare const placedCallSchema: z89.ZodObject<{
-	call: z89.ZodObject<{
-		id: z89.core.$ZodBranded<z89.ZodString, "call", "out">;
-		direction: z89.ZodEnum<{
+declare const placedCallSchema: z95.ZodObject<{
+	call: z95.ZodObject<{
+		id: z95.core.$ZodBranded<z95.ZodString, "call", "out">;
+		direction: z95.ZodEnum<{
 			inbound: "inbound";
 			outbound: "outbound";
 		}>;
-		state: z89.ZodEnum<{
+		state: z95.ZodEnum<{
 			connecting: "connecting";
 			disclosing: "disclosing";
 			ended: "ended";
@@ -19557,25 +21356,25 @@ declare const placedCallSchema: z89.ZodObject<{
 			missed: "missed";
 			ringing: "ringing";
 		}>;
-		lineId: z89.core.$ZodBranded<z89.ZodString, "line", "out">;
-		repMembershipId: z89.ZodNullable<z89.core.$ZodBranded<z89.ZodString, "mem", "out">>;
-		prospectId: z89.ZodNullable<z89.core.$ZodBranded<z89.ZodString, "prs", "out">>;
-		prospectNumber: z89.ZodString;
-		disclosure: z89.ZodObject<{
-			wordingVersion: z89.ZodNullable<z89.ZodNumber>;
-			playedAt: z89.ZodNullable<z89.ZodISODateTime>;
-			aiAssisted: z89.ZodBoolean;
-		}, z89.core.$strict>;
-		createdAt: z89.ZodISODateTime;
-		answeredAt: z89.ZodNullable<z89.ZodISODateTime>;
-		endedAt: z89.ZodNullable<z89.ZodISODateTime>;
-		durationSeconds: z89.ZodNullable<z89.ZodNumber>;
-		endedBy: z89.ZodNullable<z89.ZodEnum<{
+		lineId: z95.core.$ZodBranded<z95.ZodString, "line", "out">;
+		repMembershipId: z95.ZodNullable<z95.core.$ZodBranded<z95.ZodString, "mem", "out">>;
+		prospectId: z95.ZodNullable<z95.core.$ZodBranded<z95.ZodString, "prs", "out">>;
+		prospectNumber: z95.ZodString;
+		disclosure: z95.ZodObject<{
+			wordingVersion: z95.ZodNullable<z95.ZodNumber>;
+			playedAt: z95.ZodNullable<z95.ZodISODateTime>;
+			aiAssisted: z95.ZodBoolean;
+		}, z95.core.$strict>;
+		createdAt: z95.ZodISODateTime;
+		answeredAt: z95.ZodNullable<z95.ZodISODateTime>;
+		endedAt: z95.ZodNullable<z95.ZodISODateTime>;
+		durationSeconds: z95.ZodNullable<z95.ZodNumber>;
+		endedBy: z95.ZodNullable<z95.ZodEnum<{
 			prospect: "prospect";
 			rep: "rep";
 			system: "system";
 		}>>;
-		failureReason: z89.ZodNullable<z89.ZodEnum<{
+		failureReason: z95.ZodNullable<z95.ZodEnum<{
 			busy: "busy";
 			carrier_dropped: "carrier_dropped";
 			carrier_rejected: "carrier_rejected";
@@ -19585,28 +21384,28 @@ declare const placedCallSchema: z89.ZodObject<{
 			rep_unreachable: "rep_unreachable";
 			timeout: "timeout";
 		}>>;
-		dealId: z89.ZodNullable<z89.ZodPipe<z89.ZodPipe<z89.ZodString, z89.ZodTransform<string, string>>, z89.ZodString>>;
-		note: z89.ZodNullable<z89.ZodPipe<z89.ZodString, z89.ZodString>>;
-		recordingState: z89.ZodEnum<{
+		dealId: z95.ZodNullable<z95.ZodPipe<z95.ZodPipe<z95.ZodString, z95.ZodTransform<string, string>>, z95.ZodString>>;
+		note: z95.ZodNullable<z95.ZodPipe<z95.ZodString, z95.ZodString>>;
+		recordingState: z95.ZodEnum<{
 			deleted: "deleted";
 			none: "none";
 			stored: "stored";
 			storing: "storing";
 		}>;
-		transcriptState: z89.ZodEnum<{
+		transcriptState: z95.ZodEnum<{
 			deleted: "deleted";
 			pending: "pending";
 			ready: "ready";
 		}>;
-	}, z89.core.$strip>;
-	warnings: z89.ZodArray<z89.ZodObject<{
-		code: z89.ZodEnum<{
+	}, z95.core.$strip>;
+	warnings: z95.ZodArray<z95.ZodObject<{
+		code: z95.ZodEnum<{
 			"consent.missing": "consent.missing";
 			"consent.suppressed": "consent.suppressed";
 			"consent.unavailable": "consent.unavailable";
 			"consent.withdrawn": "consent.withdrawn";
 		}>;
-		suppressionReason: z89.ZodNullable<z89.ZodEnum<{
+		suppressionReason: z95.ZodNullable<z95.ZodEnum<{
 			bounce: "bounce";
 			complaint: "complaint";
 			crm: "crm";
@@ -19615,22 +21414,22 @@ declare const placedCallSchema: z89.ZodObject<{
 			stop: "stop";
 			unsubscribe: "unsubscribe";
 		}>>;
-	}, z89.core.$strict>>;
-}, z89.core.$strict>;
+	}, z95.core.$strict>>;
+}, z95.core.$strict>;
 /** The answer to placing a Call. */
-type PlacedCall = z89.infer<typeof placedCallSchema>;
+type PlacedCall = z95.infer<typeof placedCallSchema>;
 /**
 * The query parameters of a request to list Calls, newest first. Filters narrow what the caller
 * may see and never widen it. `from` and `to` bound `createdAt` (from inclusive, to exclusive).
 */
-declare const listVoiceCallsQuerySchema: z89.ZodObject<{
-	cursor: z89.ZodOptional<z89.ZodString>;
-	limit: z89.ZodDefault<z89.ZodPipe<z89.ZodPipe<z89.ZodUnion<readonly [z89.ZodNumber, z89.ZodString]>, z89.ZodTransform<number, string | number>>, z89.ZodNumber>>;
-	direction: z89.ZodOptional<z89.ZodEnum<{
+declare const listVoiceCallsQuerySchema: z95.ZodObject<{
+	cursor: z95.ZodOptional<z95.ZodString>;
+	limit: z95.ZodDefault<z95.ZodPipe<z95.ZodPipe<z95.ZodUnion<readonly [z95.ZodNumber, z95.ZodString]>, z95.ZodTransform<number, string | number>>, z95.ZodNumber>>;
+	direction: z95.ZodOptional<z95.ZodEnum<{
 		inbound: "inbound";
 		outbound: "outbound";
 	}>>;
-	state: z89.ZodOptional<z89.ZodEnum<{
+	state: z95.ZodOptional<z95.ZodEnum<{
 		connecting: "connecting";
 		disclosing: "disclosing";
 		ended: "ended";
@@ -19639,23 +21438,23 @@ declare const listVoiceCallsQuerySchema: z89.ZodObject<{
 		missed: "missed";
 		ringing: "ringing";
 	}>>;
-	repMembershipId: z89.ZodOptional<z89.core.$ZodBranded<z89.ZodString, "mem", "out">>;
-	lineId: z89.ZodOptional<z89.core.$ZodBranded<z89.ZodString, "line", "out">>;
-	prospectId: z89.ZodOptional<z89.core.$ZodBranded<z89.ZodString, "prs", "out">>;
-	from: z89.ZodOptional<z89.ZodISODateTime>;
-	to: z89.ZodOptional<z89.ZodISODateTime>;
-}, z89.core.$strict>;
+	repMembershipId: z95.ZodOptional<z95.core.$ZodBranded<z95.ZodString, "mem", "out">>;
+	lineId: z95.ZodOptional<z95.core.$ZodBranded<z95.ZodString, "line", "out">>;
+	prospectId: z95.ZodOptional<z95.core.$ZodBranded<z95.ZodString, "prs", "out">>;
+	from: z95.ZodOptional<z95.ZodISODateTime>;
+	to: z95.ZodOptional<z95.ZodISODateTime>;
+}, z95.core.$strict>;
 /** The query parameters of a request to list Calls. */
-type ListVoiceCallsQuery = z89.infer<typeof listVoiceCallsQuerySchema>;
+type ListVoiceCallsQuery = z95.infer<typeof listVoiceCallsQuerySchema>;
 /** One page of Calls. */
-declare const voiceCallPageSchema: z89.ZodObject<{
-	items: z89.ZodArray<z89.ZodObject<{
-		id: z89.core.$ZodBranded<z89.ZodString, "call", "out">;
-		direction: z89.ZodEnum<{
+declare const voiceCallPageSchema: z95.ZodObject<{
+	items: z95.ZodArray<z95.ZodObject<{
+		id: z95.core.$ZodBranded<z95.ZodString, "call", "out">;
+		direction: z95.ZodEnum<{
 			inbound: "inbound";
 			outbound: "outbound";
 		}>;
-		state: z89.ZodEnum<{
+		state: z95.ZodEnum<{
 			connecting: "connecting";
 			disclosing: "disclosing";
 			ended: "ended";
@@ -19664,25 +21463,25 @@ declare const voiceCallPageSchema: z89.ZodObject<{
 			missed: "missed";
 			ringing: "ringing";
 		}>;
-		lineId: z89.core.$ZodBranded<z89.ZodString, "line", "out">;
-		repMembershipId: z89.ZodNullable<z89.core.$ZodBranded<z89.ZodString, "mem", "out">>;
-		prospectId: z89.ZodNullable<z89.core.$ZodBranded<z89.ZodString, "prs", "out">>;
-		prospectNumber: z89.ZodString;
-		disclosure: z89.ZodObject<{
-			wordingVersion: z89.ZodNullable<z89.ZodNumber>;
-			playedAt: z89.ZodNullable<z89.ZodISODateTime>;
-			aiAssisted: z89.ZodBoolean;
-		}, z89.core.$strict>;
-		createdAt: z89.ZodISODateTime;
-		answeredAt: z89.ZodNullable<z89.ZodISODateTime>;
-		endedAt: z89.ZodNullable<z89.ZodISODateTime>;
-		durationSeconds: z89.ZodNullable<z89.ZodNumber>;
-		endedBy: z89.ZodNullable<z89.ZodEnum<{
+		lineId: z95.core.$ZodBranded<z95.ZodString, "line", "out">;
+		repMembershipId: z95.ZodNullable<z95.core.$ZodBranded<z95.ZodString, "mem", "out">>;
+		prospectId: z95.ZodNullable<z95.core.$ZodBranded<z95.ZodString, "prs", "out">>;
+		prospectNumber: z95.ZodString;
+		disclosure: z95.ZodObject<{
+			wordingVersion: z95.ZodNullable<z95.ZodNumber>;
+			playedAt: z95.ZodNullable<z95.ZodISODateTime>;
+			aiAssisted: z95.ZodBoolean;
+		}, z95.core.$strict>;
+		createdAt: z95.ZodISODateTime;
+		answeredAt: z95.ZodNullable<z95.ZodISODateTime>;
+		endedAt: z95.ZodNullable<z95.ZodISODateTime>;
+		durationSeconds: z95.ZodNullable<z95.ZodNumber>;
+		endedBy: z95.ZodNullable<z95.ZodEnum<{
 			prospect: "prospect";
 			rep: "rep";
 			system: "system";
 		}>>;
-		failureReason: z89.ZodNullable<z89.ZodEnum<{
+		failureReason: z95.ZodNullable<z95.ZodEnum<{
 			busy: "busy";
 			carrier_dropped: "carrier_dropped";
 			carrier_rejected: "carrier_rejected";
@@ -19692,71 +21491,71 @@ declare const voiceCallPageSchema: z89.ZodObject<{
 			rep_unreachable: "rep_unreachable";
 			timeout: "timeout";
 		}>>;
-		dealId: z89.ZodNullable<z89.ZodPipe<z89.ZodPipe<z89.ZodString, z89.ZodTransform<string, string>>, z89.ZodString>>;
-		note: z89.ZodNullable<z89.ZodPipe<z89.ZodString, z89.ZodString>>;
-		recordingState: z89.ZodEnum<{
+		dealId: z95.ZodNullable<z95.ZodPipe<z95.ZodPipe<z95.ZodString, z95.ZodTransform<string, string>>, z95.ZodString>>;
+		note: z95.ZodNullable<z95.ZodPipe<z95.ZodString, z95.ZodString>>;
+		recordingState: z95.ZodEnum<{
 			deleted: "deleted";
 			none: "none";
 			stored: "stored";
 			storing: "storing";
 		}>;
-		transcriptState: z89.ZodEnum<{
+		transcriptState: z95.ZodEnum<{
 			deleted: "deleted";
 			pending: "pending";
 			ready: "ready";
 		}>;
-	}, z89.core.$strip>>;
-	nextCursor: z89.ZodNullable<z89.ZodString>;
-}, z89.core.$strip>;
+	}, z95.core.$strip>>;
+	nextCursor: z95.ZodNullable<z95.ZodString>;
+}, z95.core.$strip>;
 /** Who spoke a turn of a Call's Transcript: the Rep (channel 1) or the Prospect. */
-declare const transcriptSpeakerSchema: z89.ZodEnum<{
+declare const transcriptSpeakerSchema: z95.ZodEnum<{
 	prospect: "prospect";
 	rep: "rep";
 }>;
 /** The longest text of one Transcript turn, in characters. */
 declare const MAX_TRANSCRIPT_TURN_LENGTH = 4e3;
 /** One turn of a Transcript: who spoke, when (milliseconds from the start of the Recording) and what. The text is the Prospect's and Rep's words: untrusted text, never logged. */
-declare const transcriptTurnSchema: z89.ZodObject<{
-	speaker: z89.ZodEnum<{
+declare const transcriptTurnSchema: z95.ZodObject<{
+	speaker: z95.ZodEnum<{
 		prospect: "prospect";
 		rep: "rep";
 	}>;
-	startMs: z89.ZodNumber;
-	endMs: z89.ZodNumber;
-	text: z89.ZodString;
-}, z89.core.$strict>;
+	startMs: z95.ZodNumber;
+	endMs: z95.ZodNumber;
+	text: z95.ZodString;
+}, z95.core.$strict>;
 /** One turn of a Transcript. */
-type TranscriptTurn = z89.infer<typeof transcriptTurnSchema>;
+type TranscriptTurn = z95.infer<typeof transcriptTurnSchema>;
 /** The position a Transcript resumes from: the index of the next turn. */
-declare const transcriptCursorSchema: z89.ZodObject<{
-	index: z89.ZodNumber;
-}, z89.core.$strict>;
+declare const transcriptCursorSchema: z95.ZodObject<{
+	index: z95.ZodNumber;
+}, z95.core.$strict>;
 /** The query parameters of a request to read a Transcript, one cursor-paginated page of turns at a time. */
-declare const getTranscriptQuerySchema: z89.ZodObject<{
-	cursor: z89.ZodOptional<z89.ZodString>;
-	limit: z89.ZodDefault<z89.ZodPipe<z89.ZodPipe<z89.ZodUnion<readonly [z89.ZodNumber, z89.ZodString]>, z89.ZodTransform<number, string | number>>, z89.ZodNumber>>;
-}, z89.core.$strict>;
+declare const getTranscriptQuerySchema: z95.ZodObject<{
+	cursor: z95.ZodOptional<z95.ZodString>;
+	limit: z95.ZodDefault<z95.ZodPipe<z95.ZodPipe<z95.ZodUnion<readonly [z95.ZodNumber, z95.ZodString]>, z95.ZodTransform<number, string | number>>, z95.ZodNumber>>;
+}, z95.core.$strict>;
 /** One page of a Call's Transcript, in time order, with the state of the Transcript. Turns are empty unless `ready`. */
-declare const transcriptPageSchema: z89.ZodObject<{
-	items: z89.ZodArray<z89.ZodObject<{
-		speaker: z89.ZodEnum<{
+declare const transcriptPageSchema: z95.ZodObject<{
+	items: z95.ZodArray<z95.ZodObject<{
+		speaker: z95.ZodEnum<{
 			prospect: "prospect";
 			rep: "rep";
 		}>;
-		startMs: z89.ZodNumber;
-		endMs: z89.ZodNumber;
-		text: z89.ZodString;
-	}, z89.core.$strict>>;
-	nextCursor: z89.ZodNullable<z89.ZodString>;
-	callId: z89.core.$ZodBranded<z89.ZodString, "call", "out">;
-	state: z89.ZodEnum<{
+		startMs: z95.ZodNumber;
+		endMs: z95.ZodNumber;
+		text: z95.ZodString;
+	}, z95.core.$strict>>;
+	nextCursor: z95.ZodNullable<z95.ZodString>;
+	callId: z95.core.$ZodBranded<z95.ZodString, "call", "out">;
+	state: z95.ZodEnum<{
 		deleted: "deleted";
 		pending: "pending";
 		ready: "ready";
 	}>;
-}, z89.core.$strip>;
+}, z95.core.$strip>;
 /** One page of a Call's Transcript. */
-type TranscriptPage = z89.infer<typeof transcriptPageSchema>;
+type TranscriptPage = z95.infer<typeof transcriptPageSchema>;
 /** The media types a Recording is played back as. */
 declare const RECORDING_MEDIA_TYPES: readonly ["audio/mpeg", "audio/wav", "audio/ogg"];
 /** The longest a playback URL can be, in characters. */
@@ -19765,38 +21564,38 @@ declare const MAX_PLAYBACK_URL_LENGTH = 2048;
 * A short-lived signed URL to play a Recording, two channels (Rep and Prospect). It is a
 * credential: shown to the caller, never logged or stored, and it stops working at `expiresAt`.
 */
-declare const recordingPlaybackSchema: z89.ZodObject<{
-	callId: z89.core.$ZodBranded<z89.ZodString, "call", "out">;
-	url: z89.ZodURL;
-	expiresAt: z89.ZodISODateTime;
-	mediaType: z89.ZodEnum<{
+declare const recordingPlaybackSchema: z95.ZodObject<{
+	callId: z95.core.$ZodBranded<z95.ZodString, "call", "out">;
+	url: z95.ZodURL;
+	expiresAt: z95.ZodISODateTime;
+	mediaType: z95.ZodEnum<{
 		"audio/mpeg": "audio/mpeg";
 		"audio/ogg": "audio/ogg";
 		"audio/wav": "audio/wav";
 	}>;
-	channels: z89.ZodLiteral<2>;
-	durationSeconds: z89.ZodNumber;
-}, z89.core.$strict>;
+	channels: z95.ZodLiteral<2>;
+	durationSeconds: z95.ZodNumber;
+}, z95.core.$strict>;
 /** A short-lived signed URL to play a Recording. */
-type RecordingPlayback = z89.infer<typeof recordingPlaybackSchema>;
+type RecordingPlayback = z95.infer<typeof recordingPlaybackSchema>;
 /**
 * The body of a request to wrap up a Call: the Deal identifier (the customer's own, as in the
 * Playbook) and a note. A field left out is left alone; null clears it. At least one is sent.
 */
-declare const wrapUpRequestSchema: z89.ZodObject<{
-	dealId: z89.ZodOptional<z89.ZodNullable<z89.ZodPipe<z89.ZodPipe<z89.ZodString, z89.ZodTransform<string, string>>, z89.ZodString>>>;
-	note: z89.ZodOptional<z89.ZodNullable<z89.ZodPipe<z89.ZodString, z89.ZodString>>>;
-}, z89.core.$strict>;
+declare const wrapUpRequestSchema: z95.ZodObject<{
+	dealId: z95.ZodOptional<z95.ZodNullable<z95.ZodPipe<z95.ZodPipe<z95.ZodString, z95.ZodTransform<string, string>>, z95.ZodString>>>;
+	note: z95.ZodOptional<z95.ZodNullable<z95.ZodPipe<z95.ZodString, z95.ZodString>>>;
+}, z95.core.$strict>;
 /** The body of a request to wrap up a Call. */
-type WrapUpRequest = z89.infer<typeof wrapUpRequestSchema>;
+type WrapUpRequest = z95.infer<typeof wrapUpRequestSchema>;
 /** The answer to deleting a Recording: the Call, whose Recording and Transcript are now `deleted`. */
-declare const deletedRecordingSchema: z89.ZodObject<{
-	id: z89.core.$ZodBranded<z89.ZodString, "call", "out">;
-	direction: z89.ZodEnum<{
+declare const deletedRecordingSchema: z95.ZodObject<{
+	id: z95.core.$ZodBranded<z95.ZodString, "call", "out">;
+	direction: z95.ZodEnum<{
 		inbound: "inbound";
 		outbound: "outbound";
 	}>;
-	state: z89.ZodEnum<{
+	state: z95.ZodEnum<{
 		connecting: "connecting";
 		disclosing: "disclosing";
 		ended: "ended";
@@ -19805,25 +21604,25 @@ declare const deletedRecordingSchema: z89.ZodObject<{
 		missed: "missed";
 		ringing: "ringing";
 	}>;
-	lineId: z89.core.$ZodBranded<z89.ZodString, "line", "out">;
-	repMembershipId: z89.ZodNullable<z89.core.$ZodBranded<z89.ZodString, "mem", "out">>;
-	prospectId: z89.ZodNullable<z89.core.$ZodBranded<z89.ZodString, "prs", "out">>;
-	prospectNumber: z89.ZodString;
-	disclosure: z89.ZodObject<{
-		wordingVersion: z89.ZodNullable<z89.ZodNumber>;
-		playedAt: z89.ZodNullable<z89.ZodISODateTime>;
-		aiAssisted: z89.ZodBoolean;
-	}, z89.core.$strict>;
-	createdAt: z89.ZodISODateTime;
-	answeredAt: z89.ZodNullable<z89.ZodISODateTime>;
-	endedAt: z89.ZodNullable<z89.ZodISODateTime>;
-	durationSeconds: z89.ZodNullable<z89.ZodNumber>;
-	endedBy: z89.ZodNullable<z89.ZodEnum<{
+	lineId: z95.core.$ZodBranded<z95.ZodString, "line", "out">;
+	repMembershipId: z95.ZodNullable<z95.core.$ZodBranded<z95.ZodString, "mem", "out">>;
+	prospectId: z95.ZodNullable<z95.core.$ZodBranded<z95.ZodString, "prs", "out">>;
+	prospectNumber: z95.ZodString;
+	disclosure: z95.ZodObject<{
+		wordingVersion: z95.ZodNullable<z95.ZodNumber>;
+		playedAt: z95.ZodNullable<z95.ZodISODateTime>;
+		aiAssisted: z95.ZodBoolean;
+	}, z95.core.$strict>;
+	createdAt: z95.ZodISODateTime;
+	answeredAt: z95.ZodNullable<z95.ZodISODateTime>;
+	endedAt: z95.ZodNullable<z95.ZodISODateTime>;
+	durationSeconds: z95.ZodNullable<z95.ZodNumber>;
+	endedBy: z95.ZodNullable<z95.ZodEnum<{
 		prospect: "prospect";
 		rep: "rep";
 		system: "system";
 	}>>;
-	failureReason: z89.ZodNullable<z89.ZodEnum<{
+	failureReason: z95.ZodNullable<z95.ZodEnum<{
 		busy: "busy";
 		carrier_dropped: "carrier_dropped";
 		carrier_rejected: "carrier_rejected";
@@ -19833,21 +21632,21 @@ declare const deletedRecordingSchema: z89.ZodObject<{
 		rep_unreachable: "rep_unreachable";
 		timeout: "timeout";
 	}>>;
-	dealId: z89.ZodNullable<z89.ZodPipe<z89.ZodPipe<z89.ZodString, z89.ZodTransform<string, string>>, z89.ZodString>>;
-	note: z89.ZodNullable<z89.ZodPipe<z89.ZodString, z89.ZodString>>;
-	recordingState: z89.ZodEnum<{
+	dealId: z95.ZodNullable<z95.ZodPipe<z95.ZodPipe<z95.ZodString, z95.ZodTransform<string, string>>, z95.ZodString>>;
+	note: z95.ZodNullable<z95.ZodPipe<z95.ZodString, z95.ZodString>>;
+	recordingState: z95.ZodEnum<{
 		deleted: "deleted";
 		none: "none";
 		stored: "stored";
 		storing: "storing";
 	}>;
-	transcriptState: z89.ZodEnum<{
+	transcriptState: z95.ZodEnum<{
 		deleted: "deleted";
 		pending: "pending";
 		ready: "ready";
 	}>;
-}, z89.core.$strip>;
-import { ErrorDefinition as ErrorDefinition_8gwh4518 } from "..";
+}, z95.core.$strip>;
+import { ErrorDefinition as ErrorDefinition_8gwh4519 } from "..";
 /**
 * The errors the voice routes return, as `area.reason` codes. A role that is not allowed is the
 * common `auth.forbidden`. A Line or Call of another Organization, or a Call the caller may not
@@ -19874,25 +21673,25 @@ import { ErrorDefinition as ErrorDefinition_8gwh4518 } from "..";
 * - `recording.not_ready` (409): the Recording is still being stored; try again shortly.
 */
 declare const VOICE_ERRORS: {
-	readonly "call.disclosure_failed": ErrorDefinition_8gwh4518<"call.disclosure_failed">;
-	readonly "call.limit_reached": ErrorDefinition_8gwh4518<"call.limit_reached">;
-	readonly "call.line_unavailable": ErrorDefinition_8gwh4518<"call.line_unavailable">;
-	readonly "call.not_ended": ErrorDefinition_8gwh4518<"call.not_ended">;
-	readonly "call.number_invalid": ErrorDefinition_8gwh4518<"call.number_invalid">;
-	readonly "line.assignment_invalid": ErrorDefinition_8gwh4518<"line.assignment_invalid">;
-	readonly "line.not_found": ErrorDefinition_8gwh4518<"line.not_found">;
-	readonly "line.number_unavailable": ErrorDefinition_8gwh4518<"line.number_unavailable">;
-	readonly "line.released": ErrorDefinition_8gwh4518<"line.released">;
-	readonly "recording.not_found": ErrorDefinition_8gwh4518<"recording.not_found">;
-	readonly "recording.not_ready": ErrorDefinition_8gwh4518<"recording.not_ready">;
+	readonly "call.disclosure_failed": ErrorDefinition_8gwh4519<"call.disclosure_failed">;
+	readonly "call.limit_reached": ErrorDefinition_8gwh4519<"call.limit_reached">;
+	readonly "call.line_unavailable": ErrorDefinition_8gwh4519<"call.line_unavailable">;
+	readonly "call.not_ended": ErrorDefinition_8gwh4519<"call.not_ended">;
+	readonly "call.number_invalid": ErrorDefinition_8gwh4519<"call.number_invalid">;
+	readonly "line.assignment_invalid": ErrorDefinition_8gwh4519<"line.assignment_invalid">;
+	readonly "line.not_found": ErrorDefinition_8gwh4519<"line.not_found">;
+	readonly "line.number_unavailable": ErrorDefinition_8gwh4519<"line.number_unavailable">;
+	readonly "line.released": ErrorDefinition_8gwh4519<"line.released">;
+	readonly "recording.not_found": ErrorDefinition_8gwh4519<"recording.not_found">;
+	readonly "recording.not_ready": ErrorDefinition_8gwh4519<"recording.not_ready">;
 };
 /** A voice error code. */
 type VoiceErrorCode = keyof typeof VOICE_ERRORS;
-import { z as z90 } from "zod";
+import { z as z96 } from "zod";
 /** The longest storage key of a Recording, in characters. */
 declare const MAX_RECORDING_KEY_LENGTH = 512;
 /** The key of a Recording in the Region's storage: opaque, made of ids, never a number or a name. */
-declare const recordingKeySchema: z90.ZodString;
+declare const recordingKeySchema: z96.ZodString;
 /**
 * `voice.call.started` (version 1): a Call began to ring. Ids, the direction and a keyed hash of the
 * Prospect's number: no number in clear, no name, no Transcript text.
@@ -19900,59 +21699,59 @@ declare const recordingKeySchema: z90.ZodString;
 declare const voiceCallStartedEvent: {
 	type: "voice.call.started";
 	version: 1;
-	schema: z90.ZodObject<{
-		id: z90.core.$ZodBranded<z90.ZodString, "evt", "out">;
-		occurredAt: z90.ZodISODateTime;
-		organizationId: z90.core.$ZodBranded<z90.ZodString, "org", "out">;
-		region: z90.ZodEnum<{
+	schema: z96.ZodObject<{
+		id: z96.core.$ZodBranded<z96.ZodString, "evt", "out">;
+		occurredAt: z96.ZodISODateTime;
+		organizationId: z96.core.$ZodBranded<z96.ZodString, "org", "out">;
+		region: z96.ZodEnum<{
 			eu: "eu";
 			us: "us";
 		}>;
-		type: z90.ZodLiteral<"voice.call.started">;
-		version: z90.ZodLiteral<1>;
-		data: z90.ZodObject<{
-			callId: z90.core.$ZodBranded<z90.ZodString, "call", "out">;
-			direction: z90.ZodEnum<{
+		type: z96.ZodLiteral<"voice.call.started">;
+		version: z96.ZodLiteral<1>;
+		data: z96.ZodObject<{
+			callId: z96.core.$ZodBranded<z96.ZodString, "call", "out">;
+			direction: z96.ZodEnum<{
 				inbound: "inbound";
 				outbound: "outbound";
 			}>;
-			lineId: z90.core.$ZodBranded<z90.ZodString, "line", "out">;
-			repMembershipId: z90.ZodNullable<z90.core.$ZodBranded<z90.ZodString, "mem", "out">>;
-			prospectId: z90.ZodNullable<z90.core.$ZodBranded<z90.ZodString, "prs", "out">>;
-			prospectPhoneHash: z90.ZodString;
-			startedAt: z90.ZodISODateTime;
-		}, z90.core.$strict>;
-	}, z90.core.$strip>;
+			lineId: z96.core.$ZodBranded<z96.ZodString, "line", "out">;
+			repMembershipId: z96.ZodNullable<z96.core.$ZodBranded<z96.ZodString, "mem", "out">>;
+			prospectId: z96.ZodNullable<z96.core.$ZodBranded<z96.ZodString, "prs", "out">>;
+			prospectPhoneHash: z96.ZodString;
+			startedAt: z96.ZodISODateTime;
+		}, z96.core.$strict>;
+	}, z96.core.$strip>;
 	parse: (input: unknown) => {
-		id: string & z90.$brand<"evt">;
+		id: string & z96.$brand<"evt">;
 		occurredAt: string;
-		organizationId: string & z90.$brand<"org">;
+		organizationId: string & z96.$brand<"org">;
 		region: "eu" | "us";
 		type: "voice.call.started";
 		version: 1;
 		data: {
-			callId: string & z90.$brand<"call">;
+			callId: string & z96.$brand<"call">;
 			direction: "inbound" | "outbound";
-			lineId: string & z90.$brand<"line">;
-			repMembershipId: (string & z90.$brand<"mem">) | null;
-			prospectId: (string & z90.$brand<"prs">) | null;
+			lineId: string & z96.$brand<"line">;
+			repMembershipId: (string & z96.$brand<"mem">) | null;
+			prospectId: (string & z96.$brand<"prs">) | null;
 			prospectPhoneHash: string;
 			startedAt: string;
 		};
 	};
-	safeParse: (input: unknown) => z90.ZodSafeParseResult<{
-		id: string & z90.$brand<"evt">;
+	safeParse: (input: unknown) => z96.ZodSafeParseResult<{
+		id: string & z96.$brand<"evt">;
 		occurredAt: string;
-		organizationId: string & z90.$brand<"org">;
+		organizationId: string & z96.$brand<"org">;
 		region: "eu" | "us";
 		type: "voice.call.started";
 		version: 1;
 		data: {
-			callId: string & z90.$brand<"call">;
+			callId: string & z96.$brand<"call">;
 			direction: "inbound" | "outbound";
-			lineId: string & z90.$brand<"line">;
-			repMembershipId: (string & z90.$brand<"mem">) | null;
-			prospectId: (string & z90.$brand<"prs">) | null;
+			lineId: string & z96.$brand<"line">;
+			repMembershipId: (string & z96.$brand<"mem">) | null;
+			prospectId: (string & z96.$brand<"prs">) | null;
 			prospectPhoneHash: string;
 			startedAt: string;
 		};
@@ -19961,7 +21760,7 @@ declare const voiceCallStartedEvent: {
 /** How a Call ended, as the event says it. */
 declare const VOICE_CALL_OUTCOMES: readonly ["completed", "failed", "missed"];
 /** How a Call ended. */
-declare const voiceCallOutcomeSchema: z90.ZodEnum<{
+declare const voiceCallOutcomeSchema: z96.ZodEnum<{
 	completed: "completed";
 	failed: "failed";
 	missed: "missed";
@@ -19975,32 +21774,32 @@ declare const voiceCallOutcomeSchema: z90.ZodEnum<{
 declare const voiceCallEndedEvent: {
 	type: "voice.call.ended";
 	version: 1;
-	schema: z90.ZodObject<{
-		id: z90.core.$ZodBranded<z90.ZodString, "evt", "out">;
-		occurredAt: z90.ZodISODateTime;
-		organizationId: z90.core.$ZodBranded<z90.ZodString, "org", "out">;
-		region: z90.ZodEnum<{
+	schema: z96.ZodObject<{
+		id: z96.core.$ZodBranded<z96.ZodString, "evt", "out">;
+		occurredAt: z96.ZodISODateTime;
+		organizationId: z96.core.$ZodBranded<z96.ZodString, "org", "out">;
+		region: z96.ZodEnum<{
 			eu: "eu";
 			us: "us";
 		}>;
-		type: z90.ZodLiteral<"voice.call.ended">;
-		version: z90.ZodLiteral<1>;
-		data: z90.ZodObject<{
-			callId: z90.core.$ZodBranded<z90.ZodString, "call", "out">;
-			direction: z90.ZodEnum<{
+		type: z96.ZodLiteral<"voice.call.ended">;
+		version: z96.ZodLiteral<1>;
+		data: z96.ZodObject<{
+			callId: z96.core.$ZodBranded<z96.ZodString, "call", "out">;
+			direction: z96.ZodEnum<{
 				inbound: "inbound";
 				outbound: "outbound";
 			}>;
-			lineId: z90.core.$ZodBranded<z90.ZodString, "line", "out">;
-			repMembershipId: z90.ZodNullable<z90.core.$ZodBranded<z90.ZodString, "mem", "out">>;
-			prospectId: z90.ZodNullable<z90.core.$ZodBranded<z90.ZodString, "prs", "out">>;
-			prospectPhoneHash: z90.ZodString;
-			outcome: z90.ZodEnum<{
+			lineId: z96.core.$ZodBranded<z96.ZodString, "line", "out">;
+			repMembershipId: z96.ZodNullable<z96.core.$ZodBranded<z96.ZodString, "mem", "out">>;
+			prospectId: z96.ZodNullable<z96.core.$ZodBranded<z96.ZodString, "prs", "out">>;
+			prospectPhoneHash: z96.ZodString;
+			outcome: z96.ZodEnum<{
 				completed: "completed";
 				failed: "failed";
 				missed: "missed";
 			}>;
-			failureReason: z90.ZodNullable<z90.ZodEnum<{
+			failureReason: z96.ZodNullable<z96.ZodEnum<{
 				busy: "busy";
 				carrier_dropped: "carrier_dropped";
 				carrier_rejected: "carrier_rejected";
@@ -20010,28 +21809,28 @@ declare const voiceCallEndedEvent: {
 				rep_unreachable: "rep_unreachable";
 				timeout: "timeout";
 			}>>;
-			startedAt: z90.ZodISODateTime;
-			answeredAt: z90.ZodNullable<z90.ZodISODateTime>;
-			endedAt: z90.ZodISODateTime;
-			durationSeconds: z90.ZodNullable<z90.ZodNumber>;
-			disclosureWordingVersion: z90.ZodNullable<z90.ZodNumber>;
-			recordingKey: z90.ZodNullable<z90.ZodString>;
-			dealId: z90.ZodNullable<z90.ZodPipe<z90.ZodPipe<z90.ZodString, z90.ZodTransform<string, string>>, z90.ZodString>>;
-		}, z90.core.$strict>;
-	}, z90.core.$strip>;
+			startedAt: z96.ZodISODateTime;
+			answeredAt: z96.ZodNullable<z96.ZodISODateTime>;
+			endedAt: z96.ZodISODateTime;
+			durationSeconds: z96.ZodNullable<z96.ZodNumber>;
+			disclosureWordingVersion: z96.ZodNullable<z96.ZodNumber>;
+			recordingKey: z96.ZodNullable<z96.ZodString>;
+			dealId: z96.ZodNullable<z96.ZodPipe<z96.ZodPipe<z96.ZodString, z96.ZodTransform<string, string>>, z96.ZodString>>;
+		}, z96.core.$strict>;
+	}, z96.core.$strip>;
 	parse: (input: unknown) => {
-		id: string & z90.$brand<"evt">;
+		id: string & z96.$brand<"evt">;
 		occurredAt: string;
-		organizationId: string & z90.$brand<"org">;
+		organizationId: string & z96.$brand<"org">;
 		region: "eu" | "us";
 		type: "voice.call.ended";
 		version: 1;
 		data: {
-			callId: string & z90.$brand<"call">;
+			callId: string & z96.$brand<"call">;
 			direction: "inbound" | "outbound";
-			lineId: string & z90.$brand<"line">;
-			repMembershipId: (string & z90.$brand<"mem">) | null;
-			prospectId: (string & z90.$brand<"prs">) | null;
+			lineId: string & z96.$brand<"line">;
+			repMembershipId: (string & z96.$brand<"mem">) | null;
+			prospectId: (string & z96.$brand<"prs">) | null;
 			prospectPhoneHash: string;
 			outcome: "completed" | "failed" | "missed";
 			failureReason: "busy" | "carrier_dropped" | "carrier_rejected" | "disclosure_failed" | "no_answer" | "provider_error" | "rep_unreachable" | "timeout" | null;
@@ -20044,19 +21843,19 @@ declare const voiceCallEndedEvent: {
 			dealId: string | null;
 		};
 	};
-	safeParse: (input: unknown) => z90.ZodSafeParseResult<{
-		id: string & z90.$brand<"evt">;
+	safeParse: (input: unknown) => z96.ZodSafeParseResult<{
+		id: string & z96.$brand<"evt">;
 		occurredAt: string;
-		organizationId: string & z90.$brand<"org">;
+		organizationId: string & z96.$brand<"org">;
 		region: "eu" | "us";
 		type: "voice.call.ended";
 		version: 1;
 		data: {
-			callId: string & z90.$brand<"call">;
+			callId: string & z96.$brand<"call">;
 			direction: "inbound" | "outbound";
-			lineId: string & z90.$brand<"line">;
-			repMembershipId: (string & z90.$brand<"mem">) | null;
-			prospectId: (string & z90.$brand<"prs">) | null;
+			lineId: string & z96.$brand<"line">;
+			repMembershipId: (string & z96.$brand<"mem">) | null;
+			prospectId: (string & z96.$brand<"prs">) | null;
 			prospectPhoneHash: string;
 			outcome: "completed" | "failed" | "missed";
 			failureReason: "busy" | "carrier_dropped" | "carrier_rejected" | "disclosure_failed" | "no_answer" | "provider_error" | "rep_unreachable" | "timeout" | null;
@@ -20075,59 +21874,59 @@ declare const VOICE_EVENTS: {
 	readonly "voice.call.started": {
 		type: "voice.call.started";
 		version: 1;
-		schema: z90.ZodObject<{
-			id: z90.core.$ZodBranded<z90.ZodString, "evt", "out">;
-			occurredAt: z90.ZodISODateTime;
-			organizationId: z90.core.$ZodBranded<z90.ZodString, "org", "out">;
-			region: z90.ZodEnum<{
+		schema: z96.ZodObject<{
+			id: z96.core.$ZodBranded<z96.ZodString, "evt", "out">;
+			occurredAt: z96.ZodISODateTime;
+			organizationId: z96.core.$ZodBranded<z96.ZodString, "org", "out">;
+			region: z96.ZodEnum<{
 				eu: "eu";
 				us: "us";
 			}>;
-			type: z90.ZodLiteral<"voice.call.started">;
-			version: z90.ZodLiteral<1>;
-			data: z90.ZodObject<{
-				callId: z90.core.$ZodBranded<z90.ZodString, "call", "out">;
-				direction: z90.ZodEnum<{
+			type: z96.ZodLiteral<"voice.call.started">;
+			version: z96.ZodLiteral<1>;
+			data: z96.ZodObject<{
+				callId: z96.core.$ZodBranded<z96.ZodString, "call", "out">;
+				direction: z96.ZodEnum<{
 					inbound: "inbound";
 					outbound: "outbound";
 				}>;
-				lineId: z90.core.$ZodBranded<z90.ZodString, "line", "out">;
-				repMembershipId: z90.ZodNullable<z90.core.$ZodBranded<z90.ZodString, "mem", "out">>;
-				prospectId: z90.ZodNullable<z90.core.$ZodBranded<z90.ZodString, "prs", "out">>;
-				prospectPhoneHash: z90.ZodString;
-				startedAt: z90.ZodISODateTime;
-			}, z90.core.$strict>;
-		}, z90.core.$strip>;
+				lineId: z96.core.$ZodBranded<z96.ZodString, "line", "out">;
+				repMembershipId: z96.ZodNullable<z96.core.$ZodBranded<z96.ZodString, "mem", "out">>;
+				prospectId: z96.ZodNullable<z96.core.$ZodBranded<z96.ZodString, "prs", "out">>;
+				prospectPhoneHash: z96.ZodString;
+				startedAt: z96.ZodISODateTime;
+			}, z96.core.$strict>;
+		}, z96.core.$strip>;
 		parse: (input: unknown) => {
-			id: string & z90.$brand<"evt">;
+			id: string & z96.$brand<"evt">;
 			occurredAt: string;
-			organizationId: string & z90.$brand<"org">;
+			organizationId: string & z96.$brand<"org">;
 			region: "eu" | "us";
 			type: "voice.call.started";
 			version: 1;
 			data: {
-				callId: string & z90.$brand<"call">;
+				callId: string & z96.$brand<"call">;
 				direction: "inbound" | "outbound";
-				lineId: string & z90.$brand<"line">;
-				repMembershipId: (string & z90.$brand<"mem">) | null;
-				prospectId: (string & z90.$brand<"prs">) | null;
+				lineId: string & z96.$brand<"line">;
+				repMembershipId: (string & z96.$brand<"mem">) | null;
+				prospectId: (string & z96.$brand<"prs">) | null;
 				prospectPhoneHash: string;
 				startedAt: string;
 			};
 		};
-		safeParse: (input: unknown) => z90.ZodSafeParseResult<{
-			id: string & z90.$brand<"evt">;
+		safeParse: (input: unknown) => z96.ZodSafeParseResult<{
+			id: string & z96.$brand<"evt">;
 			occurredAt: string;
-			organizationId: string & z90.$brand<"org">;
+			organizationId: string & z96.$brand<"org">;
 			region: "eu" | "us";
 			type: "voice.call.started";
 			version: 1;
 			data: {
-				callId: string & z90.$brand<"call">;
+				callId: string & z96.$brand<"call">;
 				direction: "inbound" | "outbound";
-				lineId: string & z90.$brand<"line">;
-				repMembershipId: (string & z90.$brand<"mem">) | null;
-				prospectId: (string & z90.$brand<"prs">) | null;
+				lineId: string & z96.$brand<"line">;
+				repMembershipId: (string & z96.$brand<"mem">) | null;
+				prospectId: (string & z96.$brand<"prs">) | null;
 				prospectPhoneHash: string;
 				startedAt: string;
 			};
@@ -20136,32 +21935,32 @@ declare const VOICE_EVENTS: {
 	readonly "voice.call.ended": {
 		type: "voice.call.ended";
 		version: 1;
-		schema: z90.ZodObject<{
-			id: z90.core.$ZodBranded<z90.ZodString, "evt", "out">;
-			occurredAt: z90.ZodISODateTime;
-			organizationId: z90.core.$ZodBranded<z90.ZodString, "org", "out">;
-			region: z90.ZodEnum<{
+		schema: z96.ZodObject<{
+			id: z96.core.$ZodBranded<z96.ZodString, "evt", "out">;
+			occurredAt: z96.ZodISODateTime;
+			organizationId: z96.core.$ZodBranded<z96.ZodString, "org", "out">;
+			region: z96.ZodEnum<{
 				eu: "eu";
 				us: "us";
 			}>;
-			type: z90.ZodLiteral<"voice.call.ended">;
-			version: z90.ZodLiteral<1>;
-			data: z90.ZodObject<{
-				callId: z90.core.$ZodBranded<z90.ZodString, "call", "out">;
-				direction: z90.ZodEnum<{
+			type: z96.ZodLiteral<"voice.call.ended">;
+			version: z96.ZodLiteral<1>;
+			data: z96.ZodObject<{
+				callId: z96.core.$ZodBranded<z96.ZodString, "call", "out">;
+				direction: z96.ZodEnum<{
 					inbound: "inbound";
 					outbound: "outbound";
 				}>;
-				lineId: z90.core.$ZodBranded<z90.ZodString, "line", "out">;
-				repMembershipId: z90.ZodNullable<z90.core.$ZodBranded<z90.ZodString, "mem", "out">>;
-				prospectId: z90.ZodNullable<z90.core.$ZodBranded<z90.ZodString, "prs", "out">>;
-				prospectPhoneHash: z90.ZodString;
-				outcome: z90.ZodEnum<{
+				lineId: z96.core.$ZodBranded<z96.ZodString, "line", "out">;
+				repMembershipId: z96.ZodNullable<z96.core.$ZodBranded<z96.ZodString, "mem", "out">>;
+				prospectId: z96.ZodNullable<z96.core.$ZodBranded<z96.ZodString, "prs", "out">>;
+				prospectPhoneHash: z96.ZodString;
+				outcome: z96.ZodEnum<{
 					completed: "completed";
 					failed: "failed";
 					missed: "missed";
 				}>;
-				failureReason: z90.ZodNullable<z90.ZodEnum<{
+				failureReason: z96.ZodNullable<z96.ZodEnum<{
 					busy: "busy";
 					carrier_dropped: "carrier_dropped";
 					carrier_rejected: "carrier_rejected";
@@ -20171,28 +21970,28 @@ declare const VOICE_EVENTS: {
 					rep_unreachable: "rep_unreachable";
 					timeout: "timeout";
 				}>>;
-				startedAt: z90.ZodISODateTime;
-				answeredAt: z90.ZodNullable<z90.ZodISODateTime>;
-				endedAt: z90.ZodISODateTime;
-				durationSeconds: z90.ZodNullable<z90.ZodNumber>;
-				disclosureWordingVersion: z90.ZodNullable<z90.ZodNumber>;
-				recordingKey: z90.ZodNullable<z90.ZodString>;
-				dealId: z90.ZodNullable<z90.ZodPipe<z90.ZodPipe<z90.ZodString, z90.ZodTransform<string, string>>, z90.ZodString>>;
-			}, z90.core.$strict>;
-		}, z90.core.$strip>;
+				startedAt: z96.ZodISODateTime;
+				answeredAt: z96.ZodNullable<z96.ZodISODateTime>;
+				endedAt: z96.ZodISODateTime;
+				durationSeconds: z96.ZodNullable<z96.ZodNumber>;
+				disclosureWordingVersion: z96.ZodNullable<z96.ZodNumber>;
+				recordingKey: z96.ZodNullable<z96.ZodString>;
+				dealId: z96.ZodNullable<z96.ZodPipe<z96.ZodPipe<z96.ZodString, z96.ZodTransform<string, string>>, z96.ZodString>>;
+			}, z96.core.$strict>;
+		}, z96.core.$strip>;
 		parse: (input: unknown) => {
-			id: string & z90.$brand<"evt">;
+			id: string & z96.$brand<"evt">;
 			occurredAt: string;
-			organizationId: string & z90.$brand<"org">;
+			organizationId: string & z96.$brand<"org">;
 			region: "eu" | "us";
 			type: "voice.call.ended";
 			version: 1;
 			data: {
-				callId: string & z90.$brand<"call">;
+				callId: string & z96.$brand<"call">;
 				direction: "inbound" | "outbound";
-				lineId: string & z90.$brand<"line">;
-				repMembershipId: (string & z90.$brand<"mem">) | null;
-				prospectId: (string & z90.$brand<"prs">) | null;
+				lineId: string & z96.$brand<"line">;
+				repMembershipId: (string & z96.$brand<"mem">) | null;
+				prospectId: (string & z96.$brand<"prs">) | null;
 				prospectPhoneHash: string;
 				outcome: "completed" | "failed" | "missed";
 				failureReason: "busy" | "carrier_dropped" | "carrier_rejected" | "disclosure_failed" | "no_answer" | "provider_error" | "rep_unreachable" | "timeout" | null;
@@ -20205,19 +22004,19 @@ declare const VOICE_EVENTS: {
 				dealId: string | null;
 			};
 		};
-		safeParse: (input: unknown) => z90.ZodSafeParseResult<{
-			id: string & z90.$brand<"evt">;
+		safeParse: (input: unknown) => z96.ZodSafeParseResult<{
+			id: string & z96.$brand<"evt">;
 			occurredAt: string;
-			organizationId: string & z90.$brand<"org">;
+			organizationId: string & z96.$brand<"org">;
 			region: "eu" | "us";
 			type: "voice.call.ended";
 			version: 1;
 			data: {
-				callId: string & z90.$brand<"call">;
+				callId: string & z96.$brand<"call">;
 				direction: "inbound" | "outbound";
-				lineId: string & z90.$brand<"line">;
-				repMembershipId: (string & z90.$brand<"mem">) | null;
-				prospectId: (string & z90.$brand<"prs">) | null;
+				lineId: string & z96.$brand<"line">;
+				repMembershipId: (string & z96.$brand<"mem">) | null;
+				prospectId: (string & z96.$brand<"prs">) | null;
 				prospectPhoneHash: string;
 				outcome: "completed" | "failed" | "missed";
 				failureReason: "busy" | "carrier_dropped" | "carrier_rejected" | "disclosure_failed" | "no_answer" | "provider_error" | "rep_unreachable" | "timeout" | null;
@@ -20234,130 +22033,130 @@ declare const VOICE_EVENTS: {
 };
 /** The type of a voice event. */
 type VoiceEventType = keyof typeof VOICE_EVENTS;
-import { z as z91 } from "zod";
+import { z as z97 } from "zod";
 /** The states of a Line: `porting` while a number moves to Closeline, `active` when Calls can use it, `released` once given up. */
 declare const LINE_STATES: readonly ["porting", "active", "released"];
 /** The state of a Line. */
-declare const lineStateSchema: z91.ZodEnum<{
+declare const lineStateSchema: z97.ZodEnum<{
 	active: "active";
 	porting: "porting";
 	released: "released";
 }>;
 /** The state of a Line. */
-type LineState = z91.infer<typeof lineStateSchema>;
+type LineState = z97.infer<typeof lineStateSchema>;
 /** Who inbound Calls on a Line ring: nobody yet, a Team's Reps, or one Rep. */
-declare const lineAssignmentSchema: z91.ZodDiscriminatedUnion<[z91.ZodObject<{
-	kind: z91.ZodLiteral<"unassigned">;
-}, z91.core.$strict>, z91.ZodObject<{
-	kind: z91.ZodLiteral<"team">;
-	teamId: z91.core.$ZodBranded<z91.ZodString, "team", "out">;
-}, z91.core.$strict>, z91.ZodObject<{
-	kind: z91.ZodLiteral<"rep">;
-	membershipId: z91.core.$ZodBranded<z91.ZodString, "mem", "out">;
-}, z91.core.$strict>], "kind">;
+declare const lineAssignmentSchema: z97.ZodDiscriminatedUnion<[z97.ZodObject<{
+	kind: z97.ZodLiteral<"unassigned">;
+}, z97.core.$strict>, z97.ZodObject<{
+	kind: z97.ZodLiteral<"team">;
+	teamId: z97.core.$ZodBranded<z97.ZodString, "team", "out">;
+}, z97.core.$strict>, z97.ZodObject<{
+	kind: z97.ZodLiteral<"rep">;
+	membershipId: z97.core.$ZodBranded<z97.ZodString, "mem", "out">;
+}, z97.core.$strict>], "kind">;
 /** Who inbound Calls on a Line ring. */
-type LineAssignment = z91.infer<typeof lineAssignmentSchema>;
+type LineAssignment = z97.infer<typeof lineAssignmentSchema>;
 /** A Line: a phone number the Organization uses to place and receive Calls. */
-declare const lineSchema: z91.ZodObject<{
-	id: z91.core.$ZodBranded<z91.ZodString, "line", "out">;
-	number: z91.ZodString;
-	country: z91.ZodString;
-	label: z91.ZodNullable<z91.ZodPipe<z91.ZodString, z91.ZodString>>;
-	state: z91.ZodEnum<{
+declare const lineSchema: z97.ZodObject<{
+	id: z97.core.$ZodBranded<z97.ZodString, "line", "out">;
+	number: z97.ZodString;
+	country: z97.ZodString;
+	label: z97.ZodNullable<z97.ZodPipe<z97.ZodString, z97.ZodString>>;
+	state: z97.ZodEnum<{
 		active: "active";
 		porting: "porting";
 		released: "released";
 	}>;
-	assignment: z91.ZodDiscriminatedUnion<[z91.ZodObject<{
-		kind: z91.ZodLiteral<"unassigned">;
-	}, z91.core.$strict>, z91.ZodObject<{
-		kind: z91.ZodLiteral<"team">;
-		teamId: z91.core.$ZodBranded<z91.ZodString, "team", "out">;
-	}, z91.core.$strict>, z91.ZodObject<{
-		kind: z91.ZodLiteral<"rep">;
-		membershipId: z91.core.$ZodBranded<z91.ZodString, "mem", "out">;
-	}, z91.core.$strict>], "kind">;
-	createdAt: z91.ZodISODateTime;
-	releasedAt: z91.ZodNullable<z91.ZodISODateTime>;
-}, z91.core.$strip>;
+	assignment: z97.ZodDiscriminatedUnion<[z97.ZodObject<{
+		kind: z97.ZodLiteral<"unassigned">;
+	}, z97.core.$strict>, z97.ZodObject<{
+		kind: z97.ZodLiteral<"team">;
+		teamId: z97.core.$ZodBranded<z97.ZodString, "team", "out">;
+	}, z97.core.$strict>, z97.ZodObject<{
+		kind: z97.ZodLiteral<"rep">;
+		membershipId: z97.core.$ZodBranded<z97.ZodString, "mem", "out">;
+	}, z97.core.$strict>], "kind">;
+	createdAt: z97.ZodISODateTime;
+	releasedAt: z97.ZodNullable<z97.ZodISODateTime>;
+}, z97.core.$strip>;
 /** A Line. */
-type Line = z91.infer<typeof lineSchema>;
+type Line = z97.infer<typeof lineSchema>;
 /** The path parameters of a request about one Line. */
-declare const lineParamsSchema: z91.ZodObject<{
-	lineId: z91.core.$ZodBranded<z91.ZodString, "line", "out">;
-}, z91.core.$strict>;
+declare const lineParamsSchema: z97.ZodObject<{
+	lineId: z97.core.$ZodBranded<z97.ZodString, "line", "out">;
+}, z97.core.$strict>;
 /** The position a Line list resumes from: newest first, by creation time then id. */
-declare const lineCursorSchema: z91.ZodObject<{
-	createdAt: z91.ZodISODateTime;
-	id: z91.core.$ZodBranded<z91.ZodString, "line", "out">;
-}, z91.core.$strict>;
+declare const lineCursorSchema: z97.ZodObject<{
+	createdAt: z97.ZodISODateTime;
+	id: z97.core.$ZodBranded<z97.ZodString, "line", "out">;
+}, z97.core.$strict>;
 /** The query parameters of a request to list Lines, newest first, optionally of one state. */
-declare const listLinesQuerySchema: z91.ZodObject<{
-	cursor: z91.ZodOptional<z91.ZodString>;
-	limit: z91.ZodDefault<z91.ZodPipe<z91.ZodPipe<z91.ZodUnion<readonly [z91.ZodNumber, z91.ZodString]>, z91.ZodTransform<number, string | number>>, z91.ZodNumber>>;
-	state: z91.ZodOptional<z91.ZodEnum<{
+declare const listLinesQuerySchema: z97.ZodObject<{
+	cursor: z97.ZodOptional<z97.ZodString>;
+	limit: z97.ZodDefault<z97.ZodPipe<z97.ZodPipe<z97.ZodUnion<readonly [z97.ZodNumber, z97.ZodString]>, z97.ZodTransform<number, string | number>>, z97.ZodNumber>>;
+	state: z97.ZodOptional<z97.ZodEnum<{
 		active: "active";
 		porting: "porting";
 		released: "released";
 	}>>;
-}, z91.core.$strict>;
+}, z97.core.$strict>;
 /** The query parameters of a request to list Lines. */
-type ListLinesQuery = z91.infer<typeof listLinesQuerySchema>;
+type ListLinesQuery = z97.infer<typeof listLinesQuerySchema>;
 /** One page of Lines. */
-declare const linePageSchema: z91.ZodObject<{
-	items: z91.ZodArray<z91.ZodObject<{
-		id: z91.core.$ZodBranded<z91.ZodString, "line", "out">;
-		number: z91.ZodString;
-		country: z91.ZodString;
-		label: z91.ZodNullable<z91.ZodPipe<z91.ZodString, z91.ZodString>>;
-		state: z91.ZodEnum<{
+declare const linePageSchema: z97.ZodObject<{
+	items: z97.ZodArray<z97.ZodObject<{
+		id: z97.core.$ZodBranded<z97.ZodString, "line", "out">;
+		number: z97.ZodString;
+		country: z97.ZodString;
+		label: z97.ZodNullable<z97.ZodPipe<z97.ZodString, z97.ZodString>>;
+		state: z97.ZodEnum<{
 			active: "active";
 			porting: "porting";
 			released: "released";
 		}>;
-		assignment: z91.ZodDiscriminatedUnion<[z91.ZodObject<{
-			kind: z91.ZodLiteral<"unassigned">;
-		}, z91.core.$strict>, z91.ZodObject<{
-			kind: z91.ZodLiteral<"team">;
-			teamId: z91.core.$ZodBranded<z91.ZodString, "team", "out">;
-		}, z91.core.$strict>, z91.ZodObject<{
-			kind: z91.ZodLiteral<"rep">;
-			membershipId: z91.core.$ZodBranded<z91.ZodString, "mem", "out">;
-		}, z91.core.$strict>], "kind">;
-		createdAt: z91.ZodISODateTime;
-		releasedAt: z91.ZodNullable<z91.ZodISODateTime>;
-	}, z91.core.$strip>>;
-	nextCursor: z91.ZodNullable<z91.ZodString>;
-}, z91.core.$strip>;
+		assignment: z97.ZodDiscriminatedUnion<[z97.ZodObject<{
+			kind: z97.ZodLiteral<"unassigned">;
+		}, z97.core.$strict>, z97.ZodObject<{
+			kind: z97.ZodLiteral<"team">;
+			teamId: z97.core.$ZodBranded<z97.ZodString, "team", "out">;
+		}, z97.core.$strict>, z97.ZodObject<{
+			kind: z97.ZodLiteral<"rep">;
+			membershipId: z97.core.$ZodBranded<z97.ZodString, "mem", "out">;
+		}, z97.core.$strict>], "kind">;
+		createdAt: z97.ZodISODateTime;
+		releasedAt: z97.ZodNullable<z97.ZodISODateTime>;
+	}, z97.core.$strip>>;
+	nextCursor: z97.ZodNullable<z97.ZodString>;
+}, z97.core.$strip>;
 /**
 * The body of a request to add a Line: buy a new number (optionally with an area code) or port
 * one the Organization already owns. The route accepts an `Idempotency-Key` header so a retry buys
 * one number.
 */
-declare const addLineRequestSchema: z91.ZodDiscriminatedUnion<[z91.ZodObject<{
-	method: z91.ZodLiteral<"buy">;
-	country: z91.ZodString;
-	areaCode: z91.ZodOptional<z91.ZodString>;
-	label: z91.ZodOptional<z91.ZodPipe<z91.ZodString, z91.ZodString>>;
-}, z91.core.$strict>, z91.ZodObject<{
-	method: z91.ZodLiteral<"port">;
-	number: z91.ZodPipe<z91.ZodString, z91.ZodString>;
-	label: z91.ZodOptional<z91.ZodPipe<z91.ZodString, z91.ZodString>>;
-}, z91.core.$strict>], "method">;
+declare const addLineRequestSchema: z97.ZodDiscriminatedUnion<[z97.ZodObject<{
+	method: z97.ZodLiteral<"buy">;
+	country: z97.ZodString;
+	areaCode: z97.ZodOptional<z97.ZodString>;
+	label: z97.ZodOptional<z97.ZodPipe<z97.ZodString, z97.ZodString>>;
+}, z97.core.$strict>, z97.ZodObject<{
+	method: z97.ZodLiteral<"port">;
+	number: z97.ZodPipe<z97.ZodString, z97.ZodString>;
+	label: z97.ZodOptional<z97.ZodPipe<z97.ZodString, z97.ZodString>>;
+}, z97.core.$strict>], "method">;
 /** The body of a request to add a Line. */
-type AddLineRequest = z91.infer<typeof addLineRequestSchema>;
+type AddLineRequest = z97.infer<typeof addLineRequestSchema>;
 /** The body of a request to assign a Line: to a Team, to a Rep, or to nobody. */
-declare const assignLineRequestSchema: z91.ZodDiscriminatedUnion<[z91.ZodObject<{
-	kind: z91.ZodLiteral<"unassigned">;
-}, z91.core.$strict>, z91.ZodObject<{
-	kind: z91.ZodLiteral<"team">;
-	teamId: z91.core.$ZodBranded<z91.ZodString, "team", "out">;
-}, z91.core.$strict>, z91.ZodObject<{
-	kind: z91.ZodLiteral<"rep">;
-	membershipId: z91.core.$ZodBranded<z91.ZodString, "mem", "out">;
-}, z91.core.$strict>], "kind">;
+declare const assignLineRequestSchema: z97.ZodDiscriminatedUnion<[z97.ZodObject<{
+	kind: z97.ZodLiteral<"unassigned">;
+}, z97.core.$strict>, z97.ZodObject<{
+	kind: z97.ZodLiteral<"team">;
+	teamId: z97.core.$ZodBranded<z97.ZodString, "team", "out">;
+}, z97.core.$strict>, z97.ZodObject<{
+	kind: z97.ZodLiteral<"rep">;
+	membershipId: z97.core.$ZodBranded<z97.ZodString, "mem", "out">;
+}, z97.core.$strict>], "kind">;
 /** The body of a request to assign a Line. */
-type AssignLineRequest = z91.infer<typeof assignLineRequestSchema>;
+type AssignLineRequest = z97.infer<typeof assignLineRequestSchema>;
 /** The roles that may use the Softphone and read the Lines and Calls they can see. */
 declare const VOICE_ALL_ROLES: readonly ["owner", "admin", "manager", "rep"];
 /** The roles that manage Lines and delete Recordings. */
@@ -20392,7 +22191,7 @@ type VoiceRoute = {
 * warning from the Contact Check (ADR 0003).
 */
 declare const VOICE_ROUTES: Readonly<Record<VoiceRouteName, VoiceRoute>>;
-import { z as z92 } from "zod";
+import { z as z98 } from "zod";
 /** The shortest a Softphone token lives, in seconds. */
 declare const MIN_SOFTPHONE_TOKEN_TTL_SECONDS = 60;
 /** The longest a Softphone token lives, in seconds: one hour. */
@@ -20404,24 +22203,24 @@ declare const MAX_SOFTPHONE_TOKEN_LENGTH = 4096;
 * is a credential for one Rep: shown once to the caller, never logged or stored, and it stops
 * working at `expiresAt`. The Rep takes Calls only while one is held.
 */
-declare const softphoneTokenSchema: z92.ZodObject<{
-	token: z92.ZodString;
-	identity: z92.core.$ZodBranded<z92.ZodString, "mem", "out">;
-	ttlSeconds: z92.ZodNumber;
-	expiresAt: z92.ZodISODateTime;
-}, z92.core.$strict>;
+declare const softphoneTokenSchema: z98.ZodObject<{
+	token: z98.ZodString;
+	identity: z98.core.$ZodBranded<z98.ZodString, "mem", "out">;
+	ttlSeconds: z98.ZodNumber;
+	expiresAt: z98.ZodISODateTime;
+}, z98.core.$strict>;
 /** A short-lived Softphone token. */
-type SoftphoneToken = z92.infer<typeof softphoneTokenSchema>;
-import { z as z93 } from "zod";
+type SoftphoneToken = z98.infer<typeof softphoneTokenSchema>;
+import { z as z99 } from "zod";
 /** The directions of a Call. */
 declare const VOICE_CALL_DIRECTIONS: readonly ["inbound", "outbound"];
 /** The direction of a Call: `outbound` is placed by a Rep to a Prospect, `inbound` rings on a Line. */
-declare const voiceCallDirectionSchema: z93.ZodEnum<{
+declare const voiceCallDirectionSchema: z99.ZodEnum<{
 	inbound: "inbound";
 	outbound: "outbound";
 }>;
 /** The direction of a Call. */
-type VoiceCallDirection = z93.infer<typeof voiceCallDirectionSchema>;
+type VoiceCallDirection = z99.infer<typeof voiceCallDirectionSchema>;
 /**
 * The states of a Call. It moves `ringing`, `connecting`, `disclosing`, `live`, `ended`, or ends
 * `failed` or `missed`. `live` is reached only after the Disclosure has played: a Call in `live` or
@@ -20429,7 +22228,7 @@ type VoiceCallDirection = z93.infer<typeof voiceCallDirectionSchema>;
 */
 declare const VOICE_CALL_STATES: readonly ["ringing", "connecting", "disclosing", "live", "ended", "failed", "missed"];
 /** The state of a Call. */
-declare const voiceCallStateSchema: z93.ZodEnum<{
+declare const voiceCallStateSchema: z99.ZodEnum<{
 	connecting: "connecting";
 	disclosing: "disclosing";
 	ended: "ended";
@@ -20439,13 +22238,13 @@ declare const voiceCallStateSchema: z93.ZodEnum<{
 	ringing: "ringing";
 }>;
 /** The state of a Call. */
-type VoiceCallState = z93.infer<typeof voiceCallStateSchema>;
+type VoiceCallState = z99.infer<typeof voiceCallStateSchema>;
 /** The states a Call can no longer leave. */
 declare const VOICE_CALL_FINAL_STATES: readonly ["ended", "failed", "missed"];
 /** Why a Call ended in `failed`: a closed list the portal maps to its own wording, never free text. */
 declare const VOICE_CALL_FAILURE_REASONS: readonly ["disclosure_failed", "carrier_dropped", "carrier_rejected", "busy", "no_answer", "rep_unreachable", "provider_error", "timeout"];
 /** Why a Call ended in `failed`. */
-declare const voiceCallFailureReasonSchema: z93.ZodEnum<{
+declare const voiceCallFailureReasonSchema: z99.ZodEnum<{
 	busy: "busy";
 	carrier_dropped: "carrier_dropped";
 	carrier_rejected: "carrier_rejected";
@@ -20456,11 +22255,11 @@ declare const voiceCallFailureReasonSchema: z93.ZodEnum<{
 	timeout: "timeout";
 }>;
 /** Why a Call ended in `failed`. */
-type VoiceCallFailureReason = z93.infer<typeof voiceCallFailureReasonSchema>;
+type VoiceCallFailureReason = z99.infer<typeof voiceCallFailureReasonSchema>;
 /** Who ended a Call that ended: the Rep, the Prospect, or the system (a time limit). */
 declare const VOICE_CALL_ENDED_BY: readonly ["rep", "prospect", "system"];
 /** Who ended a Call. */
-declare const voiceCallEndedBySchema: z93.ZodEnum<{
+declare const voiceCallEndedBySchema: z99.ZodEnum<{
 	prospect: "prospect";
 	rep: "rep";
 	system: "system";
@@ -20468,40 +22267,40 @@ declare const voiceCallEndedBySchema: z93.ZodEnum<{
 /** The state of a Call's Recording. `none` until the Disclosure has played; `storing` while it is copied to the Region's storage; `stored` once playable; `deleted` after an Admin deleted it. */
 declare const VOICE_RECORDING_STATES: readonly ["none", "storing", "stored", "deleted"];
 /** The state of a Call's Recording. */
-declare const voiceRecordingStateSchema: z93.ZodEnum<{
+declare const voiceRecordingStateSchema: z99.ZodEnum<{
 	deleted: "deleted";
 	none: "none";
 	stored: "stored";
 	storing: "storing";
 }>;
 /** The state of a Call's Recording. */
-type VoiceRecordingState = z93.infer<typeof voiceRecordingStateSchema>;
+type VoiceRecordingState = z99.infer<typeof voiceRecordingStateSchema>;
 /** The state of a Call's Transcript: `pending` until it is made, `ready` once readable, `deleted` after the Recording and Transcript were deleted. */
 declare const VOICE_TRANSCRIPT_STATES: readonly ["pending", "ready", "deleted"];
 /** The state of a Call's Transcript. */
-declare const voiceTranscriptStateSchema: z93.ZodEnum<{
+declare const voiceTranscriptStateSchema: z99.ZodEnum<{
 	deleted: "deleted";
 	pending: "pending";
 	ready: "ready";
 }>;
 /** The state of a Call's Transcript. */
-type VoiceTranscriptState = z93.infer<typeof voiceTranscriptStateSchema>;
+type VoiceTranscriptState = z99.infer<typeof voiceTranscriptStateSchema>;
 /** The most characters of a wrap-up note. */
 declare const MAX_WRAP_UP_NOTE_LENGTH = 2e3;
 /** A wrap-up note: bounded text with no control character; untrusted text for display. */
-declare const wrapUpNoteSchema: z93.ZodPipe<z93.ZodString, z93.ZodString>;
+declare const wrapUpNoteSchema: z99.ZodPipe<z99.ZodString, z99.ZodString>;
 /** The longest label of a Line. */
 declare const MAX_LINE_LABEL_LENGTH = 100;
 /** A label an Admin gives a Line: bounded text with no control character. */
-declare const lineLabelSchema: z93.ZodPipe<z93.ZodString, z93.ZodString>;
+declare const lineLabelSchema: z99.ZodPipe<z99.ZodString, z99.ZodString>;
 /** A two-letter ISO 3166-1 country code in upper case, such as `US` or `IE`. */
-declare const countryCodeSchema: z93.ZodString;
+declare const countryCodeSchema: z99.ZodString;
 /**
 * A keyed SHA-256 of a Prospect's E.164 number, as lower-case hex (64 characters). The key is the
 * Organization's, so a number cannot be recovered by hashing a list of guesses. Events carry this
 * and never the number.
 */
-declare const phoneHashSchema: z93.ZodString;
+declare const phoneHashSchema: z99.ZodString;
 /** This library's package name, so a consumer can report which shared libraries it resolved. */
 declare const PACKAGE = "tula-closeline-contract";
-export { ABANDON_MAX_AGE_HOURS, ACCEPTED_DOCUMENT_EXTENSIONS, ACCEPTED_DOCUMENT_MEDIA_TYPES, ACCEPTED_RECORDING_EXTENSIONS, ACCEPTED_TRANSCRIPT_EXTENSIONS, AGENT_ADMIN_ROLES, AGENT_ALL_ROLES, AGENT_CALLING_WINDOW, AGENT_CALL_OUTCOMES, AGENT_ERRORS, AGENT_EVENTS, AGENT_LANGUAGES, AGENT_READ_ROLES, AGENT_ROUTES, AGENT_TOOLS, AGENT_VOICE_STYLES, ALL_PLAYBOOK_ERRORS, ALL_PLAYBOOK_ROUTES, ALWAYS_HELD_REASONS, ANGLE_ORIGINS, APPROVAL_MODES, APPROVAL_REASONS, AUDIENCE_CHECK_STATES, AUTH_ERRORS, AUTH_OPTIONS_PATH, AUTH_OPTIONS_ROUTE, AcceptPlayRequest, AcceptPreviewRequest, AcceptedCallExtension, AcceptedDocumentExtension, AddLineRequest, AddSuppressionRequest, AddTeamMemberRequest, AgentErrorCode, AgentEventType, AgentRoute, AgentRouteName, AgentSettings, AgentToolName, AgentTurn, AgentVoiceStyle, AllPlaybookRouteName, AllowedOrigin, ApprovalPolicy, ApprovalQueueItem, ApprovalRule, ApproveDraftRequest, AssignLineRequest, Audience, AudienceCheck, AudienceCheckState, AudienceCounts, AuthErrorCode, AuthOptionsResponse, AuthProviders, AuthRoute, Availability, BOOKING_ADMIN_ROLES, BOOKING_ALL_ROLES, BOOKING_CANCELLED_BY, BOOKING_ERRORS, BOOKING_EVENTS, BOOKING_MODES, BOOKING_ORIGINS, BOOKING_ROUTES, BOOKING_STATES, BOOKING_TYPE_STATES, BULK_ASSIGN_SYNC_LIMIT, BookRequest, Booking, BookingErrorCode, BookingEventType, BookingId, BookingMode, BookingOrigin, BookingRoute, BookingRouteName, BookingState, BookingType, BookingTypeId, BookingTypeState, BranchCondition, BrandVoice, BrandVoiceId, BrandVoiceSettings, BriefAngle, BriefId, BriefStatement, BrowserSessionTokens, BulkAssignProspectsRequest, BulkAssignProspectsResponse, CALENDAR_CONNECTION_STATES, CALENDAR_PROVIDERS, CALL_CHANNELS, CALL_DELETED_MESSAGE, CALL_FAILURE_FIXES, CALL_FAILURE_REASONS, CALL_KINDS, CALL_MEDIA_TYPES, CALL_REP_CHANGED_MESSAGE, CALL_STATES, CALL_TRANSCRIBED_MESSAGE, CALL_UPLOADED_MESSAGE, CAMPAIGN_ADMIN_ROLES, CAMPAIGN_ALL_ROLES, CAMPAIGN_APPROVAL_MODES, CAMPAIGN_ERRORS, CAMPAIGN_EVENTS, CAMPAIGN_LANGUAGES, CAMPAIGN_ROUTES, CAMPAIGN_STATES, CHAT_ALL_ROLES, CHAT_ERRORS, CHAT_ROUTES, CHAT_STATES, CITATION_ROUTES, COMPANY_SIZE_BANDS, CONSENT_ADMIN_ROLES, CONSENT_ALL_ROLES, CONSENT_CHANNELS, CONSENT_ERRORS, CONSENT_EVENTS, CONSENT_FORM_STATES, CONSENT_GRANT_SOURCES, CONSENT_RECORDABLE_SOURCES, CONSENT_REQUIRED_CHANNELS, CONSENT_REVOKE_TRIGGERS, CONSENT_ROUTES, CONSENT_STATES, CONSENT_WITHDRAWAL_SOURCES, CONTACT_ALLOW_BASES, CONTACT_DENIAL_CODES, CONTACT_PURPOSES, CONVERSATION_CONTROLLERS, CONVERSATION_STATES, COPILOT_CARD_KINDS, COPILOT_COMPOSED_KINDS, COPILOT_ERRORS, COPILOT_EVENTS, COPILOT_OBJECTION_TYPES, COPILOT_QUIET_REASONS, COPILOT_RATINGS, COPILOT_ROUTES, COPILOT_STREAM_EVENTS, COPILOT_STREAM_STATES, COPILOT_TRANSCRIPT_UNAVAILABLE_REASONS, CORE_ERRORS, CREATE_DEMO_REQUEST_ERROR_CODES, CREATE_INVITATION_ERROR_CODES, CSV_FAILURES, CURRENT_RIGHTS_WORDING_VERSION, CalendarConnection, CalendarConnectionState, CalendarProvider, Call, CallCursor, CallDeletedPayload, CallDisclosure, CallFailureFix, CallFailureReason, CallId, CallKind, CallMediaType, CallParams, CallRepChangedPayload, CallState, CallTranscribedPayload, CallUploadedPayload, Campaign, CampaignApprovalMode, CampaignCursor, CampaignErrorCode, CampaignEventType, CampaignId, CampaignLanguage, CampaignRoute, CampaignRouteName, CampaignState, CampaignStats, CellResult, ChangeMemberRoleRequest, Chat, ChatErrorCode, ChatId, ChatMessage, ChatRoute, ChatRouteName, CheckCallFileResult, CheckDealImportHeaderResult, CheckDealImportHeaderTextResult, CheckDealImportRowResult, CheckUploadFileResult, CitationRef, CitationRouteName, CitationSource, Classification, CommonErrorCode, CompanySizeBand, CompleteCalendarConnectionRequest, CompleteMailboxConnectRequest, ConfirmRightsRequest, ConsentChannel, ConsentErrorCode, ConsentEvent, ConsentEventId, ConsentEventType, ConsentForm, ConsentFormId, ConsentFormState, ConsentGrantSource, ConsentRoute, ConsentRouteAccess, ConsentRouteName, ConsentSource, ConsentState, ConsentWithdrawalSource, ConsentWording, ConsentWordingId, ContactCheckId, ContactCheckLogEntry, ContactCheckRequest, ContactCheckResult, ContactDenialCode, ContactPurpose, ContactWarning, Conversation, ConversationController, ConversationId, ConversationState, CopilotCard, CopilotCardId, CopilotCardKind, CopilotDocumentSource, CopilotErrorCode, CopilotEventType, CopilotEvidence, CopilotMomentRef, CopilotObjectionType, CopilotQuote, CopilotRating, CopilotRoute, CopilotRouteName, CopilotSettings, CopilotStreamEventName, CopilotStreamMessage, CoreErrorCode, CreateBookingTypeRequest, CreateBriefRequest, CreateCampaignRequest, CreateConsentFormRequest, CreateConsentWordingRequest, CreateDemoRequestRequest, CreateDemoRequestResponse, CreateDraftRequest, CreateInvitationRequest, CreateProspectCompanyRequest, CreateProspectRequest, CreateQualificationQuestionRequest, CreateRoutingRuleRequest, CreateTeamRequest, CsvFailure, CsvOptions, CsvResult, DAILY_LIMIT_DETAILS_SCHEMA, DEAL_CLOSED_AT_MAX_YEAR, DEAL_CLOSED_AT_MIN_YEAR, DEAL_IMPORT_FAILURE_REASONS, DEAL_IMPORT_FILE_FIELD, DEAL_IMPORT_HEADER_PREFIX_CHARS, DEAL_IMPORT_HEADER_PROBLEMS, DEAL_IMPORT_OPTIONAL_COLUMN, DEAL_IMPORT_REQUIRED_COLUMNS, DEAL_IMPORT_ROW_REASONS, DEAL_IMPORT_ROW_RESULTS, DEAL_IMPORT_STATES, DEAL_IMPORT_UPLOADED_MESSAGE, DEAL_OUTCOME_CHANGED_MESSAGE, DECISION_KINDS, DEFAULT_AGENT_CALL_SECONDS, DEFAULT_COPILOT_MIN_DEALS, DEFAULT_COPILOT_MIN_MOMENTS, DEFAULT_MAX_CALLS, DEFAULT_MAX_DEALS, DEFAULT_MAX_DOCUMENTS, DEFAULT_MAX_DOCUMENT_BYTES_TOTAL, DEFAULT_MAX_RECORDING_BYTES_TOTAL, DEFAULT_PAGE_SIZE, DEFAULT_SEARCH_LIMIT, DELIVERY_FAILURE_REASONS, DOCUMENT_DELETED_MESSAGE, DOCUMENT_FAILURE_REASONS, DOCUMENT_RETENTION_DAYS, DOCUMENT_STATES, DOCUMENT_UPLOADED_MESSAGE, DOMAIN_CHECK_RECORDS, DOMAIN_CHECK_STATUSES, DRAFT_AUTHORS, DRAFT_CHANNELS, DRAFT_CHECKS, DRAFT_HOLD_REASONS, DRAFT_SOURCE_KINDS, DRAFT_STATUSES, Deal, DealCursor, DealId, DealImport, DealImportCursor, DealImportFailureReason, DealImportHeaderProblem, DealImportId, DealImportParams, DealImportRow, DealImportRowCursor, DealImportRowReason, DealImportRowResult, DealImportState, DealImportUploadedPayload, DealOutcomeChangedPayload, DealParams, DealRecordId, Decision, DecisionId, DecisionKind, DemoRequestId, DocumentDeletedPayload, DocumentFailureReason, DocumentFileName, DocumentId, DocumentMatch, DocumentMediaType, DocumentParams, DocumentSearchEvidence, DocumentState, DocumentUploadedPayload, DomainCheck, DomainCheckRecord, DomainCheckResult, DomainCheckStatus, Draft, DraftAuthor, DraftChannel, DraftCitation, DraftHoldReason, DraftId, DraftReason, DraftRelease, DraftSourceKind, DraftStatus, DuplicateIdentityDetails, ENROLLMENT_EVENT_KINDS, ENROLLMENT_STATES, ENROLLMENT_STOP_REASONS, ENROLL_REFUSALS, ENROLL_REFUSAL_CODES, ERRORS, EVIDENCE_CSV_COLUMNS, EditDraftRequest, EffectiveLimits, Email, EnrollProspectsRequest, EnrollRefusal, EnrollResult, Enrollment, EnrollmentEvent, EnrollmentEventId, EnrollmentId, EnrollmentState, EnrollmentStopReason, EraseProspectResponse, ErrorBody, ErrorDefinition, ErrorInput, EventId, EventType, EvidenceEvent, FIELD_HISTORY_STATES, FIXED_SOURCE_KINDS, FieldHistoryCursor, FieldHistoryEntry, FieldValue, FirstCsvRecordResult, GOOGLE_ERROR_PARAM, GOOGLE_ERROR_PATH, GOOGLE_ROUTES, GOOGLE_SIGN_UP_ATTEMPT_PARAM, GOOGLE_SIGN_UP_PATH, GoogleCompleteRequest, GoogleCompleteResponse, GoogleIntent, GoogleStartRequest, GoogleStartResponse, HANDOFF_CHANNELS, HANDOFF_REASONS, HANDOFF_RESULTS, HANDOFF_STATES, HEALTH_COMPONENTS, HEALTH_CRITICAL_SCORE, HEALTH_MINIMUM_SAMPLE, HEALTH_WARNING_SCORE, HEALTH_WINDOW_DAYS, Handoff, HandoffContext, HandoffId, HealthComponent, HealthComponentKind, HealthComponentState, HealthDaily, HealthSummary, HoldFacts, HostedConsentFormView, HostedConsentReceipt, HostedConsentSubmission, IDEMPOTENCY_KEY_HEADER, INBOX_ADMIN_ROLES, INBOX_ALL_ROLES, INBOX_CHANNELS, INBOX_ERRORS, INBOX_EVENTS, INBOX_REVIEW_ROLES, INBOX_ROUTES, INCOMPLETE_UPLOAD_PARTS_TTL_HOURS, INQUIRY_ADMIN_ROLES, INQUIRY_ALL_ROLES, INQUIRY_CALLBACK_STATES, INQUIRY_ERRORS, INQUIRY_EVENTS, INQUIRY_MANAGER_ROLES, INQUIRY_ROUTES, INQUIRY_SKIP_REASONS, INQUIRY_SOURCES, INTERNAL_CALL_ERRORS, INVITABLE_ROLES, INVITATION_STATES, Id, IdempotencyKey, InboxChannel, InboxErrorCode, InboxEventType, InboxRoute, InboxRouteName, IngestMessageRequest, Inquiry, InquiryCallback, InquiryCallbackState, InquiryEmbed, InquiryErrorCode, InquiryEventType, InquiryId, InquiryRoute, InquiryRouteName, InquirySkipReason, InquirySource, InternalAbandonOrganizationParams, InternalAbandonOrganizationRequest, InternalAbandonOrganizationResponse, InternalAcceptInvitationRequest, InternalAcceptInvitationResponse, InternalCallName, InternalCreateOrganizationRequest, InternalCreateOrganizationResponse, InternalMembershipRequest, InternalMembershipResponse, InternalRemoveOrganizationDocumentsParams, InternalRemoveOrganizationDocumentsRequest, InternalRemoveOrganizationDocumentsResponse, InternalUpdateMemberProfileParams, InternalUpdateMemberProfileRequest, InternalUpdateMemberProfileResponse, InvalidSequenceDetails, InvitableRole, Invitation, InvitationId, InvitationParams, InvitationState, LAUNCH_CHECKS, LAUNCH_CHECK_RESULTS, LINE_STATES, LIST_MEMBERS_MIN_ROLE, LIST_TEAM_MEMBERS_ERROR_CODES, LIST_TEAM_MEMBERS_MIN_ROLE, LaunchCheck, LaunchCheckName, LaunchCheckResult, LimitDetails, Line, LineAssignment, LineId, LineState, ListBookingsQuery, ListCallsQuery, ListCallsResponse, ListCampaignsQuery, ListConsentEventsQuery, ListContactChecksQuery, ListConversationsQuery, ListCopilotCardsQuery, ListDealImportRowsQuery, ListDealImportRowsResponse, ListDealImportsQuery, ListDealImportsResponse, ListDealsQuery, ListDealsResponse, ListDocumentsQuery, ListDocumentsResponse, ListDraftsQuery, ListEnrollmentsQuery, ListFieldHistoryQuery, ListFieldHistoryResponse, ListInquiriesQuery, ListInvitationsQuery, ListInvitationsResponse, ListLinesQuery, ListMailEventsQuery, ListMailboxesQuery, ListMembersQuery, ListMembersResponse, ListPlaysQuery, ListProspectCompaniesQuery, ListProspectCompaniesResponse, ListProspectDuplicatesQuery, ListProspectDuplicatesResponse, ListProspectImportRowsQuery, ListProspectImportRowsResponse, ListProspectImportsQuery, ListProspectImportsResponse, ListProspectsQuery, ListProspectsResponse, ListSendsQuery, ListSlotsQuery, ListSuppressionEntriesQuery, ListTeamMembersQuery, ListTeamMembersResponse, ListTeamsQuery, ListTeamsResponse, ListVoiceCallsQuery, LookupDealRequest, MAILBOX_KINDS, MAILBOX_PROVIDERS, MAILBOX_RAMP_STEPS, MAILBOX_STATES, MAILBOX_STATE_REASONS, MAIL_ADMIN_ROLES, MAIL_ALL_ROLES, MAIL_ERRORS, MAIL_EVENTS, MAIL_EVENT_KINDS, MAIL_REVIEW_ROLES, MAIL_ROUTES, MARKETING_ERRORS, MARKETING_ROUTES, MAX_AGENT_CALL_COST_USD_CENTS, MAX_AGENT_CALL_SECONDS, MAX_AGENT_CONCURRENCY, MAX_AGENT_GREETING_LENGTH, MAX_ALLOWED_ORIGINS, MAX_ANGLE_LENGTH, MAX_ANSWER_LENGTH, MAX_ATTEMPT_EPOCH, MAX_AUDIENCE_PROSPECTS, MAX_AUTHORIZATION_URL_LENGTH, MAX_AWAY_DAYS, MAX_BANNED_PHRASES, MAX_BOOKING_BUFFER_MINUTES, MAX_BOOKING_LENGTH_MINUTES, MAX_BOOKING_NAME_LENGTH, MAX_BOOKING_NOTICE_MINUTES, MAX_BRANCH_ARMS, MAX_BRIEF_STATEMENTS, MAX_BRIEF_STATEMENT_LENGTH, MAX_BULK_ASSIGN_PROSPECTS, MAX_CALLBACK_ATTEMPTS, MAX_CALL_DURATION_SECONDS, MAX_CALL_SPEAKERS, MAX_CAMPAIGN_DAILY_CAP, MAX_CAMPAIGN_NAME_LENGTH, MAX_CITATION_REFS, MAX_CITATION_URL_LENGTH, MAX_CONDITION_VALUES, MAX_CONSENT_FORM_NAME_LENGTH, MAX_CONSENT_WORDING_LENGTH, MAX_COPILOT_CARDS_PER_CALL, MAX_COPILOT_CARD_TEXT_LENGTH, MAX_COPILOT_CITED_MOMENTS, MAX_COPILOT_MIN_EVIDENCE, MAX_COPILOT_QUOTE_LENGTH, MAX_COPILOT_STREAM_ID_LENGTH, MAX_CURSOR_LENGTH, MAX_DAILY_BOOKING_CAP, MAX_DEAL_ID_BYTES, MAX_DEAL_ID_LENGTH, MAX_DEAL_IMPORT_BYTES, MAX_DEAL_IMPORT_CELL_LENGTH, MAX_DEAL_IMPORT_HEADER_LENGTH, MAX_DEAL_IMPORT_ROWS, MAX_DEAL_NAME_BYTES, MAX_DEAL_NAME_LENGTH, MAX_DECISION_NOTE_LENGTH, MAX_DELETION_SEQ, MAX_DEMO_REQUEST_FIELD_LENGTH, MAX_DEMO_REQUEST_MESSAGE_LENGTH, MAX_DOCUMENT_BYTES, MAX_DOCUMENT_FILE_NAME_BYTES, MAX_DOCUMENT_FILE_NAME_LENGTH, MAX_DOCUMENT_PAGES, MAX_DOMAIN_CHECK_TEXT_LENGTH, MAX_DRAFT_BODY_LENGTH, MAX_DRAFT_CITATIONS, MAX_DRAFT_SOURCES, MAX_DRAFT_SUBJECT_LENGTH, MAX_ELIGIBLE_REPS, MAX_EMAIL_LENGTH, MAX_EVIDENCE_REF_LENGTH, MAX_EXCEPT_LABELS, MAX_FIELD_HISTORY_ENTRIES, MAX_GOAL_LENGTH, MAX_HANDOFF_CONTEXT_TURNS, MAX_HONEYPOT_LENGTH, MAX_INQUIRY_MESSAGE_LENGTH, MAX_LINE_LABEL_LENGTH, MAX_MAILBOX_NAME_LENGTH, MAX_MAILBOX_TEAMS, MAX_MERGED_PROSPECTS, MAX_MESSAGE_BODY_LENGTH, MAX_MIN_GAP_SECONDS, MAX_MOMENT_SNIPPET_CHARACTERS, MAX_NAME_LENGTH, MAX_PAGE_SIZE, MAX_PERSON_NAME_LENGTH, MAX_PLAYBACK_URL_LENGTH, MAX_PLAY_CITATIONS, MAX_PREFERRED_WORDS, MAX_PREVIEW_PROSPECTS, MAX_PROMOTION_SAMPLE, MAX_PROPOSED_PLAYS, MAX_PROSPECTS_PER_REQUEST, MAX_PROSPECT_COMPANY_NAME_LENGTH, MAX_PROSPECT_FIELD_VALUE_LENGTH, MAX_PROSPECT_IMPORT_BYTES, MAX_PROSPECT_IMPORT_ROWS, MAX_PROSPECT_JOB_TITLE_LENGTH, MAX_PROSPECT_NAME_PART_LENGTH, MAX_PROSPECT_NOTES_LENGTH, MAX_PROSPECT_SEARCH_LENGTH, MAX_PROSPECT_TAGS, MAX_PROSPECT_TAG_LENGTH, MAX_PUBLIC_BOOKING_FIELD_LENGTH, MAX_QUALIFICATION_QUESTIONS, MAX_QUALIFICATION_SUMMARY_LENGTH, MAX_QUESTION_CHOICES, MAX_QUESTION_PROMPT_LENGTH, MAX_QUESTION_SUGGESTIONS, MAX_QUEUED_DEAL_IMPORTS, MAX_RECORDING_BYTES, MAX_RECORDING_KEY_LENGTH, MAX_RECORDING_SECONDS, MAX_REGION_LENGTH, MAX_REP_FIELD_LENGTH, MAX_REP_FOLLOWING_CHARACTERS, MAX_REP_FOLLOWING_TURNS, MAX_RETURN_TO_LENGTH, MAX_RIGHTS_HEADING_LENGTH, MAX_RIGHTS_PARAGRAPHS, MAX_RIGHTS_TEXT_LENGTH, MAX_RIGHTS_WORDING_VERSION, MAX_ROUTING_RULES, MAX_SEARCH_CANDIDATES, MAX_SEARCH_LIMIT, MAX_SEARCH_TEXT_CHARACTERS, MAX_SEARCH_TURNS, MAX_SENDS_PER_DAY, MAX_SENDS_PER_HOUR, MAX_SEQ, MAX_SEQUENCE_PROBLEMS, MAX_SEQUENCE_STEP, MAX_SEQUENCE_STEPS, MAX_SIGN_OFF_LENGTH, MAX_SKIP_CONDITIONS, MAX_SLOT_RANGE_DAYS, MAX_SOFTPHONE_TOKEN_LENGTH, MAX_SOFTPHONE_TOKEN_TTL_SECONDS, MAX_SOURCE_PASSAGE_LENGTH, MAX_SOURCE_REF_LENGTH, MAX_SOURCE_URL_LENGTH, MAX_SPEAKER_EXCERPT_LENGTH, MAX_SPEAKER_LABEL_BYTES, MAX_SPEAKER_LABEL_LENGTH, MAX_STEP_TEXT_LENGTH, MAX_STRATEGY_LENGTH, MAX_SUPPRESSION_IMPORT_BYTES, MAX_SUPPRESSION_IMPORT_ROWS, MAX_SUPPRESSION_NOTE_LENGTH, MAX_TONE_LENGTH, MAX_TRANSCRIPT_BYTES, MAX_TRANSCRIPT_TURN_LENGTH, MAX_TURN_SOURCES, MAX_TURN_TEXT_LENGTH, MAX_UTF8_BYTES_PER_CODE_POINT, MAX_VARIANTS, MAX_VOICE_LENGTH_CHARACTERS, MAX_VOICE_TERM_LENGTH, MAX_WAIT_HOURS, MAX_WINDOWS_PER_DAY, MAX_WRAP_UP_NOTE_LENGTH, MEDIA_TYPE_BY_CALL_EXTENSION, MEDIA_TYPE_BY_EXTENSION, MESSAGE_AUTHOR_KINDS, MESSAGE_DIRECTIONS, MESSAGE_FAILURE_REASONS, MESSAGING_ADMIN_ROLES, MESSAGING_ALL_ROLES, MESSAGING_ERRORS, MESSAGING_EVENTS, MESSAGING_ROUTES, MIN_COPILOT_MIN_EVIDENCE, MIN_QUESTION_CHOICES, MIN_SOFTPHONE_TOKEN_TTL_SECONDS, MIN_VARIANTS, MIN_VARIANT_SAMPLE, MailCapacity, MailErrorCode, MailEvent, MailEventId, MailEventKind, MailEventType, MailRoute, MailRouteName, Mailbox, MailboxCapacity, MailboxConnectStart, MailboxHealth, MailboxId, MailboxKind, MailboxLimits, MailboxProvider, MailboxState, MailboxStateReason, MarkCopilotCardRequest, MarketingErrorCode, MarketingRoute, MarketingRouteName, Member, MemberParams, MembershipId, MergeProspectsRequest, Message, MessageAuthorKind, MessageDirection, MessageFailureReason, MessageId, MessagingErrorCode, MessagingEventType, MessagingRoute, MessagingRouteName, MomentMatch, OIDC_COOKIE_BASE_NAME, OIDC_COOKIE_SECURE_PREFIX, ONE_ADDRESS_MESSAGE, ORGANIZATION_STATUSES, OUTCOMES, OneClickUnsubscribeRequest, Organization, OrganizationId, OrganizationMailLimits, OrganizationStatus, Outcome, OutreachDraft, OutreachDraftCheck, PACKAGE, PAUSE_SEQUENCE_LABELS, PLAYBOOK_ERRORS, PLAYBOOK_READ_ROLES, PLAYBOOK_ROUTES, PLAYBOOK_WRITE_ROLES, PLAY_INTENTS, PLAY_SOURCES, PLAY_STATUSES, PREVIEW_FAILURE_CODES, PROMOTION_SOURCES, PROSPECT_ADMIN_ROLES, PROSPECT_ALL_ROLES, PROSPECT_COMPANY_FIELD_NAMES, PROSPECT_ERRORS, PROSPECT_EVENTS, PROSPECT_FIELD_NAMES, PROSPECT_IDENTITY_KINDS, PROSPECT_IMPORT_COLUMNS, PROSPECT_IMPORT_FAILURE_REASONS, PROSPECT_IMPORT_FILE_FIELD, PROSPECT_IMPORT_INVALID_REASONS, PROSPECT_IMPORT_REJECT_REASONS, PROSPECT_IMPORT_REPORT_COLUMNS, PROSPECT_IMPORT_ROW_RESULTS, PROSPECT_IMPORT_SKIP_REASONS, PROSPECT_IMPORT_STATES, PROSPECT_MERGE_STATES, PROSPECT_MERGE_UNDO_DAYS, PROSPECT_ROUTES, PROSPECT_STATUSES, Page, PageQuery, ParseRepFieldResult, ParsedDealImportRow, PlaceCallRequest, PlacedCall, Play, PlayCitation, PlayId, PlayIntent, PlaySource, PlayStatus, PlaybookDocument, PlaybookErrorCode, PlaybookRoute, PlaybookRouteName, PreviewItem, PreviewRequest, PreviewResult, PromotionPolicy, PromotionSource, Prospect, ProspectCompany, ProspectCompanyCursor, ProspectCompanyFieldName, ProspectCompanyFieldParams, ProspectCompanyId, ProspectCompanyParams, ProspectConsent, ProspectCursor, ProspectDuplicate, ProspectDuplicateCursor, ProspectErrorCode, ProspectEventType, ProspectFieldName, ProspectFieldParams, ProspectId, ProspectIdentityKind, ProspectImport, ProspectImportCursor, ProspectImportFailureReason, ProspectImportId, ProspectImportInvalidDetails, ProspectImportParams, ProspectImportRow, ProspectImportRowCursor, ProspectImportRowReason, ProspectImportRowResult, ProspectImportState, ProspectMerge, ProspectMergeId, ProspectMergeParams, ProspectNotFoundDetails, ProspectParams, ProspectRoute, ProspectRouteName, ProspectStatus, PublicBookRequest, PublicBookingConfirmation, PublicBookingType, PublicChatConsentReceipt, PublicChatConsentRequest, PublicChatMessage, PublicChatReply, PublicInquiryFormView, PublicInquiryReceipt, PublicInquiryRequest, PublicSlot, QUALIFICATION_QUESTION_KINDS, Qualification, QualificationAnswer, QualificationQuestion, QualificationQuestionId, QualificationQuestionKind, QualificationValue, RECORDING_MEDIA_TYPES, REGIONS, REPLY_LABELS, REP_TASK_TYPES, RIGHTS_WORDINGS, ROLES, ROUTING_CANDIDATE_REASONS, ROUTING_ROLES, ROUTING_SKIP_REASONS, Ramp, RateInterval, RecordConsentRequest, RecordDeliveryFailureRequest, RecordWithdrawalRequest, RecordedConsent, RecordingPlayback, RegenerateDraftRequest, Region, RemoveSuppressionRequest, RenameOrganizationRequest, RenameTeamRequest, RepChoice, RepTaskType, ReplyLabel, RequestId, RescheduleBookingRequest, ResearchBrief, ResolveCitationsRequest, ResolveCitationsResponse, ResolvedCitation, RetryAfterDetails, RightsConfirmation, RightsRequiredDetails, RightsStatus, RightsWording, Role, RouteRequest, RoutingAttributes, RoutingConditions, RoutingDecisionId, RoutingResult, RoutingRule, RoutingRuleId, RoutingSkipReason, RoutingTarget, SALES_HISTORY_ERRORS, SALES_HISTORY_READ_ROLES, SALES_HISTORY_ROUTES, SEARCH_ROUTES, SEND_CHECKS, SEND_DEFERRING_REASONS, SEND_REFUSAL_REASONS, SEND_STATES, SEQUENCE_PROBLEMS, SIGNUP_ERRORS, SKIP_OPERATORS, STEP_KINDS, STOP_SENDING_LABELS, SUPPRESSION_ADDRESS_KINDS, SUPPRESSION_IMPORT_COLUMNS, SUPPRESSION_IMPORT_FAILURE_REASONS, SUPPRESSION_IMPORT_FILE_FIELD, SUPPRESSION_IMPORT_ROW_RESULTS, SUPPRESSION_IMPORT_STATES, SUPPRESSION_REASONS, SUPPRESSION_REMOVABLE_REASONS, SalesHistoryErrorCode, SalesHistoryRoute, SalesHistoryRouteName, SearchDocumentsRequest, SearchDocumentsResponse, SearchEvidence, SearchMomentsRequest, SearchMomentsResponse, SearchRouteName, SearchTurn, SendCheck, SendId, SendKey, SendRecord, SendRefusalReason, SendState, SendWindow, Sequence, SequenceProblem, SequenceProblemCode, SetAgentSettingsRequest, SetBrandVoiceRequest, SetCallRepRequest, SetCopilotSettingsRequest, SetDealOutcomeRequest, SetInquiryEmbedRequest, SetMailboxLimitsRequest, SetProspectOwnerRequest, SetSequenceRequest, SignalId, SignupErrorCode, SkipCondition, Slot, SoftphoneToken, Source, SourceKind, SourcePassage, SpeakerExcerpt, StartCalendarConnectionRequest, StartCalendarConnectionResponse, StartMailboxConnectRequest, Step, StepKey, StepKind, StepVariantResults, SubmitSendRequest, SuggestedQualificationQuestion, SuppressionAddressKind, SuppressionEntry, SuppressionEntryId, SuppressionImport, SuppressionImportId, SuppressionImportRow, SuppressionReason, Team, TeamId, TeamMember, TeamMemberParams, TeamParams, TestRoutingRequest, TranscriptPage, TranscriptTurn, TrySession, TrySessionId, UPLOAD_CONTENT_TYPE, UPLOAD_FILE_FIELD, UnsubscribePage, UnsubscribePreview, UnsubscribeReceipt, UnsubscribeResult, UpdateCampaignRequest, UpdateConsentWordingRequest, UpdateProspectCompanyRequest, UpdateProspectRequest, UpdateQualificationQuestionRequest, UploadCallFields, UploadDocumentFile, UserId, VARIANT_RESULT_STATUSES, VARIANT_WEIGHT_TOTAL, VOICE_ADMIN_ROLES, VOICE_ALL_ROLES, VOICE_CALL_DIRECTIONS, VOICE_CALL_ENDED_BY, VOICE_CALL_FAILURE_REASONS, VOICE_CALL_FINAL_STATES, VOICE_CALL_OUTCOMES, VOICE_CALL_STATES, VOICE_ERRORS, VOICE_EVENTS, VOICE_RECORDING_STATES, VOICE_ROUTES, VOICE_TRANSCRIPT_STATES, Variant, VariantGroup, VariantResult, VoiceCall, VoiceCallDirection, VoiceCallFailureReason, VoiceCallState, VoiceErrorCode, VoiceEventType, VoiceRecordingState, VoiceRoute, VoiceRouteName, VoiceTranscriptState, WEEKDAYS, WINDOW_ZONES, Weekday, WindowZone, WithdrawConsentRequest, WorkingWindow, WrapUpRequest, acceptPlayRequestSchema, acceptPreviewRequestSchema, addLineRequestSchema, addSuppressionRequestSchema, addTeamMemberRequestSchema, addressFieldsShape, agentCallOutcomeSchema, agentCallParamsSchema, agentLanguageSchema, agentSettingsSchema, agentToolNameSchema, agentTurnPageSchema, agentTurnRoleSchema, agentTurnSchema, agentVoiceStyleSchema, allowedOriginSchema, angleOriginSchema, answerHandoffRequestSchema, approvalPoliciesSchema, approvalPolicySchema, approvalQueueCursorSchema, approvalQueueItemSchema, approvalQueuePageSchema, approvalRuleSchema, approveDraftRequestSchema, assignLineRequestSchema, attemptIdSchema, audienceCheckSchema, audienceCheckStateSchema, audienceCountsSchema, audienceSchema, authOptionsResponseSchema, authProvidersSchema, authorizationUrlSchema, availabilitySchema, bookHeadersSchema, bookRequestSchema, bookingCancelledBySchema, bookingCancelledEvent, bookingCreatedEvent, bookingCursorSchema, bookingIdSchema, bookingLinkTokenSchema, bookingModeSchema, bookingNameSchema, bookingOriginSchema, bookingPageSchema, bookingParamsSchema, bookingRescheduledEvent, bookingSchema, bookingStateSchema, bookingTypeCursorSchema, bookingTypeIdSchema, bookingTypeParamsSchema, bookingTypeSchema, bookingTypeStateSchema, boundedTextSchema, branchArmSchema, branchConditionSchema, branchStepSchema, brandVoiceIdSchema, brandVoiceSchema, brandVoiceSettingsSchema, briefAngleSchema, briefIdSchema, briefStatementSchema, browserSessionTokensSchema, bulkAssignProspectsRequestSchema, bulkAssignProspectsResponseSchema, calendarConnectionSchema, calendarConnectionStateSchema, calendarDateSchema, calendarProviderSchema, callChannelSchema, callCursorSchema, callDeletedPayloadSchema, callDisclosureSchema, callFailureReasonSchema, callIdSchema, callKindSchema, callListItemSchema, callMediaTypeSchema, callParamsSchema, callRepChangedPayloadSchema, callReuploadRequeues, callSchema, callStateSchema, callTranscribedPayloadSchema, callUploadedPayloadSchema, campaignApprovalModeSchema, campaignCursorSchema, campaignEnrollmentsParamsSchema, campaignIdSchema, campaignLanguageSchema, campaignLaunchedEvent, campaignNameSchema, campaignParamsSchema, campaignSchema, campaignStateSchema, campaignStatsSchema, changeMemberRoleRequestSchema, channelConsentSchema, channelParamsSchema, chatIdSchema, chatMessagePageSchema, chatMessageSchema, chatPageSchema, chatParamsSchema, chatSchema, chatSessionTokenSchema, chatStateSchema, chatTextSchema, checkCallFile, checkDealImportHeader, checkDealImportHeaderText, checkDealImportRow, checkUploadFile, citationRefSchema, citationSourceSchema, citationUrlSchema, classificationSchema, companySizeBandSchema, completeCalendarConnectionRequestSchema, completeMailboxConnectRequestSchema, confidenceSchema, confirmRightsRequestSchema, consentChannelSchema, consentEventIdSchema, consentEventPageSchema, consentEventSchema, consentFormIdSchema, consentFormPageSchema, consentFormParamsSchema, consentFormSchema, consentFormStateSchema, consentGrantSourceSchema, consentGrantedEvent, consentProspectParamsSchema, consentRevokeTriggerSchema, consentSourceSchema, consentStateSchema, consentTokenParamsSchema, consentTokenSchema, consentWithdrawalSourceSchema, consentWithdrawnEvent, consentWordingIdSchema, consentWordingPageSchema, consentWordingParamsSchema, consentWordingSchema, consentWordingTextSchema, contactCheckIdSchema, contactCheckLogEntrySchema, contactCheckLogPageSchema, contactCheckRequestSchema, contactCheckResultSchema, contactDenialCodeSchema, contactPurposeSchema, contactWarningSchema, conversationActionRequestSchema, conversationControllerSchema, conversationCursorSchema, conversationHandedBackEvent, conversationIdSchema, conversationMessageParamsSchema, conversationPageSchema, conversationParamsSchema, conversationSchema, conversationStateSchema, conversationTakenOverEvent, copilotCallParamsSchema, copilotCardCursorSchema, copilotCardDataSchema, copilotCardIdSchema, copilotCardKindSchema, copilotCardPageSchema, copilotCardParamsSchema, copilotCardSchema, copilotCardTextSchema, copilotDocumentSourceSchema, copilotEvidenceSchema, copilotMomentKey, copilotMomentRefSchema, copilotObjectionTypeSchema, copilotQuietReasonSchema, copilotQuoteSchema, copilotQuoteTextSchema, copilotRatingSchema, copilotSettingsSchema, copilotStatusDataSchema, copilotStreamHeadersSchema, copilotStreamIdSchema, copilotStreamMessageSchema, copilotStreamStateSchema, copilotTextSchema, copilotTranscriptUnavailableDataSchema, copilotTurnDataSchema, correctClassificationRequestSchema, countSchema, countryCodeSchema, createBookingTypeRequestSchema, createBriefRequestSchema, createCampaignRequestSchema, createConsentFormRequestSchema, createConsentWordingRequestSchema, createDemoRequestRequestSchema, createDemoRequestResponseSchema, createDraftRequestSchema, createInvitationRequestSchema, createPlayRequestSchema, createProspectCompanyRequestSchema, createProspectRequestSchema, createQualificationQuestionRequestSchema, createRoutingRuleRequestSchema, createTeamRequestSchema, dealAmountSchema, dealCurrencySchema, dealCursorSchema, dealIdSchema, dealImportCursorSchema, dealImportFailureReasonSchema, dealImportIdSchema, dealImportParamsSchema, dealImportRowCursorSchema, dealImportRowReasonSchema, dealImportRowResultSchema, dealImportRowSchema, dealImportSchema, dealImportStateSchema, dealImportUploadedPayloadSchema, dealNameSchema, dealOutcomeChangedPayloadSchema, dealParamsSchema, dealRecordIdSchema, dealSchema, decisionCursorSchema, decisionIdSchema, decisionKindSchema, decisionNoteSchema, decisionPageSchema, decisionSchema, decodeCursor, defineErrors, defineEvent, deletedRecordingSchema, demoRequestIdSchema, demoRequestMessageSchema, demoRequestSourcePageSchema, documentDeletedPayloadSchema, documentExtension, documentFailureReasonSchema, documentFileNameSchema, documentIdSchema, documentMatchSchema, documentMediaTypeSchema, documentParamsSchema, documentQueryText, documentSchema, documentSearchEvidenceSchema, documentSizeCheckSchema, documentStateSchema, documentTypeCheckSchema, documentUploadedPayloadSchema, domainCheckRecordSchema, domainCheckResultSchema, domainCheckSchema, domainCheckStatusSchema, draftApprovalRequiredEvent, draftAuthorSchema, draftChannelSchema, draftCheckNameSchema, draftCheckSchema, draftCitationSchema, draftCreatedEvent, draftHoldReasonSchema, draftIdSchema, draftParamsSchema, draftReasonSchema, draftReleaseSchema, draftSchema, draftSourceKindSchema, draftSourceSchema, draftSourcesSchema, draftStatusSchema, duplicateCampaignRequestSchema, duplicateIdentityDetailsSchema, e164PhoneSchema, editDraftRequestSchema, editPlayRequestSchema, effectiveLimitsSchema, emailSchema, emailStepSchema, encodeCursor, endStepSchema, enrollProspectsRequestSchema, enrollProspectsResponseSchema, enrollRefusalSchema, enrollResultSchema, enrollmentActivityCursorSchema, enrollmentCursorSchema, enrollmentEventIdSchema, enrollmentEventKindSchema, enrollmentEventSchema, enrollmentIdSchema, enrollmentParamsSchema, enrollmentSchema, enrollmentStateSchema, enrollmentStopReasonSchema, enrollmentStoppedEvent, eraseProspectResponseSchema, errorBodySchema, errorCodeSchema, eventEnvelopeSchema, eventIdSchema, eventTypeSchema, evidenceEventSchema, evidencePageSchema, evidenceRefSchema, excerptText, fieldHistoryCursorSchema, fieldHistoryEntrySchema, fieldHistoryStateSchema, fieldValueSchema, findSequenceProblems, firstCsvRecord, foldAscii, formatCopilotStreamFrame, formatId, getTranscriptQuerySchema, goalSchema, googleCompleteRequestSchema, googleCompleteResponseSchema, googleErrorQuerySchema, googleIntentSchema, googleSignUpQuerySchema, googleStartRequestSchema, googleStartResponseSchema, handoffChannelSchema, handoffContextSchema, handoffIdSchema, handoffPageSchema, handoffParamsSchema, handoffReasonSchema, handoffResultSchema, handoffSchema, handoffStateSchema, hasControlCharacter, hasExactlyOneAddress, hasStrippableCharacter, healthComponentKindSchema, healthComponentSchema, healthComponentStateSchema, healthDailyPageSchema, healthDailySchema, healthHistoryCursorSchema, healthSummarySchema, holdReasonFor, hostedConsentFormViewSchema, hostedConsentReceiptSchema, hostedConsentSubmissionSchema, hoursSchema, idSchema, idempotencyKeySchema, inboxChannelSchema, inboxKeyedHeadersSchema, ingestMessageRequestSchema, ingestMessageResultSchema, inquiryCallbackSchema, inquiryCallbackStateSchema, inquiryConsentSchema, inquiryCursorSchema, inquiryEmbedSchema, inquiryIdSchema, inquiryKeySchema, inquiryKeyedHeadersSchema, inquiryMessageSchema, inquiryPageSchema, inquiryParamsSchema, inquirySchema, inquirySkipReasonSchema, inquirySourceSchema, internalAbandonOrganizationParamsSchema, internalAbandonOrganizationRequestSchema, internalAbandonOrganizationResponseSchema, internalAcceptInvitationRequestSchema, internalAcceptInvitationResponseSchema, internalCreateOrganizationRequestSchema, internalCreateOrganizationResponseSchema, internalMembershipRequestSchema, internalMembershipResponseSchema, internalRemoveOrganizationDocumentsParamsSchema, internalRemoveOrganizationDocumentsRequestSchema, internalRemoveOrganizationDocumentsResponseSchema, internalUpdateMemberProfileParamsSchema, internalUpdateMemberProfileRequestSchema, internalUpdateMemberProfileResponseSchema, invalidSequenceDetailsSchema, invitableRoleSchema, invitationIdSchema, invitationParamsSchema, invitationSchema, invitationStateSchema, invitationTokenSchema, isBlankCsvRecord, isComposedKind, isWellFormedText, joinUrlSchema, launchCheckItemSchema, launchCheckNameSchema, launchCheckResultSchema, launchCheckSchema, limitDetailsSchema, lineAssignmentSchema, lineCursorSchema, lineIdSchema, lineLabelSchema, linePageSchema, lineParamsSchema, lineSchema, lineStateSchema, listAgentTurnsQuerySchema, listApprovalQueueQuerySchema, listBookingTypesQuerySchema, listBookingsQuerySchema, listBrandVoiceVersionsQuerySchema, listBrandVoiceVersionsResponseSchema, listBriefsQuerySchema, listBriefsResponseSchema, listCallsQuerySchema, listCallsResponseSchema, listCampaignsQuerySchema, listCampaignsResponseSchema, listChatMessagesQuerySchema, listChatsQuerySchema, listConsentEventsQuerySchema, listConsentFormsQuerySchema, listConsentWordingsQuerySchema, listContactChecksQuerySchema, listConversationsQuerySchema, listCopilotCardsQuerySchema, listDealImportRowsQuerySchema, listDealImportRowsResponseSchema, listDealImportsQuerySchema, listDealImportsResponseSchema, listDealsQuerySchema, listDealsResponseSchema, listDecisionsQuerySchema, listDocumentsQuerySchema, listDocumentsResponseSchema, listDraftsQuerySchema, listDraftsResponseSchema, listEnrollmentActivityResponseSchema, listEnrollmentsQuerySchema, listEnrollmentsResponseSchema, listEvidenceQuerySchema, listFieldHistoryQuerySchema, listFieldHistoryResponseSchema, listHandoffsQuerySchema, listHealthHistoryQuerySchema, listInquiriesQuerySchema, listInvitationsQuerySchema, listInvitationsResponseSchema, listLinesQuerySchema, listMailEventsQuerySchema, listMailboxesQuerySchema, listMembersQuerySchema, listMembersResponseSchema, listMessagesQuerySchema, listPlaysQuerySchema, listPlaysResponseSchema, listProspectCompaniesQuerySchema, listProspectCompaniesResponseSchema, listProspectDuplicatesQuerySchema, listProspectDuplicatesResponseSchema, listProspectImportRowsQuerySchema, listProspectImportRowsResponseSchema, listProspectImportsQuerySchema, listProspectImportsResponseSchema, listProspectsQuerySchema, listProspectsResponseSchema, listQualificationQuestionsQuerySchema, listRoutingRulesQuerySchema, listSendsQuerySchema, listSlotsQuerySchema, listSuppressionEntriesQuerySchema, listSuppressionImportRowsQuerySchema, listSuppressionImportsQuerySchema, listTeamMembersQuerySchema, listTeamMembersResponseSchema, listTeamsQuerySchema, listTeamsResponseSchema, listVoiceCallsQuerySchema, lookupDealRequestSchema, lookupSuppressionRequestSchema, mailBouncedEvent, mailCapacitySchema, mailComplainedEvent, mailEventCursorSchema, mailEventIdSchema, mailEventKindSchema, mailEventPageSchema, mailEventSchema, mailKeyedHeadersSchema, mailOutOfOfficeEvent, mailProviderMessageIdSchema, mailRepliedEvent, mailUnsubscribedEvent, mailboxCapacitySchema, mailboxConnectStartSchema, mailboxCursorSchema, mailboxHealthSchema, mailboxIdSchema, mailboxKindSchema, mailboxLimitsSchema, mailboxPageSchema, mailboxParamsSchema, mailboxProviderSchema, mailboxSchema, mailboxStateChangedEvent, mailboxStateReasonSchema, mailboxStateSchema, markCopilotCardRequestSchema, maskedAddressSchema, memberParamsSchema, memberSchema, membershipIdSchema, mergeProspectsRequestSchema, messageApprovedEvent, messageAuthorKindSchema, messageBodySchema, messageCursorSchema, messageDirectionSchema, messageFailedEvent, messageFailureReasonSchema, messageIdSchema, messagePageSchema, messageSchema, messageSentEvent, messagingTextSchema, minuteOfDaySchema, momentMatchSchema, momentQueryText, momentSnippet, momentSnippetSchema, multilineTextSchema, normaliseDealId, normaliseFileName, normaliseMediaType, normaliseSpeakerLabel, oneClickUnsubscribeBodySchema, oneClickUnsubscribeRequestSchema, organizationIdSchema, organizationMailLimitsSchema, organizationNameSchema, organizationSchema, organizationStatusSchema, outcomeSchema, outreachDraftCheckSchema, outreachDraftSchema, pageQuerySchema, pageSchema, parseAmountCell, parseClosedAtCell, parseCsv, parseCurrencyCell, parseOutcomeCell, parseRepField, personNameSchema, phoneHashSchema, placeCallHeadersSchema, placeCallRequestSchema, placedCallSchema, playCitationSchema, playCursorSchema, playIdSchema, playIntentSchema, playParamsSchema, playSchema, playSourceSchema, playStatusSchema, previewFailureCodeSchema, previewItemSchema, previewRequestSchema, previewResultSchema, promoteVariantResponseSchema, promotionPolicySchema, promotionRecordSchema, promotionSourceSchema, proposePlaysRequestSchema, proposePlaysResponseSchema, prospectCompanyCursorSchema, prospectCompanyDomainSchema, prospectCompanyFieldNameSchema, prospectCompanyFieldParamsSchema, prospectCompanyIdSchema, prospectCompanyNameSchema, prospectCompanyParamsSchema, prospectCompanySchema, prospectConsentSchema, prospectCreatedEvent, prospectCursorSchema, prospectDuplicateCursorSchema, prospectDuplicateSchema, prospectErasedEvent, prospectFieldNameSchema, prospectFieldParamsSchema, prospectIdSchema, prospectIdentityKindSchema, prospectImportCursorSchema, prospectImportFailureReasonSchema, prospectImportIdSchema, prospectImportInvalidDetailsSchema, prospectImportParamsSchema, prospectImportRowCursorSchema, prospectImportRowReasonSchema, prospectImportRowResultSchema, prospectImportRowSchema, prospectImportSchema, prospectImportStateSchema, prospectJobTitleSchema, prospectMergeIdSchema, prospectMergeParamsSchema, prospectMergeSchema, prospectMergeUndoneEvent, prospectMergedEvent, prospectNamePartSchema, prospectNotFoundDetailsSchema, prospectNotesSchema, prospectParamsSchema, prospectSchema, prospectSearchSchema, prospectStatusSchema, prospectTagsSchema, prospectUpdatedEvent, providerMessageIdSchema, publicBookRequestSchema, publicBookingConfirmationSchema, publicBookingParamsSchema, publicBookingTypeSchema, publicChatConsentReceiptSchema, publicChatConsentRequestSchema, publicChatHandoffReplySchema, publicChatHandoffRequestSchema, publicChatHeadersSchema, publicChatKeyParamsSchema, publicChatMessagePageSchema, publicChatMessageReplySchema, publicChatMessageSchema, publicChatOriginHeadersSchema, publicChatReplySchema, publicChatSessionParamsSchema, publicInquiryFormViewSchema, publicInquiryHeadersSchema, publicInquiryParamsSchema, publicInquiryReceiptSchema, publicInquiryRequestSchema, publicListChatMessagesQuerySchema, publicListSlotsQuerySchema, publicOriginHeadersSchema, publicSendChatMessageRequestSchema, publicSlotPageSchema, publicSlotSchema, publicStartChatRequestSchema, publicStartChatResponseSchema, qualificationAnswerSchema, qualificationQuestionIdSchema, qualificationQuestionKindSchema, qualificationQuestionPageSchema, qualificationQuestionParamsSchema, qualificationQuestionSchema, qualificationSchema, qualificationValueSchema, questionPromptSchema, questionSuggestionsSchema, rampSchema, rateIntervalSchema, rawLinkedinUrlSchema, rawPhoneSchema, recordConsentRequestSchema, recordDeliveryFailureRequestSchema, recordWithdrawalRequestSchema, recordedConsentSchema, recordedSuppressionSchema, recordingKeySchema, recordingPlaybackSchema, regenerateDraftRequestSchema, regionSchema, rejectDraftRequestSchema, removeEnrollmentRequestSchema, removeSuppressionRequestSchema, renameOrganizationRequestSchema, renameTeamRequestSchema, reorderQualificationQuestionsRequestSchema, reorderRoutingRulesRequestSchema, repChangeAllowed, repChoiceSchema, repChoiceSuits, repTaskStepSchema, repTaskTypeSchema, replyClassifiedEvent, replyLabelSchema, replyRequestSchema, requestIdSchema, rescheduleBookingRequestSchema, researchBriefSchema, resolveCitationsRequestSchema, resolveCitationsResponseSchema, resolvedCitationSchema, retryAfterDetailsSchema, returnToSchema, rightsConfirmationSchema, rightsRequiredDetailsSchema, rightsStatusSchema, rightsWordingFor, rightsWordingSchema, rightsWordingVersionSchema, roleAtLeast, roleSchema, routeRequestSchema, routingAttributesSchema, routingCandidateReasonSchema, routingConditionsSchema, routingDecisionIdSchema, routingResultSchema, routingRuleIdSchema, routingRuleParamsSchema, routingRuleSchema, routingSkipReasonSchema, routingTargetSchema, searchDocumentsRequestSchema, searchDocumentsResponseSchema, searchEvidenceSchema, searchMomentsRequestSchema, searchMomentsResponseSchema, searchTurnSchema, sendCheckResultSchema, sendCheckSchema, sendCursorSchema, sendIdSchema, sendKeySchema, sendKeyToString, sendPageSchema, sendParamsSchema, sendRecordSchema, sendRefusalReasonSchema, sendStateSchema, sendTryMessageRequestSchema, sendWindowSchema, sequenceProblemCodeSchema, sequenceProblemSchema, sequenceSchema, sequenceStepsSchema, setAgentSettingsRequestSchema, setApprovalPolicyRequestSchema, setBrandVoiceRequestSchema, setCallRepRequestSchema, setCopilotSettingsRequestSchema, setDealOutcomeRequestSchema, setInquiryEmbedRequestSchema, setMailboxLimitsRequestSchema, setProspectOwnerRequestSchema, setSequenceRequestSchema, signalIdSchema, skipConditionSchema, skipOperatorSchema, slotPageSchema, slotSchema, softphoneTokenSchema, sourceKindSchema, sourcePassageSchema, sourceRefSchema, sourceSchema, sourceUrlSchema, speakerExcerpt, speakerExcerptSchema, speakerLabelSchema, startCalendarConnectionRequestSchema, startCalendarConnectionResponseSchema, startMailboxConnectRequestSchema, startTrySessionRequestSchema, stepKeySchema, stepKindSchema, stepSchema, stepSentEvent, stepTextSchema, stepVariantResultsSchema, stepVariantsParamsSchema, storedNameSchema, submitSendRequestSchema, suggestedQualificationQuestionSchema, suppressionAddedEvent, suppressionAddressKindSchema, suppressionEntryIdSchema, suppressionEntryPageSchema, suppressionEntryParamsSchema, suppressionEntrySchema, suppressionImportIdSchema, suppressionImportPageSchema, suppressionImportParamsSchema, suppressionImportRowPageSchema, suppressionImportRowSchema, suppressionImportSchema, suppressionImportStateSchema, suppressionListStateSchema, suppressionReasonSchema, suppressionRemovedEvent, teamIdSchema, teamMemberParamsSchema, teamMemberSchema, teamNameSchema, teamParamsSchema, teamSchema, testRoutingRequestSchema, timeOfDaySchema, timeZoneSchema, timestampSchema, toReplyLabel, transcriptCursorSchema, transcriptPageSchema, transcriptSpeakerSchema, transcriptTurnSchema, tryReplySchema, trySessionIdSchema, trySessionParamsSchema, trySessionSchema, unsubscribePageSchema, unsubscribeParamsSchema, unsubscribePreviewSchema, unsubscribeReceiptSchema, unsubscribeResultSchema, unsubscribeTokenSchema, updateBookingTypeRequestSchema, updateCampaignRequestSchema, updateConsentWordingRequestSchema, updateProspectCompanyRequestSchema, updateProspectRequestSchema, updateQualificationQuestionRequestSchema, updateRoutingRuleRequestSchema, uploadCallFieldsSchema, uploadCallFileSchema, uploadDocumentFileSchema, userIdSchema, variantGroupSchema, variantParamsSchema, variantPromotedEvent, variantResultSchema, variantResultStatusSchema, variantSchema, voiceAgentCallEndedEvent, voiceCallCursorSchema, voiceCallDirectionSchema, voiceCallEndedBySchema, voiceCallEndedEvent, voiceCallFailureReasonSchema, voiceCallOutcomeSchema, voiceCallPageSchema, voiceCallParamsSchema, voiceCallSchema, voiceCallStartedEvent, voiceCallStateSchema, voiceConsentRevokedEvent, voiceCopilotCardRatedEvent, voiceCopilotCardShownEvent, voiceHandoffCompletedEvent, voiceInquiryReceivedEvent, voiceRecordingStateSchema, voiceTranscriptStateSchema, waitStepSchema, weekdaySchema, windowZoneSchema, withdrawConsentRequestSchema, workingDaySchema, workingWindowSchema, wrapUpNoteSchema, wrapUpRequestSchema };
+export { ABANDON_MAX_AGE_HOURS, ACCEPTED_DOCUMENT_EXTENSIONS, ACCEPTED_DOCUMENT_MEDIA_TYPES, ACCEPTED_RECORDING_EXTENSIONS, ACCEPTED_TRANSCRIPT_EXTENSIONS, AGENT_ADMIN_ROLES, AGENT_ALL_ROLES, AGENT_CALLING_WINDOW, AGENT_CALL_OUTCOMES, AGENT_ERRORS, AGENT_EVENTS, AGENT_LANGUAGES, AGENT_READ_ROLES, AGENT_ROUTES, AGENT_TOOLS, AGENT_VOICE_STYLES, ALL_PLAYBOOK_ERRORS, ALL_PLAYBOOK_ROUTES, ALWAYS_HELD_REASONS, ANGLE_ORIGINS, APPROVAL_MODES, APPROVAL_REASONS, ATTEMPT_FAILURES, ATTEMPT_OUTCOMES, AUDIENCE_CHECK_STATES, AUTH_ERRORS, AUTH_OPTIONS_PATH, AUTH_OPTIONS_ROUTE, AcceptPlayRequest, AcceptPreviewRequest, AcceptedCallExtension, AcceptedDocumentExtension, AddLineRequest, AddSuppressionRequest, AddTeamMemberRequest, AgentErrorCode, AgentEventType, AgentRoute, AgentRouteName, AgentSettings, AgentToolName, AgentTurn, AgentVoiceStyle, AllPlaybookRouteName, AllowedOrigin, ApprovalPolicy, ApprovalQueueItem, ApprovalRule, ApproveDraftRequest, AssignLineRequest, Audience, AudienceCheck, AudienceCheckState, AudienceCounts, AuthErrorCode, AuthOptionsResponse, AuthProviders, AuthRoute, Availability, BOOKING_ADMIN_ROLES, BOOKING_ALL_ROLES, BOOKING_CANCELLED_BY, BOOKING_ERRORS, BOOKING_EVENTS, BOOKING_MODES, BOOKING_ORIGINS, BOOKING_ROUTES, BOOKING_STATES, BOOKING_TYPE_STATES, BULK_ASSIGN_SYNC_LIMIT, BookRequest, Booking, BookingErrorCode, BookingEventType, BookingId, BookingMode, BookingOrigin, BookingRoute, BookingRouteName, BookingState, BookingType, BookingTypeId, BookingTypeState, BranchCondition, BrandVoice, BrandVoiceId, BrandVoiceSettings, BriefAngle, BriefId, BriefStatement, BrowserSessionTokens, BulkAssignProspectsRequest, BulkAssignProspectsResponse, CALENDAR_CONNECTION_STATES, CALENDAR_PROVIDERS, CALL_CHANNELS, CALL_DELETED_MESSAGE, CALL_FAILURE_FIXES, CALL_FAILURE_REASONS, CALL_KINDS, CALL_MEDIA_TYPES, CALL_REP_CHANGED_MESSAGE, CALL_STATES, CALL_TRANSCRIBED_MESSAGE, CALL_UPLOADED_MESSAGE, CAMPAIGN_ADMIN_ROLES, CAMPAIGN_ALL_ROLES, CAMPAIGN_APPROVAL_MODES, CAMPAIGN_ERRORS, CAMPAIGN_EVENTS, CAMPAIGN_LANGUAGES, CAMPAIGN_ROUTES, CAMPAIGN_STATES, CHAT_ALL_ROLES, CHAT_ERRORS, CHAT_ROUTES, CHAT_STATES, CITATION_ROUTES, COMPANY_SIZE_BANDS, CONSENT_ADMIN_ROLES, CONSENT_ALL_ROLES, CONSENT_CHANNELS, CONSENT_ERRORS, CONSENT_EVENTS, CONSENT_FORM_STATES, CONSENT_GRANT_SOURCES, CONSENT_RECORDABLE_SOURCES, CONSENT_REQUIRED_CHANNELS, CONSENT_REVOKE_TRIGGERS, CONSENT_ROUTES, CONSENT_STATES, CONSENT_WITHDRAWAL_SOURCES, CONTACT_ALLOW_BASES, CONTACT_DENIAL_CODES, CONTACT_PURPOSES, CONVERSATION_CONTROLLERS, CONVERSATION_STATES, COPILOT_CARD_KINDS, COPILOT_COMPOSED_KINDS, COPILOT_ERRORS, COPILOT_EVENTS, COPILOT_OBJECTION_TYPES, COPILOT_QUIET_REASONS, COPILOT_RATINGS, COPILOT_ROUTES, COPILOT_STREAM_EVENTS, COPILOT_STREAM_STATES, COPILOT_TRANSCRIPT_UNAVAILABLE_REASONS, CORE_ERRORS, CREATE_DEMO_REQUEST_ERROR_CODES, CREATE_INVITATION_ERROR_CODES, CSV_FAILURES, CURRENT_RIGHTS_WORDING_VERSION, CalendarConnection, CalendarConnectionState, CalendarProvider, Call, CallCursor, CallDeletedPayload, CallDisclosure, CallFailureFix, CallFailureReason, CallId, CallKind, CallMediaType, CallParams, CallRepChangedPayload, CallState, CallTranscribedPayload, CallUploadedPayload, Campaign, CampaignApprovalMode, CampaignCursor, CampaignErrorCode, CampaignEventType, CampaignId, CampaignLanguage, CampaignRoute, CampaignRouteName, CampaignState, CampaignStats, CellResult, ChangeMemberRoleRequest, Chat, ChatErrorCode, ChatId, ChatMessage, ChatRoute, ChatRouteName, CheckCallFileResult, CheckDealImportHeaderResult, CheckDealImportHeaderTextResult, CheckDealImportRowResult, CheckUploadFileResult, CitationRef, CitationRouteName, CitationSource, Classification, CommonErrorCode, CompanySizeBand, CompleteCalendarConnectionRequest, CompleteMailboxConnectRequest, ConfirmRightsRequest, ConsentChannel, ConsentErrorCode, ConsentEvent, ConsentEventId, ConsentEventType, ConsentForm, ConsentFormId, ConsentFormState, ConsentGrantSource, ConsentRoute, ConsentRouteAccess, ConsentRouteName, ConsentSource, ConsentState, ConsentWithdrawalSource, ConsentWording, ConsentWordingId, ContactCheckId, ContactCheckLogEntry, ContactCheckRequest, ContactCheckResult, ContactDenialCode, ContactPurpose, ContactWarning, Conversation, ConversationController, ConversationId, ConversationState, CopilotCard, CopilotCardId, CopilotCardKind, CopilotDocumentSource, CopilotErrorCode, CopilotEventType, CopilotEvidence, CopilotMomentRef, CopilotObjectionType, CopilotQuote, CopilotRating, CopilotRoute, CopilotRouteName, CopilotSettings, CopilotStreamEventName, CopilotStreamMessage, CoreErrorCode, CreateBookingTypeRequest, CreateBriefRequest, CreateCampaignRequest, CreateConsentFormRequest, CreateConsentWordingRequest, CreateDemoRequestRequest, CreateDemoRequestResponse, CreateDraftRequest, CreateEnrichmentRequest, CreateFitCriterionRequest, CreateInvitationRequest, CreateProspectCompanyRequest, CreateProspectRequest, CreateQualificationQuestionRequest, CreateRoutingRuleRequest, CreateTeamRequest, CsvFailure, CsvOptions, CsvResult, DAILY_LIMIT_DETAILS_SCHEMA, DEAL_CLOSED_AT_MAX_YEAR, DEAL_CLOSED_AT_MIN_YEAR, DEAL_IMPORT_FAILURE_REASONS, DEAL_IMPORT_FILE_FIELD, DEAL_IMPORT_HEADER_PREFIX_CHARS, DEAL_IMPORT_HEADER_PROBLEMS, DEAL_IMPORT_OPTIONAL_COLUMN, DEAL_IMPORT_REQUIRED_COLUMNS, DEAL_IMPORT_ROW_REASONS, DEAL_IMPORT_ROW_RESULTS, DEAL_IMPORT_STATES, DEAL_IMPORT_UPLOADED_MESSAGE, DEAL_OUTCOME_CHANGED_MESSAGE, DECISION_KINDS, DEFAULT_AGENT_CALL_SECONDS, DEFAULT_COPILOT_MIN_DEALS, DEFAULT_COPILOT_MIN_MOMENTS, DEFAULT_MAX_CALLS, DEFAULT_MAX_DEALS, DEFAULT_MAX_DOCUMENTS, DEFAULT_MAX_DOCUMENT_BYTES_TOTAL, DEFAULT_MAX_RECORDING_BYTES_TOTAL, DEFAULT_PAGE_SIZE, DEFAULT_SEARCH_LIMIT, DELIVERY_FAILURE_REASONS, DOCUMENT_DELETED_MESSAGE, DOCUMENT_FAILURE_REASONS, DOCUMENT_RETENTION_DAYS, DOCUMENT_STATES, DOCUMENT_UPLOADED_MESSAGE, DOMAIN_CHECK_RECORDS, DOMAIN_CHECK_STATUSES, DRAFT_AUTHORS, DRAFT_CHANNELS, DRAFT_CHECKS, DRAFT_HOLD_REASONS, DRAFT_SOURCE_KINDS, DRAFT_STATUSES, Deal, DealCursor, DealId, DealImport, DealImportCursor, DealImportFailureReason, DealImportHeaderProblem, DealImportId, DealImportParams, DealImportRow, DealImportRowCursor, DealImportRowReason, DealImportRowResult, DealImportState, DealImportUploadedPayload, DealOutcomeChangedPayload, DealParams, DealRecordId, Decision, DecisionId, DecisionKind, DemoRequestId, DocumentDeletedPayload, DocumentFailureReason, DocumentFileName, DocumentId, DocumentMatch, DocumentMediaType, DocumentParams, DocumentSearchEvidence, DocumentState, DocumentUploadedPayload, DomainCheck, DomainCheckRecord, DomainCheckResult, DomainCheckStatus, Draft, DraftAuthor, DraftChannel, DraftCitation, DraftHoldReason, DraftId, DraftReason, DraftRelease, DraftSourceKind, DraftStatus, DuplicateIdentityDetails, ENRICHED_FIELDS, ENRICHMENT_ADMIN_ROLES, ENRICHMENT_ALL_ROLES, ENRICHMENT_ERRORS, ENRICHMENT_EVENTS, ENRICHMENT_READ_ROLES, ENRICHMENT_ROUTES, ENROLLMENT_EVENT_KINDS, ENROLLMENT_STATES, ENROLLMENT_STOP_REASONS, ENROLL_REFUSALS, ENROLL_REFUSAL_CODES, ERRORS, EVIDENCE_CSV_COLUMNS, EditDraftRequest, EffectiveLimits, Email, EmailVerification, EnrichedFieldName, EnrichmentAttempt, EnrichmentBudget, EnrichmentErrorCode, EnrichmentEventType, EnrichmentRoute, EnrichmentRouteName, EnrichmentRun, EnrichmentRunId, EnrichmentRunSet, EnrichmentRunSetId, EnrollProspectsRequest, EnrollRefusal, EnrollResult, Enrollment, EnrollmentEvent, EnrollmentEventId, EnrollmentId, EnrollmentState, EnrollmentStopReason, EraseProspectResponse, ErrorBody, ErrorDefinition, ErrorInput, EventId, EventType, EvidenceEvent, FIELD_APPLICATIONS, FIELD_GROUPS, FIELD_GROUP_OF, FIELD_HISTORY_STATES, FIT_FIELDS, FIT_RESULTS, FIXED_SOURCE_KINDS, FUNDING_ROUNDS, FieldGroup, FieldHistoryCursor, FieldHistoryEntry, FieldProvenance, FieldValue, FirstCsvRecordResult, FitCondition, FitCriterion, FitCriterionId, FitField, FitMatch, FitScore, GOOGLE_ERROR_PARAM, GOOGLE_ERROR_PATH, GOOGLE_ROUTES, GOOGLE_SIGN_UP_ATTEMPT_PARAM, GOOGLE_SIGN_UP_PATH, GoogleCompleteRequest, GoogleCompleteResponse, GoogleIntent, GoogleStartRequest, GoogleStartResponse, HANDOFF_CHANNELS, HANDOFF_REASONS, HANDOFF_RESULTS, HANDOFF_STATES, HEALTH_COMPONENTS, HEALTH_CRITICAL_SCORE, HEALTH_MINIMUM_SAMPLE, HEALTH_WARNING_SCORE, HEALTH_WINDOW_DAYS, Handoff, HandoffContext, HandoffId, HealthComponent, HealthComponentKind, HealthComponentState, HealthDaily, HealthSummary, HoldFacts, HostedConsentFormView, HostedConsentReceipt, HostedConsentSubmission, IDEMPOTENCY_KEY_HEADER, INBOX_ADMIN_ROLES, INBOX_ALL_ROLES, INBOX_CHANNELS, INBOX_ERRORS, INBOX_EVENTS, INBOX_REVIEW_ROLES, INBOX_ROUTES, INCOMPLETE_UPLOAD_PARTS_TTL_HOURS, INQUIRY_ADMIN_ROLES, INQUIRY_ALL_ROLES, INQUIRY_CALLBACK_STATES, INQUIRY_ERRORS, INQUIRY_EVENTS, INQUIRY_MANAGER_ROLES, INQUIRY_ROUTES, INQUIRY_SKIP_REASONS, INQUIRY_SOURCES, INTERNAL_CALL_ERRORS, INVITABLE_ROLES, INVITATION_STATES, Id, IdempotencyKey, InboxChannel, InboxErrorCode, InboxEventType, InboxRoute, InboxRouteName, IngestMessageRequest, Inquiry, InquiryCallback, InquiryCallbackState, InquiryEmbed, InquiryErrorCode, InquiryEventType, InquiryId, InquiryRoute, InquiryRouteName, InquirySkipReason, InquirySource, InternalAbandonOrganizationParams, InternalAbandonOrganizationRequest, InternalAbandonOrganizationResponse, InternalAcceptInvitationRequest, InternalAcceptInvitationResponse, InternalCallName, InternalCreateOrganizationRequest, InternalCreateOrganizationResponse, InternalMembershipRequest, InternalMembershipResponse, InternalRemoveOrganizationDocumentsParams, InternalRemoveOrganizationDocumentsRequest, InternalRemoveOrganizationDocumentsResponse, InternalUpdateMemberProfileParams, InternalUpdateMemberProfileRequest, InternalUpdateMemberProfileResponse, InvalidSequenceDetails, InvitableRole, Invitation, InvitationId, InvitationParams, InvitationState, LAUNCH_CHECKS, LAUNCH_CHECK_RESULTS, LINE_STATES, LIST_MEMBERS_MIN_ROLE, LIST_TEAM_MEMBERS_ERROR_CODES, LIST_TEAM_MEMBERS_MIN_ROLE, LaunchCheck, LaunchCheckName, LaunchCheckResult, LimitDetails, Line, LineAssignment, LineId, LineState, ListBookingsQuery, ListCallsQuery, ListCallsResponse, ListCampaignsQuery, ListConsentEventsQuery, ListContactChecksQuery, ListConversationsQuery, ListCopilotCardsQuery, ListDealImportRowsQuery, ListDealImportRowsResponse, ListDealImportsQuery, ListDealImportsResponse, ListDealsQuery, ListDealsResponse, ListDocumentsQuery, ListDocumentsResponse, ListDraftsQuery, ListEnrollmentsQuery, ListFieldHistoryQuery, ListFieldHistoryResponse, ListInquiriesQuery, ListInvitationsQuery, ListInvitationsResponse, ListLinesQuery, ListMailEventsQuery, ListMailboxesQuery, ListMembersQuery, ListMembersResponse, ListPlaysQuery, ListProspectCompaniesQuery, ListProspectCompaniesResponse, ListProspectDuplicatesQuery, ListProspectDuplicatesResponse, ListProspectImportRowsQuery, ListProspectImportRowsResponse, ListProspectImportsQuery, ListProspectImportsResponse, ListProspectsQuery, ListProspectsResponse, ListSendsQuery, ListSlotsQuery, ListSuppressionEntriesQuery, ListTeamMembersQuery, ListTeamMembersResponse, ListTeamsQuery, ListTeamsResponse, ListVoiceCallsQuery, LookupDealRequest, MAILBOX_KINDS, MAILBOX_PROVIDERS, MAILBOX_RAMP_STEPS, MAILBOX_STATES, MAILBOX_STATE_REASONS, MAIL_ADMIN_ROLES, MAIL_ALL_ROLES, MAIL_ERRORS, MAIL_EVENTS, MAIL_EVENT_KINDS, MAIL_REVIEW_ROLES, MAIL_ROUTES, MARKETING_ERRORS, MARKETING_ROUTES, MAX_AGENT_CALL_COST_USD_CENTS, MAX_AGENT_CALL_SECONDS, MAX_AGENT_CONCURRENCY, MAX_AGENT_GREETING_LENGTH, MAX_ALLOWED_ORIGINS, MAX_ANGLE_LENGTH, MAX_ANSWER_LENGTH, MAX_ATTEMPTS_PER_RUN, MAX_ATTEMPT_EPOCH, MAX_AUDIENCE_PROSPECTS, MAX_AUTHORIZATION_URL_LENGTH, MAX_AWAY_DAYS, MAX_BANNED_PHRASES, MAX_BOOKING_BUFFER_MINUTES, MAX_BOOKING_LENGTH_MINUTES, MAX_BOOKING_NAME_LENGTH, MAX_BOOKING_NOTICE_MINUTES, MAX_BRANCH_ARMS, MAX_BRIEF_STATEMENTS, MAX_BRIEF_STATEMENT_LENGTH, MAX_BULK_ASSIGN_PROSPECTS, MAX_CALLBACK_ATTEMPTS, MAX_CALL_DURATION_SECONDS, MAX_CALL_SPEAKERS, MAX_CAMPAIGN_DAILY_CAP, MAX_CAMPAIGN_NAME_LENGTH, MAX_CITATION_REFS, MAX_CITATION_URL_LENGTH, MAX_CONDITION_VALUES, MAX_CONSENT_FORM_NAME_LENGTH, MAX_CONSENT_WORDING_LENGTH, MAX_COPILOT_CARDS_PER_CALL, MAX_COPILOT_CARD_TEXT_LENGTH, MAX_COPILOT_CITED_MOMENTS, MAX_COPILOT_MIN_EVIDENCE, MAX_COPILOT_QUOTE_LENGTH, MAX_COPILOT_STREAM_ID_LENGTH, MAX_CRITERION_NAME_LENGTH, MAX_CRITERION_VALUES, MAX_CRITERION_VALUE_LENGTH, MAX_CRITERION_WEIGHT, MAX_CURSOR_LENGTH, MAX_DAILY_BOOKING_CAP, MAX_DEAL_ID_BYTES, MAX_DEAL_ID_LENGTH, MAX_DEAL_IMPORT_BYTES, MAX_DEAL_IMPORT_CELL_LENGTH, MAX_DEAL_IMPORT_HEADER_LENGTH, MAX_DEAL_IMPORT_ROWS, MAX_DEAL_NAME_BYTES, MAX_DEAL_NAME_LENGTH, MAX_DECISION_NOTE_LENGTH, MAX_DELETION_SEQ, MAX_DEMO_REQUEST_FIELD_LENGTH, MAX_DEMO_REQUEST_MESSAGE_LENGTH, MAX_DOCUMENT_BYTES, MAX_DOCUMENT_FILE_NAME_BYTES, MAX_DOCUMENT_FILE_NAME_LENGTH, MAX_DOCUMENT_PAGES, MAX_DOMAIN_CHECK_TEXT_LENGTH, MAX_DRAFT_BODY_LENGTH, MAX_DRAFT_CITATIONS, MAX_DRAFT_SOURCES, MAX_DRAFT_SUBJECT_LENGTH, MAX_ELIGIBLE_REPS, MAX_EMAIL_LENGTH, MAX_ENRICHED_VALUE_LENGTH, MAX_ENRICH_PROSPECTS, MAX_EVIDENCE_REF_LENGTH, MAX_EXCEPT_LABELS, MAX_FIELD_HISTORY_ENTRIES, MAX_FIT_CRITERIA, MAX_GOAL_LENGTH, MAX_HANDOFF_CONTEXT_TURNS, MAX_HONEYPOT_LENGTH, MAX_INQUIRY_MESSAGE_LENGTH, MAX_LINE_LABEL_LENGTH, MAX_MAILBOX_NAME_LENGTH, MAX_MAILBOX_TEAMS, MAX_MERGED_PROSPECTS, MAX_MESSAGE_BODY_LENGTH, MAX_MICRO_DOLLARS, MAX_MIN_GAP_SECONDS, MAX_MOMENT_SNIPPET_CHARACTERS, MAX_NAME_LENGTH, MAX_PAGE_SIZE, MAX_PERSON_NAME_LENGTH, MAX_PLAYBACK_URL_LENGTH, MAX_PLAY_CITATIONS, MAX_PREFERRED_WORDS, MAX_PREVIEW_PROSPECTS, MAX_PROMOTION_SAMPLE, MAX_PROPOSED_PLAYS, MAX_PROSPECTS_PER_REQUEST, MAX_PROSPECT_COMPANY_NAME_LENGTH, MAX_PROSPECT_FIELD_VALUE_LENGTH, MAX_PROSPECT_IMPORT_BYTES, MAX_PROSPECT_IMPORT_ROWS, MAX_PROSPECT_JOB_TITLE_LENGTH, MAX_PROSPECT_NAME_PART_LENGTH, MAX_PROSPECT_NOTES_LENGTH, MAX_PROSPECT_SEARCH_LENGTH, MAX_PROSPECT_TAGS, MAX_PROSPECT_TAG_LENGTH, MAX_PROVIDERS, MAX_PROVIDER_API_KEY_LENGTH, MAX_PROVIDER_KEY_LENGTH, MAX_PUBLIC_BOOKING_FIELD_LENGTH, MAX_QUALIFICATION_QUESTIONS, MAX_QUALIFICATION_SUMMARY_LENGTH, MAX_QUESTION_CHOICES, MAX_QUESTION_PROMPT_LENGTH, MAX_QUESTION_SUGGESTIONS, MAX_QUEUED_DEAL_IMPORTS, MAX_RECORDING_BYTES, MAX_RECORDING_KEY_LENGTH, MAX_RECORDING_SECONDS, MAX_REGION_LENGTH, MAX_REP_FIELD_LENGTH, MAX_REP_FOLLOWING_CHARACTERS, MAX_REP_FOLLOWING_TURNS, MAX_RETURN_TO_LENGTH, MAX_RIGHTS_HEADING_LENGTH, MAX_RIGHTS_PARAGRAPHS, MAX_RIGHTS_TEXT_LENGTH, MAX_RIGHTS_WORDING_VERSION, MAX_ROUTING_RULES, MAX_SEARCH_CANDIDATES, MAX_SEARCH_LIMIT, MAX_SEARCH_TEXT_CHARACTERS, MAX_SEARCH_TURNS, MAX_SENDS_PER_DAY, MAX_SENDS_PER_HOUR, MAX_SEQ, MAX_SEQUENCE_PROBLEMS, MAX_SEQUENCE_STEP, MAX_SEQUENCE_STEPS, MAX_SIGNAL_FRESHNESS_DAYS, MAX_SIGNAL_LABEL_LENGTH, MAX_SIGNAL_TEXT_LENGTH, MAX_SIGNAL_URL_LENGTH, MAX_SIGN_OFF_LENGTH, MAX_SKIP_CONDITIONS, MAX_SLOT_RANGE_DAYS, MAX_SOFTPHONE_TOKEN_LENGTH, MAX_SOFTPHONE_TOKEN_TTL_SECONDS, MAX_SOURCE_PASSAGE_LENGTH, MAX_SOURCE_REF_LENGTH, MAX_SOURCE_URL_LENGTH, MAX_SPEAKER_EXCERPT_LENGTH, MAX_SPEAKER_LABEL_BYTES, MAX_SPEAKER_LABEL_LENGTH, MAX_STEP_TEXT_LENGTH, MAX_STRATEGY_LENGTH, MAX_SUPPRESSION_IMPORT_BYTES, MAX_SUPPRESSION_IMPORT_ROWS, MAX_SUPPRESSION_NOTE_LENGTH, MAX_TONE_LENGTH, MAX_TRANSCRIPT_BYTES, MAX_TRANSCRIPT_TURN_LENGTH, MAX_TURN_SOURCES, MAX_TURN_TEXT_LENGTH, MAX_UTF8_BYTES_PER_CODE_POINT, MAX_VARIANTS, MAX_VOICE_LENGTH_CHARACTERS, MAX_VOICE_TERM_LENGTH, MAX_WAIT_HOURS, MAX_WINDOWS_PER_DAY, MAX_WRAP_UP_NOTE_LENGTH, MEDIA_TYPE_BY_CALL_EXTENSION, MEDIA_TYPE_BY_EXTENSION, MESSAGE_AUTHOR_KINDS, MESSAGE_DIRECTIONS, MESSAGE_FAILURE_REASONS, MESSAGING_ADMIN_ROLES, MESSAGING_ALL_ROLES, MESSAGING_ERRORS, MESSAGING_EVENTS, MESSAGING_ROUTES, MIN_COPILOT_MIN_EVIDENCE, MIN_QUESTION_CHOICES, MIN_SOFTPHONE_TOKEN_TTL_SECONDS, MIN_VARIANTS, MIN_VARIANT_SAMPLE, MailCapacity, MailErrorCode, MailEvent, MailEventId, MailEventKind, MailEventType, MailRoute, MailRouteName, Mailbox, MailboxCapacity, MailboxConnectStart, MailboxHealth, MailboxId, MailboxKind, MailboxLimits, MailboxProvider, MailboxState, MailboxStateReason, MarkCopilotCardRequest, MarketingErrorCode, MarketingRoute, MarketingRouteName, Member, MemberParams, MembershipId, MergeProspectsRequest, Message, MessageAuthorKind, MessageDirection, MessageFailureReason, MessageId, MessagingErrorCode, MessagingEventType, MessagingRoute, MessagingRouteName, MomentMatch, OIDC_COOKIE_BASE_NAME, OIDC_COOKIE_SECURE_PREFIX, ONE_ADDRESS_MESSAGE, ORGANIZATION_STATUSES, OUTCOMES, OneClickUnsubscribeRequest, Organization, OrganizationId, OrganizationMailLimits, OrganizationStatus, Outcome, OutreachDraft, OutreachDraftCheck, PACKAGE, PAUSE_SEQUENCE_LABELS, PLAYBOOK_ERRORS, PLAYBOOK_READ_ROLES, PLAYBOOK_ROUTES, PLAYBOOK_WRITE_ROLES, PLAY_INTENTS, PLAY_SOURCES, PLAY_STATUSES, PREVIEW_FAILURE_CODES, PROMOTION_SOURCES, PROSPECT_ADMIN_ROLES, PROSPECT_ALL_ROLES, PROSPECT_COMPANY_FIELD_NAMES, PROSPECT_ERRORS, PROSPECT_EVENTS, PROSPECT_FIELD_NAMES, PROSPECT_IDENTITY_KINDS, PROSPECT_IMPORT_COLUMNS, PROSPECT_IMPORT_FAILURE_REASONS, PROSPECT_IMPORT_FILE_FIELD, PROSPECT_IMPORT_INVALID_REASONS, PROSPECT_IMPORT_REJECT_REASONS, PROSPECT_IMPORT_REPORT_COLUMNS, PROSPECT_IMPORT_ROW_RESULTS, PROSPECT_IMPORT_SKIP_REASONS, PROSPECT_IMPORT_STATES, PROSPECT_MERGE_STATES, PROSPECT_MERGE_UNDO_DAYS, PROSPECT_ROUTES, PROSPECT_STATUSES, Page, PageQuery, ParseRepFieldResult, ParsedDealImportRow, PlaceCallRequest, PlacedCall, Play, PlayCitation, PlayId, PlayIntent, PlaySource, PlayStatus, PlaybookDocument, PlaybookErrorCode, PlaybookRoute, PlaybookRouteName, PreviewItem, PreviewRequest, PreviewResult, PromotionPolicy, PromotionSource, Prospect, ProspectCompany, ProspectCompanyCursor, ProspectCompanyFieldName, ProspectCompanyFieldParams, ProspectCompanyId, ProspectCompanyParams, ProspectConsent, ProspectCursor, ProspectDuplicate, ProspectDuplicateCursor, ProspectEnrichment, ProspectErrorCode, ProspectEventType, ProspectFieldName, ProspectFieldParams, ProspectId, ProspectIdentityKind, ProspectImport, ProspectImportCursor, ProspectImportFailureReason, ProspectImportId, ProspectImportInvalidDetails, ProspectImportParams, ProspectImportRow, ProspectImportRowCursor, ProspectImportRowReason, ProspectImportRowResult, ProspectImportState, ProspectMerge, ProspectMergeId, ProspectMergeParams, ProspectNotFoundDetails, ProspectParams, ProspectRoute, ProspectRouteName, ProspectStatus, ProviderKey, ProviderSettings, PublicBookRequest, PublicBookingConfirmation, PublicBookingType, PublicChatConsentReceipt, PublicChatConsentRequest, PublicChatMessage, PublicChatReply, PublicInquiryFormView, PublicInquiryReceipt, PublicInquiryRequest, PublicSlot, QUALIFICATION_QUESTION_KINDS, Qualification, QualificationAnswer, QualificationQuestion, QualificationQuestionId, QualificationQuestionKind, QualificationValue, RECORDING_MEDIA_TYPES, REGIONS, REPLY_LABELS, REP_TASK_TYPES, RIGHTS_WORDINGS, ROLES, ROUTING_CANDIDATE_REASONS, ROUTING_ROLES, ROUTING_SKIP_REASONS, RUN_END_STATUSES, RUN_STATUSES, Ramp, RateInterval, RecordConsentRequest, RecordDeliveryFailureRequest, RecordNoteRequest, RecordWithdrawalRequest, RecordedConsent, RecordingPlayback, RegenerateDraftRequest, Region, RemoveSuppressionRequest, RenameOrganizationRequest, RenameTeamRequest, RepChoice, RepTaskType, ReplyLabel, RequestId, RescheduleBookingRequest, ResearchBrief, ResolveCitationsRequest, ResolveCitationsResponse, ResolvedCitation, RetryAfterDetails, RightsConfirmation, RightsRequiredDetails, RightsStatus, RightsWording, Role, RotateSignalWebhookResponse, RouteRequest, RoutingAttributes, RoutingConditions, RoutingDecisionId, RoutingResult, RoutingRule, RoutingRuleId, RoutingSkipReason, RoutingTarget, RunStatus, SALES_HISTORY_ERRORS, SALES_HISTORY_READ_ROLES, SALES_HISTORY_ROUTES, SEARCH_ROUTES, SEND_CHECKS, SEND_DEFERRING_REASONS, SEND_REFUSAL_REASONS, SEND_STATES, SEQUENCE_PROBLEMS, SIGNAL_KINDS, SIGNAL_WEBHOOK_SIGNATURE_HEADER, SIGNAL_WEBHOOK_TIMESTAMP_HEADER, SIGNAL_WEBHOOK_TOLERANCE_SECONDS, SIGNUP_ERRORS, SKIP_OPERATORS, STEP_KINDS, STOP_REASONS, STOP_SENDING_LABELS, SUPPRESSION_ADDRESS_KINDS, SUPPRESSION_IMPORT_COLUMNS, SUPPRESSION_IMPORT_FAILURE_REASONS, SUPPRESSION_IMPORT_FILE_FIELD, SUPPRESSION_IMPORT_ROW_RESULTS, SUPPRESSION_IMPORT_STATES, SUPPRESSION_REASONS, SUPPRESSION_REMOVABLE_REASONS, SalesHistoryErrorCode, SalesHistoryRoute, SalesHistoryRouteName, SearchDocumentsRequest, SearchDocumentsResponse, SearchEvidence, SearchMomentsRequest, SearchMomentsResponse, SearchRouteName, SearchTurn, SendCheck, SendId, SendKey, SendRecord, SendRefusalReason, SendState, SendWindow, Sequence, SequenceProblem, SequenceProblemCode, SetAgentSettingsRequest, SetBrandVoiceRequest, SetBudgetRequest, SetCallRepRequest, SetCopilotSettingsRequest, SetDealOutcomeRequest, SetInquiryEmbedRequest, SetMailboxLimitsRequest, SetProspectOwnerRequest, SetProviderRequest, SetSequenceRequest, SetSignalSettingsRequest, SetWaterfallRequest, Signal, SignalId, SignalKind, SignalKindSetting, SignalSettings, SignalSource, SignalWebhookRequest, SignalWebhookResponse, SignupErrorCode, SkipCondition, Slot, SoftphoneToken, Source, SourceKind, SourcePassage, SpeakerExcerpt, SpendEntry, StartCalendarConnectionRequest, StartCalendarConnectionResponse, StartMailboxConnectRequest, Step, StepKey, StepKind, StepVariantResults, StopReason, SubmitSendRequest, SuggestedQualificationQuestion, SuppressionAddressKind, SuppressionEntry, SuppressionEntryId, SuppressionImport, SuppressionImportId, SuppressionImportRow, SuppressionReason, Team, TeamId, TeamMember, TeamMemberParams, TeamParams, TestRoutingRequest, TranscriptPage, TranscriptTurn, TrySession, TrySessionId, UPLOAD_CONTENT_TYPE, UPLOAD_FILE_FIELD, UnsubscribePage, UnsubscribePreview, UnsubscribeReceipt, UnsubscribeResult, UpdateCampaignRequest, UpdateConsentWordingRequest, UpdateFitCriterionRequest, UpdateProspectCompanyRequest, UpdateProspectRequest, UpdateQualificationQuestionRequest, UploadCallFields, UploadDocumentFile, UserId, VARIANT_RESULT_STATUSES, VARIANT_WEIGHT_TOTAL, VERIFICATION_REASONS, VERIFICATION_STATUSES, VOICE_ADMIN_ROLES, VOICE_ALL_ROLES, VOICE_CALL_DIRECTIONS, VOICE_CALL_ENDED_BY, VOICE_CALL_FAILURE_REASONS, VOICE_CALL_FINAL_STATES, VOICE_CALL_OUTCOMES, VOICE_CALL_STATES, VOICE_ERRORS, VOICE_EVENTS, VOICE_RECORDING_STATES, VOICE_ROUTES, VOICE_TRANSCRIPT_STATES, Variant, VariantGroup, VariantResult, VoiceCall, VoiceCallDirection, VoiceCallFailureReason, VoiceCallState, VoiceErrorCode, VoiceEventType, VoiceRecordingState, VoiceRoute, VoiceRouteName, VoiceTranscriptState, WEEKDAYS, WINDOW_ZONES, Waterfall, WaterfallOrder, Weekday, WindowZone, WithdrawConsentRequest, WorkingWindow, WrapUpRequest, acceptPlayRequestSchema, acceptPreviewRequestSchema, addLineRequestSchema, addSuppressionRequestSchema, addTeamMemberRequestSchema, addressFieldsShape, agentCallOutcomeSchema, agentCallParamsSchema, agentLanguageSchema, agentSettingsSchema, agentToolNameSchema, agentTurnPageSchema, agentTurnRoleSchema, agentTurnSchema, agentVoiceStyleSchema, allowedOriginSchema, angleOriginSchema, answerHandoffRequestSchema, approvalPoliciesSchema, approvalPolicySchema, approvalQueueCursorSchema, approvalQueueItemSchema, approvalQueuePageSchema, approvalRuleSchema, approveDraftRequestSchema, assignLineRequestSchema, attemptFailureSchema, attemptIdSchema, attemptOutcomeSchema, audienceCheckSchema, audienceCheckStateSchema, audienceCountsSchema, audienceSchema, authOptionsResponseSchema, authProvidersSchema, authorizationUrlSchema, availabilitySchema, bookHeadersSchema, bookRequestSchema, bookingCancelledBySchema, bookingCancelledEvent, bookingCreatedEvent, bookingCursorSchema, bookingIdSchema, bookingLinkTokenSchema, bookingModeSchema, bookingNameSchema, bookingOriginSchema, bookingPageSchema, bookingParamsSchema, bookingRescheduledEvent, bookingSchema, bookingStateSchema, bookingTypeCursorSchema, bookingTypeIdSchema, bookingTypeParamsSchema, bookingTypeSchema, bookingTypeStateSchema, boundedTextSchema, branchArmSchema, branchConditionSchema, branchStepSchema, brandVoiceIdSchema, brandVoiceSchema, brandVoiceSettingsSchema, briefAngleSchema, briefIdSchema, briefStatementSchema, browserSessionTokensSchema, bulkAssignProspectsRequestSchema, bulkAssignProspectsResponseSchema, calendarConnectionSchema, calendarConnectionStateSchema, calendarDateSchema, calendarProviderSchema, callChannelSchema, callCursorSchema, callDeletedPayloadSchema, callDisclosureSchema, callFailureReasonSchema, callIdSchema, callKindSchema, callListItemSchema, callMediaTypeSchema, callParamsSchema, callRepChangedPayloadSchema, callReuploadRequeues, callSchema, callStateSchema, callTranscribedPayloadSchema, callUploadedPayloadSchema, campaignApprovalModeSchema, campaignCursorSchema, campaignEnrollmentsParamsSchema, campaignIdSchema, campaignLanguageSchema, campaignLaunchedEvent, campaignNameSchema, campaignParamsSchema, campaignSchema, campaignStateSchema, campaignStatsSchema, changeMemberRoleRequestSchema, channelConsentSchema, channelParamsSchema, chatIdSchema, chatMessagePageSchema, chatMessageSchema, chatPageSchema, chatParamsSchema, chatSchema, chatSessionTokenSchema, chatStateSchema, chatTextSchema, checkCallFile, checkDealImportHeader, checkDealImportHeaderText, checkDealImportRow, checkUploadFile, citationRefSchema, citationSourceSchema, citationUrlSchema, classificationSchema, companySizeBandSchema, completeCalendarConnectionRequestSchema, completeMailboxConnectRequestSchema, confidenceSchema, confirmRightsRequestSchema, consentChannelSchema, consentEventIdSchema, consentEventPageSchema, consentEventSchema, consentFormIdSchema, consentFormPageSchema, consentFormParamsSchema, consentFormSchema, consentFormStateSchema, consentGrantSourceSchema, consentGrantedEvent, consentProspectParamsSchema, consentRevokeTriggerSchema, consentSourceSchema, consentStateSchema, consentTokenParamsSchema, consentTokenSchema, consentWithdrawalSourceSchema, consentWithdrawnEvent, consentWordingIdSchema, consentWordingPageSchema, consentWordingParamsSchema, consentWordingSchema, consentWordingTextSchema, contactCheckIdSchema, contactCheckLogEntrySchema, contactCheckLogPageSchema, contactCheckRequestSchema, contactCheckResultSchema, contactDenialCodeSchema, contactPurposeSchema, contactWarningSchema, conversationActionRequestSchema, conversationControllerSchema, conversationCursorSchema, conversationHandedBackEvent, conversationIdSchema, conversationMessageParamsSchema, conversationPageSchema, conversationParamsSchema, conversationSchema, conversationStateSchema, conversationTakenOverEvent, copilotCallParamsSchema, copilotCardCursorSchema, copilotCardDataSchema, copilotCardIdSchema, copilotCardKindSchema, copilotCardPageSchema, copilotCardParamsSchema, copilotCardSchema, copilotCardTextSchema, copilotDocumentSourceSchema, copilotEvidenceSchema, copilotMomentKey, copilotMomentRefSchema, copilotObjectionTypeSchema, copilotQuietReasonSchema, copilotQuoteSchema, copilotQuoteTextSchema, copilotRatingSchema, copilotSettingsSchema, copilotStatusDataSchema, copilotStreamHeadersSchema, copilotStreamIdSchema, copilotStreamMessageSchema, copilotStreamStateSchema, copilotTextSchema, copilotTranscriptUnavailableDataSchema, copilotTurnDataSchema, correctClassificationRequestSchema, countSchema, countryCodeSchema, createBookingTypeRequestSchema, createBriefRequestSchema, createCampaignRequestSchema, createConsentFormRequestSchema, createConsentWordingRequestSchema, createDemoRequestRequestSchema, createDemoRequestResponseSchema, createDraftRequestSchema, createEnrichmentRequestSchema, createFitCriterionRequestSchema, createInvitationRequestSchema, createPlayRequestSchema, createProspectCompanyRequestSchema, createProspectRequestSchema, createQualificationQuestionRequestSchema, createRoutingRuleRequestSchema, createTeamRequestSchema, dealAmountSchema, dealCurrencySchema, dealCursorSchema, dealIdSchema, dealImportCursorSchema, dealImportFailureReasonSchema, dealImportIdSchema, dealImportParamsSchema, dealImportRowCursorSchema, dealImportRowReasonSchema, dealImportRowResultSchema, dealImportRowSchema, dealImportSchema, dealImportStateSchema, dealImportUploadedPayloadSchema, dealNameSchema, dealOutcomeChangedPayloadSchema, dealParamsSchema, dealRecordIdSchema, dealSchema, decisionCursorSchema, decisionIdSchema, decisionKindSchema, decisionNoteSchema, decisionPageSchema, decisionSchema, decodeCursor, defineErrors, defineEvent, deletedRecordingSchema, demoRequestIdSchema, demoRequestMessageSchema, demoRequestSourcePageSchema, documentDeletedPayloadSchema, documentExtension, documentFailureReasonSchema, documentFileNameSchema, documentIdSchema, documentMatchSchema, documentMediaTypeSchema, documentParamsSchema, documentQueryText, documentSchema, documentSearchEvidenceSchema, documentSizeCheckSchema, documentStateSchema, documentTypeCheckSchema, documentUploadedPayloadSchema, domainCheckRecordSchema, domainCheckResultSchema, domainCheckSchema, domainCheckStatusSchema, draftApprovalRequiredEvent, draftAuthorSchema, draftChannelSchema, draftCheckNameSchema, draftCheckSchema, draftCitationSchema, draftCreatedEvent, draftHoldReasonSchema, draftIdSchema, draftParamsSchema, draftReasonSchema, draftReleaseSchema, draftSchema, draftSourceKindSchema, draftSourceSchema, draftSourcesSchema, draftStatusSchema, duplicateCampaignRequestSchema, duplicateIdentityDetailsSchema, e164PhoneSchema, editDraftRequestSchema, editPlayRequestSchema, effectiveLimitsSchema, emailSchema, emailStepSchema, emailVerificationSchema, encodeCursor, endStepSchema, enrichedFieldNameSchema, enrichmentAttemptSchema, enrichmentBudgetSchema, enrichmentCompletedEvent, enrichmentRunIdSchema, enrichmentRunSchema, enrichmentRunSetIdSchema, enrichmentRunSetSchema, enrichmentTextSchema, enrollProspectsRequestSchema, enrollProspectsResponseSchema, enrollRefusalSchema, enrollResultSchema, enrollmentActivityCursorSchema, enrollmentCursorSchema, enrollmentEventIdSchema, enrollmentEventKindSchema, enrollmentEventSchema, enrollmentIdSchema, enrollmentParamsSchema, enrollmentSchema, enrollmentStateSchema, enrollmentStopReasonSchema, enrollmentStoppedEvent, eraseProspectResponseSchema, errorBodySchema, errorCodeSchema, eventEnvelopeSchema, eventIdSchema, eventTypeSchema, evidenceEventSchema, evidencePageSchema, evidenceRefSchema, excerptText, fieldApplicationSchema, fieldGroupSchema, fieldHistoryCursorSchema, fieldHistoryEntrySchema, fieldHistoryStateSchema, fieldProvenanceSchema, fieldValueSchema, findSequenceProblems, firstCsvRecord, fitConditionSchema, fitConditionSuitsField, fitCriterionIdSchema, fitCriterionSchema, fitFieldSchema, fitMatchSchema, fitResultSchema, fitScoreSchema, foldAscii, formatCopilotStreamFrame, formatId, getTranscriptQuerySchema, goalSchema, googleCompleteRequestSchema, googleCompleteResponseSchema, googleErrorQuerySchema, googleIntentSchema, googleSignUpQuerySchema, googleStartRequestSchema, googleStartResponseSchema, handoffChannelSchema, handoffContextSchema, handoffIdSchema, handoffPageSchema, handoffParamsSchema, handoffReasonSchema, handoffResultSchema, handoffSchema, handoffStateSchema, hasControlCharacter, hasExactlyOneAddress, hasStrippableCharacter, healthComponentKindSchema, healthComponentSchema, healthComponentStateSchema, healthDailyPageSchema, healthDailySchema, healthHistoryCursorSchema, healthSummarySchema, holdReasonFor, hostedConsentFormViewSchema, hostedConsentReceiptSchema, hostedConsentSubmissionSchema, hoursSchema, idSchema, idempotencyKeySchema, inboxChannelSchema, inboxKeyedHeadersSchema, ingestMessageRequestSchema, ingestMessageResultSchema, inquiryCallbackSchema, inquiryCallbackStateSchema, inquiryConsentSchema, inquiryCursorSchema, inquiryEmbedSchema, inquiryIdSchema, inquiryKeySchema, inquiryKeyedHeadersSchema, inquiryMessageSchema, inquiryPageSchema, inquiryParamsSchema, inquirySchema, inquirySkipReasonSchema, inquirySourceSchema, internalAbandonOrganizationParamsSchema, internalAbandonOrganizationRequestSchema, internalAbandonOrganizationResponseSchema, internalAcceptInvitationRequestSchema, internalAcceptInvitationResponseSchema, internalCreateOrganizationRequestSchema, internalCreateOrganizationResponseSchema, internalMembershipRequestSchema, internalMembershipResponseSchema, internalRemoveOrganizationDocumentsParamsSchema, internalRemoveOrganizationDocumentsRequestSchema, internalRemoveOrganizationDocumentsResponseSchema, internalUpdateMemberProfileParamsSchema, internalUpdateMemberProfileRequestSchema, internalUpdateMemberProfileResponseSchema, invalidSequenceDetailsSchema, invitableRoleSchema, invitationIdSchema, invitationParamsSchema, invitationSchema, invitationStateSchema, invitationTokenSchema, isBlankCsvRecord, isComposedKind, isWellFormedText, joinUrlSchema, launchCheckItemSchema, launchCheckNameSchema, launchCheckResultSchema, launchCheckSchema, limitDetailsSchema, lineAssignmentSchema, lineCursorSchema, lineIdSchema, lineLabelSchema, linePageSchema, lineParamsSchema, lineSchema, lineStateSchema, listAgentTurnsQuerySchema, listApprovalQueueQuerySchema, listBookingTypesQuerySchema, listBookingsQuerySchema, listBrandVoiceVersionsQuerySchema, listBrandVoiceVersionsResponseSchema, listBriefsQuerySchema, listBriefsResponseSchema, listCallsQuerySchema, listCallsResponseSchema, listCampaignsQuerySchema, listCampaignsResponseSchema, listChatMessagesQuerySchema, listChatsQuerySchema, listConsentEventsQuerySchema, listConsentFormsQuerySchema, listConsentWordingsQuerySchema, listContactChecksQuerySchema, listConversationsQuerySchema, listCopilotCardsQuerySchema, listDealImportRowsQuerySchema, listDealImportRowsResponseSchema, listDealImportsQuerySchema, listDealImportsResponseSchema, listDealsQuerySchema, listDealsResponseSchema, listDecisionsQuerySchema, listDocumentsQuerySchema, listDocumentsResponseSchema, listDraftsQuerySchema, listDraftsResponseSchema, listEnrichmentRunsQuerySchema, listEnrichmentRunsResponseSchema, listEnrollmentActivityResponseSchema, listEnrollmentsQuerySchema, listEnrollmentsResponseSchema, listEvidenceQuerySchema, listFieldHistoryQuerySchema, listFieldHistoryResponseSchema, listFitCriteriaQuerySchema, listFitCriteriaResponseSchema, listFitScoresQuerySchema, listFitScoresResponseSchema, listHandoffsQuerySchema, listHealthHistoryQuerySchema, listInquiriesQuerySchema, listInvitationsQuerySchema, listInvitationsResponseSchema, listLinesQuerySchema, listMailEventsQuerySchema, listMailboxesQuerySchema, listMembersQuerySchema, listMembersResponseSchema, listMessagesQuerySchema, listPlaysQuerySchema, listPlaysResponseSchema, listProspectCompaniesQuerySchema, listProspectCompaniesResponseSchema, listProspectDuplicatesQuerySchema, listProspectDuplicatesResponseSchema, listProspectImportRowsQuerySchema, listProspectImportRowsResponseSchema, listProspectImportsQuerySchema, listProspectImportsResponseSchema, listProspectsQuerySchema, listProspectsResponseSchema, listProvidersQuerySchema, listProvidersResponseSchema, listQualificationQuestionsQuerySchema, listRoutingRulesQuerySchema, listSendsQuerySchema, listSignalsQuerySchema, listSignalsResponseSchema, listSlotsQuerySchema, listSpendQuerySchema, listSpendResponseSchema, listSuppressionEntriesQuerySchema, listSuppressionImportRowsQuerySchema, listSuppressionImportsQuerySchema, listTeamMembersQuerySchema, listTeamMembersResponseSchema, listTeamsQuerySchema, listTeamsResponseSchema, listVoiceCallsQuerySchema, lookupDealRequestSchema, lookupSuppressionRequestSchema, mailBouncedEvent, mailCapacitySchema, mailComplainedEvent, mailEventCursorSchema, mailEventIdSchema, mailEventKindSchema, mailEventPageSchema, mailEventSchema, mailKeyedHeadersSchema, mailOutOfOfficeEvent, mailProviderMessageIdSchema, mailRepliedEvent, mailUnsubscribedEvent, mailboxCapacitySchema, mailboxConnectStartSchema, mailboxCursorSchema, mailboxHealthSchema, mailboxIdSchema, mailboxKindSchema, mailboxLimitsSchema, mailboxPageSchema, mailboxParamsSchema, mailboxProviderSchema, mailboxSchema, mailboxStateChangedEvent, mailboxStateReasonSchema, mailboxStateSchema, markCopilotCardRequestSchema, maskedAddressSchema, memberParamsSchema, memberSchema, membershipIdSchema, mergeProspectsRequestSchema, messageApprovedEvent, messageAuthorKindSchema, messageBodySchema, messageCursorSchema, messageDirectionSchema, messageFailedEvent, messageFailureReasonSchema, messageIdSchema, messagePageSchema, messageSchema, messageSentEvent, messagingTextSchema, microDollarsSchema, minuteOfDaySchema, momentMatchSchema, momentQueryText, momentSnippet, momentSnippetSchema, monthSchema, multilineTextSchema, normaliseDealId, normaliseFileName, normaliseMediaType, normaliseSpeakerLabel, oneClickUnsubscribeBodySchema, oneClickUnsubscribeRequestSchema, organizationIdSchema, organizationMailLimitsSchema, organizationNameSchema, organizationSchema, organizationStatusSchema, outcomeSchema, outreachDraftCheckSchema, outreachDraftSchema, pageQuerySchema, pageSchema, parseAmountCell, parseClosedAtCell, parseCsv, parseCurrencyCell, parseOutcomeCell, parseRepField, personNameSchema, phoneHashSchema, placeCallHeadersSchema, placeCallRequestSchema, placedCallSchema, playCitationSchema, playCursorSchema, playIdSchema, playIntentSchema, playParamsSchema, playSchema, playSourceSchema, playStatusSchema, previewFailureCodeSchema, previewItemSchema, previewRequestSchema, previewResultSchema, promoteVariantResponseSchema, promotionPolicySchema, promotionRecordSchema, promotionSourceSchema, proposePlaysRequestSchema, proposePlaysResponseSchema, prospectCompanyCursorSchema, prospectCompanyDomainSchema, prospectCompanyFieldNameSchema, prospectCompanyFieldParamsSchema, prospectCompanyIdSchema, prospectCompanyNameSchema, prospectCompanyParamsSchema, prospectCompanySchema, prospectConsentSchema, prospectCreatedEvent, prospectCursorSchema, prospectDuplicateCursorSchema, prospectDuplicateSchema, prospectEnrichmentSchema, prospectErasedEvent, prospectFieldNameSchema, prospectFieldParamsSchema, prospectFitChangedEvent, prospectIdSchema, prospectIdentityKindSchema, prospectImportCursorSchema, prospectImportFailureReasonSchema, prospectImportIdSchema, prospectImportInvalidDetailsSchema, prospectImportParamsSchema, prospectImportRowCursorSchema, prospectImportRowReasonSchema, prospectImportRowResultSchema, prospectImportRowSchema, prospectImportSchema, prospectImportStateSchema, prospectJobTitleSchema, prospectMergeIdSchema, prospectMergeParamsSchema, prospectMergeSchema, prospectMergeUndoneEvent, prospectMergedEvent, prospectNamePartSchema, prospectNotFoundDetailsSchema, prospectNotesSchema, prospectParamsSchema, prospectSchema, prospectSearchSchema, prospectStatusSchema, prospectTagsSchema, prospectUpdatedEvent, providerApiKeySchema, providerCostSchema, providerKeySchema, providerMessageIdSchema, providerSettingsSchema, publicBookRequestSchema, publicBookingConfirmationSchema, publicBookingParamsSchema, publicBookingTypeSchema, publicChatConsentReceiptSchema, publicChatConsentRequestSchema, publicChatHandoffReplySchema, publicChatHandoffRequestSchema, publicChatHeadersSchema, publicChatKeyParamsSchema, publicChatMessagePageSchema, publicChatMessageReplySchema, publicChatMessageSchema, publicChatOriginHeadersSchema, publicChatReplySchema, publicChatSessionParamsSchema, publicInquiryFormViewSchema, publicInquiryHeadersSchema, publicInquiryParamsSchema, publicInquiryReceiptSchema, publicInquiryRequestSchema, publicListChatMessagesQuerySchema, publicListSlotsQuerySchema, publicOriginHeadersSchema, publicSendChatMessageRequestSchema, publicSlotPageSchema, publicSlotSchema, publicStartChatRequestSchema, publicStartChatResponseSchema, qualificationAnswerSchema, qualificationQuestionIdSchema, qualificationQuestionKindSchema, qualificationQuestionPageSchema, qualificationQuestionParamsSchema, qualificationQuestionSchema, qualificationSchema, qualificationValueSchema, questionPromptSchema, questionSuggestionsSchema, rampSchema, rateIntervalSchema, rawLinkedinUrlSchema, rawPhoneSchema, recordConsentRequestSchema, recordDeliveryFailureRequestSchema, recordNoteRequestSchema, recordWithdrawalRequestSchema, recordedConsentSchema, recordedSuppressionSchema, recordingKeySchema, recordingPlaybackSchema, regenerateDraftRequestSchema, regionSchema, rejectDraftRequestSchema, removeEnrollmentRequestSchema, removeSuppressionRequestSchema, renameOrganizationRequestSchema, renameTeamRequestSchema, reorderQualificationQuestionsRequestSchema, reorderRoutingRulesRequestSchema, repChangeAllowed, repChoiceSchema, repChoiceSuits, repTaskStepSchema, repTaskTypeSchema, replyClassifiedEvent, replyLabelSchema, replyRequestSchema, requestIdSchema, rescheduleBookingRequestSchema, researchBriefSchema, resolveCitationsRequestSchema, resolveCitationsResponseSchema, resolvedCitationSchema, retryAfterDetailsSchema, returnToSchema, rightsConfirmationSchema, rightsRequiredDetailsSchema, rightsStatusSchema, rightsWordingFor, rightsWordingSchema, rightsWordingVersionSchema, roleAtLeast, roleSchema, rotateSignalWebhookResponseSchema, routeRequestSchema, routingAttributesSchema, routingCandidateReasonSchema, routingConditionsSchema, routingDecisionIdSchema, routingResultSchema, routingRuleIdSchema, routingRuleParamsSchema, routingRuleSchema, routingSkipReasonSchema, routingTargetSchema, runSetCountsSchema, runStatusSchema, searchDocumentsRequestSchema, searchDocumentsResponseSchema, searchEvidenceSchema, searchMomentsRequestSchema, searchMomentsResponseSchema, searchTurnSchema, sendCheckResultSchema, sendCheckSchema, sendCursorSchema, sendIdSchema, sendKeySchema, sendKeyToString, sendPageSchema, sendParamsSchema, sendRecordSchema, sendRefusalReasonSchema, sendStateSchema, sendTryMessageRequestSchema, sendWindowSchema, sequenceProblemCodeSchema, sequenceProblemSchema, sequenceSchema, sequenceStepsSchema, setAgentSettingsRequestSchema, setApprovalPolicyRequestSchema, setBrandVoiceRequestSchema, setBudgetRequestSchema, setCallRepRequestSchema, setCopilotSettingsRequestSchema, setDealOutcomeRequestSchema, setInquiryEmbedRequestSchema, setMailboxLimitsRequestSchema, setProspectOwnerRequestSchema, setProviderRequestSchema, setSequenceRequestSchema, setSignalSettingsRequestSchema, setWaterfallRequestSchema, signalIdSchema, signalKindSchema, signalKindSettingSchema, signalRecordedEvent, signalSchema, signalSettingsSchema, signalSourceSchema, signalWebhookRequestSchema, signalWebhookResponseSchema, signalWebhookSecretSchema, signalWebhookStateSchema, skipConditionSchema, skipOperatorSchema, slotPageSchema, slotSchema, softphoneTokenSchema, sourceKindSchema, sourcePassageSchema, sourceRefSchema, sourceSchema, sourceUrlSchema, speakerExcerpt, speakerExcerptSchema, speakerLabelSchema, spendEntrySchema, startCalendarConnectionRequestSchema, startCalendarConnectionResponseSchema, startMailboxConnectRequestSchema, startTrySessionRequestSchema, stepKeySchema, stepKindSchema, stepSchema, stepSentEvent, stepTextSchema, stepVariantResultsSchema, stepVariantsParamsSchema, stopReasonSchema, storedNameSchema, submitSendRequestSchema, suggestedQualificationQuestionSchema, suppressionAddedEvent, suppressionAddressKindSchema, suppressionEntryIdSchema, suppressionEntryPageSchema, suppressionEntryParamsSchema, suppressionEntrySchema, suppressionImportIdSchema, suppressionImportPageSchema, suppressionImportParamsSchema, suppressionImportRowPageSchema, suppressionImportRowSchema, suppressionImportSchema, suppressionImportStateSchema, suppressionListStateSchema, suppressionReasonSchema, suppressionRemovedEvent, teamIdSchema, teamMemberParamsSchema, teamMemberSchema, teamNameSchema, teamParamsSchema, teamSchema, testRoutingRequestSchema, timeOfDaySchema, timeZoneSchema, timestampSchema, toReplyLabel, transcriptCursorSchema, transcriptPageSchema, transcriptSpeakerSchema, transcriptTurnSchema, tryReplySchema, trySessionIdSchema, trySessionParamsSchema, trySessionSchema, unsubscribePageSchema, unsubscribeParamsSchema, unsubscribePreviewSchema, unsubscribeReceiptSchema, unsubscribeResultSchema, unsubscribeTokenSchema, updateBookingTypeRequestSchema, updateCampaignRequestSchema, updateConsentWordingRequestSchema, updateFitCriterionRequestSchema, updateProspectCompanyRequestSchema, updateProspectRequestSchema, updateQualificationQuestionRequestSchema, updateRoutingRuleRequestSchema, uploadCallFieldsSchema, uploadCallFileSchema, uploadDocumentFileSchema, userIdSchema, variantGroupSchema, variantParamsSchema, variantPromotedEvent, variantResultSchema, variantResultStatusSchema, variantSchema, vendorTextSchema, verificationReasonSchema, verificationStatusSchema, voiceAgentCallEndedEvent, voiceCallCursorSchema, voiceCallDirectionSchema, voiceCallEndedBySchema, voiceCallEndedEvent, voiceCallFailureReasonSchema, voiceCallOutcomeSchema, voiceCallPageSchema, voiceCallParamsSchema, voiceCallSchema, voiceCallStartedEvent, voiceCallStateSchema, voiceConsentRevokedEvent, voiceCopilotCardRatedEvent, voiceCopilotCardShownEvent, voiceHandoffCompletedEvent, voiceInquiryReceivedEvent, voiceRecordingStateSchema, voiceTranscriptStateSchema, waitStepSchema, waterfallOrderSchema, waterfallSchema, weekdaySchema, windowZoneSchema, withdrawConsentRequestSchema, workingDaySchema, workingWindowSchema, wrapUpNoteSchema, wrapUpRequestSchema };
