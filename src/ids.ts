@@ -104,6 +104,10 @@ export const mailEventIdSchema = idSchema('mev')
 export const campaignIdSchema = idSchema('cpg')
 /** The id of an Enrollment (`enr_…`): one Prospect's place in a Campaign's Sequence. */
 export const enrollmentIdSchema = idSchema('enr')
+/** The id of a Play (`ply_…`): a reusable Sequence for a stated goal, built in or proposed from won Deals. */
+export const playIdSchema = idSchema('ply')
+/** The id of an entry in an Enrollment's activity log (`eev_…`). */
+export const enrollmentEventIdSchema = idSchema('eev')
 
 /** The id of an Organization. */
 export type OrganizationId = z.infer<typeof organizationIdSchema>
@@ -181,6 +185,10 @@ export type MailEventId = z.infer<typeof mailEventIdSchema>
 export type CampaignId = z.infer<typeof campaignIdSchema>
 /** The id of an Enrollment. */
 export type EnrollmentId = z.infer<typeof enrollmentIdSchema>
+/** The id of a Play. */
+export type PlayId = z.infer<typeof playIdSchema>
+/** The id of an entry in an Enrollment's activity log. */
+export type EnrollmentEventId = z.infer<typeof enrollmentEventIdSchema>
 
 const UUID_PATTERN =
   /^(?:[0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i
