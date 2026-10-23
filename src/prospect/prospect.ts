@@ -9,8 +9,12 @@ import {
   fieldValueSchema,
   MAX_PROSPECT_SEARCH_LENGTH,
   prospectCompanyDomainSchema,
+  prospectCompanyEmployeeCountSchema,
   prospectCompanyFieldNameSchema,
+  prospectCompanyIndustrySchema,
   prospectCompanyNameSchema,
+  prospectCompanyRegionSchema,
+  prospectCompanyTechnologiesSchema,
   prospectFieldNameSchema,
   prospectJobTitleSchema,
   prospectNamePartSchema,
@@ -255,14 +259,19 @@ export const eraseProspectResponseSchema = z.object({
 export type EraseProspectResponse = z.infer<typeof eraseProspectResponseSchema>
 
 /**
- * A Prospect Company as core returns it: the name and domain with their Source, time and actor.
- * `domain` is the normalised domain (ASCII-folded host). `name` is always present.
+ * A Prospect Company as core returns it: the fields with their Source, time and actor. `domain` is
+ * the normalised domain (ASCII-folded host). `name` is always present. `employeeCount` is a decimal
+ * string and `technologies` JSON text of a list of strings; the other fields may be absent.
  */
 export const prospectCompanySchema = z.object({
   id: prospectCompanyIdSchema,
   fields: z.object({
     name: fieldValueSchema,
     domain: fieldValueSchema.optional(),
+    industry: fieldValueSchema.optional(),
+    employeeCount: fieldValueSchema.optional(),
+    region: fieldValueSchema.optional(),
+    technologies: fieldValueSchema.optional(),
   }),
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
@@ -293,18 +302,26 @@ export type ProspectCompanyFieldParams = z.infer<typeof prospectCompanyFieldPara
 export const createProspectCompanyRequestSchema = z.strictObject({
   name: prospectCompanyNameSchema,
   domain: prospectCompanyDomainSchema.optional(),
+  industry: prospectCompanyIndustrySchema.optional(),
+  region: prospectCompanyRegionSchema.optional(),
+  employeeCount: prospectCompanyEmployeeCountSchema.optional(),
+  technologies: prospectCompanyTechnologiesSchema.optional(),
 })
 
 /** The body of a request to create a Prospect Company. */
 export type CreateProspectCompanyRequest = z.infer<typeof createProspectCompanyRequestSchema>
 
-/** The body of a request to edit a Prospect Company: only the fields sent change, written with the Source `manual`; `null` clears the domain. At least one field is required. */
+/** The body of a request to edit a Prospect Company: only the fields sent change, written with the Source `manual`; `null` clears the domain, industry, region, employee count or technologies. At least one field is required. */
 export const updateProspectCompanyRequestSchema = z
   .strictObject({
     name: prospectCompanyNameSchema.optional(),
     domain: prospectCompanyDomainSchema.nullable().optional(),
+    industry: prospectCompanyIndustrySchema.nullable().optional(),
+    region: prospectCompanyRegionSchema.nullable().optional(),
+    employeeCount: prospectCompanyEmployeeCountSchema.nullable().optional(),
+    technologies: prospectCompanyTechnologiesSchema.nullable().optional(),
   })
-  .refine((body) => body.name !== undefined || body.domain !== undefined, 'Send a change')
+  .refine((body) => Object.values(body).some((value) => value !== undefined), 'Send a change')
 
 /** The body of a request to edit a Prospect Company. */
 export type UpdateProspectCompanyRequest = z.infer<typeof updateProspectCompanyRequestSchema>

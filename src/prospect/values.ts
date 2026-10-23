@@ -48,8 +48,8 @@ export const MAX_PROSPECT_TAG_LENGTH = 50
 export const MAX_PROSPECT_TAGS = 20
 /** The longest search text of a list request, in characters. */
 export const MAX_PROSPECT_SEARCH_LENGTH = 100
-/** The longest value a stored field returns, in characters. */
-export const MAX_PROSPECT_FIELD_VALUE_LENGTH = 320
+/** The longest value a stored field returns, in characters: a `technologies` list is stored as JSON text, which a request may not take past this. */
+export const MAX_PROSPECT_FIELD_VALUE_LENGTH = 5300
 /** The longest Source reference (an import job id, a CRM record id), in characters. */
 export const MAX_SOURCE_REF_LENGTH = 200
 
@@ -61,6 +61,35 @@ export const prospectJobTitleSchema = boundedTextSchema(MAX_PROSPECT_JOB_TITLE_L
 
 /** A Prospect Company name in a request: trimmed, 1 to 200 characters, no control character. */
 export const prospectCompanyNameSchema = boundedTextSchema(MAX_PROSPECT_COMPANY_NAME_LENGTH)
+
+/** The most technologies one Prospect Company carries. */
+export const MAX_PROSPECT_COMPANY_TECHNOLOGIES = 50
+/** The longest technology name, in characters. */
+export const MAX_PROSPECT_COMPANY_TECHNOLOGY_LENGTH = 100
+/** The largest employee count of a Prospect Company. */
+export const MAX_PROSPECT_COMPANY_EMPLOYEE_COUNT = 999_999_999
+
+/** A Prospect Company industry in a request: trimmed, 1 to 200 characters, no control character. */
+export const prospectCompanyIndustrySchema = boundedTextSchema(MAX_PROSPECT_COMPANY_NAME_LENGTH)
+
+/** A Prospect Company region in a request: trimmed, 1 to 200 characters, no control character. */
+export const prospectCompanyRegionSchema = boundedTextSchema(MAX_PROSPECT_COMPANY_NAME_LENGTH)
+
+/** A Prospect Company employee count in a request: an integer from 0 to 999,999,999. */
+export const prospectCompanyEmployeeCountSchema = z
+  .number()
+  .int()
+  .min(0)
+  .max(MAX_PROSPECT_COMPANY_EMPLOYEE_COUNT)
+
+/** The technologies of a Prospect Company in a request: at most 50, each trimmed and 1 to 100 characters, and at most 5,300 characters as JSON text. */
+export const prospectCompanyTechnologiesSchema = z
+  .array(boundedTextSchema(MAX_PROSPECT_COMPANY_TECHNOLOGY_LENGTH))
+  .max(MAX_PROSPECT_COMPANY_TECHNOLOGIES)
+  .refine(
+    (list) => JSON.stringify(list).length <= MAX_PROSPECT_FIELD_VALUE_LENGTH,
+    'The list is too long once stored as JSON'
+  )
 
 /** Free-text notes on a Prospect: trimmed, 1 to 5,000 characters; line breaks and tabs are allowed, other control characters are not. */
 export const prospectNotesSchema = z
@@ -159,8 +188,15 @@ export const prospectFieldNameSchema = z.enum(PROSPECT_FIELD_NAMES)
 /** The name of a Prospect field that carries a Source. */
 export type ProspectFieldName = z.infer<typeof prospectFieldNameSchema>
 
-/** The fields of a Prospect Company that carry a Source. */
-export const PROSPECT_COMPANY_FIELD_NAMES = ['name', 'domain'] as const
+/** The fields of a Prospect Company that carry a Source, in the camelCase the API and the enrichment payload use. */
+export const PROSPECT_COMPANY_FIELD_NAMES = [
+  'name',
+  'domain',
+  'industry',
+  'employeeCount',
+  'region',
+  'technologies',
+] as const
 
 /** The name of a Prospect Company field that carries a Source. */
 export const prospectCompanyFieldNameSchema = z.enum(PROSPECT_COMPANY_FIELD_NAMES)

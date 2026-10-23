@@ -177,7 +177,7 @@ export const PROSPECT_ROUTES: Readonly<Record<ProspectRouteName, ProspectRoute>>
     errors: ['prospect.company_domain_taken'],
     commonErrors: [...IDEMPOTENT_ERRORS],
     description:
-      'Creates a Prospect Company with the Source manual. Every role may. A domain another Prospect Company of the Organization already has is prospect.company_domain_taken (409). Answers 201, or 200 with the original record for a replay of the same Idempotency-Key.',
+      'Creates a Prospect Company with the Source manual; it may also carry industry, region, employeeCount and technologies. Every role may. A domain another Prospect Company of the Organization already has is prospect.company_domain_taken (409). Answers 201, or 200 with the original record for a replay of the same Idempotency-Key.',
   }),
   listProspectCompanies: route({
     method: 'GET',
@@ -212,7 +212,7 @@ export const PROSPECT_ROUTES: Readonly<Record<ProspectRouteName, ProspectRoute>>
     errors: ['prospect.not_found', 'prospect.company_domain_taken'],
     commonErrors: ['request.invalid'],
     description:
-      'Edits a Prospect Company; each field sent is written with the Source manual (ADR 0020). null clears the domain. A domain another Prospect Company of the Organization already has is prospect.company_domain_taken (409).',
+      'Edits a Prospect Company; each field sent is written with the Source manual (ADR 0020). null clears the domain, industry, region, employeeCount or technologies. A domain another Prospect Company of the Organization already has is prospect.company_domain_taken (409).',
   }),
   listProspectCompanyFieldHistory: route({
     method: 'GET',

@@ -27,11 +27,14 @@ import {
   MAX_MERGED_PROSPECTS,
   MAX_PROSPECT_IMPORT_ROWS,
   mergeProspectsRequestSchema,
+  PROSPECT_COMPANY_FIELD_NAMES,
   PROSPECT_ERRORS,
   PROSPECT_EVENTS,
   PROSPECT_IMPORT_COLUMNS,
   PROSPECT_IMPORT_INVALID_REASONS,
   PROSPECT_ROUTES,
+  prospectCompanyFieldNameSchema,
+  prospectCompanySchema,
   prospectErasedEvent,
   prospectImportInvalidDetailsSchema,
   prospectImportRowSchema,
@@ -542,5 +545,139 @@ describe('routes', () => {
   test('ids used by the schemas are distinct', () => {
     expect(prospectIdSchema.safeParse(pco).success).toBe(false)
     expect(membershipIdSchema.safeParse(pco).success).toBe(false)
+  })
+})
+
+describe('Prospect Company enrichment fields', () => {
+  const stored = (value: string) => ({
+    value,
+    source: 'enrichment:apollo',
+    sourceRef: null,
+    setAt: NOW,
+    setByUserId: null,
+  })
+  test('the history field names include the four, camelCase like the enrichment payload', () => {
+    expect([...PROSPECT_COMPANY_FIELD_NAMES]).toEqual([
+      'name',
+      'domain',
+      'industry',
+      'employeeCount',
+      'region',
+      'technologies',
+    ])
+    expect(prospectCompanyFieldNameSchema.safeParse('employeeCount').success).toBe(true)
+    expect(prospectCompanyFieldNameSchema.safeParse('employee_count').success).toBe(false)
+  })
+  test('read: the new fields are optional, and present ones carry their Source', () => {
+    const base = { id: pco, createdAt: NOW, updatedAt: NOW }
+    expect(
+      prospectCompanySchema.safeParse({ ...base, fields: { name: stored('Acme') } }).success
+    ).toBe(true)
+    const full = prospectCompanySchema.parse({
+      ...base,
+      fields: {
+        name: stored('Acme'),
+        industry: stored('Software'),
+        employeeCount: stored('250'),
+        region: stored('EMEA'),
+        technologies: stored(JSON.stringify(['bun'])),
+      },
+    })
+    expect(full.fields.employeeCount?.value).toBe('250')
+  })
+  test('read: a full 50-technology JSON value fits', () => {
+    const list = Array.from({ length: 50 }, () => 't'.repeat(100))
+    const json = JSON.stringify(list)
+    expect(json.length).toBeGreaterThan(320)
+    expect(json.length).toBeLessThanOrEqual(5300)
+    expect(
+      prospectCompanySchema.safeParse({
+        id: pco,
+        createdAt: NOW,
+        updatedAt: NOW,
+        fields: { name: stored('Acme'), technologies: stored(json) },
+      }).success
+    ).toBe(true)
+  })
+  test('create: accepts the four fields, trimming text', () => {
+    const parsed = createProspectCompanyRequestSchema.parse({
+      name: 'Acme',
+      industry: '  Software ',
+      region: ' EMEA',
+      employeeCount: 250,
+      technologies: ['bun', 'postgres'],
+    })
+    expect(parsed.industry).toBe('Software')
+    expect(parsed.region).toBe('EMEA')
+    expect(parsed.employeeCount).toBe(250)
+    expect(parsed.technologies).toEqual(['bun', 'postgres'])
+  })
+  const bad: Array<[string, Record<string, unknown>]> = [
+    ['empty industry', { industry: '  ' }],
+    ['industry over 200', { industry: 'x'.repeat(201) }],
+    ['empty region', { region: '' }],
+    ['region over 200', { region: 'x'.repeat(201) }],
+    ['negative employeeCount', { employeeCount: -1 }],
+    ['fractional employeeCount', { employeeCount: 1.5 }],
+    ['employeeCount over 999,999,999', { employeeCount: 1_000_000_000 }],
+    ['string employeeCount', { employeeCount: '5' }],
+    ['51 technologies', { technologies: Array.from({ length: 51 }, (_, i) => `t${i}`) }],
+    ['empty technology', { technologies: [''] }],
+    ['technology over 100', { technologies: ['x'.repeat(101)] }],
+  ]
+  for (const [label, extra] of bad) {
+    test(`create and update refuse ${label}`, () => {
+      expect(createProspectCompanyRequestSchema.safeParse({ name: 'Acme', ...extra }).success).toBe(
+        false
+      )
+      expect(updateProspectCompanyRequestSchema.safeParse(extra).success).toBe(false)
+    })
+  }
+  test('limits are inclusive', () => {
+    const ok = {
+      name: 'Acme',
+      industry: 'x'.repeat(200),
+      region: 'y',
+      employeeCount: 999_999_999,
+      technologies: Array.from({ length: 50 }, () => 't'.repeat(100)),
+    }
+    expect(createProspectCompanyRequestSchema.safeParse(ok).success).toBe(true)
+    expect(
+      createProspectCompanyRequestSchema.safeParse({ name: 'A', employeeCount: 0 }).success
+    ).toBe(true)
+  })
+  test('update: each field alone is a change, null clears, empty list is allowed', () => {
+    for (const body of [
+      { industry: 'Software' },
+      { region: 'EMEA' },
+      { employeeCount: 0 },
+      { technologies: [] },
+      { industry: null },
+      { region: null },
+      { employeeCount: null },
+      { technologies: null },
+    ]) {
+      expect(updateProspectCompanyRequestSchema.safeParse(body).success).toBe(true)
+    }
+    expect(updateProspectCompanyRequestSchema.safeParse({}).success).toBe(false)
+  })
+  test('create: null is not accepted', () => {
+    expect(
+      createProspectCompanyRequestSchema.safeParse({ name: 'A', industry: null }).success
+    ).toBe(false)
+  })
+  test('technologies whose JSON text is over 5,300 characters are refused (escaping counts)', () => {
+    const escaped = Array.from({ length: 50 }, () => '"'.repeat(100))
+    expect(JSON.stringify(escaped).length).toBeGreaterThan(5300)
+    expect(
+      createProspectCompanyRequestSchema.safeParse({ name: 'A', technologies: escaped }).success
+    ).toBe(false)
+    expect(updateProspectCompanyRequestSchema.safeParse({ technologies: escaped }).success).toBe(
+      false
+    )
+    const plain = Array.from({ length: 50 }, () => 't'.repeat(100))
+    expect(
+      createProspectCompanyRequestSchema.safeParse({ name: 'A', technologies: plain }).success
+    ).toBe(true)
   })
 })
