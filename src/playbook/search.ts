@@ -1,8 +1,14 @@
 import { z } from 'zod'
-import { callIdSchema, dealRecordIdSchema, documentIdSchema } from '../ids'
+import { callIdSchema, dealRecordIdSchema, documentIdSchema, suggestionIdSchema } from '../ids'
 import { excerptText } from './call-values'
 import { PLAYBOOK_READ_ROLES, type PlaybookRoute } from './routes'
 import { SALES_HISTORY_READ_ROLES } from './sales-history-routes'
+import {
+  MAX_SUGGESTION_MOMENTS,
+  momentOriginSchema,
+  suggestionKindSchema,
+  suggestionTextSchema,
+} from './suggestion-values'
 import {
   documentFileNameSchema,
   hasStrippableCharacter,
@@ -100,6 +106,8 @@ export const momentIndexSchema = z.number().int().min(0).max(MAX_MOMENT_INDEX)
  * One similar Moment from a won Deal: the Call and Deal it comes from (opaque ids), its optional
  * `momentIndex` (which Moment of the Call), its similarity
  * `score` (higher is closer) and two snippets, what the Prospect said and what the Rep said next.
+ * `origin` says who wrote the Moment (imported, rep or agent); it is absent in an answer from a
+ * service that does not name it, and a client treats absent as not Agent-origin only for display.
  * It never carries the customer's `dealId`, name or amount; unknown fields are dropped. The
  * snippets are tenant Transcript text: never logged.
  */
@@ -107,6 +115,7 @@ export const momentMatchSchema = z.object({
   callId: callIdSchema,
   dealRecordId: dealRecordIdSchema,
   momentIndex: momentIndexSchema.optional(),
+  origin: momentOriginSchema.optional(),
   score: z.number().finite(),
   prospect: momentSnippetSchema,
   repNext: momentSnippetSchema,
@@ -114,6 +123,34 @@ export const momentMatchSchema = z.object({
 
 /** One similar Moment from a won Deal. */
 export type MomentMatch = z.infer<typeof momentMatchSchema>
+
+/** A Moment a Suggestion cites: the Call and Deal (opaque ids) and an optional `momentIndex`. */
+export const suggestionMomentRefSchema = z.object({
+  callId: callIdSchema,
+  dealRecordId: dealRecordIdSchema,
+  momentIndex: momentIndexSchema.optional(),
+})
+
+/**
+ * One accepted Suggestion that matches a search: its id, kind, `text`, similarity `score` and
+ * provenance (the won Deal and at most `MAX_SUGGESTION_MOMENTS` cited Moments). Only an accepted
+ * Suggestion is ever returned. The `text` is derived from Deal Calls and may be edited by an Admin:
+ * it is untrusted data, shown to a person and never run or obeyed as instructions. Unknown fields
+ * are dropped.
+ */
+export const suggestionMatchSchema = z.object({
+  suggestionId: suggestionIdSchema,
+  kind: suggestionKindSchema,
+  text: suggestionTextSchema,
+  score: z.number().finite(),
+  provenance: z.object({
+    dealRecordId: dealRecordIdSchema,
+    momentRefs: z.array(suggestionMomentRefSchema).max(MAX_SUGGESTION_MOMENTS),
+  }),
+})
+
+/** One accepted Suggestion that matches a search. */
+export type SuggestionMatch = z.infer<typeof suggestionMatchSchema>
 
 /** How much a search found: `moments` candidates that may be returned and the distinct won Deals (`deals`) among them, both at most `MAX_SEARCH_CANDIDATES`. */
 export const searchEvidenceSchema = z.object({
@@ -125,13 +162,15 @@ export const searchEvidenceSchema = z.object({
 export type SearchEvidence = z.infer<typeof searchEvidenceSchema>
 
 /**
- * The answer to a search: the best matches, at most `MAX_SEARCH_LIMIT`, best first, and the
+ * The answer to a search: the best matches, at most `MAX_SEARCH_LIMIT`, best first, the accepted
+ * Suggestions that match (`suggestions`, at most `MAX_SEARCH_LIMIT`, empty when none) and the
  * evidence. There is no cursor: the result is a bounded top-k. The items are the first of the
  * `moments` candidates and the Deals are among them, so neither count is above `evidence.moments`, and `evidence.deals` is at least the number of distinct Deals among the items.
  */
 export const searchMomentsResponseSchema = z
   .object({
     items: z.array(momentMatchSchema).max(MAX_SEARCH_LIMIT),
+    suggestions: z.array(suggestionMatchSchema).max(MAX_SEARCH_LIMIT).default([]),
     evidence: searchEvidenceSchema,
   })
   .superRefine((response, context) => {
@@ -261,7 +300,7 @@ export const SEARCH_ROUTES: Readonly<Record<SearchRouteName, PlaybookRoute>> = O
     errors: [],
     commonErrors: ['request.invalid', 'server.timeout', 'server.unavailable'],
     description:
-      "Finds Moments in the Organization's won Deals that resemble the conversation so far, so the Copilot can show what worked. The body is the latest turns (1 to 6, each a role of rep or prospect and its text, at most 2000 characters in all) and an optional limit (1 to 20, default 5). It answers the best matches, best first, at most 20, each with the opaque callId and dealRecordId, the momentIndex (the 0-based number of the Moment within the Call, so a Citation can point at exactly this Moment), a score and two snippets of at most 512 characters (what the Prospect said and what the Rep said next), and evidence: the number of candidate Moments and the distinct won Deals among them. The evidence counts only the over-fetched candidate window (the best min(100, limit x 5) Moments by similarity, after the eligibility checks), not every won Deal in the Organization. There is no cursor: the result is a bounded top-k. Only Moments of Calls whose Deal is won and whose Call is in search are returned, and only from the caller's Organization. It never returns the customer's dealId, name or amount. The request and the snippets are tenant conversation text and are never logged. It only reads, so it takes no Idempotency-Key and a repeat is harmless. request.invalid (400) for a body outside the bounds; server.timeout (504) when it takes too long; server.unavailable (503) with a Retry-After header when the embedding model or the vector store cannot answer. Owner and Admin only, as for all sales history (the owner's decision of 2026-10-13); a Manager or a Rep gets auth.forbidden, because a Rep sees only their own conversations. The phase-2 Copilot calls this service-to-service, not with a Rep's token.",
+      "Finds Moments in the Organization's won Deals that resemble the conversation so far, so the Copilot can show what worked. The body is the latest turns (1 to 6, each a role of rep or prospect and its text, at most 2000 characters in all) and an optional limit (1 to 20, default 5). It answers the best matches, best first, at most 20, each with the opaque callId and dealRecordId, the momentIndex (the 0-based number of the Moment within the Call, so a Citation can point at exactly this Moment), an optional origin (imported, rep or agent), a score and two snippets of at most 512 characters (what the Prospect said and what the Rep said next), then suggestions (at most 20 accepted Suggestions that match, each with its kind, untrusted text and provenance; empty when none), and evidence: the number of candidate Moments and the distinct won Deals among them. The evidence counts only the over-fetched candidate window (the best min(100, limit x 5) Moments by similarity, after the eligibility checks), not every won Deal in the Organization. There is no cursor: the result is a bounded top-k. Only Moments of Calls whose Deal is won and whose Call is in search are returned, and only from the caller's Organization. It never returns the customer's dealId, name or amount. The request and the snippets are tenant conversation text and are never logged. It only reads, so it takes no Idempotency-Key and a repeat is harmless. request.invalid (400) for a body outside the bounds; server.timeout (504) when it takes too long; server.unavailable (503) with a Retry-After header when the embedding model or the vector store cannot answer. Owner and Admin only, as for all sales history (the owner's decision of 2026-10-13); a Manager or a Rep gets auth.forbidden, because a Rep sees only their own conversations. The phase-2 Copilot calls this service-to-service, not with a Rep's token.",
   }),
   searchDocuments: route({
     method: 'POST',
