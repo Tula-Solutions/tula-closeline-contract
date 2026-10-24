@@ -2790,6 +2790,19 @@ var getSeriesResponseSchema = z30.strictObject({
   ...analyticsRangeShape,
   series: z30.array(seriesLineSchema).max(MAX_SERIES_GROUPS_PER_PAGE),
   nextCursor: pageSchema(z30.never()).shape.nextCursor
+}).superRefine((response, ctx) => {
+  const isRate = ANALYTICS_RATE_METRICS.includes(response.metric);
+  for (const [l, line] of response.series.entries()) {
+    for (const [p, point] of line.points.entries()) {
+      if (point.kind === "rate" !== isRate) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["series", l, "points", p, "kind"],
+          message: "A ratio metric has rate points and a count metric has count points"
+        });
+      }
+    }
+  }
 });
 var tableRowSchema = z30.strictObject({
   group: analyticsGroupKeySchema,

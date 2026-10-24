@@ -276,13 +276,28 @@ export const seriesLineSchema = z.strictObject({
 })
 
 /** The answer to a series read: the metric, the split, the range, one page of at most 20 lines and the cursor of the next page, or null at the end. */
-export const getSeriesResponseSchema = z.strictObject({
-  metric: analyticsSeriesMetricSchema,
-  groupBy: analyticsGroupBySchema.nullable(),
-  ...analyticsRangeShape,
-  series: z.array(seriesLineSchema).max(MAX_SERIES_GROUPS_PER_PAGE),
-  nextCursor: pageSchema(z.never()).shape.nextCursor,
-})
+export const getSeriesResponseSchema = z
+  .strictObject({
+    metric: analyticsSeriesMetricSchema,
+    groupBy: analyticsGroupBySchema.nullable(),
+    ...analyticsRangeShape,
+    series: z.array(seriesLineSchema).max(MAX_SERIES_GROUPS_PER_PAGE),
+    nextCursor: pageSchema(z.never()).shape.nextCursor,
+  })
+  .superRefine((response, ctx) => {
+    const isRate = (ANALYTICS_RATE_METRICS as readonly string[]).includes(response.metric)
+    for (const [l, line] of response.series.entries()) {
+      for (const [p, point] of line.points.entries()) {
+        if ((point.kind === 'rate') !== isRate) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['series', l, 'points', p, 'kind'],
+            message: 'A ratio metric has rate points and a count metric has count points',
+          })
+        }
+      }
+    }
+  })
 
 /** The answer to a series read. */
 export type GetSeriesResponse = z.infer<typeof getSeriesResponseSchema>

@@ -99,6 +99,27 @@ describe('queries', () => {
     expect(listTableQuerySchema.safeParse({ groupBy: 'team', ...range }).success).toBe(false)
   })
 
+  test('a series holds rate points for a ratio metric and count points otherwise', () => {
+    const base = { groupBy: null, from: '2026-09-01', to: '2026-09-30', nextCursor: null }
+    const count = { day: '2026-09-01', kind: 'count', value: 2, recordCount: 2 }
+    const few = {
+      day: '2026-09-01',
+      kind: 'rate',
+      state: 'not_enough_data',
+      value: null,
+      recordCount: 4,
+    }
+    const parse = (metric: string, point: unknown) =>
+      getSeriesResponseSchema.safeParse({
+        ...base,
+        metric,
+        series: [{ group: null, points: [point] }],
+      }).success
+    expect(parse('reply_rate', count)).toBe(false)
+    expect(parse('sends', few)).toBe(false)
+    expect(parse('sends', count)).toBe(true)
+  })
+
   test('a table has one row per channel, Agent kind, Campaign or Rep', () => {
     for (const groupBy of ['channel', 'agent_kind', 'campaign', 'rep']) {
       expect(listTableQuerySchema.safeParse({ groupBy, ...range }).success).toBe(true)
