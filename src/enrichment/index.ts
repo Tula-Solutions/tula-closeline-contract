@@ -1,6 +1,7 @@
 export * from './errors'
 export * from './events'
 export * from './fit'
+export * from './internal'
 export * from './routes'
 export * from './run'
 export * from './settings'
