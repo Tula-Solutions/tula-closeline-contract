@@ -288,5 +288,85 @@ describe('momentIndex on a search item', () => {
   })
   test('the description names the momentIndex', () => {
     expect(SEARCH_ROUTES.searchMoments.description).toContain('momentIndex')
+    expect(SEARCH_ROUTES.searchMoments.description).toContain('suggestions')
+  })
+})
+
+describe('the Agent-origin mark and accepted Suggestions in a search answer', () => {
+  const item = {
+    callId: id('call'),
+    dealRecordId: id('deal'),
+    score: 0.83,
+    prospect: 'We are worried about price.',
+    repNext: 'Many of our customers felt the same.',
+  }
+  const evidence = { moments: 12, deals: 4 }
+  const suggestion = {
+    suggestionId: id('sgs'),
+    kind: 'objection_answer',
+    text: 'Offer a quarterly plan.',
+    score: 0.7,
+    provenance: {
+      dealRecordId: id('deal'),
+      momentRefs: [{ callId: id('call'), dealRecordId: id('deal'), momentIndex: 2 }],
+    },
+  }
+  const parse = (value: unknown) => searchMomentsResponseSchema.safeParse(value)
+
+  test('a Moment item may name its origin, and an older answer without one still parses', () => {
+    const marked = searchMomentsResponseSchema.parse({
+      items: [{ ...item, origin: 'agent' }, item],
+      evidence,
+    })
+    expect(marked.items[0]?.origin).toBe('agent')
+    expect(marked.items[1]?.origin).toBeUndefined()
+    expect(parse({ items: [{ ...item, origin: 'robot' }], evidence }).success).toBe(false)
+  })
+
+  test('suggestions default to none, so an older answer parses', () => {
+    expect(searchMomentsResponseSchema.parse({ items: [], evidence }).suggestions).toEqual([])
+  })
+
+  test('an accepted Suggestion carries its kind, text and provenance', () => {
+    const parsed = searchMomentsResponseSchema.parse({
+      items: [],
+      suggestions: [suggestion],
+      evidence,
+    })
+    expect(parsed.suggestions[0]?.provenance.momentRefs).toHaveLength(1)
+    expect(
+      parse({ items: [], suggestions: [{ ...suggestion, kind: 'other' }], evidence }).success
+    ).toBe(false)
+  })
+
+  test('Suggestion text is 1 to 1000 characters, at most 20 Suggestions, 10 cited Moments', () => {
+    const at = (value: unknown) => parse({ items: [], suggestions: [value], evidence }).success
+    expect(at({ ...suggestion, text: 'a'.repeat(1000) })).toBe(true)
+    expect(at({ ...suggestion, text: 'a'.repeat(1001) })).toBe(false)
+    expect(at({ ...suggestion, text: '   ' })).toBe(false)
+    const ref = suggestion.provenance.momentRefs[0]
+    const refs = (count: number) => ({
+      ...suggestion,
+      provenance: {
+        ...suggestion.provenance,
+        momentRefs: Array.from({ length: count }, () => ref),
+      },
+    })
+    expect(at(refs(10))).toBe(true)
+    expect(at(refs(11))).toBe(false)
+    const many = (count: number) => Array.from({ length: count }, () => suggestion)
+    expect(parse({ items: [], suggestions: many(20), evidence }).success).toBe(true)
+    expect(parse({ items: [], suggestions: many(21), evidence }).success).toBe(false)
+  })
+
+  test('unknown fields of a Suggestion item are stripped', () => {
+    const parsed = searchMomentsResponseSchema.parse({
+      items: [],
+      suggestions: [{ ...suggestion, fingerprint: 'x', decidedByMembershipId: 'mem_x' }],
+      evidence,
+    })
+    expect(Object.keys(parsed.suggestions[0] ?? {}).sort()).toEqual(
+      ['kind', 'provenance', 'score', 'suggestionId', 'text'].sort()
+    )
   })
 })
