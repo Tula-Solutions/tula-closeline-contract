@@ -17,11 +17,14 @@ import {
   internalDirectoryRepCheckResponseSchema,
   internalDirectoryTeamCheckRequestSchema,
   internalDirectoryTeamCheckResponseSchema,
+  internalDirectoryTeamRepsRequestSchema,
+  internalDirectoryTeamRepsResponseSchema,
   internalMembershipRequestSchema,
   internalMembershipResponseSchema,
   internalUpdateMemberProfileParamsSchema,
   internalUpdateMemberProfileRequestSchema,
   internalUpdateMemberProfileResponseSchema,
+  MAX_DIRECTORY_TEAM_REPS,
 } from './internal'
 
 const TOKEN = 'dGhpcyBpcyBhIHRva2Vu0123456789abcdef'
@@ -416,5 +419,38 @@ describe('directory calls', () => {
       exists: true,
     })
     expect(internalDirectoryTeamCheckResponseSchema.safeParse({}).success).toBe(false)
+  })
+
+  test('team reps request names an Organization and a Membership, strictly', () => {
+    expect(
+      internalDirectoryTeamRepsRequestSchema.safeParse({ organizationId, membershipId }).success
+    ).toBe(true)
+    expect(
+      internalDirectoryTeamRepsRequestSchema.safeParse({ organizationId, membershipId: teamId })
+        .success
+    ).toBe(false)
+    expect(internalDirectoryTeamRepsRequestSchema.safeParse({ organizationId }).success).toBe(false)
+    expect(
+      internalDirectoryTeamRepsRequestSchema.safeParse({ organizationId, membershipId, extra: 1 })
+        .success
+    ).toBe(false)
+  })
+
+  test('team reps response is a list of Membership ids, empty for a non-Manager, at most 500', () => {
+    expect(internalDirectoryTeamRepsResponseSchema.parse({ membershipIds: [] })).toEqual({
+      membershipIds: [],
+    })
+    expect(MAX_DIRECTORY_TEAM_REPS).toBe(500)
+    const many = (n: number) => Array.from({ length: n }, () => membershipId)
+    expect(
+      internalDirectoryTeamRepsResponseSchema.safeParse({ membershipIds: many(500) }).success
+    ).toBe(true)
+    expect(
+      internalDirectoryTeamRepsResponseSchema.safeParse({ membershipIds: many(501) }).success
+    ).toBe(false)
+    expect(
+      internalDirectoryTeamRepsResponseSchema.safeParse({ membershipIds: [teamId] }).success
+    ).toBe(false)
+    expect(internalDirectoryTeamRepsResponseSchema.safeParse({}).success).toBe(false)
   })
 })
