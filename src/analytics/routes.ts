@@ -48,7 +48,7 @@ export const ANALYTICS_ROUTES: Readonly<Record<AnalyticsRouteName, AnalyticsRout
       idempotent: false,
       errors: ['analytics.range_too_large'],
       commonErrors: ['request.invalid'],
-      description: `Reads one metric (sends, replies, positive_replies, meetings, outcomes_won or outcomes_lost) per day, optionally split by channel, agent_kind, campaign or rep and filtered by channel, Agent kind, Campaign and Rep. Lines (groups) are cursor-paginated, at most 20 a page (limit, cursor), each of at most 400 days. ${RANGE} ${SAMPLE} ${SCOPE}`,
+      description: `Reads one metric per day: a count (sends, replies, positive_replies, meetings, outcomes_won or outcomes_lost) or a ratio (reply_rate, positive_reply_rate, meeting_rate or win_rate, each a rate over its denominator records, not_enough_data below 20), optionally split by channel, agent_kind, campaign or rep and filtered by channel, Agent kind, Campaign and Rep. Lines (groups) are cursor-paginated, at most 20 a page (limit, cursor), each of at most 400 days. ${RANGE} ${SAMPLE} ${SCOPE}`,
     }),
     listTable: inboundRoute({
       method: 'GET',
@@ -58,7 +58,7 @@ export const ANALYTICS_ROUTES: Readonly<Record<AnalyticsRouteName, AnalyticsRout
       idempotent: false,
       errors: ['analytics.range_too_large'],
       commonErrors: ['request.invalid'],
-      description: `Compares Campaigns or Reps side by side: one row each with sends, replies, positive replies, meetings, won and lost Outcomes, and the reply, positive-reply and win rates. One cursor-paginated page at a time (at most 100). ${RANGE} ${SAMPLE} ${SCOPE}`,
+      description: `Compares channels, Agent kinds, Campaigns or Reps side by side (groupBy): one row each with sends, replies, positive replies, meetings, won and lost Outcomes, and the reply, positive-reply, meeting and win rates. One cursor-paginated page at a time (at most 100). ${RANGE} ${SAMPLE} ${SCOPE}`,
     }),
     downloadTableCsv: inboundRoute({
       method: 'GET',

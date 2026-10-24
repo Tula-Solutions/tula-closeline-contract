@@ -2122,7 +2122,7 @@ var ANALYTICS_ROUTES = Object.freeze({
     idempotent: false,
     errors: ["analytics.range_too_large"],
     commonErrors: ["request.invalid"],
-    description: `Reads one metric (sends, replies, positive_replies, meetings, outcomes_won or outcomes_lost) per day, optionally split by channel, agent_kind, campaign or rep and filtered by channel, Agent kind, Campaign and Rep. Lines (groups) are cursor-paginated, at most 20 a page (limit, cursor), each of at most 400 days. ${RANGE} ${SAMPLE} ${SCOPE}`
+    description: `Reads one metric per day: a count (sends, replies, positive_replies, meetings, outcomes_won or outcomes_lost) or a ratio (reply_rate, positive_reply_rate, meeting_rate or win_rate, each a rate over its denominator records, not_enough_data below 20), optionally split by channel, agent_kind, campaign or rep and filtered by channel, Agent kind, Campaign and Rep. Lines (groups) are cursor-paginated, at most 20 a page (limit, cursor), each of at most 400 days. ${RANGE} ${SAMPLE} ${SCOPE}`
   }),
   listTable: inboundRoute({
     method: "GET",
@@ -2132,7 +2132,7 @@ var ANALYTICS_ROUTES = Object.freeze({
     idempotent: false,
     errors: ["analytics.range_too_large"],
     commonErrors: ["request.invalid"],
-    description: `Compares Campaigns or Reps side by side: one row each with sends, replies, positive replies, meetings, won and lost Outcomes, and the reply, positive-reply and win rates. One cursor-paginated page at a time (at most 100). ${RANGE} ${SAMPLE} ${SCOPE}`
+    description: `Compares channels, Agent kinds, Campaigns or Reps side by side (groupBy): one row each with sends, replies, positive replies, meetings, won and lost Outcomes, and the reply, positive-reply, meeting and win rates. One cursor-paginated page at a time (at most 100). ${RANGE} ${SAMPLE} ${SCOPE}`
   }),
   downloadTableCsv: inboundRoute({
     method: "GET",
@@ -2675,9 +2675,17 @@ var ANALYTICS_METRICS = [
   "outcomes_lost"
 ];
 var analyticsMetricSchema = z30.enum(ANALYTICS_METRICS);
+var ANALYTICS_RATE_METRICS = [
+  "reply_rate",
+  "positive_reply_rate",
+  "meeting_rate",
+  "win_rate"
+];
+var analyticsRateMetricSchema = z30.enum(ANALYTICS_RATE_METRICS);
+var analyticsSeriesMetricSchema = z30.enum([...ANALYTICS_METRICS, ...ANALYTICS_RATE_METRICS]);
 var ANALYTICS_GROUP_BYS = ["channel", "agent_kind", "campaign", "rep"];
 var analyticsGroupBySchema = z30.enum(ANALYTICS_GROUP_BYS);
-var ANALYTICS_TABLE_GROUPS = ["campaign", "rep"];
+var ANALYTICS_TABLE_GROUPS = ANALYTICS_GROUP_BYS;
 var analyticsTableGroupSchema = z30.enum(ANALYTICS_TABLE_GROUPS);
 var MAX_ANALYTICS_RANGE_MONTHS = 13;
 var MAX_SERIES_POINTS = 400;
@@ -2724,7 +2732,7 @@ var analyticsFilterShape = {
   repMembershipId: membershipIdSchema.optional()
 };
 var getSeriesQuerySchema = z30.object({
-  metric: analyticsMetricSchema,
+  metric: analyticsSeriesMetricSchema,
   groupBy: analyticsGroupBySchema.optional(),
   ...analyticsRangeShape,
   ...analyticsFilterShape,
@@ -2777,11 +2785,24 @@ var seriesLineSchema = z30.strictObject({
   points: z30.array(seriesPointSchema).max(MAX_SERIES_POINTS)
 });
 var getSeriesResponseSchema = z30.strictObject({
-  metric: analyticsMetricSchema,
+  metric: analyticsSeriesMetricSchema,
   groupBy: analyticsGroupBySchema.nullable(),
   ...analyticsRangeShape,
   series: z30.array(seriesLineSchema).max(MAX_SERIES_GROUPS_PER_PAGE),
   nextCursor: pageSchema(z30.never()).shape.nextCursor
+}).superRefine((response, ctx) => {
+  const isRate = ANALYTICS_RATE_METRICS.includes(response.metric);
+  for (const [l, line] of response.series.entries()) {
+    for (const [p, point] of line.points.entries()) {
+      if (point.kind === "rate" !== isRate) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["series", l, "points", p, "kind"],
+          message: "A ratio metric has rate points and a count metric has count points"
+        });
+      }
+    }
+  }
 });
 var tableRowSchema = z30.strictObject({
   group: analyticsGroupKeySchema,
@@ -2793,6 +2814,7 @@ var tableRowSchema = z30.strictObject({
   outcomesLost: countValueSchema,
   replyRate: rateValueSchema,
   positiveReplyRate: rateValueSchema,
+  meetingRate: rateValueSchema,
   winRate: rateValueSchema
 });
 var listTableResponseSchema = pageSchema(tableRowSchema);
@@ -12782,6 +12804,7 @@ export {
   ANALYTICS_GROUP_BYS,
   ANALYTICS_METRICS,
   ANALYTICS_RANGE_ISSUE_MESSAGE,
+  ANALYTICS_RATE_METRICS,
   ANALYTICS_READ_ROLES,
   ANALYTICS_ROUTES,
   ANALYTICS_TABLE_GROUPS,
@@ -13428,6 +13451,8 @@ export {
   analyticsGroupKeySchema,
   analyticsMetricSchema,
   analyticsRangeShape,
+  analyticsRateMetricSchema,
+  analyticsSeriesMetricSchema,
   analyticsTableGroupSchema,
   angleOriginSchema,
   answerHandoffRequestSchema,
