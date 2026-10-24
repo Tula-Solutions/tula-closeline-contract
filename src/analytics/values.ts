@@ -32,6 +32,30 @@ export const analyticsMetricSchema = z.enum(ANALYTICS_METRICS)
 /** A metric a dashboard shows. */
 export type AnalyticsMetric = z.infer<typeof analyticsMetricSchema>
 
+/**
+ * The ratio metrics a series can chart, each a rate over daily counts: reply_rate is replies over
+ * sends, positive_reply_rate is positive replies over replies, meeting_rate is meetings over sends
+ * and win_rate is won over won plus lost Outcomes. The record count is the denominator.
+ */
+export const ANALYTICS_RATE_METRICS = [
+  'reply_rate',
+  'positive_reply_rate',
+  'meeting_rate',
+  'win_rate',
+] as const
+
+/** A ratio metric a series can chart. */
+export const analyticsRateMetricSchema = z.enum(ANALYTICS_RATE_METRICS)
+
+/** A ratio metric a series can chart. */
+export type AnalyticsRateMetric = z.infer<typeof analyticsRateMetricSchema>
+
+/** Every metric a series can chart: a count or a ratio. */
+export const analyticsSeriesMetricSchema = z.enum([...ANALYTICS_METRICS, ...ANALYTICS_RATE_METRICS])
+
+/** A metric a series can chart. */
+export type AnalyticsSeriesMetric = z.infer<typeof analyticsSeriesMetricSchema>
+
 /** What a series or table can be split by. A closed list. */
 export const ANALYTICS_GROUP_BYS = ['channel', 'agent_kind', 'campaign', 'rep'] as const
 
@@ -41,8 +65,8 @@ export const analyticsGroupBySchema = z.enum(ANALYTICS_GROUP_BYS)
 /** What a series can be split by. */
 export type AnalyticsGroupBy = z.infer<typeof analyticsGroupBySchema>
 
-/** What a comparison table has one row per: a Campaign or a Rep. */
-export const ANALYTICS_TABLE_GROUPS = ['campaign', 'rep'] as const
+/** What a comparison table has one row per: a channel, an Agent kind, a Campaign or a Rep. */
+export const ANALYTICS_TABLE_GROUPS = ANALYTICS_GROUP_BYS
 
 /** What a comparison table has one row per. */
 export const analyticsTableGroupSchema = z.enum(ANALYTICS_TABLE_GROUPS)
@@ -138,7 +162,7 @@ export const analyticsFilterShape = {
 /** The query of a series read. Without `groupBy` the series is the total. Groups are paged: a cursor and a `limit` of groups (at most 20, default 20). */
 export const getSeriesQuerySchema = z
   .object({
-    metric: analyticsMetricSchema,
+    metric: analyticsSeriesMetricSchema,
     groupBy: analyticsGroupBySchema.optional(),
     ...analyticsRangeShape,
     ...analyticsFilterShape,
@@ -253,7 +277,7 @@ export const seriesLineSchema = z.strictObject({
 
 /** The answer to a series read: the metric, the split, the range, one page of at most 20 lines and the cursor of the next page, or null at the end. */
 export const getSeriesResponseSchema = z.strictObject({
-  metric: analyticsMetricSchema,
+  metric: analyticsSeriesMetricSchema,
   groupBy: analyticsGroupBySchema.nullable(),
   ...analyticsRangeShape,
   series: z.array(seriesLineSchema).max(MAX_SERIES_GROUPS_PER_PAGE),
@@ -263,7 +287,7 @@ export const getSeriesResponseSchema = z.strictObject({
 /** The answer to a series read. */
 export type GetSeriesResponse = z.infer<typeof getSeriesResponseSchema>
 
-/** One row of the comparison table: a Campaign or Rep, with counts and rates, each with its record count. */
+/** One row of the comparison table: a channel, Agent kind, Campaign or Rep, with counts and rates, each with its record count. */
 export const tableRowSchema = z.strictObject({
   group: analyticsGroupKeySchema,
   sends: countValueSchema,
@@ -274,6 +298,7 @@ export const tableRowSchema = z.strictObject({
   outcomesLost: countValueSchema,
   replyRate: rateValueSchema,
   positiveReplyRate: rateValueSchema,
+  meetingRate: rateValueSchema,
   winRate: rateValueSchema,
 })
 

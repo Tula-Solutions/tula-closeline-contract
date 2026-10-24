@@ -5,6 +5,7 @@ import { MAX_PAGE_SIZE } from '../pagination'
 import {
   ANALYTICS_ERRORS,
   ANALYTICS_RANGE_ISSUE_MESSAGE,
+  ANALYTICS_RATE_METRICS,
   ANALYTICS_ROUTES,
   conversationSummarySchema,
   countValueSchema,
@@ -20,6 +21,7 @@ import {
   rateValueSchema,
   sourcePerformanceSchema,
   tableCsvQuerySchema,
+  tableRowSchema,
   touchSchema,
 } from './index'
 
@@ -94,7 +96,41 @@ describe('queries', () => {
     expect(tableCsvQuerySchema.safeParse({ groupBy: 'rep', ...range, limit: '1001' }).success).toBe(
       false
     )
-    expect(listTableQuerySchema.safeParse({ groupBy: 'channel', ...range }).success).toBe(false)
+    expect(listTableQuerySchema.safeParse({ groupBy: 'team', ...range }).success).toBe(false)
+  })
+
+  test('a table has one row per channel, Agent kind, Campaign or Rep', () => {
+    for (const groupBy of ['channel', 'agent_kind', 'campaign', 'rep']) {
+      expect(listTableQuerySchema.safeParse({ groupBy, ...range }).success).toBe(true)
+      expect(tableCsvQuerySchema.safeParse({ groupBy, ...range }).success).toBe(true)
+    }
+  })
+
+  test('a series can chart a ratio metric, which is a rate and never a count', () => {
+    for (const metric of ANALYTICS_RATE_METRICS) {
+      expect(getSeriesQuerySchema.safeParse({ metric, ...range }).success).toBe(true)
+    }
+    expect(ANALYTICS_RATE_METRICS).toEqual([
+      'reply_rate',
+      'positive_reply_rate',
+      'meeting_rate',
+      'win_rate',
+    ])
+    const few = {
+      day: '2026-09-01',
+      kind: 'rate',
+      state: 'not_enough_data',
+      value: null,
+      recordCount: 4,
+    }
+    const response = {
+      metric: 'reply_rate',
+      groupBy: null,
+      ...range,
+      series: [{ group: null, points: [few] }],
+      nextCursor: null,
+    }
+    expect(getSeriesResponseSchema.safeParse(response).success).toBe(true)
   })
 
   test('the source list takes the one flag', () => {
@@ -168,6 +204,31 @@ describe('values', () => {
     expect(getSeriesQuerySchema.safeParse({ ...base, limit: '20' }).success).toBe(true)
     expect(getSeriesQuerySchema.safeParse({ ...base, limit: '21' }).success).toBe(false)
     expect(getSeriesQuerySchema.parse(base).limit).toBe(20)
+  })
+})
+
+describe('table row', () => {
+  const count = (value: number) => ({ kind: 'count', value, recordCount: value })
+  const few = { kind: 'rate', state: 'not_enough_data', value: null, recordCount: 3 }
+  const row = {
+    group: 'email',
+    sends: count(3),
+    replies: count(1),
+    positiveReplies: count(0),
+    meetings: count(0),
+    outcomesWon: count(0),
+    outcomesLost: count(0),
+    replyRate: few,
+    positiveReplyRate: few,
+    meetingRate: few,
+    winRate: few,
+  }
+
+  test('a row has all four ratios, each a rate or not_enough_data', () => {
+    expect(tableRowSchema.safeParse(row).success).toBe(true)
+    const { meetingRate: _omitted, ...rest } = row
+    expect(tableRowSchema.safeParse(rest).success).toBe(false)
+    expect(tableRowSchema.safeParse({ ...row, meetingRate: count(1) }).success).toBe(false)
   })
 })
 
