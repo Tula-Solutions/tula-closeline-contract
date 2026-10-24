@@ -314,3 +314,34 @@ export const internalDirectoryTeamCheckResponseSchema = z.object({
 export type InternalDirectoryTeamCheckResponse = z.infer<
   typeof internalDirectoryTeamCheckResponseSchema
 >
+
+/** Internal: the most Rep Membership ids a directory team-reps answer carries. */
+export const MAX_DIRECTORY_TEAM_REPS = 500
+
+/**
+ * Internal: `POST /internal/v1/directory/team-reps`, the body asking which Reps a Manager
+ * manages. The Organization is named in the body because the caller serves many.
+ */
+export const internalDirectoryTeamRepsRequestSchema = z.strictObject({
+  organizationId: organizationIdSchema,
+  membershipId: membershipIdSchema,
+})
+
+/** Internal: the body of a directory team-reps lookup. */
+export type InternalDirectoryTeamRepsRequest = z.infer<
+  typeof internalDirectoryTeamRepsRequestSchema
+>
+
+/**
+ * Internal: the Reps (Membership ids) on every Team where the given Membership is the Manager,
+ * at most 500 (`MAX_DIRECTORY_TEAM_REPS`). It is empty for a Membership that manages no Team, a
+ * non-Manager, and for an unknown Membership. The caller uses it to scope a Manager's view of Calls.
+ */
+export const internalDirectoryTeamRepsResponseSchema = z.object({
+  membershipIds: z.array(membershipIdSchema).max(MAX_DIRECTORY_TEAM_REPS),
+})
+
+/** Internal: the answer to a directory team-reps lookup. */
+export type InternalDirectoryTeamRepsResponse = z.infer<
+  typeof internalDirectoryTeamRepsResponseSchema
+>
