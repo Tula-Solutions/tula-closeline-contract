@@ -26433,10 +26433,15 @@ declare const prospectImportStateSchema: z111.ZodEnum<{
 }>;
 /** The state of an import. */
 type ProspectImportState = z111.infer<typeof prospectImportStateSchema>;
-/** Why a whole import failed after it was accepted. */
-declare const PROSPECT_IMPORT_FAILURE_REASONS: readonly ["too_many_rows", "unreadable"];
+/**
+* Why a whole import failed after it was accepted: `too_many_rows` (over the row limit),
+* `unreadable` (the file is not a CSV we can parse), `processing_failed` (the system could not
+* process it; try uploading again, the file was not the problem).
+*/
+declare const PROSPECT_IMPORT_FAILURE_REASONS: readonly ["too_many_rows", "unreadable", "processing_failed"];
 /** Why a whole import failed. */
 declare const prospectImportFailureReasonSchema: z111.ZodEnum<{
+	processing_failed: "processing_failed";
 	too_many_rows: "too_many_rows";
 	unreadable: "unreadable";
 }>;
@@ -26493,6 +26498,7 @@ declare const prospectImportSchema: z111.ZodObject<{
 		uploaded: "uploaded";
 	}>;
 	failureReason: z111.ZodNullable<z111.ZodEnum<{
+		processing_failed: "processing_failed";
 		too_many_rows: "too_many_rows";
 		unreadable: "unreadable";
 	}>>;
@@ -26531,6 +26537,7 @@ declare const listProspectImportsResponseSchema: z111.ZodObject<{
 			uploaded: "uploaded";
 		}>;
 		failureReason: z111.ZodNullable<z111.ZodEnum<{
+			processing_failed: "processing_failed";
 			too_many_rows: "too_many_rows";
 			unreadable: "unreadable";
 		}>>;

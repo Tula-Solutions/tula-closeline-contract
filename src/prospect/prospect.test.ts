@@ -37,6 +37,7 @@ import {
   prospectCompanyFieldNameSchema,
   prospectCompanySchema,
   prospectErasedEvent,
+  prospectImportFailureReasonSchema,
   prospectImportInvalidDetailsSchema,
   prospectImportRowSchema,
   prospectImportSchema,
@@ -331,6 +332,10 @@ describe('merge', () => {
 })
 
 describe('import', () => {
+  test('the import failure reasons include processing_failed', () => {
+    expect(prospectImportFailureReasonSchema.parse('processing_failed')).toBe('processing_failed')
+  })
+
   test('the template columns are the documented ten', () => {
     expect(PROSPECT_IMPORT_COLUMNS).toHaveLength(10)
     expect(MAX_PROSPECT_IMPORT_ROWS).toBe(50_000)

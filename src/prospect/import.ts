@@ -39,8 +39,16 @@ export const prospectImportStateSchema = z.enum(PROSPECT_IMPORT_STATES)
 /** The state of an import. */
 export type ProspectImportState = z.infer<typeof prospectImportStateSchema>
 
-/** Why a whole import failed after it was accepted. */
-export const PROSPECT_IMPORT_FAILURE_REASONS = ['too_many_rows', 'unreadable'] as const
+/**
+ * Why a whole import failed after it was accepted: `too_many_rows` (over the row limit),
+ * `unreadable` (the file is not a CSV we can parse), `processing_failed` (the system could not
+ * process it; try uploading again, the file was not the problem).
+ */
+export const PROSPECT_IMPORT_FAILURE_REASONS = [
+  'too_many_rows',
+  'unreadable',
+  'processing_failed',
+] as const
 
 /** Why a whole import failed. */
 export const prospectImportFailureReasonSchema = z.enum(PROSPECT_IMPORT_FAILURE_REASONS)
