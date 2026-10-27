@@ -11230,6 +11230,15 @@ var mailCapacitySchema = z97.object({
   organizationRemainingToday: z97.number().int().min(0).max(1e5),
   organizationDailyCap: z97.number().int().min(1).max(1e5)
 });
+var MAX_TEST_SEND_SUBJECT_LENGTH = 100;
+var testSendRequestSchema = z97.strictObject({
+  to: emailSchema,
+  subject: z97.string().trim().min(1).max(MAX_TEST_SEND_SUBJECT_LENGTH).refine((v) => !/[\u0000-\u001f\u007f]/.test(v), "No control characters").optional()
+});
+var testSendResultSchema = z97.strictObject({
+  providerMessageId: z97.string().min(1).max(255),
+  sentAt: timestampSchema
+});
 // src/mail/routes.ts
 var MAIL_ALL_ROLES = [
   "owner",
@@ -11327,6 +11336,22 @@ var MAIL_ROUTES = Object.freeze({
     errors: ["mailbox.not_found", "mailbox.not_connected", "mailbox.auth_revoked"],
     commonErrors: [...IDEMPOTENT_ERRORS],
     description: `Resumes a paused Mailbox into the state its health allows (limited if its score is under the warning level), and publishes mailbox.state_changed. Requires an Idempotency-Key header. A Mailbox paused automatically for a complaint spike or a provider suspension may be resumed only by an Admin or Owner; the owner may resume one they paused. A disconnected Mailbox is mailbox.not_connected (409) and one whose grant was revoked is mailbox.auth_revoked (409): reconnect it instead. ${VISIBILITY7}`
+  }),
+  testSendMailbox: inboundRoute({
+    method: "POST",
+    path: "/v1/mailboxes/{mailboxId}/test-send",
+    roles: MAIL_ALL_ROLES,
+    success: [200],
+    idempotent: true,
+    keyRequired: true,
+    errors: [
+      "mailbox.not_found",
+      "mailbox.not_connected",
+      "mailbox.paused",
+      "mailbox.auth_revoked"
+    ],
+    commonErrors: [...IDEMPOTENT_ERRORS, "rate.limited", "server.unavailable", "server.timeout"],
+    description: `Sends one fixed test message through a Mailbox to the address given, to prove the connection works. The text is fixed by the service: the body takes only the recipient and an optional short subject, so only those two are chosen. It is not a Campaign send: no Prospect, Enrollment or send record is made, and it counts toward no Campaign limit. It is rate limited per Mailbox (rate.limited, 429, with a Retry-After header), so it cannot be used to mail third parties in bulk. Requires an Idempotency-Key header: a replay answers the same result and sends nothing again. A disconnected Mailbox is mailbox.not_connected (409), a paused one mailbox.paused (409) and one whose grant was revoked mailbox.auth_revoked (409). A provider that does not answer in time is server.unavailable or server.timeout. The answer is the provider's message id and the time sent, never the text. The owner may test their own Mailbox; an Admin or Owner any. ${SECRETS2} ${VISIBILITY7}`
   }),
   getMailboxHealth: inboundRoute({
     method: "GET",
@@ -13399,6 +13424,7 @@ export {
   MAX_SUPPRESSION_IMPORT_BYTES,
   MAX_SUPPRESSION_IMPORT_ROWS,
   MAX_SUPPRESSION_NOTE_LENGTH,
+  MAX_TEST_SEND_SUBJECT_LENGTH,
   MAX_TONE_LENGTH,
   MAX_TOUCH_SOURCES,
   MAX_TRANSCRIPT_BYTES,
@@ -14644,6 +14670,8 @@ export {
   teamParamsSchema,
   teamSchema,
   testRoutingRequestSchema,
+  testSendRequestSchema,
+  testSendResultSchema,
   timeOfDaySchema,
   timeZoneSchema,
   timestampSchema,
