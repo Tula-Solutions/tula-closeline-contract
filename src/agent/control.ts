@@ -1,11 +1,11 @@
 import { z } from 'zod'
-import { timeOfDaySchema, weekdaySchema, workingDaySchema } from '../booking/calendar'
 import { timeZoneSchema } from '../booking/values'
 import { consentChannelSchema } from '../consent/values'
 import { timestampSchema } from '../core/values'
 import { membershipIdSchema } from '../ids'
 import { pageQuerySchema, pageSchema } from '../pagination'
 import { agentKindSchema } from './instruction'
+import { agentWorkingDaysSchema } from './values'
 
 /**
  * How much an Agent may do without a person's approval. A closed list. Supervised: every Draft is
@@ -81,12 +81,7 @@ export const escalationRulesSchema = z
  */
 export const agentSendWindowSchema = z.strictObject({
   timeZone: timeZoneSchema,
-  days: z
-    .array(workingDaySchema)
-    .max(7)
-    .refine((days) => new Set(days.map((d) => d.day)).size === days.length, {
-      message: 'Each day appears once',
-    }),
+  days: agentWorkingDaysSchema,
 })
 
 /** When an Agent may write or call. */
@@ -112,17 +107,7 @@ export const agentControlSchema = z.object({
   agentKind: agentKindSchema,
   channel: agentChannelSchema.nullable(),
   level: controlLevelSchema,
-  sendWindow: z.object({
-    timeZone: timeZoneSchema,
-    days: z
-      .array(
-        z.object({
-          day: weekdaySchema,
-          windows: z.array(z.object({ start: timeOfDaySchema, end: timeOfDaySchema })),
-        })
-      )
-      .max(7),
-  }),
+  sendWindow: z.object({ timeZone: timeZoneSchema, days: agentWorkingDaysSchema }),
   escalationRules: z
     .array(z.object({ trigger: escalationTriggerSchema, action: escalationActionSchema }))
     .max(ESCALATION_TRIGGERS.length),

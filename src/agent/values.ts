@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { workingDaySchema } from '../booking/calendar'
 
 /** The voices an Organization may choose for its Inbound Agent: a closed list of stock styles, never a clone of a person. */
 export const AGENT_VOICE_STYLES = ['warm', 'neutral', 'crisp'] as const
@@ -35,6 +36,34 @@ export const MAX_AGENT_GREETING_LENGTH = 500
  * Fixed in the contract, not a setting: an Organization's own hours can only narrow it.
  */
 export const AGENT_CALLING_WINDOW = { startHour: 8, endHour: 21 } as const
+
+const minutesOf = (time: string): number => {
+  const [h = 0, m = 0] = time.split(':').map(Number)
+  return h * 60 + m
+}
+
+/**
+ * Working days of an Agent: each day once, every window inside the fixed calling window. The one
+ * rule for the Inbound Agent's hours and for a control's send window, so neither can hold a window
+ * the other refuses (ADR 0003).
+ */
+export const agentWorkingDaysSchema = z
+  .array(workingDaySchema)
+  .max(7)
+  .refine(
+    (days) =>
+      days.every((d) =>
+        d.windows.every(
+          (w) =>
+            minutesOf(w.start) >= AGENT_CALLING_WINDOW.startHour * 60 &&
+            minutesOf(w.end) <= AGENT_CALLING_WINDOW.endHour * 60
+        )
+      ),
+    { message: 'Hours lie within the fixed calling window' }
+  )
+  .refine((days) => new Set(days.map((d) => d.day)).size === days.length, {
+    message: 'Each day appears once',
+  })
 
 /** The tools the Inbound Agent may call during a Call or Chat. A closed list: none turns off the Disclosure or the consent check. */
 export const AGENT_TOOLS = [

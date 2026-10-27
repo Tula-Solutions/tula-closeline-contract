@@ -1,5 +1,6 @@
 import type { ApiKeyScope } from '../apikey/values'
 import type { CommonErrorCode } from '../errors'
+import { IDEMPOTENT_ERRORS, PUBLIC_ERRORS } from '../inbound-route'
 import type { ProspectErrorCode } from '../prospect/errors'
 import type { Role } from '../tenancy'
 import type { BookingErrorCode } from './errors'
@@ -74,22 +75,6 @@ export type BookingRoute = {
 }
 
 const route = (definition: BookingRoute): BookingRoute => Object.freeze(definition)
-
-const IDEMPOTENT_ERRORS = [
-  'request.invalid',
-  'request.idempotency_key_reused',
-  'request.idempotency_in_progress',
-] as const
-
-const PUBLIC_ERRORS = [
-  'request.too_large',
-  'request.unsupported_media_type',
-  'request.invalid',
-  'rate.limited',
-  'server.internal',
-  'server.unavailable',
-  'server.timeout',
-] as const
 
 const BOOKING_VISIBILITY =
   'Visibility is decided from the token: a Rep sees the Bookings they take, a Manager those of the Reps on their Team, Owner and Admin every Booking; anything else is booking.not_found (404), as is a Booking of another Organization.'
