@@ -3,7 +3,7 @@ import { type InboundRoute, inboundRoute } from '../inbound-route'
 import type { Role } from '../tenancy'
 import type { AssessmentErrorCode } from './errors'
 
-/** The roles that read Assessments: Owner and Admin all, a Manager their Team's, a Rep the Assessment of a Draft they can see. */
+/** The roles that read one Assessment with getAssessment: Owner and Admin all, a Manager their Team's, a Rep that of a Draft they can see. Listing is Owner and Admin only. */
 export const ASSESSMENT_READ_ROLES = [
   'owner',
   'admin',

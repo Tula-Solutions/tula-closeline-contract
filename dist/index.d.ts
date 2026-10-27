@@ -2988,7 +2988,7 @@ declare const ASSESSMENT_EVENTS: {
 };
 /** The type of an Assessment event. */
 type AssessmentEventType = keyof typeof ASSESSMENT_EVENTS;
-/** The roles that read Assessments: Owner and Admin all, a Manager their Team's, a Rep the Assessment of a Draft they can see. */
+/** The roles that read one Assessment with getAssessment: Owner and Admin all, a Manager their Team's, a Rep that of a Draft they can see. Listing is Owner and Admin only. */
 declare const ASSESSMENT_READ_ROLES: readonly ["owner", "admin", "manager", "rep"];
 /** The roles that list across the Organization, read the rates and mark findings. */
 declare const ASSESSMENT_ADMIN_ROLES: readonly ["owner", "admin"];
