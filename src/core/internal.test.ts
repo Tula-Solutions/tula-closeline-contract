@@ -19,12 +19,15 @@ import {
   internalDirectoryTeamCheckResponseSchema,
   internalDirectoryTeamRepsRequestSchema,
   internalDirectoryTeamRepsResponseSchema,
+  internalDirectoryTeamRingMembersRequestSchema,
+  internalDirectoryTeamRingMembersResponseSchema,
   internalMembershipRequestSchema,
   internalMembershipResponseSchema,
   internalUpdateMemberProfileParamsSchema,
   internalUpdateMemberProfileRequestSchema,
   internalUpdateMemberProfileResponseSchema,
   MAX_DIRECTORY_TEAM_REPS,
+  MAX_DIRECTORY_TEAM_RING_MEMBERS,
 } from './internal'
 
 const TOKEN = 'dGhpcyBpcyBhIHRva2Vu0123456789abcdef'
@@ -452,5 +455,43 @@ describe('directory calls', () => {
       internalDirectoryTeamRepsResponseSchema.safeParse({ membershipIds: [teamId] }).success
     ).toBe(false)
     expect(internalDirectoryTeamRepsResponseSchema.safeParse({}).success).toBe(false)
+  })
+
+  test('team ring members request names an Organization and a Team, strictly', () => {
+    expect(
+      internalDirectoryTeamRingMembersRequestSchema.safeParse({ organizationId, teamId }).success
+    ).toBe(true)
+    // a bad team id: a Membership id is not a Team id
+    expect(
+      internalDirectoryTeamRingMembersRequestSchema.safeParse({
+        organizationId,
+        teamId: membershipId,
+      }).success
+    ).toBe(false)
+    expect(
+      internalDirectoryTeamRingMembersRequestSchema.safeParse({ organizationId }).success
+    ).toBe(false)
+    expect(
+      internalDirectoryTeamRingMembersRequestSchema.safeParse({ organizationId, teamId, extra: 1 })
+        .success
+    ).toBe(false)
+  })
+
+  test('team ring members response is Membership ids, at most 50', () => {
+    expect(internalDirectoryTeamRingMembersResponseSchema.parse({ membershipIds: [] })).toEqual({
+      membershipIds: [],
+    })
+    expect(MAX_DIRECTORY_TEAM_RING_MEMBERS).toBe(50)
+    const many = (n: number) => Array.from({ length: n }, () => membershipId)
+    expect(
+      internalDirectoryTeamRingMembersResponseSchema.safeParse({ membershipIds: many(50) }).success
+    ).toBe(true)
+    expect(
+      internalDirectoryTeamRingMembersResponseSchema.safeParse({ membershipIds: many(51) }).success
+    ).toBe(false)
+    expect(
+      internalDirectoryTeamRingMembersResponseSchema.safeParse({ membershipIds: [teamId] }).success
+    ).toBe(false)
+    expect(internalDirectoryTeamRingMembersResponseSchema.safeParse({}).success).toBe(false)
   })
 })

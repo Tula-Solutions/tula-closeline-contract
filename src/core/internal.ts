@@ -345,3 +345,34 @@ export const internalDirectoryTeamRepsResponseSchema = z.object({
 export type InternalDirectoryTeamRepsResponse = z.infer<
   typeof internalDirectoryTeamRepsResponseSchema
 >
+
+/** Internal: the most Membership ids a directory team-ring-members answer carries (voice's ring cap). */
+export const MAX_DIRECTORY_TEAM_RING_MEMBERS = 50
+
+/**
+ * Internal: `POST /internal/v1/directory/team-ring-members`, the body asking which Reps a Team
+ * Line should ring. The Organization is named in the body because the caller serves many.
+ */
+export const internalDirectoryTeamRingMembersRequestSchema = z.strictObject({
+  organizationId: organizationIdSchema,
+  teamId: teamIdSchema,
+})
+
+/** Internal: the body of a directory team-ring-members lookup. */
+export type InternalDirectoryTeamRingMembersRequest = z.infer<
+  typeof internalDirectoryTeamRingMembersRequestSchema
+>
+
+/**
+ * Internal: the Membership ids of the Team's members who hold the Rep role, at most 50
+ * (`MAX_DIRECTORY_TEAM_RING_MEMBERS`) in a stable order; the cap applies before voice filters by presence. Empty for an unknown Team or one in
+ * another Organization. Presence is voice's concern, so it filters these to the online ones.
+ */
+export const internalDirectoryTeamRingMembersResponseSchema = z.object({
+  membershipIds: z.array(membershipIdSchema).max(MAX_DIRECTORY_TEAM_RING_MEMBERS),
+})
+
+/** Internal: the answer to a directory team-ring-members lookup. */
+export type InternalDirectoryTeamRingMembersResponse = z.infer<
+  typeof internalDirectoryTeamRingMembersResponseSchema
+>
