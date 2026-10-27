@@ -19,6 +19,7 @@ import {
   recordingPlaybackSchema,
   softphoneTokenSchema,
   transcriptPageSchema,
+  VOICE_CALL_END_REASONS,
   VOICE_ERRORS,
   VOICE_EVENTS,
   VOICE_ROUTES,
@@ -99,6 +100,21 @@ describe('place a Call', () => {
 describe('Call state machine', () => {
   test('an ended Call is valid', () => {
     expect(voiceCallSchema.safeParse(endedCall).success).toBe(true)
+  })
+  test('end reasons are a closed list; the field may be absent or null', () => {
+    expect([...VOICE_CALL_END_REASONS]).toEqual([
+      'duration_cap',
+      'cost_cap',
+      'agent_ended',
+      'prospect_hung_up',
+      'rep_ended',
+    ])
+    for (const endReason of VOICE_CALL_END_REASONS) {
+      expect(voiceCallSchema.safeParse({ ...endedCall, endReason }).success).toBe(true)
+    }
+    expect(voiceCallSchema.safeParse({ ...endedCall, endReason: null }).success).toBe(true)
+    expect(voiceCallSchema.safeParse(endedCall).success).toBe(true)
+    expect(voiceCallSchema.safeParse({ ...endedCall, endReason: 'bored' }).success).toBe(false)
   })
   test('uses the existing call id', () => {
     expect(callIdSchema.safeParse(call).success).toBe(true)

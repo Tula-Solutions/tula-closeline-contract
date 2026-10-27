@@ -62,6 +62,21 @@ export const VOICE_CALL_ENDED_BY = ['rep', 'prospect', 'system'] as const
 /** Who ended a Call. */
 export const voiceCallEndedBySchema = z.enum(VOICE_CALL_ENDED_BY)
 
+/** Why a Call ended, stated for clients to show: a cap reached, the Agent's end tool, or a party hanging up. */
+export const VOICE_CALL_END_REASONS = [
+  'duration_cap',
+  'cost_cap',
+  'agent_ended',
+  'prospect_hung_up',
+  'rep_ended',
+] as const
+
+/** Why a Call ended. */
+export const voiceCallEndReasonSchema = z.enum(VOICE_CALL_END_REASONS)
+
+/** Why a Call ended. */
+export type VoiceCallEndReason = z.infer<typeof voiceCallEndReasonSchema>
+
 /** The state of a Call's Recording. `none` until the Disclosure has played; `storing` while it is copied to the Region's storage; `stored` once playable; `deleted` after an Admin deleted it. */
 export const VOICE_RECORDING_STATES = ['none', 'storing', 'stored', 'deleted'] as const
 
