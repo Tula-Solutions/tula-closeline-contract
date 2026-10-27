@@ -2988,7 +2988,7 @@ declare const ASSESSMENT_EVENTS: {
 };
 /** The type of an Assessment event. */
 type AssessmentEventType = keyof typeof ASSESSMENT_EVENTS;
-/** The roles that read Assessments: Owner and Admin all, a Manager their Team's, a Rep the Assessment of a Draft they can see. */
+/** The roles that read one Assessment with getAssessment: Owner and Admin all, a Manager their Team's, a Rep that of a Draft they can see. Listing is Owner and Admin only. */
 declare const ASSESSMENT_READ_ROLES: readonly ["owner", "admin", "manager", "rep"];
 /** The roles that list across the Organization, read the rates and mark findings. */
 declare const ASSESSMENT_ADMIN_ROLES: readonly ["owner", "admin"];
@@ -3253,7 +3253,7 @@ declare const listAssessmentsResponseSchema: z14.ZodObject<{
 	}, z14.core.$strict>>;
 	nextCursor: z14.ZodNullable<z14.ZodString>;
 }, z14.core.$strip>;
-/** The query of the weekly failed rate: a required date range of at most 13 months, an optional Agent kind, and a cursor and limit (at most 100). */
+/** The query of the weekly failed rate: a required date range of at most 13 months, an optional Agent kind, an optional `groupBy=category`, and a cursor and limit (at most 100). */
 declare const getAssessmentRatesQuerySchema: z14.ZodObject<{
 	cursor: z14.ZodOptional<z14.ZodString>;
 	limit: z14.ZodDefault<z14.ZodPipe<z14.ZodPipe<z14.ZodUnion<readonly [z14.ZodNumber, z14.ZodString]>, z14.ZodTransform<number, string | number>>, z14.ZodNumber>>;
@@ -3263,12 +3263,13 @@ declare const getAssessmentRatesQuerySchema: z14.ZodObject<{
 		inbound: "inbound";
 		outbound: "outbound";
 	}>>;
+	groupBy: z14.ZodOptional<z14.ZodLiteral<"category">>;
 }, z14.core.$strip>;
 /** The query of the weekly failed rate. */
 type GetAssessmentRatesQuery = z14.infer<typeof getAssessmentRatesQuerySchema>;
 /** An ISO week as `YYYY-Www`, such as `2026-W43`. */
 declare const isoWeekSchema: z14.ZodString;
-/** The share of Assessments that failed in one ISO week, for one Agent kind and instruction version. `recordCount` is the Assessments judged; below 20 the state is `not_enough_data`. */
+/** The share of Assessments that failed in one ISO week, for one Agent kind and instruction version, and with `groupBy=category` one finding category (`category` is null otherwise). `recordCount` is the Assessments judged; below 20 the state is `not_enough_data`. */
 declare const assessmentRateItemSchema: z14.ZodUnion<readonly [z14.ZodObject<{
 	kind: z14.ZodLiteral<"rate">;
 	state: z14.ZodLiteral<"ok">;
@@ -3281,6 +3282,12 @@ declare const assessmentRateItemSchema: z14.ZodUnion<readonly [z14.ZodObject<{
 		outbound: "outbound";
 	}>;
 	instructionVersion: z14.ZodNullable<z14.ZodNumber>;
+	category: z14.ZodNullable<z14.ZodEnum<{
+		missing_disclosure: "missing_disclosure";
+		policy_deviation: "policy_deviation";
+		tone: "tone";
+		unsupported_claim: "unsupported_claim";
+	}>>;
 }, z14.core.$strict>, z14.ZodObject<{
 	kind: z14.ZodLiteral<"rate">;
 	state: z14.ZodLiteral<"not_enough_data">;
@@ -3293,6 +3300,12 @@ declare const assessmentRateItemSchema: z14.ZodUnion<readonly [z14.ZodObject<{
 		outbound: "outbound";
 	}>;
 	instructionVersion: z14.ZodNullable<z14.ZodNumber>;
+	category: z14.ZodNullable<z14.ZodEnum<{
+		missing_disclosure: "missing_disclosure";
+		policy_deviation: "policy_deviation";
+		tone: "tone";
+		unsupported_claim: "unsupported_claim";
+	}>>;
 }, z14.core.$strict>]>;
 /** One weekly rate. */
 type AssessmentRateItem = z14.infer<typeof assessmentRateItemSchema>;
@@ -3310,6 +3323,12 @@ declare const getAssessmentRatesResponseSchema: z14.ZodObject<{
 			outbound: "outbound";
 		}>;
 		instructionVersion: z14.ZodNullable<z14.ZodNumber>;
+		category: z14.ZodNullable<z14.ZodEnum<{
+			missing_disclosure: "missing_disclosure";
+			policy_deviation: "policy_deviation";
+			tone: "tone";
+			unsupported_claim: "unsupported_claim";
+		}>>;
 	}, z14.core.$strict>, z14.ZodObject<{
 		kind: z14.ZodLiteral<"rate">;
 		state: z14.ZodLiteral<"not_enough_data">;
@@ -3322,6 +3341,12 @@ declare const getAssessmentRatesResponseSchema: z14.ZodObject<{
 			outbound: "outbound";
 		}>;
 		instructionVersion: z14.ZodNullable<z14.ZodNumber>;
+		category: z14.ZodNullable<z14.ZodEnum<{
+			missing_disclosure: "missing_disclosure";
+			policy_deviation: "policy_deviation";
+			tone: "tone";
+			unsupported_claim: "unsupported_claim";
+		}>>;
 	}, z14.core.$strict>]>>;
 	nextCursor: z14.ZodNullable<z14.ZodString>;
 	from: z14.ZodISODate;

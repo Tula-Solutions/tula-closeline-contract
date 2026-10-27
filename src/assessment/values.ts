@@ -172,9 +172,13 @@ export type ListAssessmentsQuery = z.infer<typeof listAssessmentsQuerySchema>
 /** One page of Assessments. */
 export const listAssessmentsResponseSchema = pageSchema(assessmentSchema)
 
-/** The query of the weekly failed rate: a required date range of at most 13 months, an optional Agent kind, and a cursor and limit (at most 100). */
+/** The query of the weekly failed rate: a required date range of at most 13 months, an optional Agent kind, an optional `groupBy=category`, and a cursor and limit (at most 100). */
 export const getAssessmentRatesQuerySchema = z
-  .object({ ...analyticsRangeShape, agentKind: agentKindSchema.optional() })
+  .object({
+    ...analyticsRangeShape,
+    agentKind: agentKindSchema.optional(),
+    groupBy: z.literal('category').optional(),
+  })
   .extend(pageQuerySchema.shape)
   .superRefine((query, ctx) => checkAnalyticsRange(query, ctx))
 
@@ -189,9 +193,10 @@ const rateItem = {
   weekStart: calendarDateSchema,
   agentKind: agentKindSchema,
   instructionVersion: z.number().int().min(1).nullable(),
+  category: findingCategorySchema.nullable(),
 } as const
 
-/** The share of Assessments that failed in one ISO week, for one Agent kind and instruction version. `recordCount` is the Assessments judged; below 20 the state is `not_enough_data`. */
+/** The share of Assessments that failed in one ISO week, for one Agent kind and instruction version, and with `groupBy=category` one finding category (`category` is null otherwise). `recordCount` is the Assessments judged; below 20 the state is `not_enough_data`. */
 export const assessmentRateItemSchema = z.union([
   rateValueSchema.options[0].extend(rateItem),
   rateValueSchema.options[1].extend(rateItem),
