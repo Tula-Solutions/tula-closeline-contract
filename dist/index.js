@@ -4443,7 +4443,11 @@ var PROSPECT_IMPORT_COLUMNS = [
 ];
 var PROSPECT_IMPORT_STATES = ["uploaded", "processing", "completed", "failed"];
 var prospectImportStateSchema = z45.enum(PROSPECT_IMPORT_STATES);
-var PROSPECT_IMPORT_FAILURE_REASONS = ["too_many_rows", "unreadable"];
+var PROSPECT_IMPORT_FAILURE_REASONS = [
+  "too_many_rows",
+  "unreadable",
+  "processing_failed"
+];
 var prospectImportFailureReasonSchema = z45.enum(PROSPECT_IMPORT_FAILURE_REASONS);
 var PROSPECT_IMPORT_ROW_RESULTS = ["created", "updated", "skipped", "rejected"];
 var prospectImportRowResultSchema = z45.enum(PROSPECT_IMPORT_ROW_RESULTS);
