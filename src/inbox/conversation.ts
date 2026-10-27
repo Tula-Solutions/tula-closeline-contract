@@ -1,6 +1,8 @@
 import { z } from 'zod'
+import { assessmentVerdictSchema, findingSchema, MAX_FINDINGS } from '../assessment/values'
 import { idempotencyKeySchema, timestampSchema } from '../core/values'
 import {
+  assessmentIdSchema,
   conversationIdSchema,
   dealRecordIdSchema,
   decisionIdSchema,
@@ -212,6 +214,19 @@ export const draftCheckSchema = z.strictObject({
 })
 
 /**
+ * The Assessment of a Draft as the inbox shows it: which Assessment, what it decided and its
+ * findings (spans and explanations, never the text).
+ */
+export const draftAssessmentSchema = z.strictObject({
+  id: assessmentIdSchema,
+  verdict: assessmentVerdictSchema,
+  findings: z.array(findingSchema).max(MAX_FINDINGS),
+})
+
+/** The Assessment of a Draft. */
+export type DraftAssessment = z.infer<typeof draftAssessmentSchema>
+
+/**
  * A Draft: text an Agent wrote (or a Rep composed in the inbox) for a Conversation and has not
  * sent. An Agent Draft has a reason, a confidence and its Sources; one with no Source is
  * `ungrounded`. `hold` says why it waits for a person, null when it was released without one. A
@@ -231,6 +246,7 @@ export const draftSchema = z
     ungrounded: z.boolean(),
     checks: z.array(draftCheckSchema).max(20),
     hold: draftHoldReasonSchema.nullable(),
+    assessment: draftAssessmentSchema.nullable(),
     status: draftStatusSchema,
     createdAt: timestampSchema,
     decidedAt: timestampSchema.nullable(),

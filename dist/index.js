@@ -3047,7 +3047,11 @@ var verifyApiKeyResponseSchema = z32.object({
 });
 // src/assessment/errors.ts
 var ASSESSMENT_ERRORS = defineErrors("assessment", {
-  not_found: { status: 404, message: "The Assessment was not found." }
+  not_found: { status: 404, message: "The Assessment was not found." },
+  reassess_required: {
+    status: 409,
+    message: "The Draft failed its check: edit it to have it judged again, or ask an Admin."
+  }
 });
 // src/assessment/events.ts
 import { z as z34 } from "zod";
@@ -9851,6 +9855,11 @@ var draftCheckSchema = z87.strictObject({
   name: z87.string().regex(/^[a-z][a-z0-9_]{0,49}$/),
   passed: z87.boolean()
 });
+var draftAssessmentSchema = z87.strictObject({
+  id: assessmentIdSchema,
+  verdict: assessmentVerdictSchema,
+  findings: z87.array(findingSchema).max(MAX_FINDINGS)
+});
 var draftSchema = z87.strictObject({
   id: draftIdSchema,
   conversationId: conversationIdSchema,
@@ -9863,6 +9872,7 @@ var draftSchema = z87.strictObject({
   ungrounded: z87.boolean(),
   checks: z87.array(draftCheckSchema).max(20),
   hold: draftHoldReasonSchema.nullable(),
+  assessment: draftAssessmentSchema.nullable(),
   status: draftStatusSchema,
   createdAt: timestampSchema,
   decidedAt: timestampSchema.nullable()
@@ -13930,6 +13940,7 @@ export {
   domainCheckSchema,
   domainCheckStatusSchema,
   draftApprovalRequiredEvent,
+  draftAssessmentSchema,
   draftAuthorSchema,
   draftChannelSchema,
   draftCheckNameSchema,
