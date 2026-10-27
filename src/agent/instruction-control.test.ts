@@ -154,6 +154,17 @@ describe('control settings', () => {
       }).success
     ).toBe(false)
   })
+  test('a stored control drops an unknown key inside sendWindow', () => {
+    const parsed = agentControlSchema.parse({
+      agentKind: 'inbound',
+      channel: 'email',
+      ...request,
+      sendWindow: { ...request.sendWindow, note: 'x' },
+      updatedAt: NOW,
+      updatedByMembershipId: null,
+    })
+    expect('note' in parsed.sendWindow).toBe(false)
+  })
   test('the response drops unknown nested fields', () => {
     const parsed = agentControlSchema.parse({
       agentKind: 'inbound',

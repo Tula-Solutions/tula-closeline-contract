@@ -199,7 +199,7 @@ declare const agentControlSchema: z.ZodObject<{
 				end: z.ZodString;
 			}, z.core.$strict>>;
 		}, z.core.$strict>>;
-	}, z.core.$strict>;
+	}, z.core.$strip>;
 	escalationRules: z.ZodArray<z.ZodObject<{
 		trigger: z.ZodEnum<{
 			competitor_mentioned: "competitor_mentioned";
@@ -265,7 +265,7 @@ declare const listAgentControlsResponseSchema: z.ZodObject<{
 					end: z.ZodString;
 				}, z.core.$strict>>;
 			}, z.core.$strict>>;
-		}, z.core.$strict>;
+		}, z.core.$strip>;
 		escalationRules: z.ZodArray<z.ZodObject<{
 			trigger: z.ZodEnum<{
 				competitor_mentioned: "competitor_mentioned";

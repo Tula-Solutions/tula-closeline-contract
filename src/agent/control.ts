@@ -107,7 +107,7 @@ export const agentControlSchema = z.object({
   agentKind: agentKindSchema,
   channel: agentChannelSchema.nullable(),
   level: controlLevelSchema,
-  sendWindow: agentSendWindowSchema,
+  sendWindow: z.object({ timeZone: timeZoneSchema, days: agentWorkingDaysSchema }),
   escalationRules: z
     .array(z.object({ trigger: escalationTriggerSchema, action: escalationActionSchema }))
     .max(ESCALATION_TRIGGERS.length),

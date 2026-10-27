@@ -530,7 +530,7 @@ var agentControlSchema = z11.object({
   agentKind: agentKindSchema,
   channel: agentChannelSchema.nullable(),
   level: controlLevelSchema,
-  sendWindow: agentSendWindowSchema,
+  sendWindow: z11.object({ timeZone: timeZoneSchema, days: agentWorkingDaysSchema }),
   escalationRules: z11.array(z11.object({ trigger: escalationTriggerSchema, action: escalationActionSchema })).max(ESCALATION_TRIGGERS.length),
   updatedAt: timestampSchema,
   updatedByMembershipId: membershipIdSchema.nullable()
