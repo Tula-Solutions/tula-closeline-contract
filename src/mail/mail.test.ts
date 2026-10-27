@@ -703,6 +703,10 @@ describe('test send', () => {
   test('the route needs a key and lists the Mailbox errors', () => {
     const r = MAIL_ROUTES.testSendMailbox
     expect(r.path).toBe('/v1/mailboxes/{mailboxId}/test-send')
+    expect(r.keyRequired).toBe(true)
+    expect(r.success).toEqual([200])
+    expect(r.commonErrors).toContain('rate.limited')
+    expect(r.description).not.toContain('cannot send chosen content')
     expect(r.errors).toEqual(
       expect.arrayContaining([
         'mailbox.not_found',

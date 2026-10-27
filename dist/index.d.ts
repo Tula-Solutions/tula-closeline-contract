@@ -21528,8 +21528,8 @@ type MailCapacity = z81.infer<typeof mailCapacitySchema>;
 declare const MAX_TEST_SEND_SUBJECT_LENGTH = 100;
 /**
 * The body of a request to send a test message through a Mailbox: the recipient and an optional
-* short subject. There is no body field: the text is fixed by the service, so the route cannot be
-* used to send chosen content to anyone. The subject has no control character, so no header can
+* short subject. There is no body field: the text is fixed by the service, so only the recipient
+* and the subject are chosen. The subject has no control character, so no header can
 * be injected through it.
 */
 declare const testSendRequestSchema: z81.ZodObject<{
