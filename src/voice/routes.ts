@@ -29,6 +29,7 @@ export type VoiceRouteName =
   | 'getCallRecording'
   | 'deleteCallRecording'
   | 'wrapUpCall'
+  | 'answerCall'
   | 'mintSoftphoneToken'
 
 /** What the service needs to describe one route: method, path, who may call it, what it answers. */
@@ -191,6 +192,17 @@ export const VOICE_ROUTES: Readonly<Record<VoiceRouteName, VoiceRoute>> = Object
     commonErrors: ['request.invalid'],
     description:
       'Sets the wrap-up of an ended Call: the Deal identifier that joins it to a Deal in the Playbook, and a note. A field left out is left alone and null clears it. A Call that has not ended is call.not_ended (409). Only the Rep who took the Call, Owner and Admin may wrap it up; for any other caller the Call is call.not_found (404), a Manager of that Rep included.',
+  }),
+  answerCall: route({
+    method: 'POST',
+    path: '/v1/calls/{callId}/answer',
+    roles: VOICE_ALL_ROLES,
+    success: [200],
+    idempotent: false,
+    errors: ['call.not_found', 'call.not_ringing', 'call.disclosure_failed'],
+    commonErrors: ['request.invalid'],
+    description:
+      "Answers a ringing inbound Call, as a Rep the Call is ringing for (through the Line assigned to them or their Team). The first answer gets the Call: the Disclosure plays, then the Rep is bridged, and the answer is the Call, `live`. Any later answer is call.not_ringing (409), as is an answer after the Call was missed; repeating the winner's own answer returns the Call as it is, so it needs no Idempotency-Key. A Call that is not ringing for the caller, or of another Organization, is call.not_found (404). A Disclosure that did not play is call.disclosure_failed (502) and the Call ends failed. Takes no body.",
   }),
   mintSoftphoneToken: route({
     method: 'POST',
