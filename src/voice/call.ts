@@ -9,6 +9,7 @@ import { e164PhoneSchema, rawPhoneSchema } from '../prospect/values'
 import {
   voiceCallDirectionSchema,
   voiceCallEndedBySchema,
+  voiceCallEndReasonSchema,
   voiceCallFailureReasonSchema,
   voiceCallStateSchema,
   voiceRecordingStateSchema,
@@ -59,6 +60,8 @@ export const voiceCallSchema = z
     durationSeconds: z.number().int().min(0).max(MAX_CALL_DURATION_SECONDS).nullable(),
     endedBy: voiceCallEndedBySchema.nullable(),
     failureReason: voiceCallFailureReasonSchema.nullable(),
+    // optional so a service that predates the field still parses
+    endReason: voiceCallEndReasonSchema.nullable().optional(),
     dealId: dealIdSchema.nullable(),
     note: wrapUpNoteSchema.nullable(),
     recordingState: voiceRecordingStateSchema,

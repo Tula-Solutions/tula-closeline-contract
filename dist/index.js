@@ -854,6 +854,14 @@ var VOICE_CALL_FAILURE_REASONS = [
 var voiceCallFailureReasonSchema = z15.enum(VOICE_CALL_FAILURE_REASONS);
 var VOICE_CALL_ENDED_BY = ["rep", "prospect", "system"];
 var voiceCallEndedBySchema = z15.enum(VOICE_CALL_ENDED_BY);
+var VOICE_CALL_END_REASONS = [
+  "duration_cap",
+  "cost_cap",
+  "agent_ended",
+  "prospect_hung_up",
+  "rep_ended"
+];
+var voiceCallEndReasonSchema = z15.enum(VOICE_CALL_END_REASONS);
 var VOICE_RECORDING_STATES = ["none", "storing", "stored", "deleted"];
 var voiceRecordingStateSchema = z15.enum(VOICE_RECORDING_STATES);
 var VOICE_TRANSCRIPT_STATES = ["pending", "ready", "deleted"];
@@ -7741,6 +7749,7 @@ var voiceCallSchema = z69.object({
   durationSeconds: z69.number().int().min(0).max(MAX_CALL_DURATION_SECONDS).nullable(),
   endedBy: voiceCallEndedBySchema.nullable(),
   failureReason: voiceCallFailureReasonSchema.nullable(),
+  endReason: voiceCallEndReasonSchema.nullable().optional(),
   dealId: dealIdSchema.nullable(),
   note: wrapUpNoteSchema.nullable(),
   recordingState: voiceRecordingStateSchema,
@@ -13602,6 +13611,7 @@ export {
   VOICE_ALL_ROLES,
   VOICE_CALL_DIRECTIONS,
   VOICE_CALL_ENDED_BY,
+  VOICE_CALL_END_REASONS,
   VOICE_CALL_FAILURE_REASONS,
   VOICE_CALL_FINAL_STATES,
   VOICE_CALL_OUTCOMES,
@@ -14780,6 +14790,7 @@ export {
   voiceAgentCallEndedEvent,
   voiceCallCursorSchema,
   voiceCallDirectionSchema,
+  voiceCallEndReasonSchema,
   voiceCallEndedBySchema,
   voiceCallEndedEvent,
   voiceCallFailureReasonSchema,
