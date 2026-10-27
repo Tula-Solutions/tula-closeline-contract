@@ -3050,7 +3050,7 @@ var ASSESSMENT_ERRORS = defineErrors("assessment", {
   not_found: { status: 404, message: "The Assessment was not found." },
   reassess_required: {
     status: 409,
-    message: "The Draft changed since it was judged and must be assessed again."
+    message: "The Draft failed its check: edit it to have it judged again, or ask an Admin."
   }
 });
 // src/assessment/events.ts

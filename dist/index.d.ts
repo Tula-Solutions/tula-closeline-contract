@@ -2754,8 +2754,8 @@ import { ErrorDefinition as ErrorDefinition_8gwh454 } from "..";
 * - `assessment.not_found` (404): unknown Assessment or finding, or one outside the caller's view
 *   (a Manager sees only their Team's; a Rep only the Assessment of a Draft they can see); one of
 *   another Organization the same, never 403.
-* - `assessment.reassess_required` (409): the Draft's text changed since it was judged, so it must be
-*   judged again before it can be released.
+* - `assessment.reassess_required` (409): the Draft is held because it failed its check, and the
+*   approval neither edits it (so it can be judged again) nor comes from an Owner or Admin.
 */
 declare const ASSESSMENT_ERRORS: Readonly<{
 	"assessment.not_found": ErrorDefinition_8gwh454<"assessment.not_found">;
