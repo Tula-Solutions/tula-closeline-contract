@@ -352,6 +352,13 @@ describe('errors', () => {
       expect(code).toMatch(/^[a-z]+\.[a-z_]+$/)
     }
   })
+  test('call.not_ringing is a 409 with its own message', () => {
+    expect(VOICE_ERRORS['call.not_ringing']).toEqual({
+      code: 'call.not_ringing',
+      status: 409,
+      message: 'The Call is no longer ringing.',
+    })
+  })
   test('call.provider_call_not_found is a 404 with its own message', () => {
     expect(VOICE_ERRORS['call.provider_call_not_found']).toEqual({
       code: 'call.provider_call_not_found',
@@ -421,6 +428,14 @@ describe('routes', () => {
     }
     expect(VOICE_ROUTES.mintSoftphoneToken.roles).toEqual(['owner', 'admin', 'manager', 'rep'])
     expect(VOICE_ROUTES.placeCall.roles).toContain('rep')
+  })
+  test('answering a ringing inbound Call', () => {
+    const r = VOICE_ROUTES.answerCall
+    expect([r.method, r.path]).toEqual(['POST', '/v1/calls/{callId}/answer'])
+    expect(r.roles).toContain('rep')
+    expect(r.success).toEqual([200])
+    expect(r.idempotent).toBe(false)
+    expect(r.errors).toEqual(['call.not_found', 'call.not_ringing', 'call.disclosure_failed'])
   })
 })
 

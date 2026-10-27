@@ -27958,6 +27958,8 @@ import { ErrorDefinition as ErrorDefinition_8gwh4527 } from "..";
 * - `call.provider_call_not_found` (404): a telephony provider's call identifier (a Twilio call
 *   SID) matches no Call. It is distinct from `call.not_found`, which names a Call by its own id.
 * - `call.not_ended` (409): the action (wrap-up) needs a Call that has ended.
+* - `call.not_ringing` (409): the inbound Call is no longer ringing for the caller: another Rep
+*   answered it first, or it was missed.
 * - `line.number_unavailable` (409): the number asked for cannot be bought or ported.
 * - `line.released` (409): the Line is released and cannot be changed.
 * - `line.assignment_invalid` (422): the Team or Rep named for a Line is not in the Organization,
@@ -27970,6 +27972,7 @@ declare const VOICE_ERRORS: {
 	readonly "call.limit_reached": ErrorDefinition_8gwh4527<"call.limit_reached">;
 	readonly "call.line_unavailable": ErrorDefinition_8gwh4527<"call.line_unavailable">;
 	readonly "call.not_ended": ErrorDefinition_8gwh4527<"call.not_ended">;
+	readonly "call.not_ringing": ErrorDefinition_8gwh4527<"call.not_ringing">;
 	readonly "call.number_invalid": ErrorDefinition_8gwh4527<"call.number_invalid">;
 	readonly "call.provider_call_not_found": ErrorDefinition_8gwh4527<"call.provider_call_not_found">;
 	readonly "line.assignment_invalid": ErrorDefinition_8gwh4527<"line.assignment_invalid">;
@@ -28641,7 +28644,7 @@ declare const VOICE_ALL_ROLES: readonly ["owner", "admin", "manager", "rep"];
 /** The roles that manage Lines and delete Recordings. */
 declare const VOICE_ADMIN_ROLES: readonly ["owner", "admin"];
 /** The voice routes, by name. */
-type VoiceRouteName = "listLines" | "addLine" | "getLine" | "assignLine" | "releaseLine" | "placeCall" | "listCalls" | "getCall" | "getCallTranscript" | "getCallRecording" | "deleteCallRecording" | "wrapUpCall" | "mintSoftphoneToken";
+type VoiceRouteName = "listLines" | "addLine" | "getLine" | "assignLine" | "releaseLine" | "placeCall" | "listCalls" | "getCall" | "getCallTranscript" | "getCallRecording" | "deleteCallRecording" | "wrapUpCall" | "answerCall" | "mintSoftphoneToken";
 /** What the service needs to describe one route: method, path, who may call it, what it answers. */
 type VoiceRoute = Omit<InboundRoute<VoiceErrorCode | Extract<SalesHistoryErrorCode, "call.not_found"> | ProspectErrorCode>, "public" | "internal" | "serviceToken" | "etag">;
 /**

@@ -20,6 +20,8 @@ import { defineErrors } from '../errors'
  * - `call.provider_call_not_found` (404): a telephony provider's call identifier (a Twilio call
  *   SID) matches no Call. It is distinct from `call.not_found`, which names a Call by its own id.
  * - `call.not_ended` (409): the action (wrap-up) needs a Call that has ended.
+ * - `call.not_ringing` (409): the inbound Call is no longer ringing for the caller: another Rep
+ *   answered it first, or it was missed.
  * - `line.number_unavailable` (409): the number asked for cannot be bought or ported.
  * - `line.released` (409): the Line is released and cannot be changed.
  * - `line.assignment_invalid` (422): the Team or Rep named for a Line is not in the Organization,
@@ -42,6 +44,7 @@ export const VOICE_ERRORS = {
       status: 429,
       message: 'The Organization has reached its limit of concurrent Calls.',
     },
+    not_ringing: { status: 409, message: 'The Call is no longer ringing.' },
     not_ended: { status: 409, message: 'The Call has not ended yet.' },
     provider_call_not_found: {
       status: 404,
