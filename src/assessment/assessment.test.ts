@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { id, NOW } from '../core/fixtures'
 import { ERRORS } from '../errors'
+import { callTurnsResponseSchema, MAX_TURN_WINDOW } from '../voice/turns'
 import {
   ASSESSMENT_ERRORS,
   ASSESSMENT_ROUTES,
@@ -11,6 +12,7 @@ import {
   findingSchema,
   getAssessmentRatesQuerySchema,
   getAssessmentRatesResponseSchema,
+  getAssessmentTranscriptQuerySchema,
   giveFindingFeedbackRequestSchema,
   listAssessmentsQuerySchema,
 } from './index'
@@ -267,7 +269,7 @@ describe('errors and routes', () => {
       ...Object.values(ERRORS).map((e) => e.code),
     ])
     const routes = Object.entries(ASSESSMENT_ROUTES)
-    expect(routes.length).toBe(4)
+    expect(routes.length).toBe(5)
     for (const [name, r] of routes) {
       for (const code of [...r.errors, ...r.commonErrors]) {
         expect(known.has(code)).toBe(true)
@@ -280,5 +282,41 @@ describe('errors and routes', () => {
     expect(ASSESSMENT_ROUTES.getAssessmentRates.roles).toEqual(['owner', 'admin'])
     expect(ASSESSMENT_ROUTES.getAssessment.description).toContain('never 403')
     expect(ASSESSMENT_ROUTES.getAssessment.roles).toContain('rep')
+  })
+})
+
+describe('transcript', () => {
+  const turn = { index: 3, role: 'prospect', text: 'hello' }
+
+  test('turn window schemas accept and refuse', () => {
+    expect(MAX_TURN_WINDOW).toBe(20)
+    expect(callTurnsResponseSchema.safeParse({ around: 3, turns: [turn] }).success).toBe(true)
+    expect(
+      callTurnsResponseSchema.safeParse({ around: 3, turns: [{ ...turn, role: 'rep' }] }).success
+    ).toBe(false)
+    expect(callTurnsResponseSchema.safeParse({ around: -1, turns: [] }).success).toBe(false)
+    const many = Array.from({ length: 42 }, (_, index) => ({ ...turn, index }))
+    expect(callTurnsResponseSchema.safeParse({ around: 0, turns: many }).success).toBe(false)
+    expect(callTurnsResponseSchema.safeParse({ around: 0, turns: many.slice(0, 41) }).success).toBe(
+      true
+    )
+  })
+
+  test('the window query is bounded', () => {
+    expect(getAssessmentTranscriptQuerySchema.safeParse({}).success).toBe(true)
+    expect(getAssessmentTranscriptQuerySchema.safeParse({ window: '20' }).success).toBe(true)
+    expect(getAssessmentTranscriptQuerySchema.safeParse({ window: '21' }).success).toBe(false)
+    expect(getAssessmentTranscriptQuerySchema.safeParse({ window: '-1' }).success).toBe(false)
+  })
+
+  test('the route is admin only with the voice errors', () => {
+    const r = ASSESSMENT_ROUTES.getAssessmentTranscript
+    expect(r.method).toBe('GET')
+    expect(r.path).toBe('/v1/assessments/{assessmentId}/transcript')
+    expect(r.roles).toEqual(['owner', 'admin'])
+    expect(r.errors).toEqual(['assessment.not_found'])
+    expect(r.commonErrors).toEqual(expect.arrayContaining(['server.unavailable', 'server.timeout']))
+    expect(r.description).toContain('never logged')
+    expect(r.description).toContain('personal data')
   })
 })
