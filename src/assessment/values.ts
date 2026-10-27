@@ -11,6 +11,7 @@ import {
 } from '../ids'
 import { pageQuerySchema, pageSchema } from '../pagination'
 import { calendarDateSchema } from '../playbook/deal-values'
+import { MAX_TURN_WINDOW } from '../voice/turns'
 
 /** What an Assessment decided about a turn. A closed list. */
 export const ASSESSMENT_VERDICTS = ['pass', 'warn', 'fail'] as const
@@ -213,3 +214,16 @@ export const getAssessmentRatesResponseSchema = z.strictObject({
 
 /** The answer to a weekly-rate read. */
 export type GetAssessmentRatesResponse = z.infer<typeof getAssessmentRatesResponseSchema>
+
+/** The query of getAssessmentTranscript: how many turns to reach on each side of the assessed turn. */
+export const getAssessmentTranscriptQuerySchema = z.object({
+  window: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(MAX_TURN_WINDOW)
+    .optional()
+    .meta({
+      description: `Turns to include on each side of the assessed turn (0 to ${MAX_TURN_WINDOW}).`,
+    }),
+})

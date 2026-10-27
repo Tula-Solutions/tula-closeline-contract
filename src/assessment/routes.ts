@@ -20,6 +20,7 @@ export type AssessmentRouteName =
   | 'getAssessment'
   | 'giveFindingFeedback'
   | 'getAssessmentRates'
+  | 'getAssessmentTranscript'
 
 /** One Assessment route. */
 export type AssessmentRoute = InboundRoute<AssessmentErrorCode | AnalyticsErrorCode>
@@ -78,5 +79,16 @@ export const ASSESSMENT_ROUTES: Readonly<Record<AssessmentRouteName, AssessmentR
       commonErrors: ['request.invalid'],
       description:
         'Reads the weekly rate of failed Assessments, per ISO week, Agent kind and instruction version (and, with groupBy=category, per finding category; the category is null when not grouped), so an Admin sees whether a change helped. Each item carries recordCount, the Assessments judged that week; below 20 the state is not_enough_data with a null value. The range (from, to) spans at most 13 calendar months, else analytics.range_too_large (422). One cursor-paginated page at a time (at most 100 items). Owner and Admin only.',
+    }),
+    getAssessmentTranscript: inboundRoute({
+      method: 'GET',
+      path: '/v1/assessments/{assessmentId}/transcript',
+      roles: ASSESSMENT_ADMIN_ROLES,
+      success: [200],
+      idempotent: false,
+      errors: ['assessment.not_found'],
+      commonErrors: ['request.invalid', 'server.unavailable', 'server.timeout'],
+      description:
+        "Reads the window of Call turns around the assessed turn (window=0..20 on each side, default 5), oldest first, so a reviewer reads the turn in context. The turns come from voice: server.unavailable (503) or server.timeout (504) when it cannot answer. An Assessment that is not of a Call turn (a Draft has no Call), or one outside the caller's Organization, is assessment.not_found (404), never 403. Turn text is personal data and tenant speech: untrusted, never logged. Owner and Admin only.",
     }),
   })
