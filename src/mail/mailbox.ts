@@ -190,3 +190,36 @@ export const mailCapacitySchema = z.object({
 
 /** The capacity of the Organization's Mailboxes. */
 export type MailCapacity = z.infer<typeof mailCapacitySchema>
+
+/** The longest subject of a test send. */
+export const MAX_TEST_SEND_SUBJECT_LENGTH = 100
+
+/**
+ * The body of a request to send a test message through a Mailbox: the recipient and an optional
+ * short subject. There is no body field: the text is fixed by the service, so the route cannot be
+ * used to send chosen content to anyone. The subject has no control character, so no header can
+ * be injected through it.
+ */
+export const testSendRequestSchema = z.strictObject({
+  to: emailSchema,
+  subject: z
+    .string()
+    .trim()
+    .min(1)
+    .max(MAX_TEST_SEND_SUBJECT_LENGTH)
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: refusing control characters is the point
+    .refine((v) => !/[\u0000-\u001f\u007f]/.test(v), 'No control characters')
+    .optional(),
+})
+
+/** The body of a request to send a test message. */
+export type TestSendRequest = z.infer<typeof testSendRequestSchema>
+
+/** The answer to a test send: the provider's id of the message and when it was sent, never the text. */
+export const testSendResultSchema = z.strictObject({
+  providerMessageId: z.string().min(1).max(255),
+  sentAt: timestampSchema,
+})
+
+/** The answer to a test send. */
+export type TestSendResult = z.infer<typeof testSendResultSchema>

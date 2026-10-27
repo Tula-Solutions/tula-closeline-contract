@@ -14,6 +14,7 @@ import {
   MAIL_EVENTS,
   MAIL_ROUTES,
   MAILBOX_RAMP_STEPS,
+  MAX_TEST_SEND_SUBJECT_LENGTH,
   mailboxHealthSchema,
   mailboxLimitsSchema,
   mailboxPageSchema,
@@ -29,6 +30,8 @@ import {
   sendRecordSchema,
   startMailboxConnectRequestSchema,
   submitSendRequestSchema,
+  testSendRequestSchema,
+  testSendResultSchema,
   unsubscribeParamsSchema,
   unsubscribeResultSchema,
 } from './index'
@@ -594,6 +597,7 @@ describe('routes', () => {
       'disconnectMailbox',
       'pauseMailbox',
       'resumeMailbox',
+      'testSendMailbox',
       'checkMailboxDomain',
       'submitSend',
     ] as const) {
@@ -660,4 +664,52 @@ test('the area is exported from the entry point', async () => {
   const api = await import('../index')
   expect(api.MAIL_ROUTES).toBe(MAIL_ROUTES)
   expect(api.MAIL_ERRORS).toBe(MAIL_ERRORS)
+})
+
+describe('test send', () => {
+  test('takes a valid recipient and an optional bounded subject, nothing else', () => {
+    expect(testSendRequestSchema.parse({ to: 'A@Example.com' }).to).toBe('a@example.com')
+    expect(testSendRequestSchema.safeParse({ to: 'a@example.com', subject: 'Hi' }).success).toBe(
+      true
+    )
+    expect(testSendRequestSchema.safeParse({ to: 'a@example.com', body: 'Hello' }).success).toBe(
+      false
+    )
+  })
+  test('refuses an invalid address and a bad subject', () => {
+    expect(testSendRequestSchema.safeParse({ to: 'not-an-email' }).success).toBe(false)
+    expect(testSendRequestSchema.safeParse({}).success).toBe(false)
+    for (const subject of [
+      '',
+      '   ',
+      'x'.repeat(MAX_TEST_SEND_SUBJECT_LENGTH + 1),
+      'a\r\nBcc: x',
+    ]) {
+      expect(testSendRequestSchema.safeParse({ to: 'a@example.com', subject }).success).toBe(false)
+    }
+    expect(
+      testSendRequestSchema.safeParse({
+        to: 'a@example.com',
+        subject: 'x'.repeat(MAX_TEST_SEND_SUBJECT_LENGTH),
+      }).success
+    ).toBe(true)
+  })
+  test('the result carries an id and a time, never text', () => {
+    const ok = { providerMessageId: 'abc', sentAt: '2026-01-01T00:00:00.000Z' }
+    expect(testSendResultSchema.parse(ok)).toEqual(ok)
+    expect(testSendResultSchema.safeParse({ ...ok, text: 'Hello' }).success).toBe(false)
+    expect(testSendResultSchema.safeParse({ ...ok, providerMessageId: '' }).success).toBe(false)
+  })
+  test('the route needs a key and lists the Mailbox errors', () => {
+    const r = MAIL_ROUTES.testSendMailbox
+    expect(r.path).toBe('/v1/mailboxes/{mailboxId}/test-send')
+    expect(r.errors).toEqual(
+      expect.arrayContaining([
+        'mailbox.not_found',
+        'mailbox.not_connected',
+        'mailbox.paused',
+        'mailbox.auth_revoked',
+      ])
+    )
+  })
 })
