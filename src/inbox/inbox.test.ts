@@ -85,6 +85,7 @@ const agentDraft = {
   ungrounded: false,
   checks: [{ name: 'no_pricing_claims', passed: true }],
   hold: 'policy',
+  assessment: null,
   status: 'pending',
   createdAt: NOW,
   decidedAt: null,
@@ -371,6 +372,33 @@ describe('Draft', () => {
     expect(draftSchema.safeParse(rep).success).toBe(true)
     expect(draftSchema.safeParse({ ...rep, authorMembershipId: null }).success).toBe(false)
     expect(draftSchema.safeParse({ ...rep, sources: [momentSource] }).success).toBe(false)
+  })
+  test('carries the Assessment of the Draft, null when it was not judged', () => {
+    const finding = {
+      id: formatId('fnd', hex(41)),
+      category: 'unsupported_claim',
+      severity: 'high',
+      span: { start: 0, end: 5 },
+      explanation: 'No Source says so.',
+      feedback: null,
+    }
+    const judged = {
+      id: formatId('asm', hex(42)),
+      verdict: 'warn',
+      findings: [finding],
+    }
+    expect(draftSchema.safeParse({ ...agentDraft, assessment: judged }).success).toBe(true)
+    expect(draftSchema.safeParse({ ...agentDraft, assessment: null }).success).toBe(true)
+    const { assessment: _omitted, ...without } = agentDraft
+    expect(draftSchema.safeParse(without).success).toBe(false)
+    const bad = { ...judged, findings: [{ ...finding, span: { start: 5, end: 5 } }] }
+    expect(draftSchema.safeParse({ ...agentDraft, assessment: bad }).success).toBe(false)
+    expect(
+      draftSchema.safeParse({ ...agentDraft, assessment: { ...judged, verdict: 'x' } }).success
+    ).toBe(false)
+    expect(
+      draftSchema.safeParse({ ...agentDraft, assessment: { ...judged, extra: 1 } }).success
+    ).toBe(false)
   })
   test('cites a Source once and at most ten', () => {
     expect(

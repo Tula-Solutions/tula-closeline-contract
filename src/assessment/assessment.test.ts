@@ -233,8 +233,9 @@ describe('assessment.completed event', () => {
 })
 
 describe('errors and routes', () => {
-  test('one 404 and no 403', () => {
+  test('a 404, a 409 and no 403', () => {
     expect(ASSESSMENT_ERRORS['assessment.not_found'].status).toBe(404)
+    expect(ASSESSMENT_ERRORS['assessment.reassess_required'].status).toBe(409)
     for (const entry of Object.values(ASSESSMENT_ERRORS)) {
       expect(entry.code in ERRORS).toBe(false)
     }
