@@ -4,7 +4,7 @@
   "description": "Closeline API schemas, types and error codes shared by services and the portal",
   "private": true,
   "type": "module",
-  "packageManager": "bun@1.4.2",
+  "packageManager": "bun@1.4.3",
   "files": [
     "dist"
   ],
