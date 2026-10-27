@@ -1,5 +1,6 @@
 import type { ApiKeyScope } from '../apikey/values'
 import type { CommonErrorCode } from '../errors'
+import { IDEMPOTENT_ERRORS } from '../inbound-route'
 import type { ProspectErrorCode } from '../prospect/errors'
 import type { Role } from '../tenancy'
 import type { ConsentErrorCode } from './errors'
@@ -76,12 +77,6 @@ export type ConsentRoute = {
 }
 
 const route = (definition: ConsentRoute): ConsentRoute => Object.freeze(definition)
-
-const IDEMPOTENT_ERRORS = [
-  'request.invalid',
-  'request.idempotency_key_reused',
-  'request.idempotency_in_progress',
-] as const
 
 /**
  * The consent routes (spec M3). Every user route may also return the common `auth.*`, `rate.limited`

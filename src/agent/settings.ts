@@ -1,42 +1,19 @@
 import { z } from 'zod'
-import { workingDaySchema } from '../booking/calendar'
 import { timeZoneSchema } from '../booking/values'
 import { timestampSchema } from '../core/values'
 import { membershipIdSchema } from '../ids'
 import { boundedTextSchema } from '../prospect/values'
 import {
-  AGENT_CALLING_WINDOW,
   agentLanguageSchema,
   agentVoiceStyleSchema,
+  agentWorkingDaysSchema,
   MAX_AGENT_CALL_COST_USD_CENTS,
   MAX_AGENT_CALL_SECONDS,
   MAX_AGENT_CONCURRENCY,
   MAX_AGENT_GREETING_LENGTH,
 } from './values'
 
-const minutesOf = (time: string): number => {
-  const [h = 0, m = 0] = time.split(':').map(Number)
-  return h * 60 + m
-}
-
-const hoursSchema = z
-  .array(workingDaySchema)
-  .min(1)
-  .max(7)
-  .refine(
-    (days) =>
-      days.every((d) =>
-        d.windows.every(
-          (w) =>
-            minutesOf(w.start) >= AGENT_CALLING_WINDOW.startHour * 60 &&
-            minutesOf(w.end) <= AGENT_CALLING_WINDOW.endHour * 60
-        )
-      ),
-    { message: 'Hours lie within the fixed calling window' }
-  )
-  .refine((days) => new Set(days.map((d) => d.day)).size === days.length, {
-    message: 'Each day appears once',
-  })
+const hoursSchema = agentWorkingDaysSchema.min(1)
 
 /**
  * What an Admin may set on the Inbound Agent. There is deliberately no field for the Disclosure,

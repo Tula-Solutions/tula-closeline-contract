@@ -135,6 +135,25 @@ describe('control settings', () => {
       false
     )
   })
+  test('refuses a window outside the calling window, in a request and as stored', () => {
+    const early = {
+      ...request.sendWindow,
+      days: [{ day: 'mon', windows: [{ start: '06:00', end: '17:00' }] }],
+    }
+    expect(setAgentControlRequestSchema.safeParse({ ...request, sendWindow: early }).success).toBe(
+      false
+    )
+    expect(
+      agentControlSchema.safeParse({
+        agentKind: 'inbound',
+        channel: 'email',
+        ...request,
+        sendWindow: early,
+        updatedAt: NOW,
+        updatedByMembershipId: null,
+      }).success
+    ).toBe(false)
+  })
   test('the response drops unknown nested fields', () => {
     const parsed = agentControlSchema.parse({
       agentKind: 'inbound',

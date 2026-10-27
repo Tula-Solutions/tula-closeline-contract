@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { timestampSchema } from './core/values'
 import { eventIdSchema, organizationIdSchema } from './ids'
 import { regionSchema } from './tenancy'
 
@@ -11,13 +12,12 @@ export const eventTypeSchema = z.string().max(100).regex(EVENT_TYPE_PATTERN)
 export type EventType = z.infer<typeof eventTypeSchema>
 
 const versionSchema = z.number().int().positive()
-const occurredAtSchema = z.iso.datetime({ offset: true }).max(64)
 
 const envelopeShape = {
   id: eventIdSchema,
   type: eventTypeSchema,
   version: versionSchema,
-  occurredAt: occurredAtSchema,
+  occurredAt: timestampSchema,
   organizationId: organizationIdSchema,
   region: regionSchema,
 }

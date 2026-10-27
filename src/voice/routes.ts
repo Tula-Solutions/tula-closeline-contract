@@ -1,5 +1,6 @@
 import type { ApiKeyScope } from '../apikey/values'
 import type { CommonErrorCode } from '../errors'
+import { IDEMPOTENT_ERRORS } from '../inbound-route'
 import type { SalesHistoryErrorCode } from '../playbook/sales-history-errors'
 import type { ProspectErrorCode } from '../prospect/errors'
 import type { Role } from '../tenancy'
@@ -59,12 +60,6 @@ export type VoiceRoute = {
 }
 
 const route = (definition: VoiceRoute): VoiceRoute => Object.freeze(definition)
-
-const IDEMPOTENT_ERRORS = [
-  'request.invalid',
-  'request.idempotency_key_reused',
-  'request.idempotency_in_progress',
-] as const
 
 const CALL_VISIBILITY =
   'Visibility is decided from the token: a Rep sees the Calls they took, a Manager those of the Reps on their Team, Owner and Admin every Call; anything else is call.not_found (404), as is a Call of another Organization.'

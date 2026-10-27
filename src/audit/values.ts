@@ -205,17 +205,6 @@ const filterShape = {
   to: timestampSchema.optional(),
 }
 
-/** The filters of an audit read: actor, action, subject, Prospect and a time range of at most 366 days. */
-export const auditFilterSchema = z.object(filterShape).refine(
-  (filter) => {
-    if (!filter.from || !filter.to) {
-      return true
-    }
-    return Date.parse(filter.from) <= Date.parse(filter.to)
-  },
-  { message: 'from is not after to', path: ['from'] }
-)
-
 /** The query of an audit list: cursor, limit (at most 100) and the filters. */
 export const listAuditEventsQuerySchema = pageQuerySchema.extend(filterShape)
 

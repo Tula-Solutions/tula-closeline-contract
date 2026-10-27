@@ -1,5 +1,6 @@
 import type { ApiKeyScope } from '../apikey/values'
 import type { CommonErrorCode } from '../errors'
+import { IDEMPOTENT_ERRORS } from '../inbound-route'
 import type { Role } from '../tenancy'
 import type { ProspectErrorCode } from './errors'
 
@@ -60,12 +61,6 @@ export type ProspectRoute = {
 }
 
 const route = (definition: ProspectRoute): ProspectRoute => Object.freeze(definition)
-
-const IDEMPOTENT_ERRORS = [
-  'request.invalid',
-  'request.idempotency_key_reused',
-  'request.idempotency_in_progress',
-] as const
 
 const VISIBILITY =
   'Visibility is decided from the token: Owner and Admin see every Prospect, a Manager those owned by Reps on their Team, a Rep those they own; anything else is prospect.not_found (404), as is a record of another Organization.'
