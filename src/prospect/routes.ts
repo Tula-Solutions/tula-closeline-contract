@@ -1,5 +1,4 @@
-import type { ApiKeyScope } from '../apikey/values'
-import type { CommonErrorCode } from '../errors'
+import type { InboundRoute } from '../inbound-route'
 import { IDEMPOTENT_ERRORS } from '../inbound-route'
 import type { Role } from '../tenancy'
 import type { ProspectErrorCode } from './errors'
@@ -41,24 +40,10 @@ export type ProspectRouteName =
   | 'downloadProspectImportReport'
 
 /** What the service needs to describe one route: method, path, who may call it, what it answers. */
-export type ProspectRoute = {
-  readonly method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
-  readonly path: string
-  /** The roles allowed. Any other role is the common `auth.forbidden`. */
-  readonly roles: readonly Role[]
-  /** Set on a route an API key may call: the scope its token must carry. Never on a public, internal or Owner-only route. */
-  readonly publicApi?: { readonly scope: ApiKeyScope }
-  /** The success statuses, the first being the usual one. */
-  readonly success: readonly number[]
-  /** True when the route accepts an `Idempotency-Key` header. */
-  readonly idempotent: boolean
-  /** The domain codes the route may return, beyond the common ones. */
-  readonly errors: readonly ProspectErrorCode[]
-  /** The common codes the route may return, beyond those every route may. */
-  readonly commonErrors: readonly CommonErrorCode[]
-  /** The description for the OpenAPI document, role rules included. */
-  readonly description: string
-}
+export type ProspectRoute = Omit<
+  InboundRoute<ProspectErrorCode>,
+  'public' | 'internal' | 'serviceToken' | 'etag' | 'keyRequired'
+>
 
 const route = (definition: ProspectRoute): ProspectRoute => Object.freeze(definition)
 

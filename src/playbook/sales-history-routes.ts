@@ -1,5 +1,4 @@
-import type { CommonErrorCode } from '../errors'
-import type { Role } from '../tenancy'
+import type { InboundRoute } from '../inbound-route'
 import { PLAYBOOK_WRITE_ROLES } from './routes'
 import type { SalesHistoryErrorCode } from './sales-history-errors'
 
@@ -30,21 +29,20 @@ export type SalesHistoryRouteName =
  * but its own method list (it adds `PUT`) and its own error codes, so the 0.7.0 `PlaybookRoute`
  * type is not widened. Use `ALL_PLAYBOOK_ROUTES` for both tables in one map.
  */
-export type SalesHistoryRoute = {
+export type SalesHistoryRoute = Omit<
+  InboundRoute<SalesHistoryErrorCode>,
+  | 'public'
+  | 'serviceToken'
+  | 'etag'
+  | 'publicApi'
+  | 'keyRequired'
+  | 'idempotent'
+  | 'method'
+  | 'internal'
+> & {
   readonly method: 'GET' | 'POST' | 'PUT' | 'DELETE'
-  readonly path: string
   /** True for a route on the internal network only; none of these is. */
   readonly internal: boolean
-  /** The roles allowed. Any other role is the common `auth.forbidden`. */
-  readonly roles: readonly Role[]
-  /** The success statuses, the first being the usual one. */
-  readonly success: readonly number[]
-  /** The domain codes the route may return, beyond the common ones. */
-  readonly errors: readonly SalesHistoryErrorCode[]
-  /** The common codes the route may return, beyond those every route may. */
-  readonly commonErrors: readonly CommonErrorCode[]
-  /** The description for the OpenAPI document, role rules included. */
-  readonly description: string
 }
 
 const route = (definition: SalesHistoryRoute): SalesHistoryRoute => Object.freeze(definition)

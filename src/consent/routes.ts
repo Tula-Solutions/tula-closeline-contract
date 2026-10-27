@@ -1,6 +1,5 @@
-import type { ApiKeyScope } from '../apikey/values'
 import type { CommonErrorCode } from '../errors'
-import { IDEMPOTENT_ERRORS } from '../inbound-route'
+import { IDEMPOTENT_ERRORS, type InboundRoute } from '../inbound-route'
 import type { ProspectErrorCode } from '../prospect/errors'
 import type { Role } from '../tenancy'
 import type { ConsentErrorCode } from './errors'
@@ -55,25 +54,12 @@ export type ConsentRouteName =
 export type ConsentRouteAccess = 'user' | 'public' | 'internal'
 
 /** What the service needs to describe one route: method, path, who may call it, what it answers. */
-export type ConsentRoute = {
-  readonly method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
-  readonly path: string
+export type ConsentRoute = Omit<
+  InboundRoute<ConsentErrorCode | ProspectErrorCode | CommonErrorCode>,
+  'public' | 'internal' | 'serviceToken' | 'etag' | 'keyRequired'
+> & {
   /** `public` routes take a signed token in the path; `internal` ones the shared secret (ADR 0013). */
   readonly access: ConsentRouteAccess
-  /** The roles allowed; empty for a public or internal route. Any other role is the common `auth.forbidden`. */
-  readonly roles: readonly Role[]
-  /** Set on a route an API key may call: the scope its token must carry. Never on a public, internal or Owner-only route. */
-  readonly publicApi?: { readonly scope: ApiKeyScope }
-  /** The success statuses, the first being the usual one. */
-  readonly success: readonly number[]
-  /** True when the route accepts an `Idempotency-Key` header. */
-  readonly idempotent: boolean
-  /** The domain codes the route may return, beyond the common ones. A Contact Check denial is never one. */
-  readonly errors: readonly (ConsentErrorCode | ProspectErrorCode | CommonErrorCode)[]
-  /** The common codes the route may return, beyond those every route may. */
-  readonly commonErrors: readonly CommonErrorCode[]
-  /** The description for the OpenAPI document, role rules included. */
-  readonly description: string
 }
 
 const route = (definition: ConsentRoute): ConsentRoute => Object.freeze(definition)

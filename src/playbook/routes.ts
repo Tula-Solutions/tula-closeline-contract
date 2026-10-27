@@ -1,4 +1,4 @@
-import type { CommonErrorCode } from '../errors'
+import type { InboundRoute } from '../inbound-route'
 import type { Role } from '../tenancy'
 import type { PlaybookErrorCode } from './errors'
 
@@ -23,21 +23,20 @@ export type PlaybookRouteName =
   | 'removeOrganizationDocuments'
 
 /** What the service needs to describe one route: its method, path, who may call it, what it answers. */
-export type PlaybookRoute = {
+export type PlaybookRoute = Omit<
+  InboundRoute<PlaybookErrorCode>,
+  | 'public'
+  | 'serviceToken'
+  | 'etag'
+  | 'publicApi'
+  | 'keyRequired'
+  | 'idempotent'
+  | 'method'
+  | 'internal'
+> & {
   readonly method: 'GET' | 'POST' | 'DELETE'
-  readonly path: string
   /** True for a route on the internal network only; it takes no role and names the Organization in the path. */
   readonly internal: boolean
-  /** The roles allowed; empty for an internal route. Any other role is the common `auth.forbidden`. */
-  readonly roles: readonly Role[]
-  /** The success statuses, the first being the usual one. */
-  readonly success: readonly number[]
-  /** The domain codes the route may return, beyond the common ones. */
-  readonly errors: readonly PlaybookErrorCode[]
-  /** The common codes the route may return, beyond those every route may. */
-  readonly commonErrors: readonly CommonErrorCode[]
-  /** The description for the OpenAPI document, role rules included. */
-  readonly description: string
 }
 
 const route = (definition: PlaybookRoute): PlaybookRoute => Object.freeze(definition)

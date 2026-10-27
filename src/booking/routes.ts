@@ -1,6 +1,4 @@
-import type { ApiKeyScope } from '../apikey/values'
-import type { CommonErrorCode } from '../errors'
-import { IDEMPOTENT_ERRORS, PUBLIC_ERRORS } from '../inbound-route'
+import { IDEMPOTENT_ERRORS, type InboundRoute, PUBLIC_ERRORS } from '../inbound-route'
 import type { ProspectErrorCode } from '../prospect/errors'
 import type { Role } from '../tenancy'
 import type { BookingErrorCode } from './errors'
@@ -51,28 +49,10 @@ export type BookingRouteName =
   | 'publicBook'
 
 /** What the service needs to describe one route: method, path, who may call it, what it answers. */
-export type BookingRoute = {
-  readonly method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
-  readonly path: string
-  /** The roles allowed. Empty for a public route. Any other role is the common `auth.forbidden`. */
-  readonly roles: readonly Role[]
-  /** Set on a route an API key may call: the scope its token must carry. Never on a public, internal or Owner-only route. */
-  readonly publicApi?: { readonly scope: ApiKeyScope }
-  /** True: the route takes no token and no Organization; anyone may call it. */
-  readonly public?: true
-  /** The success statuses, the first being the usual one. */
-  readonly success: readonly number[]
-  /** True when a retry of the route is safe by the `Idempotency-Key` header. */
-  readonly idempotent: boolean
-  /** True when the `Idempotency-Key` header is required, not just accepted; see `bookHeadersSchema`. */
-  readonly keyRequired?: true
-  /** The domain codes the route may return, beyond the common ones. */
-  readonly errors: readonly (BookingErrorCode | Extract<ProspectErrorCode, 'prospect.not_found'>)[]
-  /** The common codes the route may return, beyond those every route may. */
-  readonly commonErrors: readonly CommonErrorCode[]
-  /** The description for the OpenAPI document, role rules included. */
-  readonly description: string
-}
+export type BookingRoute = Omit<
+  InboundRoute<BookingErrorCode | Extract<ProspectErrorCode, 'prospect.not_found'>>,
+  'internal' | 'serviceToken' | 'etag'
+>
 
 const route = (definition: BookingRoute): BookingRoute => Object.freeze(definition)
 

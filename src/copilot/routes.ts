@@ -1,6 +1,5 @@
-import type { CommonErrorCode } from '../errors'
+import type { InboundRoute } from '../inbound-route'
 import type { SalesHistoryErrorCode } from '../playbook/sales-history-errors'
-import type { Role } from '../tenancy'
 import { VOICE_ADMIN_ROLES, VOICE_ALL_ROLES } from '../voice/routes'
 import type { CopilotErrorCode } from './errors'
 
@@ -13,23 +12,22 @@ export type CopilotRouteName =
   | 'setCopilotSettings'
 
 /** What the service needs to describe one route: method, path, who may call it, what it answers. */
-export type CopilotRoute = {
+export type CopilotRoute = Omit<
+  InboundRoute<CopilotErrorCode | Extract<SalesHistoryErrorCode, 'call.not_found'>>,
+  | 'public'
+  | 'internal'
+  | 'serviceToken'
+  | 'etag'
+  | 'publicApi'
+  | 'keyRequired'
+  | 'method'
+  | 'idempotent'
+> & {
   readonly method: 'GET' | 'PUT' | 'PATCH'
-  readonly path: string
-  /** The roles allowed. Any other role is the common `auth.forbidden`. */
-  readonly roles: readonly Role[]
-  /** The success statuses, the first being the usual one. */
-  readonly success: readonly number[]
-  /** True when a retry is safe by the `Idempotency-Key` header. No Copilot route takes the header: each is idempotent by end state. */
+  /** Always false: no Copilot route takes the `Idempotency-Key` header, each is idempotent by end state. */
   readonly idempotent: false
   /** True for a Server-Sent Events route, answered as `text/event-stream` and not JSON. */
   readonly stream?: true
-  /** The domain codes the route may return, beyond the common ones. */
-  readonly errors: readonly (CopilotErrorCode | Extract<SalesHistoryErrorCode, 'call.not_found'>)[]
-  /** The common codes the route may return, beyond those every route may. */
-  readonly commonErrors: readonly CommonErrorCode[]
-  /** The description for the OpenAPI document, role rules included. */
-  readonly description: string
 }
 
 const route = (definition: CopilotRoute): CopilotRoute => Object.freeze(definition)

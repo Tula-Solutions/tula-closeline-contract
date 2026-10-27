@@ -69,3 +69,11 @@ test('the entry point exports the consent area', async () => {
   )
   expect(typeof api.contactCheckResultSchema.safeParse).toBe('function')
 })
+
+test('the entry point exports the shared inbound route helpers', async () => {
+  const api = await import('./index')
+  expect(api.SERVICE_AUDIENCES).toEqual(['voice', 'outbound'])
+  expect(api.IDEMPOTENT_ERRORS).toContain('request.idempotency_key_reused')
+  expect(api.PUBLIC_ERRORS).toContain('rate.limited')
+  expect(typeof api.inboundRoute).toBe('function')
+})
