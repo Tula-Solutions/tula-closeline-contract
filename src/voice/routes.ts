@@ -1,6 +1,4 @@
-import type { ApiKeyScope } from '../apikey/values'
-import type { CommonErrorCode } from '../errors'
-import { IDEMPOTENT_ERRORS } from '../inbound-route'
+import { IDEMPOTENT_ERRORS, type InboundRoute } from '../inbound-route'
 import type { SalesHistoryErrorCode } from '../playbook/sales-history-errors'
 import type { ProspectErrorCode } from '../prospect/errors'
 import type { Role } from '../tenancy'
@@ -34,30 +32,12 @@ export type VoiceRouteName =
   | 'mintSoftphoneToken'
 
 /** What the service needs to describe one route: method, path, who may call it, what it answers. */
-export type VoiceRoute = {
-  readonly method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
-  readonly path: string
-  /** The roles allowed. Any other role is the common `auth.forbidden`. */
-  readonly roles: readonly Role[]
-  /** Set on a route an API key may call: the scope its token must carry. Never on a public, internal or Owner-only route. */
-  readonly publicApi?: { readonly scope: ApiKeyScope }
-  /** The success statuses, the first being the usual one. */
-  readonly success: readonly number[]
-  /** True when a retry of the route is safe by the `Idempotency-Key` header. */
-  readonly idempotent: boolean
-  /** True when the `Idempotency-Key` header is required, not just accepted; see `placeCallHeadersSchema` and `addLineHeadersSchema`. */
-  readonly keyRequired?: true
-  /** The domain codes the route may return, beyond the common ones. */
-  readonly errors: readonly (
-    | VoiceErrorCode
-    | Extract<SalesHistoryErrorCode, 'call.not_found'>
-    | ProspectErrorCode
-  )[]
-  /** The common codes the route may return, beyond those every route may. */
-  readonly commonErrors: readonly CommonErrorCode[]
-  /** The description for the OpenAPI document, role rules included. */
-  readonly description: string
-}
+export type VoiceRoute = Omit<
+  InboundRoute<
+    VoiceErrorCode | Extract<SalesHistoryErrorCode, 'call.not_found'> | ProspectErrorCode
+  >,
+  'public' | 'internal' | 'serviceToken' | 'etag'
+>
 
 const route = (definition: VoiceRoute): VoiceRoute => Object.freeze(definition)
 

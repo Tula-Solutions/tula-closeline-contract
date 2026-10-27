@@ -546,6 +546,7 @@ var agentsPausedSchema = z11.object({
   updatedByMembershipId: membershipIdSchema.nullable()
 });
 // src/inbound-route.ts
+var SERVICE_AUDIENCES = ["voice", "outbound"];
 var inboundRoute = (definition) => Object.freeze(definition);
 var IDEMPOTENT_ERRORS = [
   "request.invalid",
@@ -13206,6 +13207,7 @@ export {
   HEALTH_WARNING_SCORE,
   HEALTH_WINDOW_DAYS,
   IDEMPOTENCY_KEY_HEADER,
+  IDEMPOTENT_ERRORS,
   INBOX_ADMIN_ROLES,
   INBOX_ALL_ROLES,
   INBOX_CHANNELS,
@@ -13531,6 +13533,7 @@ export {
   PROSPECT_MERGE_UNDO_DAYS,
   PROSPECT_ROUTES,
   PROSPECT_STATUSES,
+  PUBLIC_ERRORS,
   PUBLIC_MARK,
   QUALIFICATION_QUESTION_KINDS,
   RECORDING_MEDIA_TYPES,
@@ -13554,6 +13557,7 @@ export {
   SEND_REFUSAL_REASONS,
   SEND_STATES,
   SEQUENCE_PROBLEMS,
+  SERVICE_AUDIENCES,
   SIGNAL_KINDS,
   SIGNAL_WEBHOOK_SIGNATURE_HEADER,
   SIGNAL_WEBHOOK_TIMESTAMP_HEADER,
@@ -14124,6 +14128,7 @@ export {
   hoursSchema2 as hoursSchema,
   idSchema,
   idempotencyKeySchema,
+  inboundRoute,
   inboxChannelSchema,
   inboxKeyedHeadersSchema,
   ingestMessageRequestSchema,
