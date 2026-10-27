@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { timestampSchema } from '../core/values'
+import { idempotencyKeySchema, timestampSchema } from '../core/values'
 import { lineIdSchema, membershipIdSchema, teamIdSchema } from '../ids'
 import { pageQuerySchema, pageSchema } from '../pagination'
 import { e164PhoneSchema, rawPhoneSchema } from '../prospect/values'
@@ -65,8 +65,8 @@ export const linePageSchema = pageSchema(lineSchema)
 
 /**
  * The body of a request to add a Line: buy a new number (optionally with an area code) or port
- * one the Organization already owns. The route accepts an `Idempotency-Key` header so a retry buys
- * one number.
+ * one the Organization already owns. The `Idempotency-Key` header is required (see
+ * `addLineHeadersSchema`) so a retry buys one number.
  */
 export const addLineRequestSchema = z.discriminatedUnion('method', [
   z.strictObject({
@@ -84,6 +84,9 @@ export const addLineRequestSchema = z.discriminatedUnion('method', [
     label: lineLabelSchema.optional(),
   }),
 ])
+
+/** The headers of a request to add a Line: the required `Idempotency-Key`, so a retry never buys a second number. */
+export const addLineHeadersSchema = z.object({ 'idempotency-key': idempotencyKeySchema })
 
 /** The body of a request to add a Line. */
 export type AddLineRequest = z.infer<typeof addLineRequestSchema>
