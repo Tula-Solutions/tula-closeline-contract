@@ -7492,9 +7492,10 @@ var VOICE_ROUTES = Object.freeze({
     roles: VOICE_ADMIN_ROLES,
     success: [201, 200],
     idempotent: true,
+    keyRequired: true,
     errors: ["line.number_unavailable"],
     commonErrors: [...IDEMPOTENT_ERRORS],
-    description: "Adds a Line by buying a new number (country, optional area code) or porting one the Organization owns (the Line is porting until the carrier completes). A number that cannot be had is line.number_unavailable (409). Owner and Admin only. Answers 201, or 200 with the original Line for a replay of the same Idempotency-Key."
+    description: "Adds a Line by buying a new number (country, optional area code) or porting one the Organization owns (the Line is porting until the carrier completes). A number that cannot be had is line.number_unavailable (409). The Idempotency-Key header is required (a request without it is request.invalid), so a retry after a timeout never buys a second number; the same key with another body is request.idempotency_key_reused. Owner and Admin only. Answers 201, or 200 with the original Line for a replay of the same Idempotency-Key."
   }),
   getLine: route9({
     method: "GET",
@@ -12930,6 +12931,7 @@ var addLineRequestSchema = z119.discriminatedUnion("method", [
     label: lineLabelSchema.optional()
   })
 ]);
+var addLineHeadersSchema = z119.object({ "idempotency-key": idempotencyKeySchema });
 var assignLineRequestSchema = lineAssignmentSchema;
 // src/voice/softphone.ts
 import { z as z120 } from "zod";
@@ -13600,6 +13602,7 @@ export {
   acceptPlayRequestSchema,
   acceptPreviewRequestSchema,
   acceptSuggestionRequestSchema,
+  addLineHeadersSchema,
   addLineRequestSchema,
   addSuppressionRequestSchema,
   addTeamMemberRequestSchema,

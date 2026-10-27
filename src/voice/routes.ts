@@ -45,7 +45,7 @@ export type VoiceRoute = {
   readonly success: readonly number[]
   /** True when a retry of the route is safe by the `Idempotency-Key` header. */
   readonly idempotent: boolean
-  /** True when the `Idempotency-Key` header is required, not just accepted; see `placeCallHeadersSchema`. */
+  /** True when the `Idempotency-Key` header is required, not just accepted; see `placeCallHeadersSchema` and `addLineHeadersSchema`. */
   readonly keyRequired?: true
   /** The domain codes the route may return, beyond the common ones. */
   readonly errors: readonly (
@@ -90,10 +90,11 @@ export const VOICE_ROUTES: Readonly<Record<VoiceRouteName, VoiceRoute>> = Object
     roles: VOICE_ADMIN_ROLES,
     success: [201, 200],
     idempotent: true,
+    keyRequired: true,
     errors: ['line.number_unavailable'],
     commonErrors: [...IDEMPOTENT_ERRORS],
     description:
-      'Adds a Line by buying a new number (country, optional area code) or porting one the Organization owns (the Line is porting until the carrier completes). A number that cannot be had is line.number_unavailable (409). Owner and Admin only. Answers 201, or 200 with the original Line for a replay of the same Idempotency-Key.',
+      'Adds a Line by buying a new number (country, optional area code) or porting one the Organization owns (the Line is porting until the carrier completes). A number that cannot be had is line.number_unavailable (409). The Idempotency-Key header is required (a request without it is request.invalid), so a retry after a timeout never buys a second number; the same key with another body is request.idempotency_key_reused. Owner and Admin only. Answers 201, or 200 with the original Line for a replay of the same Idempotency-Key.',
   }),
   getLine: route({
     method: 'GET',

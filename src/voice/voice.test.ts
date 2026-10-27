@@ -6,6 +6,7 @@ import { MAX_PAGE_SIZE } from '../pagination'
 import { SALES_HISTORY_ERRORS } from '../playbook'
 import { PROSPECT_ERRORS } from '../prospect'
 import {
+  addLineHeadersSchema,
   addLineRequestSchema,
   assignLineRequestSchema,
   getTranscriptQuerySchema,
@@ -58,6 +59,15 @@ const endedCall = {
   recordingState: 'stored',
   transcriptState: 'ready',
 }
+
+describe('add a Line', () => {
+  test('requires the Idempotency-Key header', () => {
+    const key = 'add-line-000000001'
+    expect(addLineHeadersSchema.safeParse({ 'idempotency-key': key }).success).toBe(true)
+    expect(addLineHeadersSchema.safeParse({}).success).toBe(false)
+    expect(addLineHeadersSchema.safeParse({ 'idempotency-key': 'short' }).success).toBe(false)
+  })
+})
 
 describe('place a Call', () => {
   const valid = { to: '(415) 555-0123' }
@@ -398,7 +408,8 @@ describe('routes', () => {
       }
     }
     expect(VOICE_ROUTES.placeCall.keyRequired).toBe(true)
-    expect(VOICE_ROUTES.addLine.keyRequired).toBeUndefined()
+    expect(VOICE_ROUTES.addLine.keyRequired).toBe(true)
+    expect(VOICE_ROUTES.addLine.description).toContain('Idempotency-Key header is required')
     expect(VOICE_ROUTES.placeCall.description).toContain('Idempotency-Key header is required')
   })
   test('adding a Line lists only Line codes', () => {
