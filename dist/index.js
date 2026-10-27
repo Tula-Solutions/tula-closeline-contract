@@ -3126,13 +3126,18 @@ var listAssessmentsQuerySchema = pageQuerySchema.extend({
   checkAnalyticsRange(query, ctx);
 });
 var listAssessmentsResponseSchema = pageSchema(assessmentSchema);
-var getAssessmentRatesQuerySchema = z33.object({ ...analyticsRangeShape, agentKind: agentKindSchema.optional() }).extend(pageQuerySchema.shape).superRefine((query, ctx) => checkAnalyticsRange(query, ctx));
+var getAssessmentRatesQuerySchema = z33.object({
+  ...analyticsRangeShape,
+  agentKind: agentKindSchema.optional(),
+  groupBy: z33.literal("category").optional()
+}).extend(pageQuerySchema.shape).superRefine((query, ctx) => checkAnalyticsRange(query, ctx));
 var isoWeekSchema = z33.string().regex(/^\d{4}-W(0[1-9]|[1-4]\d|5[0-3])$/);
 var rateItem = {
   week: isoWeekSchema,
   weekStart: calendarDateSchema,
   agentKind: agentKindSchema,
-  instructionVersion: z33.number().int().min(1).nullable()
+  instructionVersion: z33.number().int().min(1).nullable(),
+  category: findingCategorySchema.nullable()
 };
 var assessmentRateItemSchema = z33.union([
   rateValueSchema.options[0].extend(rateItem),
@@ -3188,12 +3193,12 @@ var ASSESSMENT_ROUTES = Object.freeze({
   listAssessments: inboundRoute({
     method: "GET",
     path: "/v1/assessments",
-    roles: ["owner", "admin", "manager"],
+    roles: ASSESSMENT_ADMIN_ROLES,
     success: [200],
     idempotent: false,
     errors: ["analytics.range_too_large"],
     commonErrors: ["request.invalid"],
-    description: `Lists Assessments, one cursor-paginated page at a time (at most 100), filtered by verdict, finding category, Agent kind and a date range (from and to together, at most 13 months, else analytics.range_too_large (422)). sort=newest (the default) or worst_first, which puts flagged turns first by severity. Owner and Admin see all; a Manager only those of their Team's Prospects; a Rep none here (auth.forbidden) and reads the Assessment of a Draft they can see with getAssessment. ${NO_TEXT}`
+    description: `Lists Assessments, one cursor-paginated page at a time (at most 100), filtered by verdict, finding category, Agent kind and a date range (from and to together, at most 13 months, else analytics.range_too_large (422)). sort=newest (the default) or worst_first, which puts flagged turns first by severity. Owner and Admin only; a Manager or Rep gets auth.forbidden (403) here, and a Rep reads the Assessment of a Draft they can see with getAssessment. ${NO_TEXT}`
   }),
   getAssessment: inboundRoute({
     method: "GET",
@@ -3227,7 +3232,7 @@ var ASSESSMENT_ROUTES = Object.freeze({
     idempotent: false,
     errors: ["analytics.range_too_large"],
     commonErrors: ["request.invalid"],
-    description: "Reads the weekly rate of failed Assessments, per ISO week, Agent kind and instruction version, so an Admin sees whether a change helped. Each item carries recordCount, the Assessments judged that week; below 20 the state is not_enough_data with a null value. The range (from, to) spans at most 13 calendar months, else analytics.range_too_large (422). One cursor-paginated page at a time (at most 100 items). Owner and Admin only."
+    description: "Reads the weekly rate of failed Assessments, per ISO week, Agent kind and instruction version (and, with groupBy=category, per finding category; the category is null when not grouped), so an Admin sees whether a change helped. Each item carries recordCount, the Assessments judged that week; below 20 the state is not_enough_data with a null value. The range (from, to) spans at most 13 calendar months, else analytics.range_too_large (422). One cursor-paginated page at a time (at most 100 items). Owner and Admin only."
   })
 });
 // src/audit/errors.ts

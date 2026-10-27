@@ -160,6 +160,7 @@ describe('weekly rates', () => {
     weekStart: '2026-10-19',
     agentKind: 'outbound',
     instructionVersion: 2,
+    category: null,
   }
   const response = (items: unknown[], nextCursor: string | null = null) => ({
     from: '2026-10-01',
@@ -178,6 +179,24 @@ describe('weekly rates', () => {
     expect(
       getAssessmentRatesResponseSchema.safeParse(response([{ ...ok, week: '2026-43' }])).success
     ).toBe(false)
+  })
+
+  test('groups by category: groupBy is category only, and an item names a category or null', () => {
+    const ok = { ...item, kind: 'rate', state: 'ok', value: 0.1, recordCount: 50 }
+    const range = { from: '2026-01-01', to: '2026-02-01' }
+    expect(getAssessmentRatesQuerySchema.safeParse({ ...range, groupBy: 'category' }).success).toBe(
+      true
+    )
+    expect(getAssessmentRatesQuerySchema.safeParse({ ...range, groupBy: 'week' }).success).toBe(
+      false
+    )
+    const withCategory = { ...ok, category: FINDING_CATEGORIES[0] }
+    expect(getAssessmentRatesResponseSchema.safeParse(response([withCategory])).success).toBe(true)
+    expect(
+      getAssessmentRatesResponseSchema.safeParse(response([{ ...ok, category: 'nope' }])).success
+    ).toBe(false)
+    const { category: _omit, ...noCategory } = ok
+    expect(getAssessmentRatesResponseSchema.safeParse(response([noCategory])).success).toBe(false)
   })
 
   test('is a page of at most 100 items with a next cursor', () => {
@@ -257,6 +276,8 @@ describe('errors and routes', () => {
     }
     expect(ASSESSMENT_ROUTES.giveFindingFeedback.idempotent).toBe(true)
     expect(ASSESSMENT_ROUTES.giveFindingFeedback.roles).toEqual(['owner', 'admin'])
+    expect(ASSESSMENT_ROUTES.listAssessments.roles).toEqual(['owner', 'admin'])
+    expect(ASSESSMENT_ROUTES.getAssessmentRates.roles).toEqual(['owner', 'admin'])
     expect(ASSESSMENT_ROUTES.getAssessment.description).toContain('never 403')
     expect(ASSESSMENT_ROUTES.getAssessment.roles).toContain('rep')
   })
