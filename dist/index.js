@@ -8009,6 +8009,14 @@ var internalDirectoryTeamRepsRequestSchema = z71.strictObject({
 var internalDirectoryTeamRepsResponseSchema = z71.object({
   membershipIds: z71.array(membershipIdSchema).max(MAX_DIRECTORY_TEAM_REPS)
 });
+var MAX_DIRECTORY_TEAM_RING_MEMBERS = 50;
+var internalDirectoryTeamRingMembersRequestSchema = z71.strictObject({
+  organizationId: organizationIdSchema,
+  teamId: teamIdSchema
+});
+var internalDirectoryTeamRingMembersResponseSchema = z71.object({
+  membershipIds: z71.array(membershipIdSchema).max(MAX_DIRECTORY_TEAM_RING_MEMBERS)
+});
 // src/core/invitation.ts
 import { z as z72 } from "zod";
 var invitationSchema = z72.object({
@@ -13360,6 +13368,7 @@ export {
   MAX_DEMO_REQUEST_MESSAGE_LENGTH,
   MAX_DIFF_LINES,
   MAX_DIRECTORY_TEAM_REPS,
+  MAX_DIRECTORY_TEAM_RING_MEMBERS,
   MAX_DOCUMENT_BYTES,
   MAX_DOCUMENT_FILE_NAME_BYTES,
   MAX_DOCUMENT_FILE_NAME_LENGTH,
@@ -14187,6 +14196,8 @@ export {
   internalDirectoryTeamCheckResponseSchema,
   internalDirectoryTeamRepsRequestSchema,
   internalDirectoryTeamRepsResponseSchema,
+  internalDirectoryTeamRingMembersRequestSchema,
+  internalDirectoryTeamRingMembersResponseSchema,
   internalMembershipRequestSchema,
   internalMembershipResponseSchema,
   internalRemoveOrganizationDocumentsParamsSchema,
