@@ -31,6 +31,8 @@ export type InquiryRouteName =
   | 'listInquiries'
   | 'getInquiry'
   | 'retryInquiryCallback'
+  | 'resolveInquiryKey'
+  | 'createInquiryIntake'
 
 /** One Inquiry route. */
 export type InquiryRoute = InboundRoute<InquiryErrorCode | AgentErrorCode>
@@ -148,5 +150,36 @@ export const INQUIRY_ROUTES: Readonly<Record<InquiryRouteName, InquiryRoute>> = 
     commonErrors: [...IDEMPOTENT_ERRORS],
     description:
       'Asks the Inbound Agent to place a callback again for an Inquiry whose callback was skipped or did not connect. It is queued, not dialled in the request, and every gate is checked again at dial time: a paused Agent is agent.paused (409), no Contact Consent for the phone channel (or one revoked) is agent.consent_required (409), and a time outside the calling hours is agent.outside_hours (409). Nothing can override those checks (ADR 0003). A callback that already has the maximum number of attempts (including after retries_exhausted) is inquiry.retries_exhausted (409) and nothing is queued, so a retry never pushes attempts past the maximum. Requires an Idempotency-Key header: a replay answers 202 without queueing a second callback. Owner, Admin, and a Manager for Inquiries assigned to Reps of their Team.',
+  }),
+  resolveInquiryKey: inboundRoute({
+    method: 'POST',
+    path: '/internal/v1/inquiry-keys/resolutions',
+    roles: [],
+    internal: true,
+    success: [200],
+    idempotent: false,
+    errors: ['inquiry.key_unknown'],
+    commonErrors: ['request.invalid', 'auth.unauthenticated', 'server.unavailable'],
+    description:
+      'Internal: voice asks core which Organization a publishable key belongs to, with the shared secret (ADR 0013); no user token. Answers the Organization id, its allowed origins and the current Consent Wording (version and exact text). A key that is unknown, rotated away or whose embed is not live is inquiry.key_unknown (404). The key travels in the body, never the path, and is a secret-like identifier: it is not echoed in any answer and services redact it from logs, traces and error reports.',
+  }),
+  createInquiryIntake: inboundRoute({
+    method: 'POST',
+    path: '/internal/v1/inquiry-intakes',
+    roles: [],
+    internal: true,
+    success: [201, 200],
+    idempotent: true,
+    keyRequired: true,
+    errors: [],
+    commonErrors: [
+      'request.invalid',
+      'request.idempotency_key_reused',
+      'request.idempotency_in_progress',
+      'auth.unauthenticated',
+      'server.unavailable',
+    ],
+    description:
+      'Internal: voice records a form Inquiry in core, with the shared secret (ADR 0013); no user token. In one call core upserts the Prospect by phone number or email within the Organization named in the body, and records a Contact Consent for the phone channel from the wording version, the page address and the time the form was sent. The wording version and the page address are required: without them the body is request.invalid and nothing is stored. Requires an Idempotency-Key header: a replay answers 200 with the same prospectId and consentId and records nothing more; the same key with another body is request.idempotency_key_reused. Answers 201 with the Prospect id and the consent event id. Prospect data is never logged.',
   }),
 })
