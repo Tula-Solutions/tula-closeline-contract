@@ -81,3 +81,6 @@ export const joinUrlSchema = z
 
 /** The opaque, unguessable token of a Booking Type's public link: 32 to 64 URL-safe characters. */
 export const bookingLinkTokenSchema = z.string().regex(/^[A-Za-z0-9_-]{32,64}$/)
+
+/** The opaque, unguessable token that lets a Prospect manage one Booking: 43 URL-safe characters (256 bits). */
+export const bookingManageTokenSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/)

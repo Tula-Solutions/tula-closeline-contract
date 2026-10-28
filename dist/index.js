@@ -260,6 +260,7 @@ var bookingNameSchema = boundedTextSchema(MAX_BOOKING_NAME_LENGTH);
 var timeZoneSchema = z5.string().max(64).regex(/^[A-Za-z][A-Za-z0-9_+-]*(\/[A-Za-z0-9_+-]+){0,2}$/);
 var joinUrlSchema = z5.string().max(2048).regex(/^https:\/\/[^\s]+$/);
 var bookingLinkTokenSchema = z5.string().regex(/^[A-Za-z0-9_-]{32,64}$/);
+var bookingManageTokenSchema = z5.string().regex(/^[A-Za-z0-9_-]{43}$/);
 
 // src/consent/values.ts
 import { z as z6 } from "zod";
@@ -3837,7 +3838,22 @@ var publicBookingConfirmationSchema = z39.strictObject({
   startsAt: timestampSchema,
   endsAt: timestampSchema,
   mode: bookingModeSchema,
-  joinUrl: joinUrlSchema.nullable()
+  joinUrl: joinUrlSchema.nullable(),
+  manageToken: bookingManageTokenSchema
+});
+var publicManageParamsSchema = z39.strictObject({ manageToken: bookingManageTokenSchema });
+var publicManagedBookingSchema = z39.strictObject({
+  id: bookingIdSchema,
+  startsAt: timestampSchema,
+  endsAt: timestampSchema,
+  mode: bookingModeSchema,
+  joinUrl: joinUrlSchema.nullable(),
+  state: bookingStateSchema,
+  bookingType: publicBookingTypeSchema
+});
+var publicRescheduleRequestSchema = z39.strictObject({
+  startsAt: timestampSchema,
+  timeZone: timeZoneSchema
 });
 // src/booking/booking-type.ts
 import { z as z40 } from "zod";
@@ -3889,7 +3905,8 @@ var BOOKING_ERRORS = {
     type_invalid: { status: 422, message: "The Booking Type is not valid." },
     type_not_found: { status: 404, message: "The Booking Type was not found." },
     not_found: { status: 404, message: "The Booking was not found." },
-    not_active: { status: 409, message: "The Booking was cancelled." }
+    not_active: { status: 409, message: "The Booking was cancelled." },
+    already_started: { status: 409, message: "The Booking has already started." }
   }),
   ...defineErrors("routing", {
     rule_invalid: { status: 422, message: "The Routing Rule is not valid." },
@@ -3955,6 +3972,10 @@ var BOOKING_ALL_ROLES = [
 var BOOKING_ADMIN_ROLES = ["owner", "admin"];
 var ROUTING_ROLES = ["owner", "admin", "manager"];
 var route6 = (definition) => Object.freeze(definition);
+var MANAGE_ACCESS = "Public: no token, no Organization; the Booking's unguessable manage token in the path stands in for both. It is issued once, in the confirmation (publicBook).";
+var MANAGE_NOT_FOUND = "An unknown or wrong token, or a Booking of an Organization that is not active, is booking.not_found (404), and the two cannot be told apart.";
+var CHANGE_STATES = "A cancelled Booking is booking.not_active (409); a Booking whose start has passed is booking.already_started (409).";
+var MANAGE_LIMITS = " Rate-limited by client address and by token (rate.limited, 429, with a Retry-After header). The token is a secret: services redact it from logs, traces and error reports.";
 var BOOKING_VISIBILITY = "Visibility is decided from the token: a Rep sees the Bookings they take, a Manager those of the Reps on their Team, Owner and Admin every Booking; anything else is booking.not_found (404), as is a Booking of another Organization.";
 var RULE_ROLES = "A Manager may change only rules whose target is a Rep or Team they manage, or a pool of such Reps; any other rule is routing.rule_not_found (404). A rule of another Organization is routing.rule_not_found.";
 var BOOKING_ROUTES = Object.freeze({
@@ -4271,7 +4292,63 @@ var BOOKING_ROUTES = Object.freeze({
       "request.idempotency_key_reused",
       "request.idempotency_in_progress"
     ],
-    description: "Public: no token, no Organization; the Booking Type's unguessable token stands in for both. A Prospect books a time with their name, work email, the start and their time zone; core upserts the Prospect by email and routes it. Requires an Idempotency-Key header (16 to 128 characters; the client generates one per submission): a replay answers the original confirmation with 200 and writes the calendar once, the same key with another body is request.idempotency_key_reused, and the same key while the first request runs is request.idempotency_in_progress. Answers 201 with the id, the times, the mode and the join link, and no Rep or Prospect id. A time taken meanwhile is booking.slot_taken (409); a calendar that fails is booking.calendar_unavailable (503) with nothing half-written. A filled honeypot is answered exactly as a real request and stores nothing. Rate-limited by client address and by token (rate.limited, 429). The invitation to the Prospect is the calendar's own; Closeline sends no email. Publishes booking.created. The token in the path is a secret: services redact it from logs, traces and error reports. A 429 (rate.limited) carries a Retry-After header."
+    description: "Public: no token, no Organization; the Booking Type's unguessable token stands in for both. A Prospect books a time with their name, work email, the start and their time zone; core upserts the Prospect by email and routes it. Requires an Idempotency-Key header (16 to 128 characters; the client generates one per submission): a replay answers the original confirmation with 200 and writes the calendar once, the same key with another body is request.idempotency_key_reused, and the same key while the first request runs is request.idempotency_in_progress. Answers 201 with the id, the times, the mode, the join link and a manageToken, and no Rep or Prospect id. A replay answers the same manageToken, which is never stored in plain form. A time taken meanwhile is booking.slot_taken (409); a calendar that fails is booking.calendar_unavailable (503) with nothing half-written. A filled honeypot is answered exactly as a real request and stores nothing. Rate-limited by client address and by token (rate.limited, 429). The invitation to the Prospect is the calendar's own; Closeline sends no email. Publishes booking.created. The token in the path is a secret: services redact it from logs, traces and error reports. A 429 (rate.limited) carries a Retry-After header."
+  }),
+  publicGetManagedBooking: route6({
+    method: "GET",
+    path: "/v1/public/bookings/manage/{manageToken}",
+    roles: [],
+    public: true,
+    success: [200],
+    idempotent: false,
+    errors: ["booking.not_found"],
+    commonErrors: [...PUBLIC_ERRORS],
+    description: MANAGE_ACCESS + " Reads the Booking: its times, mode, join link and state, and the Booking Type's name and length; never a Rep, a Prospect id or an email. " + MANAGE_NOT_FOUND + MANAGE_LIMITS
+  }),
+  publicListManagedSlots: route6({
+    method: "GET",
+    path: "/v1/public/bookings/manage/{manageToken}/slots",
+    roles: [],
+    public: true,
+    success: [200],
+    idempotent: false,
+    errors: ["booking.not_found", "booking.not_active", "booking.already_started"],
+    commonErrors: [...PUBLIC_ERRORS],
+    description: MANAGE_ACCESS + " Lists free times to move this Booking to, earliest first, one cursor-paginated page at a time (at most 100), over a range of at most 14 days, with the Booking Type's name, length and mode; a time is only a start and an end. " + MANAGE_NOT_FOUND + CHANGE_STATES + MANAGE_LIMITS
+  }),
+  publicCancelBooking: route6({
+    method: "POST",
+    path: "/v1/public/bookings/manage/{manageToken}/cancel",
+    roles: [],
+    public: true,
+    success: [200],
+    idempotent: false,
+    errors: ["booking.not_found", "booking.already_started", "booking.calendar_unavailable"],
+    commonErrors: [...PUBLIC_ERRORS],
+    description: MANAGE_ACCESS + " Cancels the Booking and removes its calendar event. Takes no body. Idempotent by end state: cancelling a cancelled Booking answers 200 with it and publishes nothing. " + MANAGE_NOT_FOUND + " A Booking whose start has passed is booking.already_started (409). A calendar that cannot be written is booking.calendar_unavailable (503) and the Booking stays confirmed. Publishes booking.cancelled." + MANAGE_LIMITS
+  }),
+  publicRescheduleBooking: route6({
+    method: "POST",
+    path: "/v1/public/bookings/manage/{manageToken}/reschedule",
+    roles: [],
+    public: true,
+    success: [200],
+    idempotent: true,
+    keyRequired: true,
+    errors: [
+      "booking.not_found",
+      "booking.not_active",
+      "booking.already_started",
+      "booking.slot_taken",
+      "booking.slot_invalid",
+      "booking.calendar_unavailable"
+    ],
+    commonErrors: [
+      ...PUBLIC_ERRORS,
+      "request.idempotency_key_reused",
+      "request.idempotency_in_progress"
+    ],
+    description: MANAGE_ACCESS + " Moves the Booking to another start with the same Rep; the length stays. Requires an Idempotency-Key header (16 to 128 characters; the client generates one per submission): a replay answers the original result with 200 and writes the calendar once, the same key with another body is request.idempotency_key_reused, and the same key while the first request runs is request.idempotency_in_progress. " + MANAGE_NOT_FOUND + CHANGE_STATES + " A time taken meanwhile is booking.slot_taken (409); a start in the past, inside the minimum notice or past 14 days is booking.slot_invalid (422); a calendar that fails is booking.calendar_unavailable (503) with the Booking keeping its old time and nothing half-written. Publishes booking.rescheduled." + MANAGE_LIMITS
   })
 });
 // src/booking/routing.ts
@@ -13730,6 +13807,7 @@ export {
   bookingIdSchema,
   bookingLinkTokenSchema,
   bookingListOrderSchema,
+  bookingManageTokenSchema,
   bookingModeSchema,
   bookingNameSchema,
   bookingOriginSchema,
@@ -14551,7 +14629,10 @@ export {
   publicInquiryRequestSchema,
   publicListChatMessagesQuerySchema,
   publicListSlotsQuerySchema,
+  publicManageParamsSchema,
+  publicManagedBookingSchema,
   publicOriginHeadersSchema,
+  publicRescheduleRequestSchema,
   publicSendChatMessageRequestSchema,
   publicSlotPageSchema,
   publicSlotSchema,

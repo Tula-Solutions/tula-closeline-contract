@@ -14,6 +14,7 @@ import {
   bookingCancelledEvent,
   bookingCreatedEvent,
   bookingCursorSchema,
+  bookingManageTokenSchema,
   bookingRescheduledEvent,
   bookingSchema,
   bookRequestSchema,
@@ -24,6 +25,9 @@ import {
   publicBookingConfirmationSchema,
   publicBookRequestSchema,
   publicListSlotsQuerySchema,
+  publicManagedBookingSchema,
+  publicManageParamsSchema,
+  publicRescheduleRequestSchema,
   publicSlotPageSchema,
   publicSlotSchema,
   reorderRoutingRulesRequestSchema,
@@ -48,6 +52,7 @@ const rdc = formatId('rdc', hex(9))
 const NOW = '2026-01-01T00:00:00Z'
 const LATER = '2026-01-01T00:30:00Z'
 const KEY = 'a1b2c3d4-e5f6-4789-a012-3456789abcde'
+const MANAGE = 'A'.repeat(43)
 const TOKEN = 'Abcdefghijklmnopqrstuvwxyz012345_-'
 
 const booking = {
@@ -148,11 +153,95 @@ describe('public routes do not leak Rep calendars', () => {
     ).toBe(true)
   })
   test('the confirmation carries no Rep, Prospect or Organization id', () => {
-    const ok = { id: bkg, startsAt: NOW, endsAt: LATER, mode: 'phone', joinUrl: null }
+    const ok = {
+      id: bkg,
+      startsAt: NOW,
+      endsAt: LATER,
+      mode: 'phone',
+      joinUrl: null,
+      manageToken: MANAGE,
+    }
     expect(publicBookingConfirmationSchema.safeParse(ok).success).toBe(true)
     for (const extra of [{ repMembershipId: mem }, { prospectId: prs }, { organizationId: org }]) {
       expect(publicBookingConfirmationSchema.safeParse({ ...ok, ...extra }).success).toBe(false)
     }
+  })
+  test('the confirmation requires a well-formed manage token', () => {
+    const ok = { id: bkg, startsAt: NOW, endsAt: LATER, mode: 'phone', joinUrl: null }
+    expect(publicBookingConfirmationSchema.safeParse(ok).success).toBe(false)
+    expect(publicBookingConfirmationSchema.safeParse({ ...ok, manageToken: MANAGE }).success).toBe(
+      true
+    )
+    for (const bad of ['', 'short', `${'A'.repeat(42)}=`, `${'A'.repeat(42)}/`, 'A'.repeat(44)]) {
+      expect(bookingManageTokenSchema.safeParse(bad).success).toBe(false)
+      expect(publicManageParamsSchema.safeParse({ manageToken: bad }).success).toBe(false)
+    }
+    expect(publicManageParamsSchema.safeParse({ manageToken: MANAGE, x: 1 }).success).toBe(false)
+  })
+  test('the managed view shows the Booking and its type, no Rep, Prospect or email', () => {
+    const view = {
+      id: bkg,
+      startsAt: NOW,
+      endsAt: LATER,
+      mode: 'video',
+      joinUrl: 'https://meet.example/x',
+      state: 'confirmed',
+      bookingType: { name: 'Intro', lengthMinutes: 30, mode: 'video' },
+    }
+    expect(publicManagedBookingSchema.safeParse(view).success).toBe(true)
+    for (const extra of [
+      { repMembershipId: mem },
+      { prospectId: prs },
+      { email: 'a@b.co' },
+      { manageToken: MANAGE },
+    ]) {
+      expect(publicManagedBookingSchema.safeParse({ ...view, ...extra }).success).toBe(false)
+    }
+  })
+  test('the reschedule body is a start and a zone, strict', () => {
+    const body = { startsAt: NOW, timeZone: 'Europe/Dublin' }
+    expect(publicRescheduleRequestSchema.safeParse(body).success).toBe(true)
+    expect(publicRescheduleRequestSchema.safeParse({ startsAt: NOW }).success).toBe(false)
+    expect(publicRescheduleRequestSchema.safeParse({ ...body, email: 'a@b.co' }).success).toBe(
+      false
+    )
+  })
+  test('the manage routes: paths, methods, redaction, Retry-After, errors', () => {
+    const paths = {
+      publicGetManagedBooking: ['GET', '/v1/public/bookings/manage/{manageToken}'],
+      publicListManagedSlots: ['GET', '/v1/public/bookings/manage/{manageToken}/slots'],
+      publicCancelBooking: ['POST', '/v1/public/bookings/manage/{manageToken}/cancel'],
+      publicRescheduleBooking: ['POST', '/v1/public/bookings/manage/{manageToken}/reschedule'],
+    } as const
+    for (const [name, [method, path]] of Object.entries(paths)) {
+      const r = BOOKING_ROUTES[name as keyof typeof paths]
+      expect([r.method, r.path]).toEqual([method, path])
+      expect(r.public).toBe(true)
+      expect(r.roles).toEqual([])
+      expect(r.errors).toContain('booking.not_found')
+      expect(r.commonErrors).toContain('rate.limited')
+      expect(r.description).toContain('redact')
+      expect(r.description).toContain('Retry-After')
+      expect(r.description).toContain('no token')
+    }
+    expect(BOOKING_ROUTES.publicListManagedSlots.description).toContain('100')
+    expect(BOOKING_ROUTES.publicCancelBooking.errors).toContain('booking.already_started')
+    expect(BOOKING_ROUTES.publicCancelBooking.description).toContain('booking.cancelled')
+    const re = BOOKING_ROUTES.publicRescheduleBooking
+    expect(re.keyRequired).toBe(true)
+    expect(re.idempotent).toBe(true)
+    expect(re.description).toContain('Idempotency-Key')
+    expect(re.errors).toEqual(
+      expect.arrayContaining([
+        'booking.slot_taken',
+        'booking.calendar_unavailable',
+        'booking.not_active',
+        'booking.already_started',
+        'booking.slot_invalid',
+      ])
+    )
+    expect(re.description).toContain('booking.rescheduled')
+    expect(BOOKING_ROUTES.publicBook.description).toContain('manageToken')
   })
   test('public routes are marked public with no roles and no auth errors', () => {
     for (const name of ['publicListSlots', 'publicBook'] as const) {
@@ -541,6 +630,7 @@ describe('routes', () => {
       'listSlots',
       'listBookings',
       'publicListSlots',
+      'publicListManagedSlots',
     ] as const) {
       expect(BOOKING_ROUTES[name].description).toContain('cursor')
       expect(BOOKING_ROUTES[name].description).toContain('100')
@@ -570,10 +660,14 @@ describe('routes', () => {
     expect(BOOKING_ROUTES.createRoutingRule.description).toContain('Manager')
     expect(BOOKING_ROUTES.startCalendarConnection.roles).toContain('rep')
   })
-  test('only the two public routes are public', () => {
+  test('only the public routes are public', () => {
     expect(routes.filter(([, r]) => r.public).map(([n]) => n)).toEqual([
       'publicListSlots',
       'publicBook',
+      'publicGetManagedBooking',
+      'publicListManagedSlots',
+      'publicCancelBooking',
+      'publicRescheduleBooking',
     ])
   })
 })
