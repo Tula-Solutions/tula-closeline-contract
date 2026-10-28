@@ -29,9 +29,14 @@ export const COPILOT_STREAM_STATES = ['waiting_for_disclosure', 'live', 'ended']
 /** The state of the Copilot on a Call. */
 export const copilotStreamStateSchema = z.enum(COPILOT_STREAM_STATES)
 
-/** Why the panel is quiet, for a Rep who wonders if it is broken; null when there is nothing to explain. */
+/**
+ * Why the panel is quiet, for a Rep who wonders if it is broken; null when there is nothing to explain.
+ * `not_enough_won_moments`: the Organization has no won Moments; `below_minimum_evidence`: the Playbook
+ * found some but fewer than the Organization's Copilot minimum.
+ */
 export const COPILOT_QUIET_REASONS = [
   'not_enough_won_moments',
+  'below_minimum_evidence',
   'playbook_unavailable',
   'transcript_unavailable',
 ] as const
