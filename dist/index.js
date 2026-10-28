@@ -7888,7 +7888,7 @@ var VOICE_ROUTES = Object.freeze({
     idempotent: false,
     errors: ["line.not_found", "line.released", "line.assignment_invalid"],
     commonErrors: ["request.invalid"],
-    description: "Sets who inbound Calls on a Line ring: a Team, one Rep, or nobody. Setting the assignment it already has answers 200 with the Line unchanged. A released Line is line.released (409); a Team or Rep that is not in the Organization, or is not a Rep, is line.assignment_invalid (422). Owner and Admin only."
+    description: "Sets who inbound Calls on a Line ring: a Team, one member of any role, a whole role (Owner, Admin, Manager or Rep), or nobody. Setting the assignment it already has answers 200 with the Line unchanged. A released Line is line.released (409); a Team or member that is not in the Organization is line.assignment_invalid (422). Owner and Admin only."
   }),
   releaseLine: route9({
     method: "POST",
@@ -13270,7 +13270,7 @@ var VOICE_ERRORS = {
     released: { status: 409, message: "The Line was released and cannot be changed." },
     assignment_invalid: {
       status: 422,
-      message: "The Team or Rep named for this Line is not valid."
+      message: "The Team or member named for this Line is not valid."
     }
   }),
   ...defineErrors("recording", {
@@ -13351,7 +13351,8 @@ var lineStateSchema = z122.enum(LINE_STATES);
 var lineAssignmentSchema = z122.discriminatedUnion("kind", [
   z122.strictObject({ kind: z122.literal("unassigned") }),
   z122.strictObject({ kind: z122.literal("team"), teamId: teamIdSchema }),
-  z122.strictObject({ kind: z122.literal("rep"), membershipId: membershipIdSchema })
+  z122.strictObject({ kind: z122.literal("rep"), membershipId: membershipIdSchema }),
+  z122.strictObject({ kind: z122.literal("role"), role: roleSchema })
 ]);
 var lineSchema = z122.object({
   id: lineIdSchema,
