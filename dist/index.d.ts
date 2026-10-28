@@ -4410,9 +4410,9 @@ type PublicBookRequest = z18.infer<typeof publicBookRequestSchema>;
 * The confirmation a Prospect gets: the time and how to join, and no id of a Rep, a Prospect or
 * the Organization. The invitation itself is the calendar's own. `manageToken` is the secret that
 * lets the Prospect see, move or cancel this Booking (`publicGetManagedBooking` and the routes
-* beside it). It is returned on 201 and on an idempotent replay (200) alike: the database keeps
-* only its SHA-256 hash, so core must keep the token with the idempotency record to answer a replay
-* with the same one. Services redact it from logs, traces and error reports.
+* beside it). It is returned on 201 and on an idempotent replay (200) alike, the same token both
+* times. The database keeps only its SHA-256 hash and the token is never stored in plain form.
+* Services redact it from logs, traces and error reports.
 */
 declare const publicBookingConfirmationSchema: z18.ZodObject<{
 	id: z18.core.$ZodBranded<z18.ZodString, "bkg", "out">;
