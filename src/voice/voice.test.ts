@@ -207,6 +207,23 @@ describe('Lines', () => {
       }).success
     ).toBe(true)
   })
+  test.each(['owner', 'admin', 'manager', 'rep'])(
+    'a Line can be assigned to the %s role',
+    (role) => {
+      expect(assignLineRequestSchema.safeParse({ kind: 'role', role }).success).toBe(true)
+      const roleLine = { ...lineRecord, assignment: { kind: 'role', role } }
+      expect(lineSchema.safeParse(roleLine).success).toBe(true)
+      const released = { ...roleLine, state: 'released', releasedAt: NOW }
+      expect(lineSchema.safeParse(released).success).toBe(false)
+    }
+  )
+  test.each([
+    { kind: 'role', role: 'god' },
+    { kind: 'role' },
+    { kind: 'role', role: 'rep', teamId: team },
+  ])('rejects a role assignment shaped %p', (bad) => {
+    expect(assignLineRequestSchema.safeParse(bad).success).toBe(false)
+  })
   test('add by buying or porting', () => {
     expect(
       addLineRequestSchema.safeParse({ method: 'buy', country: 'US', areaCode: '415' }).success

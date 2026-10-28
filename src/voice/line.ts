@@ -3,6 +3,7 @@ import { idempotencyKeySchema, timestampSchema } from '../core/values'
 import { lineIdSchema, membershipIdSchema, teamIdSchema } from '../ids'
 import { pageQuerySchema, pageSchema } from '../pagination'
 import { e164PhoneSchema, rawPhoneSchema } from '../prospect/values'
+import { roleSchema } from '../tenancy'
 import { countryCodeSchema, lineLabelSchema } from './values'
 
 /** The states of a Line: `porting` while a number moves to Closeline, `active` when Calls can use it, `released` once given up. */
@@ -14,14 +15,19 @@ export const lineStateSchema = z.enum(LINE_STATES)
 /** The state of a Line. */
 export type LineState = z.infer<typeof lineStateSchema>
 
-/** Who inbound Calls on a Line ring: nobody yet, a Team's Reps, or one Rep. */
+/**
+ * Who a Line is assigned to: nobody yet, a Team, one member of any role (`rep` is the kind name
+ * kept for stored rows; `membershipId` may be an Owner, Admin, Manager or Rep), or a whole role
+ * (every member with that role).
+ */
 export const lineAssignmentSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('unassigned') }),
   z.strictObject({ kind: z.literal('team'), teamId: teamIdSchema }),
   z.strictObject({ kind: z.literal('rep'), membershipId: membershipIdSchema }),
+  z.strictObject({ kind: z.literal('role'), role: roleSchema }),
 ])
 
-/** Who inbound Calls on a Line ring. */
+/** Who a Line is assigned to. */
 export type LineAssignment = z.infer<typeof lineAssignmentSchema>
 
 /** A Line: a phone number the Organization uses to place and receive Calls. */
@@ -91,7 +97,7 @@ export const addLineHeadersSchema = z.object({ 'idempotency-key': idempotencyKey
 /** The body of a request to add a Line. */
 export type AddLineRequest = z.infer<typeof addLineRequestSchema>
 
-/** The body of a request to assign a Line: to a Team, to a Rep, or to nobody. */
+/** The body of a request to assign a Line: to a Team, one member of any role, a whole role, or nobody. */
 export const assignLineRequestSchema = lineAssignmentSchema
 
 /** The body of a request to assign a Line. */

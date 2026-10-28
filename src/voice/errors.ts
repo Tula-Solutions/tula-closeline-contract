@@ -24,8 +24,7 @@ import { defineErrors } from '../errors'
  *   answered it first, or it was missed.
  * - `line.number_unavailable` (409): the number asked for cannot be bought or ported.
  * - `line.released` (409): the Line is released and cannot be changed.
- * - `line.assignment_invalid` (422): the Team or Rep named for a Line is not in the Organization,
- *   or is not a Rep.
+ * - `line.assignment_invalid` (422): the Team or member named for a Line is not in the Organization.
  * - `recording.not_found` (404): the Call has no Recording, or it was deleted.
  * - `recording.not_ready` (409): the Recording is still being stored; try again shortly.
  */
@@ -57,7 +56,7 @@ export const VOICE_ERRORS = {
     released: { status: 409, message: 'The Line was released and cannot be changed.' },
     assignment_invalid: {
       status: 422,
-      message: 'The Team or Rep named for this Line is not valid.',
+      message: 'The Team or member named for this Line is not valid.',
     },
   }),
   ...defineErrors('recording', {

@@ -2494,8 +2494,7 @@ import { ErrorDefinition as ErrorDefinition_8gwh454 } from "..";
 *   answered it first, or it was missed.
 * - `line.number_unavailable` (409): the number asked for cannot be bought or ported.
 * - `line.released` (409): the Line is released and cannot be changed.
-* - `line.assignment_invalid` (422): the Team or Rep named for a Line is not in the Organization,
-*   or is not a Rep.
+* - `line.assignment_invalid` (422): the Team or member named for a Line is not in the Organization.
 * - `recording.not_found` (404): the Call has no Recording, or it was deleted.
 * - `recording.not_ready` (409): the Recording is still being stored; try again shortly.
 */
@@ -29612,7 +29611,11 @@ declare const lineStateSchema: z120.ZodEnum<{
 }>;
 /** The state of a Line. */
 type LineState = z120.infer<typeof lineStateSchema>;
-/** Who inbound Calls on a Line ring: nobody yet, a Team's Reps, or one Rep. */
+/**
+* Who a Line is assigned to: nobody yet, a Team, one member of any role (`rep` is the kind name
+* kept for stored rows; `membershipId` may be an Owner, Admin, Manager or Rep), or a whole role
+* (every member with that role).
+*/
 declare const lineAssignmentSchema: z120.ZodDiscriminatedUnion<[z120.ZodObject<{
 	kind: z120.ZodLiteral<"unassigned">;
 }, z120.core.$strict>, z120.ZodObject<{
@@ -29621,8 +29624,16 @@ declare const lineAssignmentSchema: z120.ZodDiscriminatedUnion<[z120.ZodObject<{
 }, z120.core.$strict>, z120.ZodObject<{
 	kind: z120.ZodLiteral<"rep">;
 	membershipId: z120.core.$ZodBranded<z120.ZodString, "mem", "out">;
+}, z120.core.$strict>, z120.ZodObject<{
+	kind: z120.ZodLiteral<"role">;
+	role: z120.ZodEnum<{
+		admin: "admin";
+		manager: "manager";
+		owner: "owner";
+		rep: "rep";
+	}>;
 }, z120.core.$strict>], "kind">;
-/** Who inbound Calls on a Line ring. */
+/** Who a Line is assigned to. */
 type LineAssignment = z120.infer<typeof lineAssignmentSchema>;
 /** A Line: a phone number the Organization uses to place and receive Calls. */
 declare const lineSchema: z120.ZodObject<{
@@ -29643,6 +29654,14 @@ declare const lineSchema: z120.ZodObject<{
 	}, z120.core.$strict>, z120.ZodObject<{
 		kind: z120.ZodLiteral<"rep">;
 		membershipId: z120.core.$ZodBranded<z120.ZodString, "mem", "out">;
+	}, z120.core.$strict>, z120.ZodObject<{
+		kind: z120.ZodLiteral<"role">;
+		role: z120.ZodEnum<{
+			admin: "admin";
+			manager: "manager";
+			owner: "owner";
+			rep: "rep";
+		}>;
 	}, z120.core.$strict>], "kind">;
 	createdAt: z120.ZodISODateTime;
 	releasedAt: z120.ZodNullable<z120.ZodISODateTime>;
@@ -29690,6 +29709,14 @@ declare const linePageSchema: z120.ZodObject<{
 		}, z120.core.$strict>, z120.ZodObject<{
 			kind: z120.ZodLiteral<"rep">;
 			membershipId: z120.core.$ZodBranded<z120.ZodString, "mem", "out">;
+		}, z120.core.$strict>, z120.ZodObject<{
+			kind: z120.ZodLiteral<"role">;
+			role: z120.ZodEnum<{
+				admin: "admin";
+				manager: "manager";
+				owner: "owner";
+				rep: "rep";
+			}>;
 		}, z120.core.$strict>], "kind">;
 		createdAt: z120.ZodISODateTime;
 		releasedAt: z120.ZodNullable<z120.ZodISODateTime>;
@@ -29717,7 +29744,7 @@ declare const addLineHeadersSchema: z120.ZodObject<{
 }, z120.core.$strip>;
 /** The body of a request to add a Line. */
 type AddLineRequest = z120.infer<typeof addLineRequestSchema>;
-/** The body of a request to assign a Line: to a Team, to a Rep, or to nobody. */
+/** The body of a request to assign a Line: to a Team, one member of any role, a whole role, or nobody. */
 declare const assignLineRequestSchema: z120.ZodDiscriminatedUnion<[z120.ZodObject<{
 	kind: z120.ZodLiteral<"unassigned">;
 }, z120.core.$strict>, z120.ZodObject<{
@@ -29726,6 +29753,14 @@ declare const assignLineRequestSchema: z120.ZodDiscriminatedUnion<[z120.ZodObjec
 }, z120.core.$strict>, z120.ZodObject<{
 	kind: z120.ZodLiteral<"rep">;
 	membershipId: z120.core.$ZodBranded<z120.ZodString, "mem", "out">;
+}, z120.core.$strict>, z120.ZodObject<{
+	kind: z120.ZodLiteral<"role">;
+	role: z120.ZodEnum<{
+		admin: "admin";
+		manager: "manager";
+		owner: "owner";
+		rep: "rep";
+	}>;
 }, z120.core.$strict>], "kind">;
 /** The body of a request to assign a Line. */
 type AssignLineRequest = z120.infer<typeof assignLineRequestSchema>;

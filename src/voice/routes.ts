@@ -96,7 +96,7 @@ export const VOICE_ROUTES: Readonly<Record<VoiceRouteName, VoiceRoute>> = Object
     errors: ['line.not_found', 'line.released', 'line.assignment_invalid'],
     commonErrors: ['request.invalid'],
     description:
-      'Sets who inbound Calls on a Line ring: a Team, one Rep, or nobody. Setting the assignment it already has answers 200 with the Line unchanged. A released Line is line.released (409); a Team or Rep that is not in the Organization, or is not a Rep, is line.assignment_invalid (422). Owner and Admin only.',
+      'Sets who inbound Calls on a Line ring: a Team, one member of any role, a whole role (Owner, Admin, Manager or Rep), or nobody. Setting the assignment it already has answers 200 with the Line unchanged. A released Line is line.released (409); a Team or member that is not in the Organization is line.assignment_invalid (422). Owner and Admin only.',
   }),
   releaseLine: route({
     method: 'POST',
