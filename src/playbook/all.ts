@@ -1,6 +1,7 @@
 import { CITATION_ROUTES, type CitationRouteName } from './citation'
 import { PLAYBOOK_ERRORS } from './errors'
 import { LEARNING_ROUTES, type LearningRoute, type LearningRouteName } from './learning'
+import { LIVE_CALL_ROUTES, type LiveCallRouteName } from './live-call'
 import { PLAYBOOK_ROUTES, type PlaybookRoute, type PlaybookRouteName } from './routes'
 import { SALES_HISTORY_ERRORS } from './sales-history-errors'
 import {
@@ -24,6 +25,7 @@ export type AllPlaybookRouteName =
   | CitationRouteName
   | SuggestionRouteName
   | LearningRouteName
+  | LiveCallRouteName
 
 /**
  * Every Playbook route in one map, for a service that builds one OpenAPI document. `PLAYBOOK_ROUTES`
@@ -39,6 +41,7 @@ export const ALL_PLAYBOOK_ROUTES: Readonly<
   ...CITATION_ROUTES,
   ...SUGGESTION_ROUTES,
   ...LEARNING_ROUTES,
+  ...LIVE_CALL_ROUTES,
 })
 
 /** Every Playbook error code in one registry: the document codes of 0.7.0, the sales-history codes and the Suggestion codes. */
