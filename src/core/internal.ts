@@ -376,3 +376,84 @@ export const internalDirectoryTeamRingMembersResponseSchema = z.object({
 export type InternalDirectoryTeamRingMembersResponse = z.infer<
   typeof internalDirectoryTeamRingMembersResponseSchema
 >
+
+/**
+ * Internal: `POST /internal/v1/directory/member-check`, the body asking whether a Membership is an
+ * active member of an Organization, whatever its role.
+ */
+export const internalDirectoryMemberCheckRequestSchema = z.strictObject({
+  organizationId: organizationIdSchema,
+  membershipId: membershipIdSchema,
+})
+
+/** Internal: the body of a directory member check. */
+export type InternalDirectoryMemberCheckRequest = z.infer<
+  typeof internalDirectoryMemberCheckRequestSchema
+>
+
+/** Internal: the answer to a member check; `false` also for a Membership of another Organization. */
+export const internalDirectoryMemberCheckResponseSchema = z.object({
+  isMember: z.boolean(),
+})
+
+/** Internal: the answer to a directory member check. */
+export type InternalDirectoryMemberCheckResponse = z.infer<
+  typeof internalDirectoryMemberCheckResponseSchema
+>
+
+/** Internal: the most Membership ids a directory role-members page carries (voice's ring cap). */
+export const MAX_DIRECTORY_ROLE_MEMBERS = 50
+
+/**
+ * Internal: `POST /internal/v1/directory/role-members`, the body asking for one page of the
+ * Memberships holding a role. `after` is the `next` of the previous page.
+ */
+export const internalDirectoryRoleMembersRequestSchema = z.strictObject({
+  organizationId: organizationIdSchema,
+  role: roleSchema,
+  after: membershipIdSchema.optional(),
+})
+
+/** Internal: the body of a directory role-members lookup. */
+export type InternalDirectoryRoleMembersRequest = z.infer<
+  typeof internalDirectoryRoleMembersRequestSchema
+>
+
+/**
+ * Internal: a page of the Membership ids holding the role, in id order, at most 50
+ * (`MAX_DIRECTORY_ROLE_MEMBERS`). `next` is the cursor for the following page, or `null` on the last.
+ */
+export const internalDirectoryRoleMembersResponseSchema = z.object({
+  membershipIds: z.array(membershipIdSchema).max(MAX_DIRECTORY_ROLE_MEMBERS),
+  next: membershipIdSchema.nullable(),
+})
+
+/** Internal: the answer to a directory role-members lookup. */
+export type InternalDirectoryRoleMembersResponse = z.infer<
+  typeof internalDirectoryRoleMembersResponseSchema
+>
+
+/** Internal: the most Team ids a directory teams-of answer carries. */
+export const MAX_DIRECTORY_TEAMS_OF = 50
+
+/** Internal: `POST /internal/v1/directory/teams-of`, the body asking which Teams a Membership is on. */
+export const internalDirectoryTeamsOfRequestSchema = z.strictObject({
+  organizationId: organizationIdSchema,
+  membershipId: membershipIdSchema,
+})
+
+/** Internal: the body of a directory teams-of lookup. */
+export type InternalDirectoryTeamsOfRequest = z.infer<typeof internalDirectoryTeamsOfRequestSchema>
+
+/**
+ * Internal: the ids of the Teams the Membership is on, in id order, at most 50
+ * (`MAX_DIRECTORY_TEAMS_OF`). Empty for an unknown Membership or one of another Organization.
+ */
+export const internalDirectoryTeamsOfResponseSchema = z.object({
+  teamIds: z.array(teamIdSchema).max(MAX_DIRECTORY_TEAMS_OF),
+})
+
+/** Internal: the answer to a directory teams-of lookup. */
+export type InternalDirectoryTeamsOfResponse = z.infer<
+  typeof internalDirectoryTeamsOfResponseSchema
+>
