@@ -11,21 +11,28 @@ import {
   internalAcceptInvitationResponseSchema,
   internalCreateOrganizationRequestSchema,
   internalCreateOrganizationResponseSchema,
+  internalDirectoryMemberCheckRequestSchema,
+  internalDirectoryMemberCheckResponseSchema,
   internalDirectoryMembershipRequestSchema,
   internalDirectoryMembershipResponseSchema,
   internalDirectoryRepCheckRequestSchema,
   internalDirectoryRepCheckResponseSchema,
+  internalDirectoryRoleMembersRequestSchema,
+  internalDirectoryRoleMembersResponseSchema,
   internalDirectoryTeamCheckRequestSchema,
   internalDirectoryTeamCheckResponseSchema,
   internalDirectoryTeamRepsRequestSchema,
   internalDirectoryTeamRepsResponseSchema,
   internalDirectoryTeamRingMembersRequestSchema,
   internalDirectoryTeamRingMembersResponseSchema,
+  internalDirectoryTeamsOfRequestSchema,
+  internalDirectoryTeamsOfResponseSchema,
   internalMembershipRequestSchema,
   internalMembershipResponseSchema,
   internalUpdateMemberProfileParamsSchema,
   internalUpdateMemberProfileRequestSchema,
   internalUpdateMemberProfileResponseSchema,
+  MAX_DIRECTORY_ROLE_MEMBERS,
   MAX_DIRECTORY_TEAM_REPS,
   MAX_DIRECTORY_TEAM_RING_MEMBERS,
 } from './internal'
@@ -408,6 +415,42 @@ describe('directory calls', () => {
       isRep: false,
     })
     expect(internalDirectoryRepCheckResponseSchema.safeParse({ isRep: 'yes' }).success).toBe(false)
+  })
+
+  test('member check, role members and teams-of shapes', () => {
+    expect(
+      internalDirectoryMemberCheckRequestSchema.safeParse({ organizationId, membershipId }).success
+    ).toBe(true)
+    expect(
+      internalDirectoryMemberCheckRequestSchema.safeParse({ organizationId, userId }).success
+    ).toBe(false)
+    expect(internalDirectoryMemberCheckResponseSchema.safeParse({ isMember: 'yes' }).success).toBe(
+      false
+    )
+    expect(
+      internalDirectoryRoleMembersRequestSchema.safeParse({ organizationId, role: 'rep' }).success
+    ).toBe(true)
+    expect(
+      internalDirectoryRoleMembersRequestSchema.safeParse({ organizationId, role: 'root' }).success
+    ).toBe(false)
+    const tooMany = Array.from({ length: MAX_DIRECTORY_ROLE_MEMBERS + 1 }, () => membershipId)
+    expect(
+      internalDirectoryRoleMembersResponseSchema.safeParse({ membershipIds: tooMany, next: null })
+        .success
+    ).toBe(false)
+    expect(
+      internalDirectoryRoleMembersResponseSchema.safeParse({ membershipIds: [membershipId] })
+        .success
+    ).toBe(false)
+    expect(
+      internalDirectoryTeamsOfRequestSchema.safeParse({ organizationId, membershipId }).success
+    ).toBe(true)
+    expect(
+      internalDirectoryTeamsOfResponseSchema.parse({ teamIds: [teamId] }).teamIds
+    ).toHaveLength(1)
+    expect(
+      internalDirectoryTeamsOfResponseSchema.safeParse({ teamIds: [membershipId] }).success
+    ).toBe(false)
   })
 
   test('team check request and response', () => {
