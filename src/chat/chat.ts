@@ -120,6 +120,18 @@ export const publicChatConsentRequestSchema = z.strictObject({
 export type PublicChatConsentRequest = z.infer<typeof publicChatConsentRequestSchema>
 
 /**
+ * The Consent Wording id and version a Chat's callback box currently shows, so the widget can
+ * show it and send both back with the visitor's choice. The wording text is the widget's own.
+ */
+export const publicChatConsentWordingSchema = z.strictObject({
+  consentWordingId: consentWordingIdSchema,
+  consentWordingVersion: z.number().int().min(1),
+})
+
+/** The current callback consent wording of a Chat site. */
+export type PublicChatConsentWording = z.infer<typeof publicChatConsentWordingSchema>
+
+/**
  * The receipt of a callback request from a Chat: that it arrived, and when. It does not say
  * whether a call is coming, so it cannot reveal a suppressed number. No Inquiry, Prospect or Rep id.
  */

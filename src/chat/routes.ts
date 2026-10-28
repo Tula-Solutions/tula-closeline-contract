@@ -16,6 +16,7 @@ export type ChatRouteName =
   | 'publicStartChat'
   | 'publicSendChatMessage'
   | 'publicListChatMessages'
+  | 'publicChatConsentWording'
   | 'publicChatConsent'
   | 'publicRequestChatHandoff'
   | 'listChats'
@@ -75,6 +76,17 @@ export const CHAT_ROUTES: Readonly<Record<ChatRouteName, ChatRoute>> = Object.fr
     errors: ['chat.origin_not_allowed', 'chat.session_not_found'],
     commonErrors: [...PUBLIC_ERRORS],
     description: `Public: no token, no Organization; the session token in the path stands in for both. Lists the messages of the visitor's own Chat, oldest first, one cursor-paginated page at a time (at most 100), so a reloaded page can show them again. Each is a role, text and time only. The Origin header must match an allowed origin. Rate-limited by client address and by session. ${PUBLIC_SECRET}`,
+  }),
+  publicChatConsentWording: inboundRoute({
+    method: 'GET',
+    path: '/v1/public/chat/{key}/consent-wording',
+    roles: [],
+    public: true,
+    success: [200],
+    idempotent: false,
+    errors: ['chat.origin_not_allowed', 'chat.key_invalid'],
+    commonErrors: [...PUBLIC_ERRORS],
+    description: `Public: no token, no Organization; the Organization's publishable key in the path stands in for both. Answers the id and version of the Consent Wording the Chat's callback box must show now, so the widget can show it and send both back to the callback request. The Origin header must be an allowed origin. Rate-limited by client address and by key. ${PUBLIC_SECRET}`,
   }),
   publicChatConsent: inboundRoute({
     method: 'POST',
