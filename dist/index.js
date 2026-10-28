@@ -7877,7 +7877,8 @@ var voiceCallCursorSchema = z69.strictObject({
 var placeCallRequestSchema = z69.strictObject({
   to: rawPhoneSchema,
   lineId: lineIdSchema.optional(),
-  prospectId: prospectIdSchema.optional()
+  prospectId: prospectIdSchema.optional(),
+  copilot: z69.boolean().optional()
 });
 var placeCallHeadersSchema = z69.object({ "idempotency-key": idempotencyKeySchema });
 var contactWarningSchema = z69.strictObject({
