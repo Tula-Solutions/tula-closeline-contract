@@ -11,6 +11,8 @@ import { defineErrors } from '../errors'
  * - `agent.consent_required` (409): there is no Contact Consent for the channel, or it was revoked.
  *   The Agent never acts without one, and there is no setting that changes that (ADR 0003).
  * - `agent.outside_hours` (409): now is outside the hours the Agent may call, in the Prospect's time.
+ * - `agent.timezone_unknown` (409): the Prospect's time zone cannot be worked out from the number, so
+ *   the calling window cannot be checked and the Agent does not call (it never guesses).
  * - `agent.question_invalid` (422): a Qualification question refers to an unknown question or its
  *   skip logic loops.
  * - `agent.question_not_found` (404): the Qualification question is unknown.
@@ -37,6 +39,10 @@ export const AGENT_ERRORS = {
     outside_hours: {
       status: 409,
       message: 'It is outside the hours the Inbound Agent may call.',
+    },
+    timezone_unknown: {
+      status: 409,
+      message: "The Prospect's time zone is not known, so the Agent will not call.",
     },
     question_invalid: { status: 422, message: 'The Qualification question is not valid.' },
     question_not_found: { status: 404, message: 'The Qualification question was not found.' },
