@@ -28648,13 +28648,16 @@ declare const voiceCallCursorSchema: z118.ZodObject<{
 * The body of a request to place a Call to a number from the Rep's browser. The idempotency key is
 * not in the body: see `placeCallHeadersSchema`. `to` is as typed; voice normalises it to
 * E.164 and refuses what it cannot as `call.number_invalid`. `lineId` is the caller identity, the
-* Rep's own Line when absent. `prospectId` links the Call to a Prospect the caller may see. There is
-* no field that turns off the Disclosure or the Recording.
+* Rep's own Line when absent. `prospectId` links the Call to a Prospect the caller may see. `copilot`
+* dials with the Copilot on (default off): the Disclosure then uses the AI-assisted wording and the
+* live transcript starts once it has played. There is no field that turns off the Disclosure or the
+* Recording.
 */
 declare const placeCallRequestSchema: z118.ZodObject<{
 	to: z118.ZodPipe<z118.ZodString, z118.ZodString>;
 	lineId: z118.ZodOptional<z118.core.$ZodBranded<z118.ZodString, "line", "out">>;
 	prospectId: z118.ZodOptional<z118.core.$ZodBranded<z118.ZodString, "prs", "out">>;
+	copilot: z118.ZodOptional<z118.ZodBoolean>;
 }, z118.core.$strict>;
 /**
 * The headers of a request to place a Call. The `Idempotency-Key` header is required (header names

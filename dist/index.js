@@ -8161,7 +8161,8 @@ var voiceCallCursorSchema = z72.strictObject({
 var placeCallRequestSchema = z72.strictObject({
   to: rawPhoneSchema,
   lineId: lineIdSchema.optional(),
-  prospectId: prospectIdSchema.optional()
+  prospectId: prospectIdSchema.optional(),
+  copilot: z72.boolean().optional()
 });
 var placeCallHeadersSchema = z72.object({ "idempotency-key": idempotencyKeySchema });
 var contactWarningSchema = z72.strictObject({

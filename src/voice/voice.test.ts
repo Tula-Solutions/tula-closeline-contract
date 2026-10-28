@@ -85,6 +85,11 @@ describe('place a Call', () => {
     expect(placeCallRequestSchema.safeParse(valid).success).toBe(true)
     expect(placeCallRequestSchema.safeParse({ ...valid, idempotencyKey: key }).success).toBe(false)
   })
+  test('dials with the Copilot on or off, and refuses anything but a boolean', () => {
+    expect(placeCallRequestSchema.safeParse({ ...valid, copilot: true }).success).toBe(true)
+    expect(placeCallRequestSchema.safeParse({ ...valid, copilot: false }).success).toBe(true)
+    expect(placeCallRequestSchema.safeParse({ ...valid, copilot: 'yes' }).success).toBe(false)
+  })
   test('refuses unknown fields such as a switch for the Disclosure or consent', () => {
     for (const extra of ['skipDisclosure', 'consent', 'record', 'force']) {
       expect(placeCallRequestSchema.safeParse({ ...valid, [extra]: true }).success).toBe(false)
