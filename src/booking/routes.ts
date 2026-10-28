@@ -320,7 +320,7 @@ export const BOOKING_ROUTES: Readonly<Record<BookingRouteName, BookingRoute>> = 
     idempotent: false,
     errors: [],
     commonErrors: ['request.invalid'],
-    description: `Lists Bookings, latest start first, one cursor-paginated page at a time (at most 100). Filters: state, repMembershipId, prospectId and a start range. ${BOOKING_VISIBILITY} A filter can narrow what the caller sees, never widen it.`,
+    description: `Lists Bookings, one cursor-paginated page at a time (at most 100), latest start first by default; order=asc lists the soonest start first. A cursor is valid only with the order it was issued for: a cursor used with the other order is request.invalid (400). Filters: state, repMembershipId, prospectId and a start range. ${BOOKING_VISIBILITY} A filter can narrow what the caller sees, never widen it.`,
   }),
   getBooking: route({
     method: 'GET',

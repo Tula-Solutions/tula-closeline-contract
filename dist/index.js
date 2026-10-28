@@ -3792,16 +3792,19 @@ var bookRequestSchema = z39.strictObject({
   repMembershipId: membershipIdSchema.optional()
 });
 var rescheduleBookingRequestSchema = z39.strictObject({ startsAt: timestampSchema });
+var bookingListOrderSchema = z39.enum(["asc", "desc"]);
 var bookingCursorSchema = z39.strictObject({
   startsAt: timestampSchema,
-  id: bookingIdSchema
+  id: bookingIdSchema,
+  order: bookingListOrderSchema.default("desc")
 });
 var listBookingsQuerySchema = pageQuerySchema.extend({
   state: bookingStateSchema.optional(),
   repMembershipId: membershipIdSchema.optional(),
   prospectId: prospectIdSchema.optional(),
   from: timestampSchema.optional(),
-  to: timestampSchema.optional()
+  to: timestampSchema.optional(),
+  order: bookingListOrderSchema.default("desc")
 }).strict().refine((q) => q.from === undefined || q.to === undefined || Date.parse(q.to) > Date.parse(q.from), {
   message: "The range ends after it starts",
   path: ["to"]
@@ -4186,7 +4189,7 @@ var BOOKING_ROUTES = Object.freeze({
     idempotent: false,
     errors: [],
     commonErrors: ["request.invalid"],
-    description: `Lists Bookings, latest start first, one cursor-paginated page at a time (at most 100). Filters: state, repMembershipId, prospectId and a start range. ${BOOKING_VISIBILITY} A filter can narrow what the caller sees, never widen it.`
+    description: `Lists Bookings, one cursor-paginated page at a time (at most 100), latest start first by default; order=asc lists the soonest start first. A cursor is valid only with the order it was issued for: a cursor used with the other order is request.invalid (400). Filters: state, repMembershipId, prospectId and a start range. ${BOOKING_VISIBILITY} A filter can narrow what the caller sees, never widen it.`
   }),
   getBooking: route6({
     method: "GET",
@@ -13726,6 +13729,7 @@ export {
   bookingCursorSchema,
   bookingIdSchema,
   bookingLinkTokenSchema,
+  bookingListOrderSchema,
   bookingModeSchema,
   bookingNameSchema,
   bookingOriginSchema,
