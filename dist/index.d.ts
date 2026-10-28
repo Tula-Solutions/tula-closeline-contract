@@ -12015,10 +12015,15 @@ declare const copilotStreamStateSchema: z49.ZodEnum<{
 	live: "live";
 	waiting_for_disclosure: "waiting_for_disclosure";
 }>;
-/** Why the panel is quiet, for a Rep who wonders if it is broken; null when there is nothing to explain. */
-declare const COPILOT_QUIET_REASONS: readonly ["not_enough_won_moments", "playbook_unavailable", "transcript_unavailable"];
+/**
+* Why the panel is quiet, for a Rep who wonders if it is broken; null when there is nothing to explain.
+* `not_enough_won_moments`: the Organization has no won Moments; `below_minimum_evidence`: the Playbook
+* found some but fewer than the Organization's Copilot minimum.
+*/
+declare const COPILOT_QUIET_REASONS: readonly ["not_enough_won_moments", "below_minimum_evidence", "playbook_unavailable", "transcript_unavailable"];
 /** Why the panel shows no cards. */
 declare const copilotQuietReasonSchema: z49.ZodEnum<{
+	below_minimum_evidence: "below_minimum_evidence";
 	not_enough_won_moments: "not_enough_won_moments";
 	playbook_unavailable: "playbook_unavailable";
 	transcript_unavailable: "transcript_unavailable";
@@ -12034,6 +12039,7 @@ declare const copilotStatusDataSchema: z49.ZodObject<{
 		waiting_for_disclosure: "waiting_for_disclosure";
 	}>;
 	quietReason: z49.ZodNullable<z49.ZodEnum<{
+		below_minimum_evidence: "below_minimum_evidence";
 		not_enough_won_moments: "not_enough_won_moments";
 		playbook_unavailable: "playbook_unavailable";
 		transcript_unavailable: "transcript_unavailable";
@@ -12205,6 +12211,7 @@ declare const copilotStreamMessageSchema: z49.ZodDiscriminatedUnion<[z49.ZodObje
 			waiting_for_disclosure: "waiting_for_disclosure";
 		}>;
 		quietReason: z49.ZodNullable<z49.ZodEnum<{
+			below_minimum_evidence: "below_minimum_evidence";
 			not_enough_won_moments: "not_enough_won_moments";
 			playbook_unavailable: "playbook_unavailable";
 			transcript_unavailable: "transcript_unavailable";

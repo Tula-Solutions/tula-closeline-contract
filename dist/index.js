@@ -8242,6 +8242,7 @@ var COPILOT_STREAM_STATES = ["waiting_for_disclosure", "live", "ended"];
 var copilotStreamStateSchema = z73.enum(COPILOT_STREAM_STATES);
 var COPILOT_QUIET_REASONS = [
   "not_enough_won_moments",
+  "below_minimum_evidence",
   "playbook_unavailable",
   "transcript_unavailable"
 ];
