@@ -9,12 +9,16 @@ import {
   INQUIRY_ERRORS,
   INQUIRY_EVENTS,
   INQUIRY_ROUTES,
+  inquiryIntakeRequestSchema,
+  inquiryIntakeResultSchema,
   inquirySchema,
   listInquiriesQuerySchema,
   publicInquiryHeadersSchema,
   publicInquiryReceiptSchema,
   publicInquiryRequestSchema,
   qualificationQuestionSchema,
+  resolvedInquiryKeySchema,
+  resolveInquiryKeyRequestSchema,
   setInquiryEmbedRequestSchema,
   voiceInquiryReceivedEvent,
 } from './index'
@@ -298,9 +302,9 @@ describe('routes', () => {
       const key = `${r.method} ${r.path}`
       expect(seen.has(key)).toBe(false)
       seen.add(key)
-      expect(r.path.startsWith('/v1/')).toBe(true)
+      expect(r.path.startsWith(r.internal ? '/internal/v1/' : '/v1/')).toBe(true)
       expect(r.description.length).toBeGreaterThan(40)
-      expect(r.roles.length > 0 || r.public === true).toBe(true)
+      expect(r.roles.length > 0 || r.public === true || r.internal === true).toBe(true)
     }
   })
   test('the list route describes its cursor and its maximum page size', () => {
@@ -345,6 +349,76 @@ describe('routes', () => {
     expect(INQUIRY_ROUTES.retryInquiryCallback.errors).toContain('inquiry.retries_exhausted')
     expect(INQUIRY_ERRORS['inquiry.retries_exhausted'].status).toBe(409)
     expect(INQUIRY_ROUTES.retryInquiryCallback.description).toContain('retries_exhausted')
+  })
+})
+
+describe('internal key resolution and intake', () => {
+  const key = 'k'.repeat(40)
+  const intake = {
+    organizationId: org,
+    inquiryId: inq,
+    prospect: { phone: '+14155550123' },
+    consent: {
+      channel: 'phone',
+      wordingVersion: 3,
+      sourceUrl: 'https://acme.example/contact',
+      capturedAt: NOW,
+    },
+  }
+  test('a key resolves to the Organization, origins and wording', () => {
+    expect(resolveInquiryKeyRequestSchema.safeParse({ publishableKey: key }).success).toBe(true)
+    expect(resolveInquiryKeyRequestSchema.safeParse({ publishableKey: 'short' }).success).toBe(
+      false
+    )
+    const ok = {
+      organizationId: org,
+      allowedOrigins: ['https://acme.example'],
+      consentWording: { version: 3, text: 'We may call you.' },
+    }
+    expect(resolvedInquiryKeySchema.safeParse(ok).success).toBe(true)
+    expect(resolvedInquiryKeySchema.safeParse({ ...ok, publishableKey: key }).success).toBe(false)
+    expect(
+      resolvedInquiryKeySchema.safeParse({ ...ok, consentWording: { text: 'x' } }).success
+    ).toBe(false)
+  })
+  test('an intake needs a phone, the wording version and the source URL', () => {
+    expect(inquiryIntakeRequestSchema.safeParse(intake).success).toBe(true)
+    const full = {
+      ...intake,
+      prospect: { name: 'Ada', email: 'a@b.co', phone: '+14155550123', company: 'Acme' },
+    }
+    expect(inquiryIntakeRequestSchema.safeParse(full).success).toBe(true)
+    const { wordingVersion: _v, ...noVersion } = intake.consent
+    expect(inquiryIntakeRequestSchema.safeParse({ ...intake, consent: noVersion }).success).toBe(
+      false
+    )
+    const { sourceUrl: _u, ...noUrl } = intake.consent
+    expect(inquiryIntakeRequestSchema.safeParse({ ...intake, consent: noUrl }).success).toBe(false)
+    expect(
+      inquiryIntakeRequestSchema.safeParse({ ...intake, prospect: { name: 'Ada' } }).success
+    ).toBe(false)
+    expect(
+      inquiryIntakeRequestSchema.safeParse({
+        ...intake,
+        consent: { ...intake.consent, channel: 'sms' },
+      }).success
+    ).toBe(false)
+  })
+  test('the result names the Prospect and the consent event', () => {
+    const ok = { prospectId: prs, consentId: formatId('cev', hex(6)) }
+    expect(inquiryIntakeResultSchema.safeParse(ok).success).toBe(true)
+    expect(inquiryIntakeResultSchema.safeParse({ prospectId: prs }).success).toBe(false)
+  })
+  test('the routes are internal, the intake needs a key, and the unknown key is a 404', () => {
+    expect(INQUIRY_ERRORS['inquiry.key_unknown'].status).toBe(404)
+    const a = INQUIRY_ROUTES.resolveInquiryKey
+    expect(a.internal).toBe(true)
+    expect(a.errors).toContain('inquiry.key_unknown')
+    expect(a.description).toContain('redact')
+    const b = INQUIRY_ROUTES.createInquiryIntake
+    expect(b.internal).toBe(true)
+    expect(b.keyRequired).toBe(true)
+    expect(b.description).toContain('Idempotency-Key')
   })
 })
 

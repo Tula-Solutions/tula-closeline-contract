@@ -4,9 +4,11 @@ import { emailSchema } from '../email'
 import {
   callIdSchema,
   chatIdSchema,
+  consentEventIdSchema,
   consentWordingIdSchema,
   inquiryIdSchema,
   membershipIdSchema,
+  organizationIdSchema,
   prospectIdSchema,
 } from '../ids'
 import { pageQuerySchema, pageSchema } from '../pagination'
@@ -258,3 +260,60 @@ export const publicInquiryReceiptSchema = z.strictObject({
 
 /** The receipt a Prospect gets. */
 export type PublicInquiryReceipt = z.infer<typeof publicInquiryReceiptSchema>
+
+/** The body of the internal key resolution: the publishable key a public request carried. It is secret-like, so no service logs it. */
+export const resolveInquiryKeyRequestSchema = z.strictObject({ publishableKey: inquiryKeySchema })
+
+/** The body of the internal key resolution. */
+export type ResolveInquiryKeyRequest = z.infer<typeof resolveInquiryKeyRequestSchema>
+
+/**
+ * What a publishable key resolves to: the Organization, the origins allowed to submit and the
+ * current Consent Wording (its version and exact text). The key is never echoed.
+ */
+export const resolvedInquiryKeySchema = z.strictObject({
+  organizationId: organizationIdSchema,
+  allowedOrigins: z.array(allowedOriginSchema).max(MAX_ALLOWED_ORIGINS),
+  consentWording: z.strictObject({
+    version: z.number().int().min(1),
+    text: boundedTextSchema(5000),
+  }),
+})
+
+/** What a publishable key resolves to. */
+export type ResolvedInquiryKey = z.infer<typeof resolvedInquiryKeySchema>
+
+/**
+ * The body of the internal Inquiry intake: the Organization the key resolved to, the Inquiry id
+ * voice generated, the Prospect (a phone number is required; the rest is optional) and the Contact
+ * Consent evidence for the phone channel. `wordingVersion` and `sourceUrl` are required, so an
+ * intake without the wording shown is refused.
+ */
+export const inquiryIntakeRequestSchema = z.strictObject({
+  organizationId: organizationIdSchema,
+  inquiryId: inquiryIdSchema,
+  prospect: z.strictObject({
+    name: personNameSchema.optional(),
+    email: emailSchema.optional(),
+    phone: rawPhoneSchema,
+    company: boundedTextSchema(200).optional(),
+  }),
+  consent: z.strictObject({
+    channel: z.literal('phone'),
+    wordingVersion: z.number().int().min(1),
+    sourceUrl: sourceUrlSchema,
+    capturedAt: timestampSchema,
+  }),
+})
+
+/** The body of the internal Inquiry intake. */
+export type InquiryIntakeRequest = z.infer<typeof inquiryIntakeRequestSchema>
+
+/** The answer to an intake: the Prospect that was found or created and the consent event recorded. */
+export const inquiryIntakeResultSchema = z.strictObject({
+  prospectId: prospectIdSchema,
+  consentId: consentEventIdSchema,
+})
+
+/** The answer to an intake. */
+export type InquiryIntakeResult = z.infer<typeof inquiryIntakeResultSchema>

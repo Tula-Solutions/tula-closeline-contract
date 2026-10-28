@@ -10,6 +10,8 @@ import { defineErrors } from '../errors'
  *   Organization allowed for its publishable key. Nothing is stored.
  * - `inquiry.key_invalid` (404): the publishable key is unknown, rotated away or its embed is not
  *   live. It answers exactly as for a key that never existed.
+ * - `inquiry.key_unknown` (404): internal key resolution only: no live embed has this publishable key.
+ *   Core answers it to voice, which then answers the public caller `inquiry.key_invalid`.
  * - `inquiry.consent_wording_missing` (422): the wording id and version sent are not the Consent
  *   Wording the form is set to display, or the embed has none. The Inquiry is not stored.
  * - `inquiry.embed_invalid` (422): an allowed-origin or wording the Organization cannot use (a
@@ -22,6 +24,7 @@ export const INQUIRY_ERRORS = {
   ...defineErrors('inquiry', {
     origin_not_allowed: { status: 403, message: 'This site is not allowed to send Inquiries.' },
     key_invalid: { status: 404, message: 'The form was not found.' },
+    key_unknown: { status: 404, message: 'No form has this key.' },
     consent_wording_missing: {
       status: 422,
       message: 'The consent wording shown with the form is missing or out of date.',
