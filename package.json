@@ -1,6 +1,6 @@
 {
   "name": "tula-closeline-contract",
-  "version": "0.66.0",
+  "version": "0.67.0",
   "description": "Closeline API schemas, types and error codes shared by services and the portal",
   "private": true,
   "type": "module",

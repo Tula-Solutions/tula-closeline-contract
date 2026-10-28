@@ -683,6 +683,7 @@ describe('0.7.0 types are not widened (code written against them still compiles)
         ...Object.keys(SUGGESTION_ROUTES),
         'getLearningSettings',
         'setLearningSettings',
+        'listAwaitingDealCalls',
       ].sort()
     )
     expect(Object.keys(ALL_PLAYBOOK_ERRORS).sort()).toEqual(
