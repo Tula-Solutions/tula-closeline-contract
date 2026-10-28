@@ -12,6 +12,7 @@ import {
   listChatsQuerySchema,
   publicChatConsentReceiptSchema,
   publicChatConsentRequestSchema,
+  publicChatConsentWordingSchema,
   publicChatHeadersSchema,
   publicChatMessageReplySchema,
   publicChatReplySchema,
@@ -232,4 +233,18 @@ describe('routes', () => {
 test('the area is exported from the entry point', async () => {
   const api = await import('../index')
   expect(api.CHAT_ROUTES).toBe(CHAT_ROUTES)
+})
+
+describe('the current consent wording', () => {
+  test('has the wording id and version only', () => {
+    const wording = {
+      consentWordingId: formatId('cwd', crypto.randomUUID()),
+      consentWordingVersion: 2,
+    }
+    expect(publicChatConsentWordingSchema.safeParse(wording).success).toBe(true)
+    expect(publicChatConsentWordingSchema.safeParse({ ...wording, text: 'x' }).success).toBe(false)
+    expect(
+      publicChatConsentWordingSchema.safeParse({ ...wording, consentWordingVersion: 0 }).success
+    ).toBe(false)
+  })
 })
