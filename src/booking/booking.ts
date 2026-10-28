@@ -128,9 +128,15 @@ export const bookingCursorSchema = z.strictObject({
   id: bookingIdSchema,
 })
 
+/** Which end of the start times a Booking list begins at: `asc` soonest first, `desc` latest first. */
+export const bookingListOrderSchema = z.enum(['asc', 'desc'])
+
+/** Which end of the start times a Booking list begins at. */
+export type BookingListOrder = z.infer<typeof bookingListOrderSchema>
+
 /**
- * The query parameters of a request to list Bookings: latest start first, one cursor-paginated
- * page at a time, optionally narrowed by state, Rep, Prospect and a start range. What the caller
+ * The query parameters of a request to list Bookings: latest start first (or soonest first with
+ * `order=asc`), one cursor-paginated page at a time, optionally narrowed by state, Rep, Prospect and a start range. What the caller
  * sees is decided from the token and a filter never widens it.
  */
 export const listBookingsQuerySchema = pageQuerySchema
@@ -140,6 +146,7 @@ export const listBookingsQuerySchema = pageQuerySchema
     prospectId: prospectIdSchema.optional(),
     from: timestampSchema.optional(),
     to: timestampSchema.optional(),
+    order: bookingListOrderSchema.default('desc'),
   })
   .strict()
   .refine(

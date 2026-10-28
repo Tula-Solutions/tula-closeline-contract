@@ -376,6 +376,12 @@ describe('list Bookings', () => {
     expect(listBookingsQuerySchema.safeParse({ from: LATER, to: NOW }).success).toBe(false)
     expect(listBookingsQuerySchema.safeParse({ organizationId: org }).success).toBe(false)
   })
+
+  test('order defaults to desc, accepts asc and rejects anything else', () => {
+    expect(listBookingsQuerySchema.parse({}).order).toBe('desc')
+    expect(listBookingsQuerySchema.parse({ order: 'asc' }).order).toBe('asc')
+    expect(listBookingsQuerySchema.safeParse({ order: 'newest' }).success).toBe(false)
+  })
 })
 
 describe('events', () => {
