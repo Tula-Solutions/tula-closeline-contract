@@ -11,6 +11,7 @@ import {
 import { pageQuerySchema, pageSchema } from '../pagination'
 import {
   bookingLinkTokenSchema,
+  bookingManageTokenSchema,
   bookingModeSchema,
   bookingOriginSchema,
   bookingStateSchema,
@@ -229,7 +230,11 @@ export type PublicBookRequest = z.infer<typeof publicBookRequestSchema>
 
 /**
  * The confirmation a Prospect gets: the time and how to join, and no id of a Rep, a Prospect or
- * the Organization. The invitation itself is the calendar's own.
+ * the Organization. The invitation itself is the calendar's own. `manageToken` is the secret that
+ * lets the Prospect see, move or cancel this Booking (`publicGetManagedBooking` and the routes
+ * beside it). It is returned on 201 and on an idempotent replay (200) alike: the database keeps
+ * only its SHA-256 hash, so core must keep the token with the idempotency record to answer a replay
+ * with the same one. Services redact it from logs, traces and error reports.
  */
 export const publicBookingConfirmationSchema = z.strictObject({
   id: bookingIdSchema,
@@ -237,7 +242,40 @@ export const publicBookingConfirmationSchema = z.strictObject({
   endsAt: timestampSchema,
   mode: bookingModeSchema,
   joinUrl: joinUrlSchema.nullable(),
+  manageToken: bookingManageTokenSchema,
 })
 
 /** The confirmation a Prospect gets. */
 export type PublicBookingConfirmation = z.infer<typeof publicBookingConfirmationSchema>
+
+/** The path parameters of a public request to manage a Booking: its manage token. */
+export const publicManageParamsSchema = z.strictObject({ manageToken: bookingManageTokenSchema })
+
+/**
+ * A Booking as its Prospect sees it through the manage link: the times, mode, join link and state,
+ * and the Booking Type's name, length and mode. No Rep, no Prospect id, no email.
+ */
+export const publicManagedBookingSchema = z.strictObject({
+  id: bookingIdSchema,
+  startsAt: timestampSchema,
+  endsAt: timestampSchema,
+  mode: bookingModeSchema,
+  joinUrl: joinUrlSchema.nullable(),
+  state: bookingStateSchema,
+  bookingType: publicBookingTypeSchema,
+})
+
+/** A Booking as its Prospect sees it through the manage link. */
+export type PublicManagedBooking = z.infer<typeof publicManagedBookingSchema>
+
+/**
+ * The body of a public request to move a Booking: the new start and the Prospect's time zone. The
+ * idempotency key is the `Idempotency-Key` header (`bookHeadersSchema`).
+ */
+export const publicRescheduleRequestSchema = z.strictObject({
+  startsAt: timestampSchema,
+  timeZone: timeZoneSchema,
+})
+
+/** The body of a public request to move a Booking. */
+export type PublicRescheduleRequest = z.infer<typeof publicRescheduleRequestSchema>

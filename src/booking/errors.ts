@@ -5,7 +5,8 @@ import { defineErrors } from '../errors'
  * is not allowed is the common `auth.forbidden`. A record of another Organization, or one the
  * caller may not see (a Rep's view of another Rep's Booking, a Manager's view outside their Team),
  * is the `not_found` code of its kind (404, never 403), so existence is not revealed. A public
- * route answers a token it does not know as `booking.type_not_found`.
+ * route answers a Booking Type token it does not know as `booking.type_not_found` and a manage
+ * token it does not know as `booking.not_found`.
  *
  * - `booking.slot_taken` (409): the time was taken (or became busy) before the Booking was made;
  *   the caller picks another time. Nothing is written.
@@ -19,6 +20,8 @@ import { defineErrors } from '../errors'
  * - `booking.type_not_found` (404): the Booking Type is unknown, retired, or its token is wrong.
  * - `booking.not_found` (404): the Booking is unknown or not the caller's to see.
  * - `booking.not_active` (409): the Booking is cancelled and cannot be moved.
+ * - `booking.already_started` (409): the Booking's start has passed and it can no longer be changed
+ *   through a public manage link.
  * - `routing.rule_invalid` (422): a Routing Rule names a Team, Rep or Booking Type that is not in
  *   the Organization, is not a Rep, has a second default, or puts the default anywhere but last.
  * - `routing.rule_not_found` (404): the Routing Rule is unknown or not the caller's to change.
@@ -40,6 +43,7 @@ export const BOOKING_ERRORS = {
     type_not_found: { status: 404, message: 'The Booking Type was not found.' },
     not_found: { status: 404, message: 'The Booking was not found.' },
     not_active: { status: 409, message: 'The Booking was cancelled.' },
+    already_started: { status: 409, message: 'The Booking has already started.' },
   }),
   ...defineErrors('routing', {
     rule_invalid: { status: 422, message: 'The Routing Rule is not valid.' },
