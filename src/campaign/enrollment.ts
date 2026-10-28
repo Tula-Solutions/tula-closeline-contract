@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { callResultSchema } from '../agent-call/values'
 import { timestampSchema } from '../core/values'
 import {
   campaignIdSchema,
@@ -25,7 +26,7 @@ export type EnrollmentState = z.infer<typeof enrollmentStateSchema>
  * Why an Enrollment stopped, a closed set: the Prospect `replied`, the address `hard_bounce`d,
  * the Prospect `unsubscribed` or `complaint`ed, the address became `suppressed`, Contact Consent
  * went (`no_consent`), the address is `unverified_address`, a Rep took them out
- * (`removed_by_rep`), a `meeting_booked`, the Prospect was erased (`prospect_erased`), or the
+ * (`removed_by_rep`), the Prospect opted out on an Agent Call (`call.opted_out`), a `meeting_booked`, the Prospect was erased (`prospect_erased`), or the
  * Campaign was archived (`campaign_archived`).
  */
 export const ENROLLMENT_STOP_REASONS = [
@@ -37,6 +38,7 @@ export const ENROLLMENT_STOP_REASONS = [
   'no_consent',
   'unverified_address',
   'removed_by_rep',
+  'call.opted_out',
   'meeting_booked',
   'prospect_erased',
   'campaign_archived',
@@ -207,6 +209,7 @@ export const ENROLLMENT_EVENT_KINDS = [
   'deferred',
   'refused',
   'rep_task_created',
+  'call_result',
   'branch_taken',
   'stopped',
   'completed',
@@ -218,7 +221,8 @@ export const enrollmentEventKindSchema = z.enum(ENROLLMENT_EVENT_KINDS)
 /**
  * One entry in an Enrollment's log: what happened at which Step, with the send record where one
  * exists. It holds ids and closed values only: no message text, no subject, no address.
- * `actorMembershipId` is the person who caused it (null for the engine).
+ * `callResult` is set on a `call_result` entry (the Call result `outbound` recorded) and absent
+ * otherwise. `actorMembershipId` is the person who caused it (null for the engine).
  */
 export const enrollmentEventSchema = z.strictObject({
   id: enrollmentEventIdSchema,
@@ -228,6 +232,7 @@ export const enrollmentEventSchema = z.strictObject({
   variantKey: stepKeySchema.nullable(),
   sendId: sendIdSchema.nullable(),
   stopReason: enrollmentStopReasonSchema.nullable(),
+  callResult: callResultSchema.nullish(),
   actorMembershipId: membershipIdSchema.nullable(),
   occurredAt: timestampSchema,
 })

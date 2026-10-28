@@ -1,6 +1,12 @@
 import { z } from 'zod'
+import {
+  callEndReasonSchema,
+  callResultSchema,
+  MAX_CALL_ATTEMPTS,
+  MIN_CALL_RETRY_HOURS,
+} from '../agent-call/values'
 import { timestampSchema } from '../core/values'
-import { campaignIdSchema } from '../ids'
+import { campaignIdSchema, lineIdSchema } from '../ids'
 import {
   goalSchema,
   hoursSchema,
@@ -11,7 +17,7 @@ import {
 import { variantGroupSchema } from './variant'
 
 /** The kinds of Step this release has. A new kind is a new member of {@link stepSchema}; none changes. */
-export const STEP_KINDS = ['email', 'wait', 'branch', 'rep_task', 'end'] as const
+export const STEP_KINDS = ['email', 'wait', 'branch', 'rep_task', 'call', 'end'] as const
 
 /** A kind of Step. */
 export const stepKindSchema = z.enum(STEP_KINDS)
@@ -42,7 +48,9 @@ export const waitStepSchema = z.strictObject({
 /**
  * What a branch may test. Only recorded events and elapsed time are available: `out_of_office`
  * (an automatic reply said the Prospect is away), `no_response` (no reply `afterHours` after the
- * last email), `task_completed` and `task_skipped` (the outcome of the Rep task before it). A
+ * last email), `task_completed` and `task_skipped` (the outcome of the Rep task before it),
+ * `call_result` (the Call result of the call Step before it) and `call_end_reason` (why an
+ * answered Call ended, such as `booked` or `opted_out`). A
  * reply, a bounce, an unsubscribe or a suppression is never a condition: each stops the
  * Enrollment. There is no condition on opens or clicks, because nothing is tracked.
  */
@@ -51,6 +59,8 @@ export const branchConditionSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('no_response'), afterHours: hoursSchema }),
   z.strictObject({ kind: z.literal('task_completed') }),
   z.strictObject({ kind: z.literal('task_skipped') }),
+  z.strictObject({ kind: z.literal('call_result'), result: callResultSchema }),
+  z.strictObject({ kind: z.literal('call_end_reason'), endReason: callEndReasonSchema }),
 ])
 
 /** What a branch may test. */
@@ -98,6 +108,24 @@ export const repTaskStepSchema = z.strictObject({
   next: stepKeySchema,
 })
 
+/**
+ * A call Step: the Outbound Agent phones the Prospect toward `goal`, from `lineId` (null: the
+ * Organization's default outbound Line), then goes to `next` once the Call result is final. A
+ * result that retries (`no_answer`, `busy`, `voicemail`, `failed`) is tried again after
+ * `retryAfterHours` (4 to 2,160; default 4) up to `maxAttempts` (1 to 3; default 3) in all. A
+ * Contact Consent for the phone channel is checked on every attempt and cannot be waived
+ * (ADR 0003). A branch after the Step tests the result.
+ */
+export const callStepSchema = z.strictObject({
+  kind: z.literal('call'),
+  key: stepKeySchema,
+  goal: goalSchema,
+  lineId: lineIdSchema.nullable(),
+  maxAttempts: z.number().int().min(1).max(MAX_CALL_ATTEMPTS).default(MAX_CALL_ATTEMPTS),
+  retryAfterHours: hoursSchema.min(MIN_CALL_RETRY_HOURS).default(MIN_CALL_RETRY_HOURS),
+  next: stepKeySchema,
+})
+
 /** The end: the Enrollment completes. */
 export const endStepSchema = z.strictObject({
   kind: z.literal('end'),
@@ -110,6 +138,7 @@ export const stepSchema = z.discriminatedUnion('kind', [
   waitStepSchema,
   branchStepSchema,
   repTaskStepSchema,
+  callStepSchema,
   endStepSchema,
 ])
 
@@ -163,6 +192,7 @@ function targetsOf(step: Step): readonly string[] {
     case 'email':
     case 'wait':
     case 'rep_task':
+    case 'call':
       return [step.next]
     case 'branch':
       return [...step.arms.map((arm) => arm.next), step.default]

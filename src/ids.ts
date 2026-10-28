@@ -83,6 +83,8 @@ export const qualificationQuestionIdSchema = idSchema('qst')
 export const chatIdSchema = idSchema('cht')
 /** The id of a Handoff (`hof_…`): a live Call or Chat passed from the Inbound Agent to a Rep. */
 export const handoffIdSchema = idSchema('hof')
+/** The id of an Agent Call (`acl_…`): one request that the Outbound Agent place a Call, whatever came of it. */
+export const agentCallIdSchema = idSchema('acl')
 /** The id of a text session an Admin uses to try the Inbound Agent before it speaks to anyone (`try_…`). */
 export const trySessionIdSchema = idSchema('try')
 /** The id of a Conversation (`cnv_…`): all Messages between one Prospect and an Organization on one channel. */
@@ -217,6 +219,8 @@ export type QualificationQuestionId = z.infer<typeof qualificationQuestionIdSche
 export type ChatId = z.infer<typeof chatIdSchema>
 /** The id of a Handoff. */
 export type HandoffId = z.infer<typeof handoffIdSchema>
+/** The id of an Agent Call. */
+export type AgentCallId = z.infer<typeof agentCallIdSchema>
 /** The id of a try-it session. */
 export type TrySessionId = z.infer<typeof trySessionIdSchema>
 /** The id of a Mailbox. */
