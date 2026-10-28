@@ -8382,6 +8382,31 @@ var internalDirectoryTeamRingMembersRequestSchema = z74.strictObject({
 var internalDirectoryTeamRingMembersResponseSchema = z74.object({
   membershipIds: z74.array(membershipIdSchema).max(MAX_DIRECTORY_TEAM_RING_MEMBERS)
 });
+var internalDirectoryMemberCheckRequestSchema = z74.strictObject({
+  organizationId: organizationIdSchema,
+  membershipId: membershipIdSchema
+});
+var internalDirectoryMemberCheckResponseSchema = z74.object({
+  isMember: z74.boolean()
+});
+var MAX_DIRECTORY_ROLE_MEMBERS = 50;
+var internalDirectoryRoleMembersRequestSchema = z74.strictObject({
+  organizationId: organizationIdSchema,
+  role: roleSchema,
+  after: membershipIdSchema.optional()
+});
+var internalDirectoryRoleMembersResponseSchema = z74.object({
+  membershipIds: z74.array(membershipIdSchema).max(MAX_DIRECTORY_ROLE_MEMBERS),
+  next: membershipIdSchema.nullable()
+});
+var MAX_DIRECTORY_TEAMS_OF = 50;
+var internalDirectoryTeamsOfRequestSchema = z74.strictObject({
+  organizationId: organizationIdSchema,
+  membershipId: membershipIdSchema
+});
+var internalDirectoryTeamsOfResponseSchema = z74.object({
+  teamIds: z74.array(teamIdSchema).max(MAX_DIRECTORY_TEAMS_OF)
+});
 // src/core/invitation.ts
 import { z as z75 } from "zod";
 var invitationSchema = z75.object({
@@ -13827,6 +13852,8 @@ export {
   MAX_DEMO_REQUEST_FIELD_LENGTH,
   MAX_DEMO_REQUEST_MESSAGE_LENGTH,
   MAX_DIFF_LINES,
+  MAX_DIRECTORY_ROLE_MEMBERS,
+  MAX_DIRECTORY_TEAMS_OF,
   MAX_DIRECTORY_TEAM_REPS,
   MAX_DIRECTORY_TEAM_RING_MEMBERS,
   MAX_DOCUMENT_BYTES,
@@ -14665,16 +14692,22 @@ export {
   internalAcceptInvitationResponseSchema,
   internalCreateOrganizationRequestSchema,
   internalCreateOrganizationResponseSchema,
+  internalDirectoryMemberCheckRequestSchema,
+  internalDirectoryMemberCheckResponseSchema,
   internalDirectoryMembershipRequestSchema,
   internalDirectoryMembershipResponseSchema,
   internalDirectoryRepCheckRequestSchema,
   internalDirectoryRepCheckResponseSchema,
+  internalDirectoryRoleMembersRequestSchema,
+  internalDirectoryRoleMembersResponseSchema,
   internalDirectoryTeamCheckRequestSchema,
   internalDirectoryTeamCheckResponseSchema,
   internalDirectoryTeamRepsRequestSchema,
   internalDirectoryTeamRepsResponseSchema,
   internalDirectoryTeamRingMembersRequestSchema,
   internalDirectoryTeamRingMembersResponseSchema,
+  internalDirectoryTeamsOfRequestSchema,
+  internalDirectoryTeamsOfResponseSchema,
   internalMembershipRequestSchema,
   internalMembershipResponseSchema,
   internalRemoveOrganizationDocumentsParamsSchema,
