@@ -4264,11 +4264,6 @@ declare const rescheduleBookingRequestSchema: z18.ZodObject<{
 }, z18.core.$strict>;
 /** The body of a request to move a Booking. */
 type RescheduleBookingRequest = z18.infer<typeof rescheduleBookingRequestSchema>;
-/** The cursor position a Booking list resumes from: latest start first, then id. */
-declare const bookingCursorSchema: z18.ZodObject<{
-	startsAt: z18.ZodISODateTime;
-	id: z18.core.$ZodBranded<z18.ZodString, "bkg", "out">;
-}, z18.core.$strict>;
 /** Which end of the start times a Booking list begins at: `asc` soonest first, `desc` latest first. */
 declare const bookingListOrderSchema: z18.ZodEnum<{
 	asc: "asc";
@@ -4277,9 +4272,21 @@ declare const bookingListOrderSchema: z18.ZodEnum<{
 /** Which end of the start times a Booking list begins at. */
 type BookingListOrder = z18.infer<typeof bookingListOrderSchema>;
 /**
+* The cursor position a Booking list resumes from: start, then id, in the order the cursor was
+* issued for. A cursor used with the other order is request.invalid.
+*/
+declare const bookingCursorSchema: z18.ZodObject<{
+	startsAt: z18.ZodISODateTime;
+	id: z18.core.$ZodBranded<z18.ZodString, "bkg", "out">;
+	order: z18.ZodDefault<z18.ZodEnum<{
+		asc: "asc";
+		desc: "desc";
+	}>>;
+}, z18.core.$strict>;
+/**
 * The query parameters of a request to list Bookings: latest start first (or soonest first with
-* `order=asc`), one cursor-paginated page at a time, optionally narrowed by state, Rep, Prospect and a start range. What the caller
-* sees is decided from the token and a filter never widens it.
+* `order=asc`), one cursor-paginated page at a time, optionally narrowed by state, Rep, Prospect
+* and a start range. What the caller sees is decided from the token and a filter never widens it.
 */
 declare const listBookingsQuerySchema: z18.ZodObject<{
 	cursor: z18.ZodOptional<z18.ZodString>;

@@ -3792,11 +3792,12 @@ var bookRequestSchema = z39.strictObject({
   repMembershipId: membershipIdSchema.optional()
 });
 var rescheduleBookingRequestSchema = z39.strictObject({ startsAt: timestampSchema });
+var bookingListOrderSchema = z39.enum(["asc", "desc"]);
 var bookingCursorSchema = z39.strictObject({
   startsAt: timestampSchema,
-  id: bookingIdSchema
+  id: bookingIdSchema,
+  order: bookingListOrderSchema.default("desc")
 });
-var bookingListOrderSchema = z39.enum(["asc", "desc"]);
 var listBookingsQuerySchema = pageQuerySchema.extend({
   state: bookingStateSchema.optional(),
   repMembershipId: membershipIdSchema.optional(),

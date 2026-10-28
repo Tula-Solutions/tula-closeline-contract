@@ -13,6 +13,7 @@ import {
   bookHeadersSchema,
   bookingCancelledEvent,
   bookingCreatedEvent,
+  bookingCursorSchema,
   bookingRescheduledEvent,
   bookingSchema,
   bookRequestSchema,
@@ -375,6 +376,13 @@ describe('list Bookings', () => {
     expect(listBookingsQuerySchema.parse({}).limit).toBe(25)
     expect(listBookingsQuerySchema.safeParse({ from: LATER, to: NOW }).success).toBe(false)
     expect(listBookingsQuerySchema.safeParse({ organizationId: org }).success).toBe(false)
+  })
+
+  test('the cursor carries the order it was issued for', () => {
+    const at = { startsAt: NOW, id: bkg }
+    expect(bookingCursorSchema.parse({ ...at, order: 'asc' }).order).toBe('asc')
+    expect(bookingCursorSchema.parse(at).order).toBe('desc')
+    expect(bookingCursorSchema.safeParse({ ...at, order: 'up' }).success).toBe(false)
   })
 
   test('order defaults to desc, accepts asc and rejects anything else', () => {

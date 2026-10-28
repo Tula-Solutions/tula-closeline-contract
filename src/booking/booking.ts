@@ -122,12 +122,6 @@ export const rescheduleBookingRequestSchema = z.strictObject({ startsAt: timesta
 /** The body of a request to move a Booking. */
 export type RescheduleBookingRequest = z.infer<typeof rescheduleBookingRequestSchema>
 
-/** The cursor position a Booking list resumes from: latest start first, then id. */
-export const bookingCursorSchema = z.strictObject({
-  startsAt: timestampSchema,
-  id: bookingIdSchema,
-})
-
 /** Which end of the start times a Booking list begins at: `asc` soonest first, `desc` latest first. */
 export const bookingListOrderSchema = z.enum(['asc', 'desc'])
 
@@ -135,9 +129,19 @@ export const bookingListOrderSchema = z.enum(['asc', 'desc'])
 export type BookingListOrder = z.infer<typeof bookingListOrderSchema>
 
 /**
+ * The cursor position a Booking list resumes from: start, then id, in the order the cursor was
+ * issued for. A cursor used with the other order is request.invalid.
+ */
+export const bookingCursorSchema = z.strictObject({
+  startsAt: timestampSchema,
+  id: bookingIdSchema,
+  order: bookingListOrderSchema.default('desc'),
+})
+
+/**
  * The query parameters of a request to list Bookings: latest start first (or soonest first with
- * `order=asc`), one cursor-paginated page at a time, optionally narrowed by state, Rep, Prospect and a start range. What the caller
- * sees is decided from the token and a filter never widens it.
+ * `order=asc`), one cursor-paginated page at a time, optionally narrowed by state, Rep, Prospect
+ * and a start range. What the caller sees is decided from the token and a filter never widens it.
  */
 export const listBookingsQuerySchema = pageQuerySchema
   .extend({
